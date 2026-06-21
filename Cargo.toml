@@ -1,0 +1,16 @@
+[package]
+name = "surgeist-css"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/bj-data-eng/surgeist-css"
+readme = "README.md"
+description = "Strict CSS ingestion for Surgeist style sheets."
+
+[lib]
+name = "surgeist_css"
+path = "src/lib.rs"
+
+[dependencies]
+cssparser = "=0.37.0"
+surgeist-style = { path = "../surgeist-style", version = "=0.1.0" }

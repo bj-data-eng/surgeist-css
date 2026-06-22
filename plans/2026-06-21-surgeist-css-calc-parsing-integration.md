@@ -53,6 +53,7 @@ If those APIs differ, stop and open an upstream `surgeist-style` issue or update
   - Extend the existing strict length parser to recognize `calc()`.
   - Add parser helpers for calc sums, signed terms, nested calc, px terms, percent terms, and zero terms.
   - Add focused parser tests for supported and rejected calc syntax.
+  - Update length consumers that currently assume `style::Length` is `Copy`.
 
 ### Task 1: Parse Calc Lengths
 
@@ -268,9 +269,9 @@ fn parses_calc_in_edge_shorthands() {
         other => panic!("expected edges, got {other:?}"),
     };
 
-    assert!(matches!(edges.top, style::Length::Calc(_)));
+    assert!(matches!(&edges.top, style::Length::Calc(_)));
     assert_eq!(edges.right, style::Length::px(2.0));
-    assert!(matches!(edges.bottom, style::Length::Calc(_)));
+    assert!(matches!(&edges.bottom, style::Length::Calc(_)));
     assert_eq!(edges.left, style::Length::px(2.0));
 }
 
@@ -288,6 +289,12 @@ fn parses_calc_gap() {
     );
     assert!(matches!(value, style::Value::Length(style::Length::Calc(_))));
 }
+
+#[test]
+fn grid_flow_tolerance_calc_reaches_style_validation() {
+    let error = parse_sheet(".panel { grid-flow-tolerance: calc(8px + 2%); }").unwrap_err();
+    assert!(error.message().contains("grid flow tolerance length"));
+}
 ```
 
 - [ ] **Step 2: Run tests to verify current behavior**
@@ -295,14 +302,77 @@ fn parses_calc_gap() {
 Run:
 
 ```sh
-cargo test -p surgeist-css tests::parses_calc_in_edge_shorthands tests::parses_normal_gap_without_treating_it_as_calc tests::parses_calc_gap
+cargo test -p surgeist-css tests::parses_calc_in_edge_shorthands tests::parses_normal_gap_without_treating_it_as_calc tests::parses_calc_gap tests::grid_flow_tolerance_calc_reaches_style_validation
 ```
 
-Expected: shorthand and calc gap tests pass if Task 1 integrated through `parse_length`; otherwise they expose the remaining parse path that still bypasses `parse_length`.
+Expected: shorthand and calc gap tests pass if Task 1 integrated through `parse_length`; otherwise they expose the remaining parse path that still bypasses `parse_length`. The grid-flow-tolerance test should fail until the parser stops owning that property's length compatibility rejection.
 
-- [ ] **Step 3: Fix any bypassing parse path**
+- [ ] **Step 3: Update edge parsing for non-`Copy` lengths**
 
-If the tests fail, update the failing parser path to call `parse_length(input)` or `parse_gap_length(input)` consistently. For example, `parse_edges` must keep this shape:
+After `surgeist-style::Length` gains `Length::Calc(CalcLength)`, edge shorthand parsing can no longer copy borrowed lengths out of `values.as_slice()`. Update `parse_edges` to move values out of the vector:
+
+```rust
+fn parse_edges<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Edges, ParseError<'i, Error>> {
+    let mut values = Vec::new();
+    while !input.is_exhausted() {
+        values.push(parse_length(input)?);
+        if values.len() == 4 && !input.is_exhausted() {
+            return Err(custom_error(input, "edge shorthand has too many values"));
+        }
+    }
+
+    match values.len() {
+        1 => {
+            let all = values.pop().unwrap();
+            Ok(Edges::all(all))
+        }
+        2 => {
+            let horizontal = values.pop().unwrap();
+            let vertical = values.pop().unwrap();
+            Ok(Edges::new(
+                vertical.clone(),
+                horizontal.clone(),
+                vertical,
+                horizontal,
+            ))
+        }
+        3 => {
+            let bottom = values.pop().unwrap();
+            let horizontal = values.pop().unwrap();
+            let top = values.pop().unwrap();
+            Ok(Edges::new(top, horizontal.clone(), bottom, horizontal))
+        }
+        4 => {
+            let left = values.pop().unwrap();
+            let bottom = values.pop().unwrap();
+            let right = values.pop().unwrap();
+            let top = values.pop().unwrap();
+            Ok(Edges::new(top, right, bottom, left))
+        }
+        0 => Err(custom_error(input, "edge shorthand is missing a value")),
+        _ => unreachable!("edge shorthand parser caps values at four"),
+    }
+}
+```
+
+- [ ] **Step 4: Let style validate grid-flow-tolerance length compatibility**
+
+Update `parse_grid_flow_tolerance` so it parses calc syntax but leaves compatibility rejection to `surgeist-style` validation:
+
+```rust
+match parse_length(input)? {
+    Length::Percent(value) => Ok(GridFlowTolerance::Percent(value)),
+    length => Ok(GridFlowTolerance::Length(length)),
+}
+```
+
+Do not add CSS-side checks for `Length::Calc`, `Length::Auto`, or intrinsic values here. Those are style property compatibility decisions.
+
+- [ ] **Step 5: Fix any remaining bypassing parse path**
+
+If any calc consumer tests still fail, update the failing parser path to call `parse_length(input)` or `parse_gap_length(input)` consistently. For example, edge shorthands must still gather values through:
 
 ```rust
 while !input.is_exhausted() {
@@ -313,7 +383,7 @@ while !input.is_exhausted() {
 }
 ```
 
-- [ ] **Step 4: Run package checks**
+- [ ] **Step 6: Run package checks**
 
 Run:
 
@@ -325,7 +395,7 @@ cargo fmt --check
 
 Expected: all commands pass.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```sh
 git add -- src/lib.rs
@@ -342,7 +412,7 @@ git commit -m "css: cover calc length consumers"
 Run the crate's existing API generator command from its README or current crate convention. If no command is documented, run:
 
 ```sh
-cargo run --manifest-path api/generator/Cargo.toml > api/public-api.txt
+cargo run --manifest-path api/generator/Cargo.toml
 ```
 
 Expected: `api/public-api.txt` changes only if the parser crate's public API changed.

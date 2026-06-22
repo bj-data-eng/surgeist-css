@@ -458,11 +458,7 @@ fn parse_grid_flow_tolerance<'i, 't>(
 
     match parse_length(input)? {
         Length::Percent(value) => Ok(GridFlowTolerance::Percent(value)),
-        length @ Length::Px(_) => Ok(GridFlowTolerance::Length(length)),
-        length => Err(custom_error(
-            input,
-            format!("unsupported grid-flow-tolerance length `{length:?}`"),
-        )),
+        length => Ok(GridFlowTolerance::Length(length)),
     }
 }
 
@@ -739,5 +735,44 @@ mod tests {
     fn rejects_unknown_calc_functions() {
         let error = parse_sheet(".panel { width: min(10px, 20px); }").unwrap_err();
         assert!(error.message().contains("unsupported length function"));
+    }
+
+    #[test]
+    fn parses_calc_in_edge_shorthands() {
+        let sheet = parse_sheet(".panel { margin: calc(4px + 1%) 2px; }").unwrap();
+        let edges = match sheet.rules()[0]
+            .declarations()
+            .get(style::Property::Margin)
+            .unwrap()
+        {
+            style::Value::Edges(edges) => edges,
+            other => panic!("expected edges, got {other:?}"),
+        };
+
+        assert!(matches!(&edges.top, style::Length::Calc(_)));
+        assert_eq!(edges.right, style::Length::px(2.0));
+        assert!(matches!(&edges.bottom, style::Length::Calc(_)));
+        assert_eq!(edges.left, style::Length::px(2.0));
+    }
+
+    #[test]
+    fn parses_normal_gap_without_treating_it_as_calc() {
+        let value = declaration_value(".panel { gap: normal; }", style::Property::RowGap);
+        assert_eq!(value, style::Value::Length(style::Length::NORMAL));
+    }
+
+    #[test]
+    fn parses_calc_gap() {
+        let value = declaration_value(".panel { gap: calc(8px + 2%); }", style::Property::RowGap);
+        assert!(matches!(
+            value,
+            style::Value::Length(style::Length::Calc(_))
+        ));
+    }
+
+    #[test]
+    fn grid_flow_tolerance_calc_reaches_style_validation() {
+        let error = parse_sheet(".panel { grid-flow-tolerance: calc(8px + 2%); }").unwrap_err();
+        assert!(error.message().contains("grid flow tolerance length"));
     }
 }

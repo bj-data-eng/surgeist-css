@@ -13,9 +13,9 @@ use cssparser::{
 };
 
 use surgeist_style::{
-    self as style, AlignItems, BoxSizing, Color, Declarations, Direction, Display, Edges,
-    FlexDirection, FlexWrap, GridFlowTolerance, LayoutPosition, Length, Overflow, OverflowAxes,
-    Property, Selector, Sheet, Value,
+    self as style, AlignItems, BoxSizing, CalcLength, CalcLengthTerm, Color, Declarations,
+    Direction, Display, Edges, FlexDirection, FlexWrap, GridFlowTolerance, LayoutPosition, Length,
+    Overflow, OverflowAxes, Property, Selector, Sheet, Value,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -477,10 +477,22 @@ fn parse_edges<'i, 't>(
         }
     }
     Ok(match values.as_slice() {
-        [all] => Edges::all(*all),
-        [vertical, horizontal] => Edges::new(*vertical, *horizontal, *vertical, *horizontal),
-        [top, horizontal, bottom] => Edges::new(*top, *horizontal, *bottom, *horizontal),
-        [top, right, bottom, left] => Edges::new(*top, *right, *bottom, *left),
+        [all] => Edges::all(all.clone()),
+        [vertical, horizontal] => Edges::new(
+            vertical.clone(),
+            horizontal.clone(),
+            vertical.clone(),
+            horizontal.clone(),
+        ),
+        [top, horizontal, bottom] => Edges::new(
+            top.clone(),
+            horizontal.clone(),
+            bottom.clone(),
+            horizontal.clone(),
+        ),
+        [top, right, bottom, left] => {
+            Edges::new(top.clone(), right.clone(), bottom.clone(), left.clone())
+        }
         [] => return Err(custom_error(input, "edge shorthand is missing a value")),
         _ => unreachable!("edge shorthand parser caps values at four"),
     })
@@ -516,7 +528,68 @@ fn parse_length<'i, 't>(
             "fit-content" => Ok(Length::Fit),
             _ => Err(error_at(location, format!("unsupported length `{ident}`"))),
         },
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            let calc = input.parse_nested_block(parse_calc_length)?;
+            Ok(Length::Calc(calc))
+        }
+        Token::Function(name) => Err(error_at(
+            location,
+            format!("unsupported length function `{name}`"),
+        )),
         token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+fn parse_calc_length<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CalcLength, ParseError<'i, Error>> {
+    let mut terms = Vec::new();
+    terms.push(CalcLengthTerm::add(parse_calc_component(input)?));
+
+    while !input.is_exhausted() {
+        let location = input.current_source_location();
+        let operator = match input.next().map_err(basic)? {
+            Token::Delim('+') => CalcLengthTerm::add,
+            Token::Delim('-') => CalcLengthTerm::sub,
+            token => {
+                return Err(error_at(
+                    location,
+                    format!("expected calc operator, got `{}`", token.to_css_string()),
+                ));
+            }
+        };
+        let component = parse_calc_component(input)?;
+        terms.push(operator(component));
+    }
+
+    Ok(CalcLength::sum(terms))
+}
+
+fn parse_calc_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CalcLength, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("px") => {
+            Ok(CalcLength::px(*value))
+        }
+        Token::Dimension { unit, .. } => Err(error_at(
+            location,
+            format!("unsupported calc length unit `{unit}`"),
+        )),
+        Token::Percentage { unit_value, .. } => Ok(CalcLength::percent(*unit_value * 100.0)),
+        Token::Number { value, .. } if *value == 0.0 => Ok(CalcLength::px(0.0)),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            input.parse_nested_block(parse_calc_length)
+        }
+        Token::Function(name) => Err(error_at(
+            location,
+            format!("unsupported calc function `{name}`"),
+        )),
+        token => Err(error_at(
+            location,
+            format!("unexpected calc token `{}`", token.to_css_string()),
+        )),
     }
 }
 
@@ -608,5 +681,63 @@ fn error_at<'i>(
     ParseError {
         kind: ParseErrorKind::Custom(Error::at(location, message)),
         location,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn declaration_value(input: &str, property: style::Property) -> style::Value {
+        let sheet = parse_sheet(input).unwrap();
+        sheet.rules()[0]
+            .declarations()
+            .get(property)
+            .unwrap()
+            .clone()
+    }
+
+    #[test]
+    fn parses_calc_width_as_style_calc_length() {
+        let value = declaration_value(
+            ".panel { width: calc(20px + 10%); }",
+            style::Property::Width,
+        );
+
+        match value {
+            style::Value::Length(style::Length::Calc(calc)) => {
+                assert!(calc.uses_percentage());
+                assert_eq!(calc.to_css_string(), "calc(20px + 10%)");
+            }
+            other => panic!("expected calc length, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_nested_calc_width_with_subtraction() {
+        let value = declaration_value(
+            ".panel { width: calc(100% - calc(12px + 3%)); }",
+            style::Property::Width,
+        );
+
+        match value {
+            style::Value::Length(style::Length::Calc(calc)) => {
+                assert!(calc.uses_percentage());
+                assert_eq!(calc.to_css_string(), "calc(100% - calc(12px + 3%))");
+            }
+            other => panic!("expected nested calc length, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_unsupported_calc_units() {
+        let error = parse_sheet(".panel { width: calc(1em + 2px); }").unwrap_err();
+        assert!(error.message().contains("unsupported calc length unit"));
+    }
+
+    #[test]
+    fn rejects_unknown_calc_functions() {
+        let error = parse_sheet(".panel { width: min(10px, 20px); }").unwrap_err();
+        assert!(error.message().contains("unsupported length function"));
     }
 }

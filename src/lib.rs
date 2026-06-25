@@ -3,6 +3,9 @@
 //! This module parses CSS syntax into [`surgeist_style`] values. It is strict by
 //! design: unsupported selectors, at-rules, properties, and values are errors
 //! instead of browser-style recoverable invalid declarations.
+//!
+//! Parse failures expose typed [`ErrorKind`] values plus source line and column
+//! information so callers do not need to parse display strings.
 
 use std::fmt;
 

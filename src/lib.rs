@@ -146,12 +146,11 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {
     ) -> std::result::Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
         let mut declarations = Declarations::new();
         let mut declaration_parser = StrictDeclarationParser;
-        let location = input.current_source_location();
         for declaration in RuleBodyParser::new(input, &mut declaration_parser) {
-            let (property, value) = declaration.map_err(|(error, _)| error)?;
+            let declaration = declaration.map_err(|(error, _)| error)?;
             declarations
-                .try_insert(property, value)
-                .map_err(|error| style_validation_at(location, error))?;
+                .try_insert(declaration.property, declaration.value)
+                .map_err(|error| style_validation_at(declaration.location, error))?;
         }
 
         Ok(selectors
@@ -163,19 +162,25 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {
 
 struct StrictDeclarationParser;
 
+struct CssDeclaration {
+    property: Property,
+    value: Value,
+    location: cssparser::SourceLocation,
+}
+
 impl<'i> AtRuleParser<'i> for StrictDeclarationParser {
     type Prelude = ();
-    type AtRule = (Property, Value);
+    type AtRule = CssDeclaration;
     type Error = Error;
 }
 
 impl<'i> QualifiedRuleParser<'i> for StrictDeclarationParser {
     type Prelude = ();
-    type QualifiedRule = (Property, Value);
+    type QualifiedRule = CssDeclaration;
     type Error = Error;
 }
 
-impl<'i> RuleBodyItemParser<'i, (Property, Value), Error> for StrictDeclarationParser {
+impl<'i> RuleBodyItemParser<'i, CssDeclaration, Error> for StrictDeclarationParser {
     fn parse_declarations(&self) -> bool {
         true
     }
@@ -186,15 +191,16 @@ impl<'i> RuleBodyItemParser<'i, (Property, Value), Error> for StrictDeclarationP
 }
 
 impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
-    type Declaration = (Property, Value);
+    type Declaration = CssDeclaration;
     type Error = Error;
 
     fn parse_value<'t>(
         &mut self,
         name: CowRcStr<'i>,
         input: &mut Parser<'i, 't>,
-        _declaration_start: &ParserState,
+        declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
+        let location = declaration_start.source_location();
         let result = (|| {
             Ok(match_ignore_ascii_case! { &name,
             "display" => (Property::Display, Value::Display(parse_display(input)?)),
@@ -239,7 +245,12 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
         })()
         .map_err(|error| with_property_context(error, name.as_ref()))?;
         input.expect_exhausted().map_err(basic)?;
-        Ok(result)
+        let (property, value) = result;
+        Ok(CssDeclaration {
+            property,
+            value,
+            location,
+        })
     }
 }
 
@@ -1010,6 +1021,21 @@ mod tests {
         let error = parse_sheet(". { width: 10px; }").unwrap_err();
 
         assert!(matches!(error.kind(), ErrorKind::InvalidSelector { .. }));
+    }
+
+    #[test]
+    fn style_validation_error_uses_declaration_location() {
+        let error =
+            parse_sheet(".panel {\n  width: 12px;\n  grid-flow-tolerance: calc(8px + 2%);\n}")
+                .unwrap_err();
+
+        match error.kind() {
+            ErrorKind::StyleValidation { code, .. } => {
+                assert_eq!(*code, style::ErrorCode::InvalidValue);
+            }
+            other => panic!("expected style validation error, got {other:?}"),
+        }
+        assert_eq!(error.line(), 2);
     }
 
     #[test]

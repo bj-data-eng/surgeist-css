@@ -1056,9 +1056,21 @@ mod tests {
             other => panic!("expected edges, got {other:?}"),
         };
 
-        assert!(matches!(&edges.top, style::Length::Calc(_)));
+        match &edges.top {
+            style::Length::Calc(calc) => {
+                assert!(calc.uses_percentage());
+                assert_eq!(calc.to_css_string(), "calc(4px + 1%)");
+            }
+            other => panic!("expected calc top edge, got {other:?}"),
+        }
         assert_eq!(edges.right, style::Length::px(2.0));
-        assert!(matches!(&edges.bottom, style::Length::Calc(_)));
+        match &edges.bottom {
+            style::Length::Calc(calc) => {
+                assert!(calc.uses_percentage());
+                assert_eq!(calc.to_css_string(), "calc(4px + 1%)");
+            }
+            other => panic!("expected calc bottom edge, got {other:?}"),
+        }
         assert_eq!(edges.left, style::Length::px(2.0));
     }
 
@@ -1071,10 +1083,13 @@ mod tests {
     #[test]
     fn parses_calc_gap() {
         let value = declaration_value(".panel { gap: calc(8px + 2%); }", style::Property::RowGap);
-        assert!(matches!(
-            value,
-            style::Value::Length(style::Length::Calc(_))
-        ));
+        match value {
+            style::Value::Length(style::Length::Calc(calc)) => {
+                assert!(calc.uses_percentage());
+                assert_eq!(calc.to_css_string(), "calc(8px + 2%)");
+            }
+            other => panic!("expected calc row gap, got {other:?}"),
+        }
     }
 
     #[test]

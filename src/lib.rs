@@ -20,20 +20,59 @@ use surgeist_style::{
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[non_exhaustive]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ErrorKind {
+    InvalidSyntax {
+        reason: String,
+    },
+    InvalidSelector {
+        reason: String,
+    },
+    UnsupportedAtRule {
+        name: String,
+    },
+    UnsupportedProperty {
+        name: String,
+    },
+    UnsupportedValue {
+        property: Option<String>,
+        reason: String,
+    },
+    InvalidColor {
+        value: String,
+    },
+    StyleValidation {
+        code: style::ErrorCode,
+        reason: String,
+    },
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Error {
+    kind: ErrorKind,
     message: String,
     line: u32,
     column: u32,
 }
 
 impl Error {
-    fn at(location: cssparser::SourceLocation, message: impl Into<String>) -> Self {
+    fn at(
+        location: cssparser::SourceLocation,
+        kind: ErrorKind,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
+            kind,
             message: message.into(),
             line: location.line,
             column: location.column,
         }
+    }
+
+    #[must_use]
+    pub const fn kind(&self) -> &ErrorKind {
+        &self.kind
     }
 
     #[must_use]
@@ -112,7 +151,7 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {
             let (property, value) = declaration.map_err(|(error, _)| error)?;
             declarations
                 .try_insert(property, value)
-                .map_err(|error| error_at(location, error.to_string()))?;
+                .map_err(|error| style_validation_at(location, error))?;
         }
 
         Ok(selectors
@@ -156,7 +195,8 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
         input: &mut Parser<'i, 't>,
         _declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
-        let result = match_ignore_ascii_case! { &name,
+        let result = (|| {
+            Ok(match_ignore_ascii_case! { &name,
             "display" => (Property::Display, Value::Display(parse_display(input)?)),
             "box-sizing" => (Property::BoxSizing, Value::BoxSizing(parse_box_sizing(input)?)),
             "position" => (Property::Position, Value::Position(parse_position(input)?)),
@@ -194,8 +234,10 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             "flex-shrink" => (Property::FlexShrink, Value::Number(parse_number(input)?)),
             "aspect-ratio" => (Property::AspectRatio, Value::Number(parse_number(input)?)),
             "scrollbar-width" => (Property::ScrollbarWidth, Value::Number(parse_number(input)?)),
-            _ => return Err(custom_error(input, format!("unsupported CSS property `{name}`"))),
-        };
+            _ => return Err(unsupported_property(input, name.as_ref())),
+            })
+        })()
+        .map_err(|error| with_property_context(error, name.as_ref()))?;
         input.expect_exhausted().map_err(basic)?;
         Ok(result)
     }
@@ -211,7 +253,7 @@ fn parse_selector_list<'i, 't>(
             break;
         }
     }
-    input.expect_exhausted().map_err(basic)?;
+    input.expect_exhausted().map_err(selector_basic)?;
     Ok(selectors)
 }
 
@@ -227,17 +269,17 @@ fn parse_compound_selector<'i, 't>(
         let tag = tag.to_string();
         compound = compound
             .tag(&tag)
-            .map_err(|error| custom_error(input, error.to_string()))?;
+            .map_err(|error| invalid_selector(input, error.to_string()))?;
         tag_name = Some(tag);
     }
 
     loop {
         if input.try_parse(|input| input.expect_delim('.')).is_ok() {
-            let class = input.expect_ident_cloned().map_err(basic)?;
+            let class = input.expect_ident_cloned().map_err(selector_basic)?;
             let class = class.to_string();
             compound = compound
                 .class(&class)
-                .map_err(|error| custom_error(input, error.to_string()))?;
+                .map_err(|error| invalid_selector(input, error.to_string()))?;
             class_names.push(class);
             continue;
         }
@@ -248,33 +290,36 @@ fn parse_compound_selector<'i, 't>(
                 let key = key.to_string();
                 compound = compound
                     .key(&key)
-                    .map_err(|error| custom_error(input, error.to_string()))?;
+                    .map_err(|error| invalid_selector(input, error.to_string()))?;
                 key_name = Some(key);
             }
             Ok(token) => {
                 let message = format!("unexpected selector token `{}`", token.to_css_string());
                 input.reset(&state);
                 if tag_name.is_none() && key_name.is_none() && class_names.is_empty() {
-                    return Err(custom_error(input, message));
+                    return Err(invalid_selector(input, message));
                 }
                 break;
             }
             Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => break,
-            Err(error) => return Err(basic(error)),
+            Err(error) => return Err(selector_basic(error)),
         }
     }
 
     if tag_name.is_none() && key_name.is_none() && class_names.is_empty() {
-        return Err(custom_error(input, "selector is missing a simple selector"));
+        return Err(invalid_selector(
+            input,
+            "selector is missing a simple selector",
+        ));
     }
     if let (None, None, [class]) = (tag_name.as_ref(), key_name.as_ref(), class_names.as_slice()) {
-        return Selector::class(class).map_err(|error| custom_error(input, error.to_string()));
+        return Selector::class(class).map_err(|error| invalid_selector(input, error.to_string()));
     }
     if let (Some(tag), None, []) = (tag_name.as_ref(), key_name.as_ref(), class_names.as_slice()) {
-        return Selector::tag(tag).map_err(|error| custom_error(input, error.to_string()));
+        return Selector::tag(tag).map_err(|error| invalid_selector(input, error.to_string()));
     }
     if let (None, Some(key), []) = (tag_name.as_ref(), key_name.as_ref(), class_names.as_slice()) {
-        return Selector::key(key).map_err(|error| custom_error(input, error.to_string()));
+        return Selector::key(key).map_err(|error| invalid_selector(input, error.to_string()));
     }
     Ok(compound.selector())
 }
@@ -292,7 +337,7 @@ fn parse_display<'i, 't>(
         "grid-lanes" => Ok(Display::GridLanes),
         "inline-grid-lanes" => Ok(Display::InlineGridLanes),
         "none" => Ok(Display::None),
-        _ => Err(custom_error(input, format!("unsupported display `{ident}`"))),
+        _ => Err(unsupported_value(input, None, format!("unsupported display `{ident}`"))),
     }
 }
 
@@ -303,7 +348,7 @@ fn parse_box_sizing<'i, 't>(
     match_ignore_ascii_case! { &ident,
         "content-box" => Ok(BoxSizing::ContentBox),
         "border-box" => Ok(BoxSizing::BorderBox),
-        _ => Err(custom_error(input, format!("unsupported box-sizing `{ident}`"))),
+        _ => Err(unsupported_value(input, None, format!("unsupported box-sizing `{ident}`"))),
     }
 }
 
@@ -314,7 +359,7 @@ fn parse_position<'i, 't>(
     match_ignore_ascii_case! { &ident,
         "relative" => Ok(LayoutPosition::Relative),
         "absolute" => Ok(LayoutPosition::Absolute),
-        _ => Err(custom_error(input, format!("unsupported position `{ident}`"))),
+        _ => Err(unsupported_value(input, None, format!("unsupported position `{ident}`"))),
     }
 }
 
@@ -325,7 +370,7 @@ fn parse_direction<'i, 't>(
     match_ignore_ascii_case! { &ident,
         "ltr" => Ok(Direction::Ltr),
         "rtl" => Ok(Direction::Rtl),
-        _ => Err(custom_error(input, format!("unsupported direction `{ident}`"))),
+        _ => Err(unsupported_value(input, None, format!("unsupported direction `{ident}`"))),
     }
 }
 
@@ -338,7 +383,7 @@ fn parse_overflow<'i, 't>(
         "clip" => Ok(Overflow::Clip),
         "hidden" => Ok(Overflow::Hidden),
         "scroll" => Ok(Overflow::Scroll),
-        _ => Err(custom_error(input, format!("unsupported overflow `{ident}`"))),
+        _ => Err(unsupported_value(input, None, format!("unsupported overflow `{ident}`"))),
     }
 }
 
@@ -363,7 +408,7 @@ fn parse_flex_direction<'i, 't>(
         "column" => Ok(FlexDirection::Column),
         "row-reverse" => Ok(FlexDirection::RowReverse),
         "column-reverse" => Ok(FlexDirection::ColumnReverse),
-        _ => Err(custom_error(input, format!("unsupported flex-direction `{ident}`"))),
+        _ => Err(unsupported_value(input, None, format!("unsupported flex-direction `{ident}`"))),
     }
 }
 
@@ -375,7 +420,7 @@ fn parse_flex_wrap<'i, 't>(
         "nowrap" => Ok(FlexWrap::NoWrap),
         "wrap" => Ok(FlexWrap::Wrap),
         "wrap-reverse" => Ok(FlexWrap::WrapReverse),
-        _ => Err(custom_error(input, format!("unsupported flex-wrap `{ident}`"))),
+        _ => Err(unsupported_value(input, None, format!("unsupported flex-wrap `{ident}`"))),
     }
 }
 
@@ -408,15 +453,17 @@ fn parse_align_items<'i, 't>(
         "first" => {
             let baseline = input.expect_ident_cloned().map_err(basic)?;
             if has_overflow_prefix {
-                Err(custom_error(
+                Err(unsupported_value(
                     input,
+                    None,
                     format!("unsupported alignment `{first} first {baseline}`"),
                 ))
             } else if baseline.eq_ignore_ascii_case("baseline") {
                 Ok(AlignItems::Baseline)
             } else {
-                Err(custom_error(
+                Err(unsupported_value(
                     input,
+                    None,
                     format!("unsupported alignment `first {baseline}`"),
                 ))
             }
@@ -424,22 +471,25 @@ fn parse_align_items<'i, 't>(
         "last" => {
             let baseline = input.expect_ident_cloned().map_err(basic)?;
             if has_overflow_prefix {
-                Err(custom_error(
+                Err(unsupported_value(
                     input,
+                    None,
                     format!("unsupported alignment `{first} last {baseline}`"),
                 ))
             } else if baseline.eq_ignore_ascii_case("baseline") {
                 Ok(AlignItems::LastBaseline)
             } else {
-                Err(custom_error(
+                Err(unsupported_value(
                     input,
+                    None,
                     format!("unsupported alignment `last {baseline}`"),
                 ))
             }
         }
         "stretch" => Ok(AlignItems::Stretch),
-        _ => Err(custom_error(
+        _ => Err(unsupported_value(
             input,
+            None,
             format!("unsupported alignment `{keyword}`"),
         )),
     }
@@ -452,7 +502,7 @@ fn parse_grid_flow_tolerance<'i, 't>(
         return match_ignore_ascii_case! { &ident,
             "normal" => Ok(GridFlowTolerance::Normal),
             "infinite" => Ok(GridFlowTolerance::Infinite),
-            _ => Err(custom_error(input, format!("unsupported grid-flow-tolerance `{ident}`"))),
+            _ => Err(unsupported_value(input, None, format!("unsupported grid-flow-tolerance `{ident}`"))),
         };
     }
 
@@ -469,7 +519,11 @@ fn parse_edges<'i, 't>(
     while !input.is_exhausted() {
         values.push(parse_length(input)?);
         if values.len() == 4 && !input.is_exhausted() {
-            return Err(custom_error(input, "edge shorthand has too many values"));
+            return Err(unsupported_value(
+                input,
+                None,
+                "edge shorthand has too many values",
+            ));
         }
     }
     Ok(match values.as_slice() {
@@ -489,7 +543,13 @@ fn parse_edges<'i, 't>(
         [top, right, bottom, left] => {
             Edges::new(top.clone(), right.clone(), bottom.clone(), left.clone())
         }
-        [] => return Err(custom_error(input, "edge shorthand is missing a value")),
+        [] => {
+            return Err(unsupported_value(
+                input,
+                None,
+                "edge shorthand is missing a value",
+            ));
+        }
         _ => unreachable!("edge shorthand parser caps values at four"),
     })
 }
@@ -522,14 +582,19 @@ fn parse_length<'i, 't>(
             "min-content" => Ok(Length::MinContent),
             "max-content" => Ok(Length::MaxContent),
             "fit-content" => Ok(Length::Fit),
-            _ => Err(error_at(location, format!("unsupported length `{ident}`"))),
+            _ => Err(unsupported_value_at(
+                location,
+                None,
+                format!("unsupported length `{ident}`"),
+            )),
         },
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
             let calc = input.parse_nested_block(parse_calc_length)?;
             Ok(Length::Calc(calc))
         }
-        Token::Function(name) => Err(error_at(
+        Token::Function(name) => Err(unsupported_value_at(
             location,
+            None,
             format!("unsupported length function `{name}`"),
         )),
         token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
@@ -548,8 +613,9 @@ fn parse_calc_length<'i, 't>(
             Token::Delim('+') => CalcLengthTerm::add,
             Token::Delim('-') => CalcLengthTerm::sub,
             token => {
-                return Err(error_at(
+                return Err(unsupported_value_at(
                     location,
+                    None,
                     format!("expected calc operator, got `{}`", token.to_css_string()),
                 ));
             }
@@ -569,8 +635,9 @@ fn parse_calc_component<'i, 't>(
         Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("px") => {
             Ok(CalcLength::px(*value))
         }
-        Token::Dimension { unit, .. } => Err(error_at(
+        Token::Dimension { unit, .. } => Err(unsupported_value_at(
             location,
+            None,
             format!("unsupported calc length unit `{unit}`"),
         )),
         Token::Percentage { unit_value, .. } => Ok(CalcLength::percent(*unit_value * 100.0)),
@@ -578,12 +645,14 @@ fn parse_calc_component<'i, 't>(
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
             input.parse_nested_block(parse_calc_length)
         }
-        Token::Function(name) => Err(error_at(
+        Token::Function(name) => Err(unsupported_value_at(
             location,
+            None,
             format!("unsupported calc function `{name}`"),
         )),
-        token => Err(error_at(
+        token => Err(unsupported_value_at(
             location,
+            None,
             format!("unexpected calc token `{}`", token.to_css_string()),
         )),
     }
@@ -605,9 +674,13 @@ fn parse_color<'i, 't>(
             "transparent" => Ok(Color::TRANSPARENT),
             "black" => Ok(Color::BLACK),
             "white" => Ok(Color::rgba(1.0, 1.0, 1.0, 1.0)),
-            _ => Err(error_at(location, format!("unsupported color `{ident}`"))),
+            _ => Err(unsupported_value_at(
+                location,
+                None,
+                format!("unsupported color `{ident}`"),
+            )),
         },
-        token => Err(error_at(
+        token => Err(invalid_syntax(
             location,
             format!("unexpected CSS token `{}`", token.to_css_string()),
         )),
@@ -622,14 +695,20 @@ fn color_from_hex<'i>(
         3 => hex.chars().flat_map(|ch| [ch, ch]).collect::<String>(),
         6 => hex.to_owned(),
         _ => {
-            return Err(error_at(
+            return Err(invalid_color(
                 location,
+                format!("#{hex}"),
                 format!("unsupported hex color `#{hex}`"),
             ));
         }
     };
-    let value = u32::from_str_radix(&expanded, 16)
-        .map_err(|_| error_at(location, format!("invalid hex color `#{hex}`")))?;
+    let value = u32::from_str_radix(&expanded, 16).map_err(|_| {
+        invalid_color(
+            location,
+            format!("#{hex}"),
+            format!("invalid hex color `#{hex}`"),
+        )
+    })?;
     Ok(Color::rgba(
         ((value >> 16) & 0xff) as f32 / 255.0,
         ((value >> 8) & 0xff) as f32 / 255.0,
@@ -641,20 +720,50 @@ fn color_from_hex<'i>(
 fn from_parse_error(error: ParseError<'_, Error>) -> Error {
     match error.kind {
         ParseErrorKind::Custom(error) => error,
-        ParseErrorKind::Basic(kind) => Error::at(error.location, basic_error_message(kind)),
+        ParseErrorKind::Basic(kind) => basic_error(error.location, kind),
     }
 }
 
-fn basic_error_message(kind: BasicParseErrorKind<'_>) -> String {
+fn basic_error(location: cssparser::SourceLocation, kind: BasicParseErrorKind<'_>) -> Error {
     match kind {
-        BasicParseErrorKind::EndOfInput => "unexpected end of CSS input".to_owned(),
+        BasicParseErrorKind::EndOfInput => Error::at(
+            location,
+            ErrorKind::InvalidSyntax {
+                reason: "unexpected end of CSS input".to_owned(),
+            },
+            "unexpected end of CSS input",
+        ),
         BasicParseErrorKind::AtRuleInvalid(name) => {
-            format!("unsupported CSS at-rule `@{name}`")
+            let name = name.to_string();
+            Error::at(
+                location,
+                ErrorKind::UnsupportedAtRule { name: name.clone() },
+                format!("unsupported CSS at-rule `@{name}`"),
+            )
         }
-        BasicParseErrorKind::QualifiedRuleInvalid => "invalid CSS rule".to_owned(),
-        BasicParseErrorKind::AtRuleBodyInvalid => "invalid CSS at-rule body".to_owned(),
+        BasicParseErrorKind::QualifiedRuleInvalid => Error::at(
+            location,
+            ErrorKind::InvalidSyntax {
+                reason: "invalid CSS rule".to_owned(),
+            },
+            "invalid CSS rule",
+        ),
+        BasicParseErrorKind::AtRuleBodyInvalid => Error::at(
+            location,
+            ErrorKind::InvalidSyntax {
+                reason: "invalid CSS at-rule body".to_owned(),
+            },
+            "invalid CSS at-rule body",
+        ),
         BasicParseErrorKind::UnexpectedToken(token) => {
-            format!("unexpected CSS token `{}`", token.to_css_string())
+            let reason = format!("unexpected CSS token `{}`", token.to_css_string());
+            Error::at(
+                location,
+                ErrorKind::InvalidSyntax {
+                    reason: reason.clone(),
+                },
+                reason,
+            )
         }
     }
 }
@@ -663,19 +772,145 @@ fn basic<'i>(error: BasicParseError<'i>) -> ParseError<'i, Error> {
     error.into()
 }
 
-fn custom_error<'i, 't>(
+fn selector_basic<'i>(error: BasicParseError<'i>) -> ParseError<'i, Error> {
+    let location = error.location;
+    let reason = basic_error(location, error.kind).message().to_owned();
+    invalid_selector_at(location, reason)
+}
+
+fn invalid_syntax<'i>(
+    location: cssparser::SourceLocation,
+    reason: impl Into<String>,
+) -> ParseError<'i, Error> {
+    let reason = reason.into();
+    error_at(
+        location,
+        ErrorKind::InvalidSyntax {
+            reason: reason.clone(),
+        },
+        reason,
+    )
+}
+
+fn invalid_selector<'i, 't>(
     input: &Parser<'i, 't>,
+    reason: impl Into<String>,
+) -> ParseError<'i, Error> {
+    invalid_selector_at(input.current_source_location(), reason)
+}
+
+fn invalid_selector_at<'i>(
+    location: cssparser::SourceLocation,
+    reason: impl Into<String>,
+) -> ParseError<'i, Error> {
+    let reason = reason.into();
+    error_at(
+        location,
+        ErrorKind::InvalidSelector {
+            reason: reason.clone(),
+        },
+        reason,
+    )
+}
+
+fn unsupported_property<'i, 't>(
+    input: &Parser<'i, 't>,
+    name: impl Into<String>,
+) -> ParseError<'i, Error> {
+    let name = name.into();
+    error_at(
+        input.current_source_location(),
+        ErrorKind::UnsupportedProperty { name: name.clone() },
+        format!("unsupported CSS property `{name}`"),
+    )
+}
+
+fn unsupported_value<'i, 't>(
+    input: &Parser<'i, 't>,
+    property: Option<&str>,
+    reason: impl Into<String>,
+) -> ParseError<'i, Error> {
+    let reason = reason.into();
+    error_at(
+        input.current_source_location(),
+        ErrorKind::UnsupportedValue {
+            property: property.map(str::to_owned),
+            reason: reason.clone(),
+        },
+        reason,
+    )
+}
+
+fn unsupported_value_at<'i>(
+    location: cssparser::SourceLocation,
+    property: Option<&str>,
+    reason: impl Into<String>,
+) -> ParseError<'i, Error> {
+    let reason = reason.into();
+    error_at(
+        location,
+        ErrorKind::UnsupportedValue {
+            property: property.map(str::to_owned),
+            reason: reason.clone(),
+        },
+        reason,
+    )
+}
+
+fn invalid_color<'i>(
+    location: cssparser::SourceLocation,
+    value: impl Into<String>,
     message: impl Into<String>,
 ) -> ParseError<'i, Error> {
-    input.new_custom_error(Error::at(input.current_source_location(), message))
+    error_at(
+        location,
+        ErrorKind::InvalidColor {
+            value: value.into(),
+        },
+        message,
+    )
+}
+
+fn style_validation_at<'i>(
+    location: cssparser::SourceLocation,
+    error: style::Error,
+) -> ParseError<'i, Error> {
+    let code = error.code();
+    let reason = error.message().to_owned();
+    error_at(
+        location,
+        ErrorKind::StyleValidation {
+            code,
+            reason: reason.clone(),
+        },
+        reason,
+    )
+}
+
+fn with_property_context<'i>(
+    mut error: ParseError<'i, Error>,
+    property: &str,
+) -> ParseError<'i, Error> {
+    if let ParseErrorKind::Custom(Error {
+        kind: ErrorKind::UnsupportedValue {
+            property: context, ..
+        },
+        ..
+    }) = &mut error.kind
+        && context.is_none()
+    {
+        *context = Some(property.to_owned());
+    }
+    error
 }
 
 fn error_at<'i>(
     location: cssparser::SourceLocation,
+    kind: ErrorKind,
     message: impl Into<String>,
 ) -> ParseError<'i, Error> {
     ParseError {
-        kind: ParseErrorKind::Custom(Error::at(location, message)),
+        kind: ParseErrorKind::Custom(Error::at(location, kind, message)),
         location,
     }
 }
@@ -729,6 +964,52 @@ mod tests {
     fn rejects_unsupported_calc_units() {
         let error = parse_sheet(".panel { width: calc(1em + 2px); }").unwrap_err();
         assert!(error.message().contains("unsupported calc length unit"));
+    }
+
+    #[test]
+    fn unsupported_property_has_typed_error_kind() {
+        let error = parse_sheet(".panel { float: left; }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedProperty {
+                name: "float".to_owned(),
+            }
+        );
+        assert!(error.message().contains("unsupported CSS property `float`"));
+    }
+
+    #[test]
+    fn unsupported_calc_unit_has_typed_error_kind() {
+        let error = parse_sheet(".panel { width: calc(1em + 2px); }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedValue {
+                property: Some("width".to_owned()),
+                reason: "unsupported calc length unit `em`".to_owned(),
+            }
+        );
+        assert!(
+            error
+                .message()
+                .contains("unsupported calc length unit `em`")
+        );
+    }
+
+    #[test]
+    fn selector_parse_failure_has_typed_error_kind() {
+        let error = parse_sheet("??? { width: 10px; }").unwrap_err();
+
+        assert!(matches!(error.kind(), ErrorKind::InvalidSelector { .. }));
+        assert!(error.message().contains("unexpected selector token"));
+    }
+
+    #[test]
+    fn selector_missing_class_name_has_typed_error_kind() {
+        let error = parse_sheet(". { width: 10px; }").unwrap_err();
+
+        assert!(matches!(error.kind(), ErrorKind::InvalidSelector { .. }));
     }
 
     #[test]

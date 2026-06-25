@@ -664,13 +664,15 @@ fn style_validation_error_uses_declaration_location() {
         }
         other => panic!("expected style validation error, got {other:?}"),
     }
-    assert_eq!(error.line(), 3);
+    assert_eq!(error.line(), 2);
 }
 ```
 
 The test intentionally avoids asserting the style-owned prose reason. This crate
 only needs to prove that style validation reaches the typed CSS error boundary
-with the stable style error code and declaration source location.
+with the stable style error code and declaration source location. The expected
+line follows this crate's existing convention of exposing the raw
+`cssparser::SourceLocation` line value.
 
 - [ ] **Step 2: Run the focused failing test**
 

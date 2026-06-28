@@ -638,7 +638,11 @@ fn parse_calc_length<'i, 't>(
         terms.push(operator(component));
     }
 
-    Ok(CalcLength::sum(terms))
+    let mut terms = terms.into_iter();
+    let first = terms
+        .next()
+        .expect("calc parser records the first term before parsing operators");
+    Ok(CalcLength::sum(first, terms))
 }
 
 fn parse_calc_component<'i, 't>(

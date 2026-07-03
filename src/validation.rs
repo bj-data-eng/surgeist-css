@@ -1,3 +1,5 @@
+use crate::CssGlobalKeyword;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PropertyNameStatus {
     Supported,
@@ -189,6 +191,22 @@ pub(crate) fn classify_property_name(name: &str) -> PropertyNameStatus {
         PropertyNameStatus::KnownUnsupported
     } else {
         PropertyNameStatus::Unknown
+    }
+}
+
+pub(crate) fn parse_global_keyword(name: &str) -> Option<CssGlobalKeyword> {
+    if name.eq_ignore_ascii_case("inherit") {
+        Some(CssGlobalKeyword::Inherit)
+    } else if name.eq_ignore_ascii_case("initial") {
+        Some(CssGlobalKeyword::Initial)
+    } else if name.eq_ignore_ascii_case("unset") {
+        Some(CssGlobalKeyword::Unset)
+    } else if name.eq_ignore_ascii_case("revert") {
+        Some(CssGlobalKeyword::Revert)
+    } else if name.eq_ignore_ascii_case("revert-layer") {
+        Some(CssGlobalKeyword::RevertLayer)
+    } else {
+        None
     }
 }
 

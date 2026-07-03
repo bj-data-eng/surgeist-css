@@ -20,7 +20,7 @@ mod validation;
 
 pub use syntax::*;
 
-use validation::{PropertyNameStatus, classify_property_name};
+use validation::{PropertyNameStatus, classify_property_name, parse_global_keyword};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -196,6 +196,34 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
         declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
         let location = CssSourceLocation::from_cssparser(declaration_start.source_location());
+        let state = input.state();
+        if let Ok(ident) = input.expect_ident_cloned() {
+            if let Some(keyword) = parse_global_keyword(&ident) {
+                match classify_property_name(name.as_ref()) {
+                    PropertyNameStatus::Supported => {
+                        if !input.is_exhausted() {
+                            return Err(invalid_syntax(
+                                input.current_source_location(),
+                                "CSS global keyword must be the entire declaration value",
+                            ));
+                        }
+                        return Ok(CssDeclaration::new(
+                            property_for_supported_name(name.as_ref())
+                                .expect("supported property has CssProperty"),
+                            CssValue::GlobalKeyword(keyword),
+                            location,
+                        ));
+                    }
+                    PropertyNameStatus::KnownUnsupported | PropertyNameStatus::Unknown => {
+                        input.reset(&state);
+                        return Err(property_name_error(input, name.as_ref()));
+                    }
+                }
+            }
+            input.reset(&state);
+        } else {
+            input.reset(&state);
+        }
         let result = (|| {
             Ok(match_ignore_ascii_case! { &name,
             "display" => (CssProperty::Display, CssValue::Display(parse_display(input)?)),
@@ -982,6 +1010,49 @@ fn property_name_error<'i, 't>(input: &Parser<'i, 't>, name: &str) -> ParseError
     }
 }
 
+fn property_for_supported_name(name: &str) -> Option<CssProperty> {
+    Some(match_ignore_ascii_case! { name,
+        "display" => CssProperty::Display,
+        "box-sizing" => CssProperty::BoxSizing,
+        "position" => CssProperty::Position,
+        "direction" => CssProperty::Direction,
+        "overflow" => CssProperty::Overflow,
+        "overflow-x" => CssProperty::OverflowX,
+        "overflow-y" => CssProperty::OverflowY,
+        "flex-direction" => CssProperty::FlexDirection,
+        "flex-wrap" => CssProperty::FlexWrap,
+        "align-items" => CssProperty::AlignItems,
+        "align-self" => CssProperty::AlignSelf,
+        "justify-items" => CssProperty::JustifyItems,
+        "justify-self" => CssProperty::JustifySelf,
+        "width" => CssProperty::Width,
+        "height" => CssProperty::Height,
+        "min-width" => CssProperty::MinWidth,
+        "min-height" => CssProperty::MinHeight,
+        "max-width" => CssProperty::MaxWidth,
+        "max-height" => CssProperty::MaxHeight,
+        "flex-basis" => CssProperty::FlexBasis,
+        "gap" => CssProperty::Gap,
+        "row-gap" => CssProperty::RowGap,
+        "column-gap" => CssProperty::ColumnGap,
+        "grid-flow-tolerance" => CssProperty::GridFlowTolerance,
+        "font-size" => CssProperty::FontSize,
+        "line-height" => CssProperty::LineHeight,
+        "margin" => CssProperty::Margin,
+        "padding" => CssProperty::Padding,
+        "border-width" => CssProperty::BorderWidth,
+        "color" => CssProperty::Color,
+        "background" | "background-color" => CssProperty::Background,
+        "border-color" => CssProperty::BorderColor,
+        "opacity" => CssProperty::Opacity,
+        "flex-grow" => CssProperty::FlexGrow,
+        "flex-shrink" => CssProperty::FlexShrink,
+        "aspect-ratio" => CssProperty::AspectRatio,
+        "scrollbar-width" => CssProperty::ScrollbarWidth,
+        _ => return None,
+    })
+}
+
 fn unknown_property<'i, 't>(
     input: &Parser<'i, 't>,
     name: impl Into<String>,
@@ -1208,6 +1279,41 @@ mod tests {
             }
         );
         assert!(error.message().contains("unknown CSS property `widht`"));
+    }
+
+    #[test]
+    fn parses_global_keywords_for_different_value_domains() {
+        assert_eq!(
+            declaration_value(".panel { width: inherit; }", CssProperty::Width),
+            CssValue::GlobalKeyword(CssGlobalKeyword::Inherit)
+        );
+        assert_eq!(
+            declaration_value(".panel { display: initial; }", CssProperty::Display),
+            CssValue::GlobalKeyword(CssGlobalKeyword::Initial)
+        );
+        assert_eq!(
+            declaration_value(".panel { color: unset; }", CssProperty::Color),
+            CssValue::GlobalKeyword(CssGlobalKeyword::Unset)
+        );
+    }
+
+    #[test]
+    fn parses_newer_global_keywords_as_authored_syntax() {
+        assert_eq!(
+            declaration_value(".panel { padding: revert; }", CssProperty::Padding),
+            CssValue::GlobalKeyword(CssGlobalKeyword::Revert)
+        );
+        assert_eq!(
+            declaration_value(".panel { margin: revert-layer; }", CssProperty::Margin),
+            CssValue::GlobalKeyword(CssGlobalKeyword::RevertLayer)
+        );
+    }
+
+    #[test]
+    fn global_keyword_must_be_the_whole_value() {
+        let error = parse_sheet(".panel { width: inherit 10px; }").unwrap_err();
+
+        assert!(matches!(error.kind(), ErrorKind::InvalidSyntax { .. }));
     }
 
     #[test]

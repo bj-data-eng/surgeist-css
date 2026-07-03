@@ -172,8 +172,18 @@ pub enum CssProperty {
     ScrollbarWidth,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CssGlobalKeyword {
+    Inherit,
+    Initial,
+    Unset,
+    Revert,
+    RevertLayer,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssValue {
+    GlobalKeyword(CssGlobalKeyword),
     Display(CssDisplay),
     BoxSizing(CssBoxSizing),
     Position(CssLayoutPosition),

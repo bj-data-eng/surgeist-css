@@ -142,10 +142,19 @@ pub enum CssProperty {
     OverflowY,
     FlexDirection,
     FlexWrap,
+    Float,
+    Clear,
+    AlignContent,
+    JustifyContent,
     AlignItems,
     AlignSelf,
     JustifyItems,
     JustifySelf,
+    PlaceContent,
+    PlaceItems,
+    PlaceSelf,
+    Visibility,
+    ContentVisibility,
     Width,
     Height,
     MinWidth,
@@ -231,7 +240,13 @@ pub enum CssValue {
     OverflowAxes(CssOverflowAxes),
     FlexDirection(CssFlexDirection),
     FlexWrap(CssFlexWrap),
+    Float(CssFloat),
+    Clear(CssClear),
+    Alignment(CssAlignment),
     AlignItems(CssAlignItems),
+    PlaceAlignment(CssPlaceAlignment),
+    Visibility(CssVisibility),
+    ContentVisibility(CssContentVisibility),
     Length(CssLength),
     GridFlowTolerance(CssGridFlowTolerance),
     Edges(CssEdges),
@@ -267,8 +282,11 @@ pub enum CssBoxSizing {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CssLayoutPosition {
+    Static,
     Relative,
     Absolute,
+    Fixed,
+    Sticky,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -314,7 +332,23 @@ pub enum CssFlexWrap {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CssAlignItems {
+pub enum CssFloat {
+    Left,
+    Right,
+    None,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssClear {
+    Left,
+    Right,
+    Both,
+    None,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssAlignment {
+    Normal,
     Start,
     End,
     SafeEnd,
@@ -324,8 +358,127 @@ pub enum CssAlignItems {
     Center,
     SafeCenter,
     Baseline,
+    FirstBaseline,
     LastBaseline,
     Stretch,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssAlignItems {
+    Normal,
+    Start,
+    End,
+    SafeEnd,
+    FlexStart,
+    FlexEnd,
+    SafeFlexEnd,
+    Center,
+    SafeCenter,
+    Baseline,
+    FirstBaseline,
+    LastBaseline,
+    Stretch,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssPlaceAlignment {
+    Content(CssPlaceContentAlignment),
+    Items(CssPlaceItemsAlignment),
+}
+
+impl CssPlaceAlignment {
+    #[must_use]
+    pub const fn content(first: CssAlignment, second: CssAlignment) -> Self {
+        Self::Content(CssPlaceContentAlignment::new(first, second))
+    }
+
+    #[must_use]
+    pub const fn content_all(value: CssAlignment) -> Self {
+        Self::content(value, value)
+    }
+
+    #[must_use]
+    pub const fn items(first: CssAlignItems, second: CssAlignItems) -> Self {
+        Self::Items(CssPlaceItemsAlignment::new(first, second))
+    }
+
+    #[must_use]
+    pub const fn items_all(value: CssAlignItems) -> Self {
+        Self::items(value, value)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssPlaceContentAlignment {
+    first: CssAlignment,
+    second: CssAlignment,
+}
+
+impl CssPlaceContentAlignment {
+    #[must_use]
+    pub const fn new(first: CssAlignment, second: CssAlignment) -> Self {
+        Self { first, second }
+    }
+
+    #[must_use]
+    pub const fn all(value: CssAlignment) -> Self {
+        Self::new(value, value)
+    }
+
+    #[must_use]
+    pub const fn first(self) -> CssAlignment {
+        self.first
+    }
+
+    #[must_use]
+    pub const fn second(self) -> CssAlignment {
+        self.second
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssPlaceItemsAlignment {
+    first: CssAlignItems,
+    second: CssAlignItems,
+}
+
+impl CssPlaceItemsAlignment {
+    #[must_use]
+    pub const fn new(first: CssAlignItems, second: CssAlignItems) -> Self {
+        Self { first, second }
+    }
+
+    #[must_use]
+    pub const fn all(value: CssAlignItems) -> Self {
+        Self::new(value, value)
+    }
+
+    #[must_use]
+    pub const fn first(self) -> CssAlignItems {
+        self.first
+    }
+
+    #[must_use]
+    pub const fn second(self) -> CssAlignItems {
+        self.second
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssVisibility {
+    Visible,
+    Hidden,
+    Collapse,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssContentVisibility {
+    Visible,
+    Hidden,
+    Auto,
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -238,10 +238,19 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             "overflow-y" => (CssProperty::OverflowY, CssValue::Overflow(parse_overflow(input)?)),
             "flex-direction" => (CssProperty::FlexDirection, CssValue::FlexDirection(parse_flex_direction(input)?)),
             "flex-wrap" => (CssProperty::FlexWrap, CssValue::FlexWrap(parse_flex_wrap(input)?)),
+            "float" => (CssProperty::Float, CssValue::Float(parse_float(input)?)),
+            "clear" => (CssProperty::Clear, CssValue::Clear(parse_clear(input)?)),
+            "align-content" => (CssProperty::AlignContent, CssValue::Alignment(parse_content_alignment(input)?)),
+            "justify-content" => (CssProperty::JustifyContent, CssValue::Alignment(parse_content_alignment(input)?)),
             "align-items" => (CssProperty::AlignItems, CssValue::AlignItems(parse_align_items(input)?)),
             "align-self" => (CssProperty::AlignSelf, CssValue::AlignItems(parse_align_items(input)?)),
             "justify-items" => (CssProperty::JustifyItems, CssValue::AlignItems(parse_align_items(input)?)),
             "justify-self" => (CssProperty::JustifySelf, CssValue::AlignItems(parse_align_items(input)?)),
+            "place-content" => (CssProperty::PlaceContent, CssValue::PlaceAlignment(parse_place_alignment(input, parse_content_alignment, CssPlaceAlignment::content)?)),
+            "place-items" => (CssProperty::PlaceItems, CssValue::PlaceAlignment(parse_place_alignment(input, parse_align_items, CssPlaceAlignment::items)?)),
+            "place-self" => (CssProperty::PlaceSelf, CssValue::PlaceAlignment(parse_place_alignment(input, parse_align_items, CssPlaceAlignment::items)?)),
+            "visibility" => (CssProperty::Visibility, CssValue::Visibility(parse_visibility(input)?)),
+            "content-visibility" => (CssProperty::ContentVisibility, CssValue::ContentVisibility(parse_content_visibility(input)?)),
             "width" => (CssProperty::Width, CssValue::Length(parse_box_size_value(input)?)),
             "height" => (CssProperty::Height, CssValue::Length(parse_box_size_value(input)?)),
             "min-width" => (CssProperty::MinWidth, CssValue::Length(parse_box_size_value(input)?)),
@@ -431,8 +440,11 @@ fn parse_position<'i, 't>(
 ) -> std::result::Result<CssLayoutPosition, ParseError<'i, Error>> {
     let ident = input.expect_ident_cloned().map_err(basic)?;
     match_ignore_ascii_case! { &ident,
+        "static" => Ok(CssLayoutPosition::Static),
         "relative" => Ok(CssLayoutPosition::Relative),
         "absolute" => Ok(CssLayoutPosition::Absolute),
+        "fixed" => Ok(CssLayoutPosition::Fixed),
+        "sticky" => Ok(CssLayoutPosition::Sticky),
         _ => Err(unsupported_value(
             input,
             None,
@@ -518,9 +530,95 @@ fn parse_flex_wrap<'i, 't>(
     }
 }
 
+fn parse_float<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFloat, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "left" => Ok(CssFloat::Left),
+        "right" => Ok(CssFloat::Right),
+        "none" => Ok(CssFloat::None),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("float", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_clear<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssClear, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "left" => Ok(CssClear::Left),
+        "right" => Ok(CssClear::Right),
+        "both" => Ok(CssClear::Both),
+        "none" => Ok(CssClear::None),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("clear", ident.as_ref()),
+        )),
+    }
+}
+
+#[derive(Clone, Copy)]
+struct AlignmentOptions {
+    normal: bool,
+    distribution: bool,
+}
+
+impl AlignmentOptions {
+    const fn content() -> Self {
+        Self {
+            normal: true,
+            distribution: true,
+        }
+    }
+
+    const fn item() -> Self {
+        Self {
+            normal: true,
+            distribution: false,
+        }
+    }
+}
+
+fn parse_content_alignment<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAlignment, ParseError<'i, Error>> {
+    parse_alignment(input, AlignmentOptions::content())
+}
+
 fn parse_align_items<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssAlignItems, ParseError<'i, Error>> {
+    let alignment = parse_alignment(input, AlignmentOptions::item())?;
+    Ok(match alignment {
+        CssAlignment::Normal => CssAlignItems::Normal,
+        CssAlignment::Start => CssAlignItems::Start,
+        CssAlignment::End => CssAlignItems::End,
+        CssAlignment::SafeEnd => CssAlignItems::SafeEnd,
+        CssAlignment::FlexStart => CssAlignItems::FlexStart,
+        CssAlignment::FlexEnd => CssAlignItems::FlexEnd,
+        CssAlignment::SafeFlexEnd => CssAlignItems::SafeFlexEnd,
+        CssAlignment::Center => CssAlignItems::Center,
+        CssAlignment::SafeCenter => CssAlignItems::SafeCenter,
+        CssAlignment::Baseline => CssAlignItems::Baseline,
+        CssAlignment::FirstBaseline => CssAlignItems::FirstBaseline,
+        CssAlignment::LastBaseline => CssAlignItems::LastBaseline,
+        CssAlignment::Stretch => CssAlignItems::Stretch,
+        CssAlignment::SpaceBetween | CssAlignment::SpaceAround | CssAlignment::SpaceEvenly => {
+            unreachable!("item alignment parser disables distribution keywords")
+        }
+    })
+}
+
+fn parse_alignment<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    options: AlignmentOptions,
+) -> std::result::Result<CssAlignment, ParseError<'i, Error>> {
     let first = input.expect_ident_cloned().map_err(basic)?;
     let first = first.to_ascii_lowercase();
     let safe = first == "safe";
@@ -548,15 +646,16 @@ fn parse_align_items<'i, 't>(
     }
 
     match keyword.as_str() {
-        "start" => Ok(CssAlignItems::Start),
-        "end" if safe => Ok(CssAlignItems::SafeEnd),
-        "end" => Ok(CssAlignItems::End),
-        "flex-start" => Ok(CssAlignItems::FlexStart),
-        "flex-end" if safe => Ok(CssAlignItems::SafeFlexEnd),
-        "flex-end" => Ok(CssAlignItems::FlexEnd),
-        "center" if safe => Ok(CssAlignItems::SafeCenter),
-        "center" => Ok(CssAlignItems::Center),
-        "baseline" if !has_overflow_prefix => Ok(CssAlignItems::Baseline),
+        "normal" if options.normal && !has_overflow_prefix => Ok(CssAlignment::Normal),
+        "start" if !has_overflow_prefix => Ok(CssAlignment::Start),
+        "end" if safe => Ok(CssAlignment::SafeEnd),
+        "end" => Ok(CssAlignment::End),
+        "flex-start" if !has_overflow_prefix => Ok(CssAlignment::FlexStart),
+        "flex-end" if safe => Ok(CssAlignment::SafeFlexEnd),
+        "flex-end" => Ok(CssAlignment::FlexEnd),
+        "center" if safe => Ok(CssAlignment::SafeCenter),
+        "center" => Ok(CssAlignment::Center),
+        "baseline" if !has_overflow_prefix => Ok(CssAlignment::Baseline),
         "first" => {
             let baseline = input.expect_ident_cloned().map_err(basic)?;
             if has_overflow_prefix {
@@ -566,7 +665,7 @@ fn parse_align_items<'i, 't>(
                     unsupported_keyword_reason("alignment", format!("{first} first {baseline}")),
                 ))
             } else if baseline.eq_ignore_ascii_case("baseline") {
-                Ok(CssAlignItems::Baseline)
+                Ok(CssAlignment::FirstBaseline)
             } else {
                 Err(unsupported_value(
                     input,
@@ -584,7 +683,7 @@ fn parse_align_items<'i, 't>(
                     unsupported_keyword_reason("alignment", format!("{first} last {baseline}")),
                 ))
             } else if baseline.eq_ignore_ascii_case("baseline") {
-                Ok(CssAlignItems::LastBaseline)
+                Ok(CssAlignment::LastBaseline)
             } else {
                 Err(unsupported_value(
                     input,
@@ -593,11 +692,75 @@ fn parse_align_items<'i, 't>(
                 ))
             }
         }
-        "stretch" => Ok(CssAlignItems::Stretch),
+        "stretch" if !has_overflow_prefix => Ok(CssAlignment::Stretch),
+        "space-between" if options.distribution && !has_overflow_prefix => {
+            Ok(CssAlignment::SpaceBetween)
+        }
+        "space-around" if options.distribution && !has_overflow_prefix => {
+            Ok(CssAlignment::SpaceAround)
+        }
+        "space-evenly" if options.distribution && !has_overflow_prefix => {
+            Ok(CssAlignment::SpaceEvenly)
+        }
         _ => Err(unsupported_value(
             input,
             None,
             unsupported_keyword_reason("alignment", original),
+        )),
+    }
+}
+
+fn parse_place_alignment<'i, 't, T: Copy>(
+    input: &mut Parser<'i, 't>,
+    mut parse_component: impl FnMut(
+        &mut Parser<'i, 't>,
+    ) -> std::result::Result<T, ParseError<'i, Error>>,
+    make: impl Fn(T, T) -> CssPlaceAlignment,
+) -> std::result::Result<CssPlaceAlignment, ParseError<'i, Error>> {
+    let first = parse_component(input)?;
+    let second = if input.is_exhausted() {
+        first
+    } else {
+        parse_component(input)?
+    };
+    if !input.is_exhausted() {
+        return Err(unsupported_value(
+            input,
+            None,
+            "place alignment shorthand has too many values",
+        ));
+    }
+    Ok(make(first, second))
+}
+
+fn parse_visibility<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssVisibility, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "visible" => Ok(CssVisibility::Visible),
+        "hidden" => Ok(CssVisibility::Hidden),
+        "collapse" => Ok(CssVisibility::Collapse),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("visibility", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_content_visibility<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssContentVisibility, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "visible" => Ok(CssContentVisibility::Visible),
+        "hidden" => Ok(CssContentVisibility::Hidden),
+        "auto" => Ok(CssContentVisibility::Auto),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("content-visibility", ident.as_ref()),
         )),
     }
 }
@@ -1571,10 +1734,19 @@ fn property_for_supported_name(name: &str) -> Option<CssProperty> {
         "overflow-y" => CssProperty::OverflowY,
         "flex-direction" => CssProperty::FlexDirection,
         "flex-wrap" => CssProperty::FlexWrap,
+        "float" => CssProperty::Float,
+        "clear" => CssProperty::Clear,
+        "align-content" => CssProperty::AlignContent,
+        "justify-content" => CssProperty::JustifyContent,
         "align-items" => CssProperty::AlignItems,
         "align-self" => CssProperty::AlignSelf,
         "justify-items" => CssProperty::JustifyItems,
         "justify-self" => CssProperty::JustifySelf,
+        "place-content" => CssProperty::PlaceContent,
+        "place-items" => CssProperty::PlaceItems,
+        "place-self" => CssProperty::PlaceSelf,
+        "visibility" => CssProperty::Visibility,
+        "content-visibility" => CssProperty::ContentVisibility,
         "width" => CssProperty::Width,
         "height" => CssProperty::Height,
         "min-width" => CssProperty::MinWidth,
@@ -1895,15 +2067,19 @@ mod tests {
 
     #[test]
     fn known_but_unsupported_property_has_typed_error_kind() {
-        let error = parse_sheet(".panel { float: left; }").unwrap_err();
+        let error = parse_sheet(".panel { text-align: left; }").unwrap_err();
 
         assert_eq!(
             error.kind(),
             &ErrorKind::UnsupportedProperty {
-                name: "float".to_owned(),
+                name: "text-align".to_owned(),
             }
         );
-        assert!(error.message().contains("unsupported CSS property `float`"));
+        assert!(
+            error
+                .message()
+                .contains("unsupported CSS property `text-align`")
+        );
     }
 
     #[test]
@@ -1994,13 +2170,13 @@ mod tests {
 
     #[test]
     fn unsupported_position_keyword_is_typed_with_property_context() {
-        let error = parse_sheet(".panel { position: fixed; }").unwrap_err();
+        let error = parse_sheet(".panel { position: running; }").unwrap_err();
 
         assert_eq!(
             error.kind(),
             &ErrorKind::UnsupportedValue {
                 property: Some("position".to_owned()),
-                reason: "unsupported position keyword `fixed`".to_owned(),
+                reason: "unsupported position keyword `running`".to_owned(),
             }
         );
     }
@@ -2016,6 +2192,146 @@ mod tests {
                 reason: "unsupported alignment keyword `unsafe center`".to_owned(),
             }
         );
+    }
+
+    #[test]
+    fn parses_position_float_clear_visibility_values() {
+        assert_eq!(
+            declaration_value(".panel { position: static; }", CssProperty::Position),
+            CssValue::Position(CssLayoutPosition::Static)
+        );
+        assert_eq!(
+            declaration_value(".panel { position: fixed; }", CssProperty::Position),
+            CssValue::Position(CssLayoutPosition::Fixed)
+        );
+        assert_eq!(
+            declaration_value(".panel { position: sticky; }", CssProperty::Position),
+            CssValue::Position(CssLayoutPosition::Sticky)
+        );
+        assert_eq!(
+            declaration_value(".panel { float: left; }", CssProperty::Float),
+            CssValue::Float(CssFloat::Left)
+        );
+        assert_eq!(
+            declaration_value(".panel { clear: both; }", CssProperty::Clear),
+            CssValue::Clear(CssClear::Both)
+        );
+        assert_eq!(
+            declaration_value(".panel { visibility: collapse; }", CssProperty::Visibility),
+            CssValue::Visibility(CssVisibility::Collapse)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { content-visibility: auto; }",
+                CssProperty::ContentVisibility
+            ),
+            CssValue::ContentVisibility(CssContentVisibility::Auto)
+        );
+    }
+
+    #[test]
+    fn parses_content_alignment_and_place_shorthands() {
+        assert_eq!(
+            declaration_value(
+                ".panel { align-content: space-between; }",
+                CssProperty::AlignContent
+            ),
+            CssValue::Alignment(CssAlignment::SpaceBetween)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { justify-content: safe center; }",
+                CssProperty::JustifyContent
+            ),
+            CssValue::Alignment(CssAlignment::SafeCenter)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { align-items: first baseline; }",
+                CssProperty::AlignItems
+            ),
+            CssValue::AlignItems(CssAlignItems::FirstBaseline)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { place-content: center end; }",
+                CssProperty::PlaceContent
+            ),
+            CssValue::PlaceAlignment(CssPlaceAlignment::content(
+                CssAlignment::Center,
+                CssAlignment::End
+            ))
+        );
+        assert_eq!(
+            declaration_value(".panel { place-items: stretch; }", CssProperty::PlaceItems),
+            CssValue::PlaceAlignment(CssPlaceAlignment::items_all(CssAlignItems::Stretch))
+        );
+        assert_eq!(
+            declaration_value(".panel { place-self: end center; }", CssProperty::PlaceSelf),
+            CssValue::PlaceAlignment(CssPlaceAlignment::items(
+                CssAlignItems::End,
+                CssAlignItems::Center
+            ))
+        );
+    }
+
+    #[test]
+    fn preserves_explicit_safe_alignment_values() {
+        assert_eq!(
+            declaration_value(".panel { align-items: safe end; }", CssProperty::AlignItems),
+            CssValue::AlignItems(CssAlignItems::SafeEnd)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { align-self: safe flex-end; }",
+                CssProperty::AlignSelf
+            ),
+            CssValue::AlignItems(CssAlignItems::SafeFlexEnd)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { justify-content: safe center; }",
+                CssProperty::JustifyContent
+            ),
+            CssValue::Alignment(CssAlignment::SafeCenter)
+        );
+    }
+
+    #[test]
+    fn rejects_positioning_alignment_and_visibility_leakage_values() {
+        let cases = [
+            ".panel { float: center; }",
+            ".panel { clear: start; }",
+            ".panel { align-content: left; }",
+            ".panel { justify-content: auto; }",
+            ".panel { place-items: auto; }",
+            ".panel { place-items: space-between; }",
+            ".panel { visibility: auto; }",
+            ".panel { content-visibility: collapse; }",
+        ];
+
+        for case in cases {
+            assert!(parse_sheet(case).is_err(), "{case} should be rejected");
+        }
+    }
+
+    #[test]
+    fn rejects_unmodeled_safe_prefixed_alignment_values() {
+        let cases = [
+            ".panel { align-items: safe start; }",
+            ".panel { align-items: safe flex-start; }",
+            ".panel { align-items: safe stretch; }",
+            ".panel { align-content: safe start; }",
+            ".panel { align-content: safe flex-start; }",
+            ".panel { align-content: safe stretch; }",
+            ".panel { place-content: safe start; }",
+            ".panel { place-content: safe flex-start; }",
+            ".panel { place-content: safe stretch; }",
+        ];
+
+        for case in cases {
+            assert!(parse_sheet(case).is_err(), "{case} should be rejected");
+        }
     }
 
     #[test]

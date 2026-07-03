@@ -255,12 +255,51 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             "grid-flow-tolerance" => (CssProperty::GridFlowTolerance, CssValue::GridFlowTolerance(parse_grid_flow_tolerance(input)?)),
             "font-size" => (CssProperty::FontSize, CssValue::Length(parse_font_size(input)?)),
             "line-height" => (CssProperty::LineHeight, CssValue::Length(parse_line_height(input)?)),
+            "inset" => (CssProperty::Inset, CssValue::Edges(parse_edges(input, parse_inset_component)?)),
+            "top" => (CssProperty::Top, CssValue::Length(parse_inset_component(input)?)),
+            "right" => (CssProperty::Right, CssValue::Length(parse_inset_component(input)?)),
+            "bottom" => (CssProperty::Bottom, CssValue::Length(parse_inset_component(input)?)),
+            "left" => (CssProperty::Left, CssValue::Length(parse_inset_component(input)?)),
+            "z-index" => (CssProperty::ZIndex, CssValue::ZIndex(parse_z_index(input)?)),
+            "box-decoration-break" => (CssProperty::BoxDecorationBreak, CssValue::BoxDecorationBreak(parse_box_decoration_break(input)?)),
             "margin" => (CssProperty::Margin, CssValue::Edges(parse_edges(input, parse_margin_component)?)),
+            "margin-top" => (CssProperty::MarginTop, CssValue::Length(parse_margin_component(input)?)),
+            "margin-right" => (CssProperty::MarginRight, CssValue::Length(parse_margin_component(input)?)),
+            "margin-bottom" => (CssProperty::MarginBottom, CssValue::Length(parse_margin_component(input)?)),
+            "margin-left" => (CssProperty::MarginLeft, CssValue::Length(parse_margin_component(input)?)),
             "padding" => (CssProperty::Padding, CssValue::Edges(parse_edges(input, parse_padding_component)?)),
+            "padding-top" => (CssProperty::PaddingTop, CssValue::Length(parse_padding_component(input)?)),
+            "padding-right" => (CssProperty::PaddingRight, CssValue::Length(parse_padding_component(input)?)),
+            "padding-bottom" => (CssProperty::PaddingBottom, CssValue::Length(parse_padding_component(input)?)),
+            "padding-left" => (CssProperty::PaddingLeft, CssValue::Length(parse_padding_component(input)?)),
+            "border" => (CssProperty::Border, CssValue::Border(parse_border(input)?)),
+            "border-top" => (CssProperty::BorderTop, CssValue::Border(parse_border(input)?)),
+            "border-right" => (CssProperty::BorderRight, CssValue::Border(parse_border(input)?)),
+            "border-bottom" => (CssProperty::BorderBottom, CssValue::Border(parse_border(input)?)),
+            "border-left" => (CssProperty::BorderLeft, CssValue::Border(parse_border(input)?)),
             "border-width" => (CssProperty::BorderWidth, CssValue::Edges(parse_edges(input, parse_border_width_component)?)),
+            "border-top-width" => (CssProperty::BorderTopWidth, CssValue::Length(parse_border_width_component(input)?)),
+            "border-right-width" => (CssProperty::BorderRightWidth, CssValue::Length(parse_border_width_component(input)?)),
+            "border-bottom-width" => (CssProperty::BorderBottomWidth, CssValue::Length(parse_border_width_component(input)?)),
+            "border-left-width" => (CssProperty::BorderLeftWidth, CssValue::Length(parse_border_width_component(input)?)),
             "color" => (CssProperty::Color, CssValue::Color(parse_color(input)?)),
             "background" | "background-color" => (CssProperty::Background, CssValue::Color(parse_color(input)?)),
             "border-color" => (CssProperty::BorderColor, CssValue::Color(parse_color(input)?)),
+            "border-top-color" => (CssProperty::BorderTopColor, CssValue::Color(parse_color(input)?)),
+            "border-right-color" => (CssProperty::BorderRightColor, CssValue::Color(parse_color(input)?)),
+            "border-bottom-color" => (CssProperty::BorderBottomColor, CssValue::Color(parse_color(input)?)),
+            "border-left-color" => (CssProperty::BorderLeftColor, CssValue::Color(parse_color(input)?)),
+            "border-style" => (CssProperty::BorderStyle, CssValue::BorderStyles(parse_border_styles(input)?)),
+            "border-top-style" => (CssProperty::BorderTopStyle, CssValue::BorderStyle(parse_border_style(input)?)),
+            "border-right-style" => (CssProperty::BorderRightStyle, CssValue::BorderStyle(parse_border_style(input)?)),
+            "border-bottom-style" => (CssProperty::BorderBottomStyle, CssValue::BorderStyle(parse_border_style(input)?)),
+            "border-left-style" => (CssProperty::BorderLeftStyle, CssValue::BorderStyle(parse_border_style(input)?)),
+            "border-radius" => (CssProperty::BorderRadius, CssValue::BorderRadius(parse_border_radius(input)?)),
+            "border-top-left-radius" => (CssProperty::BorderTopLeftRadius, CssValue::CornerRadius(parse_corner_radius(input)?)),
+            "border-top-right-radius" => (CssProperty::BorderTopRightRadius, CssValue::CornerRadius(parse_corner_radius(input)?)),
+            "border-bottom-right-radius" => (CssProperty::BorderBottomRightRadius, CssValue::CornerRadius(parse_corner_radius(input)?)),
+            "border-bottom-left-radius" => (CssProperty::BorderBottomLeftRadius, CssValue::CornerRadius(parse_corner_radius(input)?)),
+            "box-shadow" => (CssProperty::BoxShadow, CssValue::BoxShadow(parse_box_shadow(input)?)),
             "opacity" => (CssProperty::Opacity, CssValue::Number(parse_number(input)?)),
             "flex-grow" => (CssProperty::FlexGrow, CssValue::Number(parse_number(input)?)),
             "flex-shrink" => (CssProperty::FlexShrink, CssValue::Number(parse_number(input)?)),
@@ -584,6 +623,50 @@ fn parse_grid_flow_tolerance<'i, 't>(
     }
 }
 
+fn parse_z_index<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssZIndex, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Ident(ident) if ident.eq_ignore_ascii_case("auto") => Ok(CssZIndex::Auto),
+        Token::Ident(ident) => Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported z-index `{ident}`"),
+        )),
+        Token::Number {
+            int_value: Some(value),
+            ..
+        } => Ok(CssZIndex::Integer(*value)),
+        Token::Number { .. } => Err(unsupported_value_at(
+            location,
+            None,
+            "unsupported z-index non-integer number",
+        )),
+        Token::Dimension { unit, .. } => Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported z-index length unit `{unit}`"),
+        )),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+fn parse_box_decoration_break<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBoxDecorationBreak, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "slice" => Ok(CssBoxDecorationBreak::Slice),
+        "clone" => Ok(CssBoxDecorationBreak::Clone),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("box-decoration-break", ident.as_ref()),
+        )),
+    }
+}
+
 fn parse_edges<'i, 't>(
     input: &mut Parser<'i, 't>,
     mut parse_component: impl FnMut(
@@ -629,10 +712,338 @@ fn parse_edges<'i, 't>(
     })
 }
 
+fn parse_border_styles<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderStyles, ParseError<'i, Error>> {
+    let mut values = Vec::new();
+    while !input.is_exhausted() {
+        values.push(parse_border_style(input)?);
+        if values.len() == 4 && !input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "border-style shorthand has too many values",
+            ));
+        }
+    }
+    Ok(match values.as_slice() {
+        [all] => CssBorderStyles::all(*all),
+        [vertical, horizontal] => {
+            CssBorderStyles::new(*vertical, *horizontal, *vertical, *horizontal)
+        }
+        [top, horizontal, bottom] => CssBorderStyles::new(*top, *horizontal, *bottom, *horizontal),
+        [top, right, bottom, left] => CssBorderStyles::new(*top, *right, *bottom, *left),
+        [] => {
+            return Err(unsupported_value(
+                input,
+                None,
+                "border-style shorthand is missing a value",
+            ));
+        }
+        _ => unreachable!("border-style shorthand parser caps values at four"),
+    })
+}
+
+fn parse_border_style<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderStyle, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "none" => Ok(CssBorderStyle::None),
+        "hidden" => Ok(CssBorderStyle::Hidden),
+        "dotted" => Ok(CssBorderStyle::Dotted),
+        "dashed" => Ok(CssBorderStyle::Dashed),
+        "solid" => Ok(CssBorderStyle::Solid),
+        "double" => Ok(CssBorderStyle::Double),
+        "groove" => Ok(CssBorderStyle::Groove),
+        "ridge" => Ok(CssBorderStyle::Ridge),
+        "inset" => Ok(CssBorderStyle::Inset),
+        "outset" => Ok(CssBorderStyle::Outset),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("border-style", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_border<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorder, ParseError<'i, Error>> {
+    let mut width = None;
+    let mut style = None;
+    let mut color = None;
+
+    while !input.is_exhausted() {
+        if let Ok(parsed_width) = input.try_parse(parse_border_width_component) {
+            if width.replace(parsed_width).is_some() {
+                return Err(unsupported_value(input, None, "duplicate border width"));
+            }
+            continue;
+        }
+        if let Ok(parsed_style) = input.try_parse(parse_border_style) {
+            if style.replace(parsed_style).is_some() {
+                return Err(unsupported_value(input, None, "duplicate border style"));
+            }
+            continue;
+        }
+        if let Ok(parsed_color) = input.try_parse(parse_color) {
+            if color.replace(parsed_color).is_some() {
+                return Err(unsupported_value(input, None, "duplicate border color"));
+            }
+            continue;
+        }
+
+        return Err(unsupported_value(
+            input,
+            None,
+            "unsupported border component",
+        ));
+    }
+
+    if width.is_none() && style.is_none() && color.is_none() {
+        Err(unsupported_value(
+            input,
+            None,
+            "border shorthand is missing a component",
+        ))
+    } else {
+        Ok(CssBorder::new(width, style, color))
+    }
+}
+
+fn parse_corner_radius<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssCornerRadius, ParseError<'i, Error>> {
+    let horizontal = parse_radius_component(input)?;
+    let vertical = if input.is_exhausted() {
+        horizontal.clone()
+    } else {
+        parse_radius_component(input)?
+    };
+    Ok(CssCornerRadius::new(horizontal, vertical))
+}
+
+fn parse_border_radius<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderRadii, ParseError<'i, Error>> {
+    let horizontal = parse_radius_component_list(input)?;
+    if horizontal.is_empty() {
+        return Err(unsupported_value(
+            input,
+            None,
+            "border-radius shorthand is missing a value",
+        ));
+    }
+
+    let vertical = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+        let vertical = parse_radius_component_list(input)?;
+        if vertical.is_empty() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "border-radius slash is missing vertical radii",
+            ));
+        }
+        vertical
+    } else {
+        horizontal.clone()
+    };
+
+    let (h_top_left, h_top_right, h_bottom_right, h_bottom_left) =
+        expand_radius_components(horizontal);
+    let (v_top_left, v_top_right, v_bottom_right, v_bottom_left) =
+        expand_radius_components(vertical);
+
+    Ok(CssBorderRadii::new(
+        CssCornerRadius::new(h_top_left, v_top_left),
+        CssCornerRadius::new(h_top_right, v_top_right),
+        CssCornerRadius::new(h_bottom_right, v_bottom_right),
+        CssCornerRadius::new(h_bottom_left, v_bottom_left),
+    ))
+}
+
+fn parse_radius_component_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Vec<CssLength>, ParseError<'i, Error>> {
+    let mut values = Vec::new();
+    while !input.is_exhausted() {
+        let state = input.state();
+        if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+            input.reset(&state);
+            break;
+        }
+
+        values.push(parse_radius_component(input)?);
+        if values.len() == 4 && !input.is_exhausted() {
+            let state = input.state();
+            let slash_is_next = input.try_parse(|input| input.expect_delim('/')).is_ok();
+            input.reset(&state);
+            if !slash_is_next {
+                return Err(unsupported_value(
+                    input,
+                    None,
+                    "border-radius shorthand has too many values",
+                ));
+            }
+        }
+    }
+    Ok(values)
+}
+
+fn expand_radius_components(
+    values: Vec<CssLength>,
+) -> (CssLength, CssLength, CssLength, CssLength) {
+    match values.as_slice() {
+        [all] => (all.clone(), all.clone(), all.clone(), all.clone()),
+        [vertical, horizontal] => (
+            vertical.clone(),
+            horizontal.clone(),
+            vertical.clone(),
+            horizontal.clone(),
+        ),
+        [top_left, top_right_bottom_left, bottom_right] => (
+            top_left.clone(),
+            top_right_bottom_left.clone(),
+            bottom_right.clone(),
+            top_right_bottom_left.clone(),
+        ),
+        [top_left, top_right, bottom_right, bottom_left] => (
+            top_left.clone(),
+            top_right.clone(),
+            bottom_right.clone(),
+            bottom_left.clone(),
+        ),
+        [] => unreachable!("caller validates non-empty border-radius components"),
+        _ => unreachable!("border-radius component parser caps values at four"),
+    }
+}
+
+fn parse_box_shadow<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBoxShadow, ParseError<'i, Error>> {
+    let state = input.state();
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned)
+        && ident.eq_ignore_ascii_case("none")
+        && input.is_exhausted()
+    {
+        return Ok(CssBoxShadow::None);
+    }
+    input.reset(&state);
+
+    let mut shadows = Vec::new();
+    loop {
+        shadows.push(parse_shadow(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "box-shadow list has an empty item",
+            ));
+        }
+    }
+
+    Ok(CssBoxShadow::Shadows(
+        CssBoxShadowList::new(shadows).expect("box-shadow parser records at least one shadow"),
+    ))
+}
+
+fn parse_shadow<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssShadow, ParseError<'i, Error>> {
+    let mut inset = false;
+    let mut color = None;
+    let mut lengths = Vec::new();
+
+    while !input.is_exhausted() {
+        let state = input.state();
+        if input.try_parse(Parser::expect_comma).is_ok() {
+            input.reset(&state);
+            break;
+        }
+
+        if input
+            .try_parse(|input| input.expect_ident_matching("inset"))
+            .is_ok()
+        {
+            if inset {
+                return Err(unsupported_value(input, None, "duplicate box-shadow inset"));
+            }
+            inset = true;
+            continue;
+        }
+
+        if let Ok(parsed_color) = input.try_parse(parse_color) {
+            if color.replace(parsed_color).is_some() {
+                return Err(unsupported_value(input, None, "duplicate box-shadow color"));
+            }
+            continue;
+        }
+
+        if lengths.len() < 4
+            && let Ok(length) = if lengths.len() == 2 {
+                input.try_parse(parse_shadow_blur_length)
+            } else {
+                input.try_parse(parse_shadow_length)
+            }
+        {
+            lengths.push(length);
+            continue;
+        }
+
+        return Err(unsupported_value(
+            input,
+            None,
+            "unsupported box-shadow component",
+        ));
+    }
+
+    match lengths.as_slice() {
+        [offset_x, offset_y] => Ok(CssShadow::new(
+            inset,
+            offset_x.clone(),
+            offset_y.clone(),
+            None,
+            None,
+            color,
+        )),
+        [offset_x, offset_y, blur] => Ok(CssShadow::new(
+            inset,
+            offset_x.clone(),
+            offset_y.clone(),
+            Some(blur.clone()),
+            None,
+            color,
+        )),
+        [offset_x, offset_y, blur, spread] => Ok(CssShadow::new(
+            inset,
+            offset_x.clone(),
+            offset_y.clone(),
+            Some(blur.clone()),
+            Some(spread.clone()),
+            color,
+        )),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            "box-shadow requires at least two offsets",
+        )),
+    }
+}
+
 fn parse_box_size_value<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
     parse_length_with(input, LengthOptions::box_size(), "box size")
+}
+
+fn parse_inset_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssLength, ParseError<'i, Error>> {
+    parse_length_with(input, LengthOptions::box_size(), "inset")
 }
 
 fn parse_margin_component<'i, 't>(
@@ -651,6 +1062,24 @@ fn parse_border_width_component<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
     parse_length_with(input, LengthOptions::border_width(), "border-width")
+}
+
+fn parse_radius_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssLength, ParseError<'i, Error>> {
+    parse_length_with(input, LengthOptions::radius(), "border-radius")
+}
+
+fn parse_shadow_length<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssLength, ParseError<'i, Error>> {
+    parse_length_with(input, LengthOptions::shadow(), "box-shadow")
+}
+
+fn parse_shadow_blur_length<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssLength, ParseError<'i, Error>> {
+    parse_length_with(input, LengthOptions::shadow_blur(), "box-shadow blur")
 }
 
 fn parse_gap_value<'i, 't>(
@@ -692,6 +1121,7 @@ struct LengthOptions {
     intrinsic: bool,
     normal: bool,
     calc_percent: bool,
+    non_negative: bool,
 }
 
 impl LengthOptions {
@@ -702,6 +1132,7 @@ impl LengthOptions {
             intrinsic: true,
             normal: false,
             calc_percent: true,
+            non_negative: false,
         }
     }
 
@@ -712,6 +1143,7 @@ impl LengthOptions {
             intrinsic: false,
             normal: false,
             calc_percent: true,
+            non_negative: false,
         }
     }
 
@@ -722,6 +1154,7 @@ impl LengthOptions {
             intrinsic: false,
             normal: false,
             calc_percent: true,
+            non_negative: true,
         }
     }
 
@@ -732,6 +1165,40 @@ impl LengthOptions {
             intrinsic: false,
             normal: false,
             calc_percent: false,
+            non_negative: true,
+        }
+    }
+
+    const fn radius() -> Self {
+        Self {
+            percent: true,
+            auto: false,
+            intrinsic: false,
+            normal: false,
+            calc_percent: true,
+            non_negative: true,
+        }
+    }
+
+    const fn shadow() -> Self {
+        Self {
+            percent: false,
+            auto: false,
+            intrinsic: false,
+            normal: false,
+            calc_percent: false,
+            non_negative: false,
+        }
+    }
+
+    const fn shadow_blur() -> Self {
+        Self {
+            percent: false,
+            auto: false,
+            intrinsic: false,
+            normal: false,
+            calc_percent: false,
+            non_negative: true,
         }
     }
 
@@ -742,6 +1209,7 @@ impl LengthOptions {
             intrinsic: false,
             normal: true,
             calc_percent: true,
+            non_negative: false,
         }
     }
 
@@ -752,6 +1220,7 @@ impl LengthOptions {
             intrinsic: false,
             normal: false,
             calc_percent: true,
+            non_negative: false,
         }
     }
 
@@ -762,6 +1231,7 @@ impl LengthOptions {
             intrinsic: false,
             normal: true,
             calc_percent: true,
+            non_negative: false,
         }
     }
 }
@@ -774,6 +1244,13 @@ fn parse_length_with<'i, 't>(
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
         Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
+            LengthUnitStatus::Supported(_) if options.non_negative && *value < 0.0 => {
+                Err(unsupported_value_at(
+                    location,
+                    None,
+                    format!("unsupported negative {context} length"),
+                ))
+            }
             LengthUnitStatus::Supported(unit) => Ok(CssLength::dimension(*value, unit)),
             LengthUnitStatus::Unknown => Err(unsupported_value_at(
                 location,
@@ -781,6 +1258,13 @@ fn parse_length_with<'i, 't>(
                 format!("unknown {context} unit `{unit}`"),
             )),
         },
+        Token::Percentage { unit_value, .. } if options.non_negative && *unit_value < 0.0 => {
+            Err(unsupported_value_at(
+                location,
+                None,
+                format!("unsupported negative {context} percentage"),
+            ))
+        }
         Token::Percentage { unit_value, .. } if options.percent => {
             Ok(CssLength::percent(*unit_value * 100.0))
         }
@@ -805,6 +1289,13 @@ fn parse_length_with<'i, 't>(
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
             let calc =
                 input.parse_nested_block(|input| parse_calc_length_with_options(input, options))?;
+            if options.non_negative && syntax::calc_has_negative_component(&calc) {
+                return Err(unsupported_value_at(
+                    location,
+                    None,
+                    format!("unsupported negative {context} calc component"),
+                ));
+            }
             Ok(CssLength::Calc(calc))
         }
         Token::Function(name) => Err(unsupported_value_at(
@@ -856,6 +1347,9 @@ fn parse_calc_component<'i, 't>(
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
         Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
+            LengthUnitStatus::Supported(_) if options.non_negative && *value < 0.0 => Err(
+                unsupported_value_at(location, None, "unsupported negative calc length"),
+            ),
             LengthUnitStatus::Supported(unit) => Ok(CssCalcLength::dimension(*value, unit)),
             LengthUnitStatus::Unknown => Err(unsupported_value_at(
                 location,
@@ -863,6 +1357,9 @@ fn parse_calc_component<'i, 't>(
                 format!("unknown calc length unit `{unit}`"),
             )),
         },
+        Token::Percentage { unit_value, .. } if options.non_negative && *unit_value < 0.0 => Err(
+            unsupported_value_at(location, None, "unsupported negative calc percentage"),
+        ),
         Token::Percentage { unit_value, .. } if options.calc_percent => {
             Ok(CssCalcLength::percent(*unit_value * 100.0))
         }
@@ -1091,12 +1588,51 @@ fn property_for_supported_name(name: &str) -> Option<CssProperty> {
         "grid-flow-tolerance" => CssProperty::GridFlowTolerance,
         "font-size" => CssProperty::FontSize,
         "line-height" => CssProperty::LineHeight,
+        "inset" => CssProperty::Inset,
+        "top" => CssProperty::Top,
+        "right" => CssProperty::Right,
+        "bottom" => CssProperty::Bottom,
+        "left" => CssProperty::Left,
+        "z-index" => CssProperty::ZIndex,
+        "box-decoration-break" => CssProperty::BoxDecorationBreak,
         "margin" => CssProperty::Margin,
+        "margin-top" => CssProperty::MarginTop,
+        "margin-right" => CssProperty::MarginRight,
+        "margin-bottom" => CssProperty::MarginBottom,
+        "margin-left" => CssProperty::MarginLeft,
         "padding" => CssProperty::Padding,
+        "padding-top" => CssProperty::PaddingTop,
+        "padding-right" => CssProperty::PaddingRight,
+        "padding-bottom" => CssProperty::PaddingBottom,
+        "padding-left" => CssProperty::PaddingLeft,
+        "border" => CssProperty::Border,
+        "border-top" => CssProperty::BorderTop,
+        "border-right" => CssProperty::BorderRight,
+        "border-bottom" => CssProperty::BorderBottom,
+        "border-left" => CssProperty::BorderLeft,
         "border-width" => CssProperty::BorderWidth,
+        "border-top-width" => CssProperty::BorderTopWidth,
+        "border-right-width" => CssProperty::BorderRightWidth,
+        "border-bottom-width" => CssProperty::BorderBottomWidth,
+        "border-left-width" => CssProperty::BorderLeftWidth,
         "color" => CssProperty::Color,
         "background" | "background-color" => CssProperty::Background,
         "border-color" => CssProperty::BorderColor,
+        "border-top-color" => CssProperty::BorderTopColor,
+        "border-right-color" => CssProperty::BorderRightColor,
+        "border-bottom-color" => CssProperty::BorderBottomColor,
+        "border-left-color" => CssProperty::BorderLeftColor,
+        "border-style" => CssProperty::BorderStyle,
+        "border-top-style" => CssProperty::BorderTopStyle,
+        "border-right-style" => CssProperty::BorderRightStyle,
+        "border-bottom-style" => CssProperty::BorderBottomStyle,
+        "border-left-style" => CssProperty::BorderLeftStyle,
+        "border-radius" => CssProperty::BorderRadius,
+        "border-top-left-radius" => CssProperty::BorderTopLeftRadius,
+        "border-top-right-radius" => CssProperty::BorderTopRightRadius,
+        "border-bottom-right-radius" => CssProperty::BorderBottomRightRadius,
+        "border-bottom-left-radius" => CssProperty::BorderBottomLeftRadius,
+        "box-shadow" => CssProperty::BoxShadow,
         "opacity" => CssProperty::Opacity,
         "flex-grow" => CssProperty::FlexGrow,
         "flex-shrink" => CssProperty::FlexShrink,
@@ -1372,12 +1908,12 @@ mod tests {
 
     #[test]
     fn another_known_but_unsupported_property_is_not_treated_as_unknown() {
-        let error = parse_sheet(".panel { z-index: 10; }").unwrap_err();
+        let error = parse_sheet(".panel { writing-mode: horizontal-tb; }").unwrap_err();
 
         assert_eq!(
             error.kind(),
             &ErrorKind::UnsupportedProperty {
-                name: "z-index".to_owned(),
+                name: "writing-mode".to_owned(),
             }
         );
     }
@@ -1636,5 +2172,410 @@ mod tests {
             declaration_value(".panel { margin: auto; }", CssProperty::Margin),
             CssValue::Edges(CssEdges::all(CssLength::Auto))
         );
+    }
+
+    #[test]
+    fn parses_spacing_inset_and_z_index_values() {
+        assert_eq!(
+            declaration_value(".panel { inset: auto 10px 5%; }", CssProperty::Inset),
+            CssValue::Edges(CssEdges::new(
+                CssLength::Auto,
+                CssLength::px(10.0),
+                CssLength::percent(5.0),
+                CssLength::px(10.0),
+            ))
+        );
+        assert_eq!(
+            declaration_value(".panel { top: calc(10px + 5%); }", CssProperty::Top),
+            CssValue::Length(CssLength::Calc(CssCalcLength::sum(
+                CssCalcLengthTerm::add(CssCalcLength::Px(10.0)),
+                [CssCalcLengthTerm::add(CssCalcLength::Percent(5.0))]
+            )))
+        );
+        assert_eq!(
+            declaration_value(".panel { z-index: -2; }", CssProperty::ZIndex),
+            CssValue::ZIndex(CssZIndex::Integer(-2))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { box-decoration-break: clone; }",
+                CssProperty::BoxDecorationBreak
+            ),
+            CssValue::BoxDecorationBreak(CssBoxDecorationBreak::Clone)
+        );
+    }
+
+    #[test]
+    fn parses_spacing_longhands_with_existing_component_rules() {
+        assert_eq!(
+            declaration_value(".panel { margin-left: auto; }", CssProperty::MarginLeft),
+            CssValue::Length(CssLength::Auto)
+        );
+        assert_eq!(
+            declaration_value(".panel { padding-top: 12px; }", CssProperty::PaddingTop),
+            CssValue::Length(CssLength::px(12.0))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { border-right-width: 2px; }",
+                CssProperty::BorderRightWidth
+            ),
+            CssValue::Length(CssLength::px(2.0))
+        );
+    }
+
+    #[test]
+    fn parses_border_style_and_border_shorthand_values() {
+        assert_eq!(
+            declaration_value(
+                ".panel { border-style: solid dashed; }",
+                CssProperty::BorderStyle
+            ),
+            CssValue::BorderStyles(CssBorderStyles::new(
+                CssBorderStyle::Solid,
+                CssBorderStyle::Dashed,
+                CssBorderStyle::Solid,
+                CssBorderStyle::Dashed,
+            ))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { border-left-style: groove; }",
+                CssProperty::BorderLeftStyle
+            ),
+            CssValue::BorderStyle(CssBorderStyle::Groove)
+        );
+        assert_eq!(
+            declaration_value(".panel { border: solid 2px #fff; }", CssProperty::Border),
+            CssValue::Border(CssBorder::new(
+                Some(CssLength::px(2.0)),
+                Some(CssBorderStyle::Solid),
+                Some(CssColor::WHITE),
+            ))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { border-top: black dotted; }",
+                CssProperty::BorderTop
+            ),
+            CssValue::Border(CssBorder::new(
+                None,
+                Some(CssBorderStyle::Dotted),
+                Some(CssColor::BLACK),
+            ))
+        );
+    }
+
+    #[test]
+    fn parses_border_radius_shorthand_and_longhands() {
+        assert_eq!(
+            declaration_value(
+                ".panel { border-top-left-radius: 4px 10%; }",
+                CssProperty::BorderTopLeftRadius,
+            ),
+            CssValue::CornerRadius(CssCornerRadius::new(
+                CssLength::px(4.0),
+                CssLength::percent(10.0),
+            ))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { border-radius: 1px 2px 3px / 4px 5px; }",
+                CssProperty::BorderRadius,
+            ),
+            CssValue::BorderRadius(CssBorderRadii::new(
+                CssCornerRadius::new(CssLength::px(1.0), CssLength::px(4.0)),
+                CssCornerRadius::new(CssLength::px(2.0), CssLength::px(5.0)),
+                CssCornerRadius::new(CssLength::px(3.0), CssLength::px(4.0)),
+                CssCornerRadius::new(CssLength::px(2.0), CssLength::px(5.0)),
+            ))
+        );
+    }
+
+    #[test]
+    fn parses_box_shadow_none_and_shadow_lists() {
+        assert_eq!(
+            declaration_value(".panel { box-shadow: none; }", CssProperty::BoxShadow),
+            CssValue::BoxShadow(CssBoxShadow::None)
+        );
+
+        let value = declaration_value(
+            ".panel { box-shadow: inset 1px 2px 3px 4px black, 0 1px #fff; }",
+            CssProperty::BoxShadow,
+        );
+
+        let CssValue::BoxShadow(CssBoxShadow::Shadows(shadows)) = value else {
+            panic!("expected box-shadow list");
+        };
+        assert_eq!(shadows.shadows().len(), 2);
+        assert_eq!(
+            shadows.shadows()[0],
+            CssShadow::new(
+                true,
+                CssLength::px(1.0),
+                CssLength::px(2.0),
+                Some(CssLength::px(3.0)),
+                Some(CssLength::px(4.0)),
+                Some(CssColor::BLACK),
+            )
+        );
+        assert_eq!(
+            shadows.shadows()[1],
+            CssShadow::new(
+                false,
+                CssLength::Zero,
+                CssLength::px(1.0),
+                None,
+                None,
+                Some(CssColor::WHITE),
+            )
+        );
+    }
+
+    #[test]
+    fn checked_border_constructor_rejects_empty_shorthands() {
+        assert_eq!(CssBorder::try_new(None, None, None), None);
+        assert_eq!(
+            CssBorder::try_new(None, Some(CssBorderStyle::Solid), None),
+            Some(CssBorder::new(None, Some(CssBorderStyle::Solid), None))
+        );
+    }
+
+    #[test]
+    fn checked_border_constructor_rejects_parser_invalid_widths() {
+        for width in [
+            CssLength::Auto,
+            CssLength::percent(10.0),
+            CssLength::px(-1.0),
+            CssLength::MinContent,
+            CssLength::Normal,
+            CssLength::Calc(CssCalcLength::Percent(10.0)),
+            CssLength::Calc(CssCalcLength::Px(-1.0)),
+        ] {
+            assert_eq!(
+                CssBorder::try_new(Some(width), Some(CssBorderStyle::Solid), None),
+                None
+            );
+        }
+
+        assert_eq!(
+            CssBorder::try_new(
+                Some(CssLength::Calc(CssCalcLength::Px(1.0))),
+                Some(CssBorderStyle::Solid),
+                None,
+            ),
+            Some(CssBorder::new(
+                Some(CssLength::Calc(CssCalcLength::Px(1.0))),
+                Some(CssBorderStyle::Solid),
+                None,
+            ))
+        );
+    }
+
+    #[test]
+    fn checked_corner_radius_constructor_rejects_parser_invalid_values() {
+        for value in [
+            CssLength::Auto,
+            CssLength::MinContent,
+            CssLength::MaxContent,
+            CssLength::FitContent,
+            CssLength::Normal,
+            CssLength::px(-1.0),
+            CssLength::percent(-1.0),
+            CssLength::Calc(CssCalcLength::Px(-1.0)),
+            CssLength::Calc(CssCalcLength::Percent(-1.0)),
+        ] {
+            assert_eq!(
+                CssCornerRadius::try_new(value.clone(), CssLength::px(1.0)),
+                None
+            );
+            assert_eq!(CssCornerRadius::try_new(CssLength::px(1.0), value), None);
+        }
+
+        assert_eq!(
+            CssCornerRadius::try_new(CssLength::px(1.0), CssLength::percent(25.0)),
+            Some(CssCornerRadius::new(
+                CssLength::px(1.0),
+                CssLength::percent(25.0)
+            ))
+        );
+    }
+
+    #[test]
+    fn checked_shadow_constructor_rejects_invalid_pairings_and_lengths() {
+        assert_eq!(
+            CssShadow::try_new(false, CssLength::Auto, CssLength::px(2.0), None, None, None,),
+            None
+        );
+        assert_eq!(
+            CssShadow::try_new(
+                false,
+                CssLength::px(1.0),
+                CssLength::px(2.0),
+                None,
+                Some(CssLength::px(4.0)),
+                None,
+            ),
+            None
+        );
+        assert_eq!(
+            CssShadow::try_new(
+                false,
+                CssLength::px(1.0),
+                CssLength::px(2.0),
+                Some(CssLength::px(-3.0)),
+                None,
+                None,
+            ),
+            None
+        );
+        assert_eq!(
+            CssShadow::try_new(
+                false,
+                CssLength::px(-1.0),
+                CssLength::px(2.0),
+                Some(CssLength::px(3.0)),
+                Some(CssLength::px(-4.0)),
+                None,
+            ),
+            Some(CssShadow::new(
+                false,
+                CssLength::px(-1.0),
+                CssLength::px(2.0),
+                Some(CssLength::px(3.0)),
+                Some(CssLength::px(-4.0)),
+                None,
+            ))
+        );
+    }
+
+    #[test]
+    fn parses_every_task_2_supported_property_name() {
+        let sheet = parse_sheet(
+            ".panel {
+                inset: auto 1px 2%;
+                top: auto;
+                right: 1px;
+                bottom: 2%;
+                left: calc(3px + 4%);
+                z-index: 7;
+                box-decoration-break: slice;
+                margin-top: auto;
+                margin-right: 1px;
+                margin-bottom: 2%;
+                margin-left: calc(3px + 4%);
+                padding-top: 1px;
+                padding-right: 2%;
+                padding-bottom: calc(3px + 4%);
+                padding-left: 0;
+                border: 1px solid black;
+                border-top: solid;
+                border-right: 1px;
+                border-bottom: #fff;
+                border-left: dashed black;
+                border-top-width: 1px;
+                border-right-width: 2px;
+                border-bottom-width: 3px;
+                border-left-width: 4px;
+                border-top-color: black;
+                border-right-color: white;
+                border-bottom-color: transparent;
+                border-left-color: #fff;
+                border-style: none hidden dotted dashed;
+                border-top-style: solid;
+                border-right-style: double;
+                border-bottom-style: ridge;
+                border-left-style: outset;
+                border-radius: 1px 2px / 3px 4px;
+                border-top-left-radius: 1px;
+                border-top-right-radius: 1px 2px;
+                border-bottom-right-radius: 10%;
+                border-bottom-left-radius: calc(1px + 2%);
+                box-shadow: 1px 2px;
+            }",
+        )
+        .unwrap();
+        let declarations = sheet.rules()[0].declarations();
+
+        for property in [
+            CssProperty::Inset,
+            CssProperty::Top,
+            CssProperty::Right,
+            CssProperty::Bottom,
+            CssProperty::Left,
+            CssProperty::ZIndex,
+            CssProperty::BoxDecorationBreak,
+            CssProperty::MarginTop,
+            CssProperty::MarginRight,
+            CssProperty::MarginBottom,
+            CssProperty::MarginLeft,
+            CssProperty::PaddingTop,
+            CssProperty::PaddingRight,
+            CssProperty::PaddingBottom,
+            CssProperty::PaddingLeft,
+            CssProperty::Border,
+            CssProperty::BorderTop,
+            CssProperty::BorderRight,
+            CssProperty::BorderBottom,
+            CssProperty::BorderLeft,
+            CssProperty::BorderTopWidth,
+            CssProperty::BorderRightWidth,
+            CssProperty::BorderBottomWidth,
+            CssProperty::BorderLeftWidth,
+            CssProperty::BorderTopColor,
+            CssProperty::BorderRightColor,
+            CssProperty::BorderBottomColor,
+            CssProperty::BorderLeftColor,
+            CssProperty::BorderStyle,
+            CssProperty::BorderTopStyle,
+            CssProperty::BorderRightStyle,
+            CssProperty::BorderBottomStyle,
+            CssProperty::BorderLeftStyle,
+            CssProperty::BorderRadius,
+            CssProperty::BorderTopLeftRadius,
+            CssProperty::BorderTopRightRadius,
+            CssProperty::BorderBottomRightRadius,
+            CssProperty::BorderBottomLeftRadius,
+            CssProperty::BoxShadow,
+        ] {
+            assert!(
+                declarations
+                    .iter()
+                    .any(|declaration| declaration.property() == property),
+                "missing parsed declaration for {property:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_negative_lengths_for_non_negative_task_2_properties() {
+        for input in [
+            ".panel { border-radius: -1px; }",
+            ".panel { padding-top: -1px; }",
+            ".panel { border-width: -1px; }",
+            ".panel { box-shadow: 1px 2px -3px; }",
+        ] {
+            let error = parse_sheet(input).expect_err(input);
+            assert!(matches!(error.kind(), ErrorKind::UnsupportedValue { .. }));
+        }
+    }
+
+    #[test]
+    fn rejects_task_2_cross_family_leakage_values() {
+        for input in [
+            ".panel { padding-top: auto; }",
+            ".panel { border-width: 10%; }",
+            ".panel { border-style: 10px; }",
+            ".panel { border-color: solid; }",
+            ".panel { border-radius: auto; }",
+            ".panel { box-shadow: auto; }",
+            ".panel { z-index: 1.5; }",
+        ] {
+            let error = parse_sheet(input).expect_err(input);
+            assert!(matches!(
+                error.kind(),
+                ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ));
+        }
     }
 }

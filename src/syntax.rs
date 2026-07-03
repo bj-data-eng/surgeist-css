@@ -159,12 +159,51 @@ pub enum CssProperty {
     GridFlowTolerance,
     FontSize,
     LineHeight,
+    Inset,
+    Top,
+    Right,
+    Bottom,
+    Left,
+    ZIndex,
+    BoxDecorationBreak,
     Margin,
+    MarginTop,
+    MarginRight,
+    MarginBottom,
+    MarginLeft,
     Padding,
+    PaddingTop,
+    PaddingRight,
+    PaddingBottom,
+    PaddingLeft,
+    Border,
+    BorderTop,
+    BorderRight,
+    BorderBottom,
+    BorderLeft,
     BorderWidth,
+    BorderTopWidth,
+    BorderRightWidth,
+    BorderBottomWidth,
+    BorderLeftWidth,
     Color,
     Background,
     BorderColor,
+    BorderTopColor,
+    BorderRightColor,
+    BorderBottomColor,
+    BorderLeftColor,
+    BorderStyle,
+    BorderTopStyle,
+    BorderRightStyle,
+    BorderBottomStyle,
+    BorderLeftStyle,
+    BorderRadius,
+    BorderTopLeftRadius,
+    BorderTopRightRadius,
+    BorderBottomRightRadius,
+    BorderBottomLeftRadius,
+    BoxShadow,
     Opacity,
     FlexGrow,
     FlexShrink,
@@ -197,6 +236,14 @@ pub enum CssValue {
     GridFlowTolerance(CssGridFlowTolerance),
     Edges(CssEdges),
     Color(CssColor),
+    ZIndex(CssZIndex),
+    BoxDecorationBreak(CssBoxDecorationBreak),
+    Border(CssBorder),
+    BorderStyle(CssBorderStyle),
+    BorderStyles(CssBorderStyles),
+    BorderRadius(CssBorderRadii),
+    CornerRadius(CssCornerRadius),
+    BoxShadow(CssBoxShadow),
     Number(f32),
 }
 
@@ -287,6 +334,18 @@ pub enum CssGridFlowTolerance {
     Infinite,
     Length(CssLength),
     Percent(f32),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssZIndex {
+    Auto,
+    Integer(i32),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssBoxDecorationBreak {
+    Slice,
+    Clone,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -547,6 +606,352 @@ impl CssEdges {
             bottom,
             left,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssBorderStyle {
+    None,
+    Hidden,
+    Dotted,
+    Dashed,
+    Solid,
+    Double,
+    Groove,
+    Ridge,
+    Inset,
+    Outset,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBorder {
+    width: Option<CssLength>,
+    style: Option<CssBorderStyle>,
+    color: Option<CssColor>,
+}
+
+impl CssBorder {
+    #[must_use]
+    pub fn try_new(
+        width: Option<CssLength>,
+        style: Option<CssBorderStyle>,
+        color: Option<CssColor>,
+    ) -> Option<Self> {
+        if width.is_none() && style.is_none() && color.is_none()
+            || width.as_ref().is_some_and(|width| !is_border_width(width))
+        {
+            None
+        } else {
+            Some(Self::new(width, style, color))
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(
+        width: Option<CssLength>,
+        style: Option<CssBorderStyle>,
+        color: Option<CssColor>,
+    ) -> Self {
+        Self {
+            width,
+            style,
+            color,
+        }
+    }
+
+    #[must_use]
+    pub const fn width(&self) -> Option<&CssLength> {
+        self.width.as_ref()
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<CssBorderStyle> {
+        self.style
+    }
+
+    #[must_use]
+    pub const fn color(&self) -> Option<CssColor> {
+        self.color
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssBorderStyles {
+    pub top: CssBorderStyle,
+    pub right: CssBorderStyle,
+    pub bottom: CssBorderStyle,
+    pub left: CssBorderStyle,
+}
+
+impl CssBorderStyles {
+    #[must_use]
+    pub const fn new(
+        top: CssBorderStyle,
+        right: CssBorderStyle,
+        bottom: CssBorderStyle,
+        left: CssBorderStyle,
+    ) -> Self {
+        Self {
+            top,
+            right,
+            bottom,
+            left,
+        }
+    }
+
+    #[must_use]
+    pub const fn all(value: CssBorderStyle) -> Self {
+        Self {
+            top: value,
+            right: value,
+            bottom: value,
+            left: value,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssCornerRadius {
+    horizontal: CssLength,
+    vertical: CssLength,
+}
+
+impl CssCornerRadius {
+    #[must_use]
+    pub fn try_new(horizontal: CssLength, vertical: CssLength) -> Option<Self> {
+        if is_radius_length(&horizontal) && is_radius_length(&vertical) {
+            Some(Self::new(horizontal, vertical))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(horizontal: CssLength, vertical: CssLength) -> Self {
+        Self {
+            horizontal,
+            vertical,
+        }
+    }
+
+    #[must_use]
+    pub const fn horizontal(&self) -> &CssLength {
+        &self.horizontal
+    }
+
+    #[must_use]
+    pub const fn vertical(&self) -> &CssLength {
+        &self.vertical
+    }
+}
+
+fn is_border_width(length: &CssLength) -> bool {
+    match length {
+        CssLength::Px(value) => *value >= 0.0,
+        CssLength::Dimension(length) => length.value() >= 0.0,
+        CssLength::Zero => true,
+        CssLength::Calc(calc) => !calc.uses_percentage() && !calc_has_negative_component(calc),
+        CssLength::Percent(_)
+        | CssLength::Auto
+        | CssLength::MinContent
+        | CssLength::MaxContent
+        | CssLength::FitContent
+        | CssLength::Normal => false,
+    }
+}
+
+fn is_radius_length(length: &CssLength) -> bool {
+    match length {
+        CssLength::Px(value) | CssLength::Percent(value) => *value >= 0.0,
+        CssLength::Dimension(length) => length.value() >= 0.0,
+        CssLength::Zero => true,
+        CssLength::Calc(calc) => !calc_has_negative_component(calc),
+        CssLength::Auto
+        | CssLength::MinContent
+        | CssLength::MaxContent
+        | CssLength::FitContent
+        | CssLength::Normal => false,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBorderRadii {
+    pub top_left: CssCornerRadius,
+    pub top_right: CssCornerRadius,
+    pub bottom_right: CssCornerRadius,
+    pub bottom_left: CssCornerRadius,
+}
+
+impl CssBorderRadii {
+    #[must_use]
+    pub const fn new(
+        top_left: CssCornerRadius,
+        top_right: CssCornerRadius,
+        bottom_right: CssCornerRadius,
+        bottom_left: CssCornerRadius,
+    ) -> Self {
+        Self {
+            top_left,
+            top_right,
+            bottom_right,
+            bottom_left,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssBoxShadow {
+    None,
+    Shadows(CssBoxShadowList),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBoxShadowList {
+    shadows: Vec<CssShadow>,
+}
+
+impl CssBoxShadowList {
+    pub(crate) fn new(shadows: Vec<CssShadow>) -> Option<Self> {
+        if shadows.is_empty() {
+            None
+        } else {
+            Some(Self { shadows })
+        }
+    }
+
+    #[must_use]
+    pub fn shadows(&self) -> &[CssShadow] {
+        &self.shadows
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssShadow {
+    inset: bool,
+    offset_x: CssLength,
+    offset_y: CssLength,
+    blur_radius: Option<CssLength>,
+    spread_radius: Option<CssLength>,
+    color: Option<CssColor>,
+}
+
+impl CssShadow {
+    #[must_use]
+    pub fn try_new(
+        inset: bool,
+        offset_x: CssLength,
+        offset_y: CssLength,
+        blur_radius: Option<CssLength>,
+        spread_radius: Option<CssLength>,
+        color: Option<CssColor>,
+    ) -> Option<Self> {
+        if !is_shadow_length(&offset_x)
+            || !is_shadow_length(&offset_y)
+            || blur_radius
+                .as_ref()
+                .is_some_and(|blur| !is_shadow_length(blur) || length_has_negative_component(blur))
+            || spread_radius
+                .as_ref()
+                .is_some_and(|spread| !is_shadow_length(spread))
+            || blur_radius.is_none() && spread_radius.is_some()
+        {
+            None
+        } else {
+            Some(Self::new(
+                inset,
+                offset_x,
+                offset_y,
+                blur_radius,
+                spread_radius,
+                color,
+            ))
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(
+        inset: bool,
+        offset_x: CssLength,
+        offset_y: CssLength,
+        blur_radius: Option<CssLength>,
+        spread_radius: Option<CssLength>,
+        color: Option<CssColor>,
+    ) -> Self {
+        Self {
+            inset,
+            offset_x,
+            offset_y,
+            blur_radius,
+            spread_radius,
+            color,
+        }
+    }
+
+    #[must_use]
+    pub const fn inset(&self) -> bool {
+        self.inset
+    }
+
+    #[must_use]
+    pub const fn offset_x(&self) -> &CssLength {
+        &self.offset_x
+    }
+
+    #[must_use]
+    pub const fn offset_y(&self) -> &CssLength {
+        &self.offset_y
+    }
+
+    #[must_use]
+    pub const fn blur_radius(&self) -> Option<&CssLength> {
+        self.blur_radius.as_ref()
+    }
+
+    #[must_use]
+    pub const fn spread_radius(&self) -> Option<&CssLength> {
+        self.spread_radius.as_ref()
+    }
+
+    #[must_use]
+    pub const fn color(&self) -> Option<CssColor> {
+        self.color
+    }
+}
+
+fn is_shadow_length(length: &CssLength) -> bool {
+    match length {
+        CssLength::Px(_) | CssLength::Dimension(_) | CssLength::Zero => true,
+        CssLength::Calc(calc) => !calc.uses_percentage(),
+        CssLength::Percent(_)
+        | CssLength::Auto
+        | CssLength::MinContent
+        | CssLength::MaxContent
+        | CssLength::FitContent
+        | CssLength::Normal => false,
+    }
+}
+
+pub(crate) fn length_has_negative_component(length: &CssLength) -> bool {
+    match length {
+        CssLength::Px(value) | CssLength::Percent(value) => *value < 0.0,
+        CssLength::Dimension(length) => length.value() < 0.0,
+        CssLength::Calc(calc) => calc_has_negative_component(calc),
+        CssLength::Zero
+        | CssLength::Auto
+        | CssLength::MinContent
+        | CssLength::MaxContent
+        | CssLength::FitContent
+        | CssLength::Normal => false,
+    }
+}
+
+pub(crate) fn calc_has_negative_component(calc: &CssCalcLength) -> bool {
+    match calc {
+        CssCalcLength::Px(value) | CssCalcLength::Percent(value) => *value < 0.0,
+        CssCalcLength::Dimension(length) => length.value() < 0.0,
+        CssCalcLength::Sum(terms) => terms
+            .iter()
+            .any(|term| calc_has_negative_component(term.value())),
     }
 }
 

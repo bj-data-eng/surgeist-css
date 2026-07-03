@@ -10,6 +10,8 @@
 //! adapters can report validation failures at the declaration site without
 //! depending on parser implementation types.
 
+use std::collections::HashMap;
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CssSheet {
     rules: Vec<CssRule>,
@@ -166,6 +168,21 @@ pub enum CssProperty {
     RowGap,
     ColumnGap,
     GridFlowTolerance,
+    GridTemplateRows,
+    GridTemplateColumns,
+    GridTemplateAreas,
+    GridTemplate,
+    GridAutoRows,
+    GridAutoColumns,
+    GridAutoFlow,
+    GridRowStart,
+    GridRowEnd,
+    GridColumnStart,
+    GridColumnEnd,
+    GridRow,
+    GridColumn,
+    GridArea,
+    Grid,
     FontSize,
     LineHeight,
     Inset,
@@ -216,6 +233,10 @@ pub enum CssProperty {
     Opacity,
     FlexGrow,
     FlexShrink,
+    Order,
+    Flex,
+    JustifyTracks,
+    AlignTracks,
     AspectRatio,
     ScrollbarWidth,
 }
@@ -249,6 +270,14 @@ pub enum CssValue {
     ContentVisibility(CssContentVisibility),
     Length(CssLength),
     GridFlowTolerance(CssGridFlowTolerance),
+    GridTrackList(CssGridTrackList),
+    GridTemplateAreas(CssGridTemplateAreas),
+    GridTemplate(CssGridTemplate),
+    GridAutoFlow(CssGridAutoFlow),
+    GridLine(CssGridLine),
+    GridLineRange(CssGridLineRange),
+    GridArea(CssGridArea),
+    Grid(CssGrid),
     Edges(CssEdges),
     Color(CssColor),
     ZIndex(CssZIndex),
@@ -259,6 +288,8 @@ pub enum CssValue {
     BorderRadius(CssBorderRadii),
     CornerRadius(CssCornerRadius),
     BoxShadow(CssBoxShadow),
+    Order(CssOrder),
+    Flex(CssFlex),
     Number(f32),
 }
 
@@ -487,6 +518,601 @@ pub enum CssGridFlowTolerance {
     Infinite,
     Length(CssLength),
     Percent(f32),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCustomIdent {
+    value: String,
+}
+
+impl CssCustomIdent {
+    #[must_use]
+    pub fn try_new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        if is_valid_custom_ident(&value) {
+            Some(Self::new(value))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(value: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+fn is_valid_custom_ident(value: &str) -> bool {
+    !value.is_empty()
+        && !matches!(
+            value.to_ascii_lowercase().as_str(),
+            "inherit" | "initial" | "unset" | "revert" | "revert-layer" | "span" | "auto"
+        )
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssGridTrackBreadth {
+    Length(CssLength),
+    Fraction(f32),
+    MinContent,
+    MaxContent,
+    Auto,
+}
+
+impl CssGridTrackBreadth {
+    #[must_use]
+    pub const fn length(length: CssLength) -> Self {
+        Self::Length(length)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssGridTrackSize {
+    Breadth(CssGridTrackBreadth),
+    MinMax {
+        min: CssGridTrackBreadth,
+        max: CssGridTrackBreadth,
+    },
+    FitContent(CssLength),
+}
+
+impl CssGridTrackSize {
+    #[must_use]
+    pub const fn breadth(breadth: CssGridTrackBreadth) -> Self {
+        Self::Breadth(breadth)
+    }
+
+    #[must_use]
+    pub const fn minmax(min: CssGridTrackBreadth, max: CssGridTrackBreadth) -> Self {
+        Self::MinMax { min, max }
+    }
+
+    #[must_use]
+    pub const fn fit_content(limit: CssLength) -> Self {
+        Self::FitContent(limit)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssGridLineNames {
+    names: Vec<CssCustomIdent>,
+}
+
+impl CssGridLineNames {
+    #[must_use]
+    pub fn try_new(names: Vec<CssCustomIdent>) -> Option<Self> {
+        if names.is_empty() {
+            None
+        } else {
+            Some(Self::new(names))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(names: Vec<CssCustomIdent>) -> Self {
+        Self { names }
+    }
+
+    #[must_use]
+    pub fn names(&self) -> &[CssCustomIdent] {
+        &self.names
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssGridTrackComponent {
+    LineNames(CssGridLineNames),
+    TrackSize(CssGridTrackSize),
+    Repeat(CssGridRepeat),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssGridTrackList {
+    components: Vec<CssGridTrackComponent>,
+}
+
+impl CssGridTrackList {
+    #[must_use]
+    pub fn try_new(components: Vec<CssGridTrackComponent>) -> Option<Self> {
+        if components.is_empty() {
+            None
+        } else {
+            Some(Self::new(components))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(components: Vec<CssGridTrackComponent>) -> Self {
+        Self { components }
+    }
+
+    #[must_use]
+    pub fn components(&self) -> &[CssGridTrackComponent] {
+        &self.components
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssGridRepeatCount {
+    Integer(CssGridRepeatInteger),
+    AutoFill,
+    AutoFit,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssGridRepeatInteger {
+    value: i32,
+}
+
+impl CssGridRepeatInteger {
+    #[must_use]
+    pub const fn try_new(value: i32) -> Option<Self> {
+        if value > 0 {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> i32 {
+        self.value
+    }
+}
+
+impl CssGridRepeatCount {
+    #[must_use]
+    pub const fn try_integer(value: i32) -> Option<Self> {
+        match CssGridRepeatInteger::try_new(value) {
+            Some(value) => Some(Self::Integer(value)),
+            None => None,
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn integer(value: i32) -> Self {
+        match Self::try_integer(value) {
+            Some(value) => value,
+            None => panic!("grid repeat integer must be positive"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssGridRepeat {
+    count: CssGridRepeatCount,
+    tracks: CssGridTrackList,
+}
+
+impl CssGridRepeat {
+    #[must_use]
+    pub fn try_new(count: CssGridRepeatCount, tracks: CssGridTrackList) -> Option<Self> {
+        if tracks.components().is_empty() {
+            None
+        } else {
+            Some(Self::new(count, tracks))
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(count: CssGridRepeatCount, tracks: CssGridTrackList) -> Self {
+        Self { count, tracks }
+    }
+
+    #[must_use]
+    pub const fn count(&self) -> CssGridRepeatCount {
+        self.count
+    }
+
+    #[must_use]
+    pub const fn tracks(&self) -> &CssGridTrackList {
+        &self.tracks
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssGridTemplateAreaCell {
+    Empty,
+    Named(CssCustomIdent),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssGridTemplateAreaRow {
+    cells: Vec<CssGridTemplateAreaCell>,
+}
+
+impl CssGridTemplateAreaRow {
+    #[must_use]
+    pub fn try_new(cells: Vec<CssGridTemplateAreaCell>) -> Option<Self> {
+        if cells.is_empty() {
+            None
+        } else {
+            Some(Self::new(cells))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(cells: Vec<CssGridTemplateAreaCell>) -> Self {
+        Self { cells }
+    }
+
+    #[must_use]
+    pub fn cells(&self) -> &[CssGridTemplateAreaCell] {
+        &self.cells
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssGridTemplateAreas {
+    None,
+    Rows(CssGridTemplateAreaRows),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssGridTemplateAreaRows {
+    rows: Vec<CssGridTemplateAreaRow>,
+}
+
+impl CssGridTemplateAreaRows {
+    #[must_use]
+    pub fn try_new(rows: Vec<CssGridTemplateAreaRow>) -> Option<Self> {
+        if grid_template_area_rows_are_valid(&rows) {
+            Some(Self { rows })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new_unchecked(rows: Vec<CssGridTemplateAreaRow>) -> Self {
+        Self { rows }
+    }
+
+    #[must_use]
+    pub fn rows(&self) -> &[CssGridTemplateAreaRow] {
+        &self.rows
+    }
+}
+
+impl CssGridTemplateAreas {
+    #[must_use]
+    pub fn try_rows(rows: Vec<CssGridTemplateAreaRow>) -> Option<Self> {
+        CssGridTemplateAreaRows::try_new(rows).map(Self::Rows)
+    }
+
+    #[must_use]
+    pub(crate) fn rows(rows: Vec<CssGridTemplateAreaRow>) -> Self {
+        Self::Rows(CssGridTemplateAreaRows::new_unchecked(rows))
+    }
+}
+
+fn grid_template_area_rows_are_valid(rows: &[CssGridTemplateAreaRow]) -> bool {
+    if rows.is_empty() {
+        return false;
+    }
+    let width = rows[0].cells().len();
+    if width == 0 || rows.iter().any(|row| row.cells().len() != width) {
+        return false;
+    }
+
+    let mut bounds = HashMap::<String, GridAreaBounds>::new();
+    for (row_index, row) in rows.iter().enumerate() {
+        for (col_index, cell) in row.cells().iter().enumerate() {
+            let CssGridTemplateAreaCell::Named(name) = cell else {
+                continue;
+            };
+            bounds
+                .entry(name.as_str().to_owned())
+                .and_modify(|bounds| {
+                    bounds.min_row = bounds.min_row.min(row_index);
+                    bounds.max_row = bounds.max_row.max(row_index);
+                    bounds.min_col = bounds.min_col.min(col_index);
+                    bounds.max_col = bounds.max_col.max(col_index);
+                    bounds.count += 1;
+                })
+                .or_insert(GridAreaBounds {
+                    min_row: row_index,
+                    max_row: row_index,
+                    min_col: col_index,
+                    max_col: col_index,
+                    count: 1,
+                });
+        }
+    }
+
+    bounds.into_values().all(|bounds| {
+        let rectangle_area =
+            (bounds.max_row - bounds.min_row + 1) * (bounds.max_col - bounds.min_col + 1);
+        rectangle_area == bounds.count
+    })
+}
+
+#[derive(Clone, Copy)]
+struct GridAreaBounds {
+    min_row: usize,
+    max_row: usize,
+    min_col: usize,
+    max_col: usize,
+    count: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssGridTemplate {
+    None,
+    RowsColumns {
+        rows: CssGridTrackList,
+        columns: Option<CssGridTrackList>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssGridAutoFlowAxis {
+    Row,
+    Column,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssGridAutoFlow {
+    axis: CssGridAutoFlowAxis,
+    dense: bool,
+}
+
+impl CssGridAutoFlow {
+    #[must_use]
+    pub const fn new(axis: CssGridAutoFlowAxis, dense: bool) -> Self {
+        Self { axis, dense }
+    }
+
+    #[must_use]
+    pub const fn axis(self) -> CssGridAutoFlowAxis {
+        self.axis
+    }
+
+    #[must_use]
+    pub const fn dense(self) -> bool {
+        self.dense
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssGridLine {
+    Auto,
+    Integer(CssGridLineInteger),
+    CustomIdent(CssCustomIdent),
+    Span(CssGridLineSpan),
+}
+
+impl CssGridLine {
+    #[must_use]
+    pub fn try_integer(value: i32) -> Option<Self> {
+        CssGridLineInteger::try_new(value).map(Self::Integer)
+    }
+
+    #[must_use]
+    pub(crate) fn integer(value: i32) -> Self {
+        match Self::try_integer(value) {
+            Some(value) => value,
+            None => panic!("grid line integer must be non-zero"),
+        }
+    }
+
+    #[must_use]
+    pub fn try_span(integer: Option<i32>, name: Option<CssCustomIdent>) -> Option<Self> {
+        CssGridLineSpan::try_new(integer, name).map(Self::Span)
+    }
+
+    #[must_use]
+    pub(crate) fn span(integer: Option<i32>, name: Option<CssCustomIdent>) -> Self {
+        Self::Span(CssGridLineSpan::new(integer, name))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssGridLineInteger {
+    value: i32,
+}
+
+impl CssGridLineInteger {
+    #[must_use]
+    pub const fn try_new(value: i32) -> Option<Self> {
+        if value != 0 {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> i32 {
+        self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssGridLineSpan {
+    integer: Option<CssGridSpanInteger>,
+    name: Option<CssCustomIdent>,
+}
+
+impl CssGridLineSpan {
+    #[must_use]
+    pub fn try_new(integer: Option<i32>, name: Option<CssCustomIdent>) -> Option<Self> {
+        let integer = match integer {
+            Some(value) => match CssGridSpanInteger::try_new(value) {
+                Some(value) => Some(value),
+                None => return None,
+            },
+            None => None,
+        };
+        if integer.is_none() && name.is_none() {
+            None
+        } else {
+            Some(Self { integer, name })
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(integer: Option<i32>, name: Option<CssCustomIdent>) -> Self {
+        match Self::try_new(integer, name) {
+            Some(value) => value,
+            None => panic!("grid span must include a positive integer or name"),
+        }
+    }
+
+    #[must_use]
+    pub const fn integer(&self) -> Option<i32> {
+        match self.integer {
+            Some(value) => Some(value.value()),
+            None => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> Option<&CssCustomIdent> {
+        self.name.as_ref()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssGridSpanInteger {
+    value: i32,
+}
+
+impl CssGridSpanInteger {
+    #[must_use]
+    pub const fn try_new(value: i32) -> Option<Self> {
+        if value > 0 {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> i32 {
+        self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssGridLineRange {
+    start: CssGridLine,
+    end: Option<CssGridLine>,
+}
+
+impl CssGridLineRange {
+    #[must_use]
+    pub const fn new(start: CssGridLine, end: Option<CssGridLine>) -> Self {
+        Self { start, end }
+    }
+
+    #[must_use]
+    pub const fn start(&self) -> &CssGridLine {
+        &self.start
+    }
+
+    #[must_use]
+    pub const fn end(&self) -> Option<&CssGridLine> {
+        self.end.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssGridArea {
+    row_start: CssGridLine,
+    column_start: Option<CssGridLine>,
+    row_end: Option<CssGridLine>,
+    column_end: Option<CssGridLine>,
+}
+
+impl CssGridArea {
+    #[must_use]
+    pub const fn new(
+        row_start: CssGridLine,
+        column_start: Option<CssGridLine>,
+        row_end: Option<CssGridLine>,
+        column_end: Option<CssGridLine>,
+    ) -> Self {
+        Self {
+            row_start,
+            column_start,
+            row_end,
+            column_end,
+        }
+    }
+
+    #[must_use]
+    pub const fn row_start(&self) -> &CssGridLine {
+        &self.row_start
+    }
+
+    #[must_use]
+    pub const fn column_start(&self) -> Option<&CssGridLine> {
+        self.column_start.as_ref()
+    }
+
+    #[must_use]
+    pub const fn row_end(&self) -> Option<&CssGridLine> {
+        self.row_end.as_ref()
+    }
+
+    #[must_use]
+    pub const fn column_end(&self) -> Option<&CssGridLine> {
+        self.column_end.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssGrid {
+    Template(CssGridTemplate),
+    AutoFlow {
+        flow: CssGridAutoFlow,
+        auto_tracks: Option<CssGridTrackList>,
+        explicit_tracks: CssGridTrackList,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssOrder {
+    Integer(i32),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssFlex {
+    None,
+    Auto,
+    Components {
+        grow: f32,
+        shrink: Option<f32>,
+        basis: Option<CssLength>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -22,7 +22,7 @@ pub use syntax::*;
 
 use validation::{
     LengthUnitStatus, PropertyNameStatus, classify_length_unit, classify_property_name,
-    parse_global_keyword,
+    parse_global_keyword, unsupported_keyword_reason,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -364,7 +364,11 @@ fn parse_display<'i, 't>(
         "grid-lanes" => Ok(CssDisplay::GridLanes),
         "inline-grid-lanes" => Ok(CssDisplay::InlineGridLanes),
         "none" => Ok(CssDisplay::None),
-        _ => Err(unsupported_value(input, None, format!("unsupported display `{ident}`"))),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("display", ident.as_ref()),
+        )),
     }
 }
 
@@ -375,7 +379,11 @@ fn parse_box_sizing<'i, 't>(
     match_ignore_ascii_case! { &ident,
         "content-box" => Ok(CssBoxSizing::ContentBox),
         "border-box" => Ok(CssBoxSizing::BorderBox),
-        _ => Err(unsupported_value(input, None, format!("unsupported box-sizing `{ident}`"))),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("box-sizing", ident.as_ref()),
+        )),
     }
 }
 
@@ -386,7 +394,11 @@ fn parse_position<'i, 't>(
     match_ignore_ascii_case! { &ident,
         "relative" => Ok(CssLayoutPosition::Relative),
         "absolute" => Ok(CssLayoutPosition::Absolute),
-        _ => Err(unsupported_value(input, None, format!("unsupported position `{ident}`"))),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("position", ident.as_ref()),
+        )),
     }
 }
 
@@ -397,7 +409,11 @@ fn parse_direction<'i, 't>(
     match_ignore_ascii_case! { &ident,
         "ltr" => Ok(CssDirection::Ltr),
         "rtl" => Ok(CssDirection::Rtl),
-        _ => Err(unsupported_value(input, None, format!("unsupported direction `{ident}`"))),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("direction", ident.as_ref()),
+        )),
     }
 }
 
@@ -410,7 +426,11 @@ fn parse_overflow<'i, 't>(
         "clip" => Ok(CssOverflow::Clip),
         "hidden" => Ok(CssOverflow::Hidden),
         "scroll" => Ok(CssOverflow::Scroll),
-        _ => Err(unsupported_value(input, None, format!("unsupported overflow `{ident}`"))),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("overflow", ident.as_ref()),
+        )),
     }
 }
 
@@ -435,7 +455,11 @@ fn parse_flex_direction<'i, 't>(
         "column" => Ok(CssFlexDirection::Column),
         "row-reverse" => Ok(CssFlexDirection::RowReverse),
         "column-reverse" => Ok(CssFlexDirection::ColumnReverse),
-        _ => Err(unsupported_value(input, None, format!("unsupported flex-direction `{ident}`"))),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("flex-direction", ident.as_ref()),
+        )),
     }
 }
 
@@ -447,7 +471,11 @@ fn parse_flex_wrap<'i, 't>(
         "nowrap" => Ok(CssFlexWrap::NoWrap),
         "wrap" => Ok(CssFlexWrap::Wrap),
         "wrap-reverse" => Ok(CssFlexWrap::WrapReverse),
-        _ => Err(unsupported_value(input, None, format!("unsupported flex-wrap `{ident}`"))),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("flex-wrap", ident.as_ref()),
+        )),
     }
 }
 
@@ -466,6 +494,19 @@ fn parse_align_items<'i, 't>(
     } else {
         first.clone()
     };
+    let original = if has_overflow_prefix {
+        format!("{first} {keyword}")
+    } else {
+        keyword.clone()
+    };
+
+    if first == "unsafe" {
+        return Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("alignment", original),
+        ));
+    }
 
     match keyword.as_str() {
         "start" => Ok(CssAlignItems::Start),
@@ -483,7 +524,7 @@ fn parse_align_items<'i, 't>(
                 Err(unsupported_value(
                     input,
                     None,
-                    format!("unsupported alignment `{first} first {baseline}`"),
+                    unsupported_keyword_reason("alignment", format!("{first} first {baseline}")),
                 ))
             } else if baseline.eq_ignore_ascii_case("baseline") {
                 Ok(CssAlignItems::Baseline)
@@ -491,7 +532,7 @@ fn parse_align_items<'i, 't>(
                 Err(unsupported_value(
                     input,
                     None,
-                    format!("unsupported alignment `first {baseline}`"),
+                    unsupported_keyword_reason("alignment", format!("first {baseline}")),
                 ))
             }
         }
@@ -501,7 +542,7 @@ fn parse_align_items<'i, 't>(
                 Err(unsupported_value(
                     input,
                     None,
-                    format!("unsupported alignment `{first} last {baseline}`"),
+                    unsupported_keyword_reason("alignment", format!("{first} last {baseline}")),
                 ))
             } else if baseline.eq_ignore_ascii_case("baseline") {
                 Ok(CssAlignItems::LastBaseline)
@@ -509,7 +550,7 @@ fn parse_align_items<'i, 't>(
                 Err(unsupported_value(
                     input,
                     None,
-                    format!("unsupported alignment `last {baseline}`"),
+                    unsupported_keyword_reason("alignment", format!("last {baseline}")),
                 ))
             }
         }
@@ -517,7 +558,7 @@ fn parse_align_items<'i, 't>(
         _ => Err(unsupported_value(
             input,
             None,
-            format!("unsupported alignment `{keyword}`"),
+            unsupported_keyword_reason("alignment", original),
         )),
     }
 }
@@ -529,7 +570,11 @@ fn parse_grid_flow_tolerance<'i, 't>(
         return match_ignore_ascii_case! { &ident,
             "normal" => Ok(CssGridFlowTolerance::Normal),
             "infinite" => Ok(CssGridFlowTolerance::Infinite),
-            _ => Err(unsupported_value(input, None, format!("unsupported grid-flow-tolerance `{ident}`"))),
+            _ => Err(unsupported_value(
+                input,
+                None,
+                unsupported_keyword_reason("grid-flow-tolerance", ident.as_ref()),
+            )),
         };
     }
 
@@ -872,7 +917,7 @@ fn parse_color<'i, 't>(
             _ => Err(unsupported_value_at(
                 location,
                 None,
-                format!("unsupported color `{ident}`"),
+                unsupported_keyword_reason("color", ident.as_ref()),
             )),
         },
         token => Err(invalid_syntax(
@@ -1332,6 +1377,58 @@ mod tests {
         let error = parse_sheet(".panel { width: inherit 10px; }").unwrap_err();
 
         assert!(matches!(error.kind(), ErrorKind::InvalidSyntax { .. }));
+    }
+
+    #[test]
+    fn unsupported_display_keyword_is_typed_with_property_context() {
+        let error = parse_sheet(".panel { display: inline; }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedValue {
+                property: Some("display".to_owned()),
+                reason: "unsupported display keyword `inline`".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn unsupported_overflow_keyword_is_typed_with_property_context() {
+        let error = parse_sheet(".panel { overflow: auto; }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedValue {
+                property: Some("overflow".to_owned()),
+                reason: "unsupported overflow keyword `auto`".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn unsupported_position_keyword_is_typed_with_property_context() {
+        let error = parse_sheet(".panel { position: fixed; }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedValue {
+                property: Some("position".to_owned()),
+                reason: "unsupported position keyword `fixed`".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn unsupported_alignment_keyword_is_typed_with_property_context() {
+        let error = parse_sheet(".panel { align-items: unsafe center; }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedValue {
+                property: Some("align-items".to_owned()),
+                reason: "unsupported alignment keyword `unsafe center`".to_owned(),
+            }
+        );
     }
 
     #[test]

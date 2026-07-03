@@ -234,6 +234,10 @@ pub(crate) fn parse_global_keyword(name: &str) -> Option<CssGlobalKeyword> {
     }
 }
 
+pub(crate) fn unsupported_keyword_reason(domain: &str, keyword: impl AsRef<str>) -> String {
+    format!("unsupported {domain} keyword `{}`", keyword.as_ref())
+}
+
 fn contains_ascii_case(haystack: &[&str], needle: &str) -> bool {
     haystack
         .iter()

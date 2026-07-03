@@ -13,4 +13,3 @@ path = "src/lib.rs"
 
 [dependencies]
 cssparser = "=0.37.0"
-surgeist-style = { path = "../surgeist-style", version = "=0.1.0" }

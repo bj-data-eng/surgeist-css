@@ -20,7 +20,10 @@ mod validation;
 
 pub use syntax::*;
 
-use validation::{PropertyNameStatus, classify_property_name, parse_global_keyword};
+use validation::{
+    LengthUnitStatus, PropertyNameStatus, classify_length_unit, classify_property_name,
+    parse_global_keyword,
+};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -725,9 +728,19 @@ fn parse_length_with<'i, 't>(
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
-        Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("px") => {
-            Ok(CssLength::px(*value))
-        }
+        Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
+            LengthUnitStatus::SupportedPx => Ok(CssLength::px(*value)),
+            LengthUnitStatus::KnownUnsupported => Err(unsupported_value_at(
+                location,
+                None,
+                format!("unsupported {context} unit `{unit}`"),
+            )),
+            LengthUnitStatus::Unknown => Err(unsupported_value_at(
+                location,
+                None,
+                format!("unknown {context} unit `{unit}`"),
+            )),
+        },
         Token::Percentage { unit_value, .. } if options.percent => {
             Ok(CssLength::percent(*unit_value * 100.0))
         }
@@ -802,14 +815,19 @@ fn parse_calc_component<'i, 't>(
 ) -> std::result::Result<CssCalcLength, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
-        Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("px") => {
-            Ok(CssCalcLength::px(*value))
-        }
-        Token::Dimension { unit, .. } => Err(unsupported_value_at(
-            location,
-            None,
-            format!("unsupported calc length unit `{unit}`"),
-        )),
+        Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
+            LengthUnitStatus::SupportedPx => Ok(CssCalcLength::px(*value)),
+            LengthUnitStatus::KnownUnsupported => Err(unsupported_value_at(
+                location,
+                None,
+                format!("unsupported calc length unit `{unit}`"),
+            )),
+            LengthUnitStatus::Unknown => Err(unsupported_value_at(
+                location,
+                None,
+                format!("unknown calc length unit `{unit}`"),
+            )),
+        },
         Token::Percentage { unit_value, .. } if options.calc_percent => {
             Ok(CssCalcLength::percent(*unit_value * 100.0))
         }
@@ -1331,6 +1349,58 @@ mod tests {
             error
                 .message()
                 .contains("unsupported calc length unit `em`")
+        );
+    }
+
+    #[test]
+    fn unsupported_length_units_report_the_unit_and_property() {
+        let error = parse_sheet(".panel { width: 1rem; }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedValue {
+                property: Some("width".to_owned()),
+                reason: "unsupported box size unit `rem`".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn unsupported_viewport_units_report_the_unit_and_property() {
+        let error = parse_sheet(".panel { font-size: 2vh; }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedValue {
+                property: Some("font-size".to_owned()),
+                reason: "unsupported font-size unit `vh`".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn unsupported_calc_units_still_report_the_unit_and_property() {
+        let error = parse_sheet(".panel { width: calc(1rem + 2px); }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedValue {
+                property: Some("width".to_owned()),
+                reason: "unsupported calc length unit `rem`".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn unknown_dimension_units_are_reported_as_unknown_units() {
+        let error = parse_sheet(".panel { width: 1quux; }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedValue {
+                property: Some("width".to_owned()),
+                reason: "unknown box size unit `quux`".to_owned(),
+            }
         );
     }
 

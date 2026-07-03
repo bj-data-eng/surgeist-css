@@ -1,11 +1,25 @@
 use crate::CssGlobalKeyword;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum LengthUnitStatus {
+    SupportedPx,
+    KnownUnsupported,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PropertyNameStatus {
     Supported,
     KnownUnsupported,
     Unknown,
 }
+
+const KNOWN_UNSUPPORTED_LENGTH_UNITS: &[&str] = &[
+    "em", "rem", "ex", "rex", "cap", "rcap", "ch", "rch", "ic", "ric", "lh", "rlh", "vw", "vh",
+    "vi", "vb", "vmin", "vmax", "svw", "svh", "svi", "svb", "svmin", "svmax", "lvw", "lvh", "lvi",
+    "lvb", "lvmin", "lvmax", "dvw", "dvh", "dvi", "dvb", "dvmin", "dvmax", "cqw", "cqh", "cqi",
+    "cqb", "cqmin", "cqmax", "cm", "mm", "q", "in", "pc", "pt",
+];
 
 const SUPPORTED_PROPERTY_NAMES: &[&str] = &[
     "display",
@@ -191,6 +205,16 @@ pub(crate) fn classify_property_name(name: &str) -> PropertyNameStatus {
         PropertyNameStatus::KnownUnsupported
     } else {
         PropertyNameStatus::Unknown
+    }
+}
+
+pub(crate) fn classify_length_unit(unit: &str) -> LengthUnitStatus {
+    if unit.eq_ignore_ascii_case("px") {
+        LengthUnitStatus::SupportedPx
+    } else if contains_ascii_case(KNOWN_UNSUPPORTED_LENGTH_UNITS, unit) {
+        LengthUnitStatus::KnownUnsupported
+    } else {
+        LengthUnitStatus::Unknown
     }
 }
 

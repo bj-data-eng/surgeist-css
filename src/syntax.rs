@@ -5,6 +5,10 @@
 //! validation bag: property-specific parsers in this crate decide which value
 //! forms are accepted for each declaration, and downstream crates own their own
 //! normalization and validation phases.
+//!
+//! Successful declarations carry their authored source location so downstream
+//! adapters can report validation failures at the declaration site without
+//! depending on parser implementation types.
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CssSheet {
@@ -57,12 +61,21 @@ impl CssRule {
 pub struct CssDeclaration {
     property: CssProperty,
     value: CssValue,
+    location: CssSourceLocation,
 }
 
 impl CssDeclaration {
     #[must_use]
-    pub(crate) const fn new(property: CssProperty, value: CssValue) -> Self {
-        Self { property, value }
+    pub(crate) const fn new(
+        property: CssProperty,
+        value: CssValue,
+        location: CssSourceLocation,
+    ) -> Self {
+        Self {
+            property,
+            value,
+            location,
+        }
     }
 
     #[must_use]
@@ -73,6 +86,48 @@ impl CssDeclaration {
     #[must_use]
     pub const fn value(&self) -> &CssValue {
         &self.value
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+
+    #[must_use]
+    pub const fn line(&self) -> u32 {
+        self.location.line()
+    }
+
+    #[must_use]
+    pub const fn column(&self) -> u32 {
+        self.location.column()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CssSourceLocation {
+    line: u32,
+    column: u32,
+}
+
+impl CssSourceLocation {
+    #[must_use]
+    pub const fn new(line: u32, column: u32) -> Self {
+        Self { line, column }
+    }
+
+    pub(crate) const fn from_cssparser(location: cssparser::SourceLocation) -> Self {
+        Self::new(location.line, location.column)
+    }
+
+    #[must_use]
+    pub const fn line(self) -> u32 {
+        self.line
+    }
+
+    #[must_use]
+    pub const fn column(self) -> u32 {
+        self.column
     }
 }
 
@@ -425,10 +480,20 @@ impl CssCalcLengthTerm {
             value,
         }
     }
+
+    #[must_use]
+    pub const fn operator(&self) -> CssCalcOperator {
+        self.operator
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssCalcLength {
+        &self.value
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CssCalcOperator {
+pub enum CssCalcOperator {
     Add,
     Subtract,
 }

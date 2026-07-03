@@ -187,8 +187,9 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
         &mut self,
         name: CowRcStr<'i>,
         input: &mut Parser<'i, 't>,
-        _declaration_start: &ParserState,
+        declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
+        let location = CssSourceLocation::from_cssparser(declaration_start.source_location());
         let result = (|| {
             Ok(match_ignore_ascii_case! { &name,
             "display" => (CssProperty::Display, CssValue::Display(parse_display(input)?)),
@@ -234,7 +235,7 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
         .map_err(|error| with_property_context(error, name.as_ref()))?;
         input.expect_exhausted().map_err(basic)?;
         let (property, value) = result;
-        Ok(CssDeclaration::new(property, value))
+        Ok(CssDeclaration::new(property, value, location))
     }
 }
 
@@ -1056,6 +1057,16 @@ mod tests {
             .clone()
     }
 
+    fn declaration(input: &str, property: CssProperty) -> CssDeclaration {
+        let sheet = parse_sheet(input).unwrap();
+        sheet.rules()[0]
+            .declarations()
+            .iter()
+            .find(|declaration| declaration.property() == property)
+            .unwrap()
+            .clone()
+    }
+
     #[test]
     fn parses_calc_width_as_css_calc_length() {
         let value = declaration_value(".panel { width: calc(20px + 10%); }", CssProperty::Width);
@@ -1083,6 +1094,50 @@ mod tests {
             }
             other => panic!("expected nested calc length, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn exposes_nested_calc_terms_structurally() {
+        let value = declaration_value(
+            ".panel { width: calc(100% - calc(12px + 3%)); }",
+            CssProperty::Width,
+        );
+
+        let calc = match value {
+            CssValue::Length(CssLength::Calc(calc)) => calc,
+            other => panic!("expected nested calc length, got {other:?}"),
+        };
+
+        let terms = match calc {
+            CssCalcLength::Sum(terms) => terms,
+            other => panic!("expected calc sum, got {other:?}"),
+        };
+        assert_eq!(terms.len(), 2);
+        assert_eq!(terms[0].operator(), CssCalcOperator::Add);
+        assert_eq!(terms[0].value(), &CssCalcLength::Percent(100.0));
+        assert_eq!(terms[1].operator(), CssCalcOperator::Subtract);
+
+        let nested_terms = match terms[1].value() {
+            CssCalcLength::Sum(terms) => terms,
+            other => panic!("expected nested calc sum, got {other:?}"),
+        };
+        assert_eq!(nested_terms.len(), 2);
+        assert_eq!(nested_terms[0].operator(), CssCalcOperator::Add);
+        assert_eq!(nested_terms[0].value(), &CssCalcLength::Px(12.0));
+        assert_eq!(nested_terms[1].operator(), CssCalcOperator::Add);
+        assert_eq!(nested_terms[1].value(), &CssCalcLength::Percent(3.0));
+    }
+
+    #[test]
+    fn successful_declarations_expose_authored_source_location() {
+        let input = ".panel {\n  height: 20px;\n  width: calc(100% - 4px);\n}\n";
+        let height = declaration(input, CssProperty::Height);
+        let width = declaration(input, CssProperty::Width);
+
+        assert_eq!(height.location(), CssSourceLocation::new(1, 3));
+        assert_eq!(width.location(), CssSourceLocation::new(2, 3));
+        assert_eq!(width.line(), 2);
+        assert_eq!(width.column(), 3);
     }
 
     #[test]

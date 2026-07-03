@@ -16,8 +16,11 @@ use cssparser::{
 };
 
 mod syntax;
+mod validation;
 
 pub use syntax::*;
+
+use validation::{PropertyNameStatus, classify_property_name};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -31,6 +34,9 @@ pub enum ErrorKind {
         reason: String,
     },
     UnsupportedAtRule {
+        name: String,
+    },
+    UnknownProperty {
         name: String,
     },
     UnsupportedProperty {
@@ -229,7 +235,7 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             "flex-shrink" => (CssProperty::FlexShrink, CssValue::Number(parse_number(input)?)),
             "aspect-ratio" => (CssProperty::AspectRatio, CssValue::Number(parse_number(input)?)),
             "scrollbar-width" => (CssProperty::ScrollbarWidth, CssValue::Number(parse_number(input)?)),
-            _ => return Err(unsupported_property(input, name.as_ref())),
+            _ => return Err(property_name_error(input, name.as_ref())),
             })
         })()
         .map_err(|error| with_property_context(error, name.as_ref()))?;
@@ -968,6 +974,26 @@ fn unsupported_property<'i, 't>(
     )
 }
 
+fn property_name_error<'i, 't>(input: &Parser<'i, 't>, name: &str) -> ParseError<'i, Error> {
+    match classify_property_name(name) {
+        PropertyNameStatus::Supported => unsupported_property(input, name),
+        PropertyNameStatus::KnownUnsupported => unsupported_property(input, name),
+        PropertyNameStatus::Unknown => unknown_property(input, name),
+    }
+}
+
+fn unknown_property<'i, 't>(
+    input: &Parser<'i, 't>,
+    name: impl Into<String>,
+) -> ParseError<'i, Error> {
+    let name = name.into();
+    error_at(
+        input.current_source_location(),
+        ErrorKind::UnknownProperty { name: name.clone() },
+        format!("unknown CSS property `{name}`"),
+    )
+}
+
 fn unsupported_value<'i, 't>(
     input: &Parser<'i, 't>,
     property: Option<&str>,
@@ -1147,7 +1173,7 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_property_has_typed_error_kind() {
+    fn known_but_unsupported_property_has_typed_error_kind() {
         let error = parse_sheet(".panel { float: left; }").unwrap_err();
 
         assert_eq!(
@@ -1157,6 +1183,31 @@ mod tests {
             }
         );
         assert!(error.message().contains("unsupported CSS property `float`"));
+    }
+
+    #[test]
+    fn another_known_but_unsupported_property_is_not_treated_as_unknown() {
+        let error = parse_sheet(".panel { z-index: 10; }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedProperty {
+                name: "z-index".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn typo_property_has_unknown_property_error_kind() {
+        let error = parse_sheet(".panel { widht: 10px; }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnknownProperty {
+                name: "widht".to_owned(),
+            }
+        );
+        assert!(error.message().contains("unknown CSS property `widht`"));
     }
 
     #[test]

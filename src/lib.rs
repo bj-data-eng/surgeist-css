@@ -774,12 +774,7 @@ fn parse_length_with<'i, 't>(
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
         Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
-            LengthUnitStatus::SupportedPx => Ok(CssLength::px(*value)),
-            LengthUnitStatus::KnownUnsupported => Err(unsupported_value_at(
-                location,
-                None,
-                format!("unsupported {context} unit `{unit}`"),
-            )),
+            LengthUnitStatus::Supported(unit) => Ok(CssLength::dimension(*value, unit)),
             LengthUnitStatus::Unknown => Err(unsupported_value_at(
                 location,
                 None,
@@ -861,12 +856,7 @@ fn parse_calc_component<'i, 't>(
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
         Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
-            LengthUnitStatus::SupportedPx => Ok(CssCalcLength::px(*value)),
-            LengthUnitStatus::KnownUnsupported => Err(unsupported_value_at(
-                location,
-                None,
-                format!("unsupported calc length unit `{unit}`"),
-            )),
+            LengthUnitStatus::Supported(unit) => Ok(CssCalcLength::dimension(*value, unit)),
             LengthUnitStatus::Unknown => Err(unsupported_value_at(
                 location,
                 None,
@@ -1301,9 +1291,70 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unsupported_calc_units() {
-        let error = parse_sheet(".panel { width: calc(1em + 2px); }").unwrap_err();
-        assert!(error.message().contains("unsupported calc length unit"));
+    fn parses_supported_length_units_as_authored_dimensions() {
+        let cases = [
+            ("1em", 1.0, CssLengthUnit::Em),
+            ("2rem", 2.0, CssLengthUnit::Rem),
+            ("3vw", 3.0, CssLengthUnit::Vw),
+            ("4svh", 4.0, CssLengthUnit::Svh),
+            ("5lvw", 5.0, CssLengthUnit::Lvw),
+            ("6dvb", 6.0, CssLengthUnit::Dvb),
+            ("7cqi", 7.0, CssLengthUnit::Cqi),
+            ("8cm", 8.0, CssLengthUnit::Cm),
+            ("9pt", 9.0, CssLengthUnit::Pt),
+        ];
+
+        for (authored, expected_value, expected_unit) in cases {
+            let value = declaration_value(
+                &format!(".panel {{ width: {authored}; }}"),
+                CssProperty::Width,
+            );
+
+            match value {
+                CssValue::Length(CssLength::Dimension(length)) => {
+                    assert_eq!(length.value(), expected_value);
+                    assert_eq!(length.unit(), expected_unit);
+                    assert_eq!(length.to_css_string(), authored);
+                }
+                other => panic!("expected authored dimension for {authored}, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn parses_supported_calc_length_units_as_authored_dimensions() {
+        let cases = [
+            ("1em", 1.0, CssLengthUnit::Em),
+            ("2rem", 2.0, CssLengthUnit::Rem),
+            ("3vw", 3.0, CssLengthUnit::Vw),
+            ("4svh", 4.0, CssLengthUnit::Svh),
+            ("5lvw", 5.0, CssLengthUnit::Lvw),
+            ("6dvb", 6.0, CssLengthUnit::Dvb),
+            ("7cqi", 7.0, CssLengthUnit::Cqi),
+            ("8cm", 8.0, CssLengthUnit::Cm),
+            ("9pt", 9.0, CssLengthUnit::Pt),
+        ];
+
+        for (authored, expected_value, expected_unit) in cases {
+            let value = declaration_value(
+                &format!(".panel {{ width: calc({authored} + 2px); }}"),
+                CssProperty::Width,
+            );
+
+            let CssValue::Length(CssLength::Calc(CssCalcLength::Sum(terms))) = value else {
+                panic!("expected calc length for {authored}");
+            };
+            assert_eq!(terms.len(), 2);
+            match terms[0].value() {
+                CssCalcLength::Dimension(length) => {
+                    assert_eq!(length.value(), expected_value);
+                    assert_eq!(length.unit(), expected_unit);
+                    assert_eq!(length.to_css_string(), authored);
+                }
+                other => panic!("expected authored calc dimension for {authored}, got {other:?}"),
+            }
+            assert_eq!(terms[1].value(), &CssCalcLength::Px(2.0));
+        }
     }
 
     #[test]
@@ -1432,63 +1483,6 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_calc_unit_has_typed_error_kind() {
-        let error = parse_sheet(".panel { width: calc(1em + 2px); }").unwrap_err();
-
-        assert_eq!(
-            error.kind(),
-            &ErrorKind::UnsupportedValue {
-                property: Some("width".to_owned()),
-                reason: "unsupported calc length unit `em`".to_owned(),
-            }
-        );
-        assert!(
-            error
-                .message()
-                .contains("unsupported calc length unit `em`")
-        );
-    }
-
-    #[test]
-    fn unsupported_length_units_report_the_unit_and_property() {
-        let error = parse_sheet(".panel { width: 1rem; }").unwrap_err();
-
-        assert_eq!(
-            error.kind(),
-            &ErrorKind::UnsupportedValue {
-                property: Some("width".to_owned()),
-                reason: "unsupported box size unit `rem`".to_owned(),
-            }
-        );
-    }
-
-    #[test]
-    fn unsupported_viewport_units_report_the_unit_and_property() {
-        let error = parse_sheet(".panel { font-size: 2vh; }").unwrap_err();
-
-        assert_eq!(
-            error.kind(),
-            &ErrorKind::UnsupportedValue {
-                property: Some("font-size".to_owned()),
-                reason: "unsupported font-size unit `vh`".to_owned(),
-            }
-        );
-    }
-
-    #[test]
-    fn unsupported_calc_units_still_report_the_unit_and_property() {
-        let error = parse_sheet(".panel { width: calc(1rem + 2px); }").unwrap_err();
-
-        assert_eq!(
-            error.kind(),
-            &ErrorKind::UnsupportedValue {
-                property: Some("width".to_owned()),
-                reason: "unsupported calc length unit `rem`".to_owned(),
-            }
-        );
-    }
-
-    #[test]
     fn unknown_dimension_units_are_reported_as_unknown_units() {
         let error = parse_sheet(".panel { width: 1quux; }").unwrap_err();
 
@@ -1497,6 +1491,19 @@ mod tests {
             &ErrorKind::UnsupportedValue {
                 property: Some("width".to_owned()),
                 reason: "unknown box size unit `quux`".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn unknown_calc_dimension_units_are_reported_as_unknown_units() {
+        let error = parse_sheet(".panel { width: calc(1quux + 2px); }").unwrap_err();
+
+        assert_eq!(
+            error.kind(),
+            &ErrorKind::UnsupportedValue {
+                property: Some("width".to_owned()),
+                reason: "unknown calc length unit `quux`".to_owned(),
             }
         );
     }

@@ -289,9 +289,207 @@ pub enum CssGridFlowTolerance {
     Percent(f32),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssLengthUnit {
+    Px,
+    Em,
+    Rem,
+    Ex,
+    Rex,
+    Cap,
+    Rcap,
+    Ch,
+    Rch,
+    Ic,
+    Ric,
+    Lh,
+    Rlh,
+    Vw,
+    Vh,
+    Vi,
+    Vb,
+    Vmin,
+    Vmax,
+    Svw,
+    Svh,
+    Svi,
+    Svb,
+    Svmin,
+    Svmax,
+    Lvw,
+    Lvh,
+    Lvi,
+    Lvb,
+    Lvmin,
+    Lvmax,
+    Dvw,
+    Dvh,
+    Dvi,
+    Dvb,
+    Dvmin,
+    Dvmax,
+    Cqw,
+    Cqh,
+    Cqi,
+    Cqb,
+    Cqmin,
+    Cqmax,
+    Cm,
+    Mm,
+    Q,
+    In,
+    Pc,
+    Pt,
+}
+
+impl CssLengthUnit {
+    pub(crate) fn from_css_unit(unit: &str) -> Option<Self> {
+        Some(match unit.to_ascii_lowercase().as_str() {
+            "px" => Self::Px,
+            "em" => Self::Em,
+            "rem" => Self::Rem,
+            "ex" => Self::Ex,
+            "rex" => Self::Rex,
+            "cap" => Self::Cap,
+            "rcap" => Self::Rcap,
+            "ch" => Self::Ch,
+            "rch" => Self::Rch,
+            "ic" => Self::Ic,
+            "ric" => Self::Ric,
+            "lh" => Self::Lh,
+            "rlh" => Self::Rlh,
+            "vw" => Self::Vw,
+            "vh" => Self::Vh,
+            "vi" => Self::Vi,
+            "vb" => Self::Vb,
+            "vmin" => Self::Vmin,
+            "vmax" => Self::Vmax,
+            "svw" => Self::Svw,
+            "svh" => Self::Svh,
+            "svi" => Self::Svi,
+            "svb" => Self::Svb,
+            "svmin" => Self::Svmin,
+            "svmax" => Self::Svmax,
+            "lvw" => Self::Lvw,
+            "lvh" => Self::Lvh,
+            "lvi" => Self::Lvi,
+            "lvb" => Self::Lvb,
+            "lvmin" => Self::Lvmin,
+            "lvmax" => Self::Lvmax,
+            "dvw" => Self::Dvw,
+            "dvh" => Self::Dvh,
+            "dvi" => Self::Dvi,
+            "dvb" => Self::Dvb,
+            "dvmin" => Self::Dvmin,
+            "dvmax" => Self::Dvmax,
+            "cqw" => Self::Cqw,
+            "cqh" => Self::Cqh,
+            "cqi" => Self::Cqi,
+            "cqb" => Self::Cqb,
+            "cqmin" => Self::Cqmin,
+            "cqmax" => Self::Cqmax,
+            "cm" => Self::Cm,
+            "mm" => Self::Mm,
+            "q" => Self::Q,
+            "in" => Self::In,
+            "pc" => Self::Pc,
+            "pt" => Self::Pt,
+            _ => return None,
+        })
+    }
+
+    #[must_use]
+    pub const fn as_css_str(self) -> &'static str {
+        match self {
+            Self::Px => "px",
+            Self::Em => "em",
+            Self::Rem => "rem",
+            Self::Ex => "ex",
+            Self::Rex => "rex",
+            Self::Cap => "cap",
+            Self::Rcap => "rcap",
+            Self::Ch => "ch",
+            Self::Rch => "rch",
+            Self::Ic => "ic",
+            Self::Ric => "ric",
+            Self::Lh => "lh",
+            Self::Rlh => "rlh",
+            Self::Vw => "vw",
+            Self::Vh => "vh",
+            Self::Vi => "vi",
+            Self::Vb => "vb",
+            Self::Vmin => "vmin",
+            Self::Vmax => "vmax",
+            Self::Svw => "svw",
+            Self::Svh => "svh",
+            Self::Svi => "svi",
+            Self::Svb => "svb",
+            Self::Svmin => "svmin",
+            Self::Svmax => "svmax",
+            Self::Lvw => "lvw",
+            Self::Lvh => "lvh",
+            Self::Lvi => "lvi",
+            Self::Lvb => "lvb",
+            Self::Lvmin => "lvmin",
+            Self::Lvmax => "lvmax",
+            Self::Dvw => "dvw",
+            Self::Dvh => "dvh",
+            Self::Dvi => "dvi",
+            Self::Dvb => "dvb",
+            Self::Dvmin => "dvmin",
+            Self::Dvmax => "dvmax",
+            Self::Cqw => "cqw",
+            Self::Cqh => "cqh",
+            Self::Cqi => "cqi",
+            Self::Cqb => "cqb",
+            Self::Cqmin => "cqmin",
+            Self::Cqmax => "cqmax",
+            Self::Cm => "cm",
+            Self::Mm => "mm",
+            Self::Q => "q",
+            Self::In => "in",
+            Self::Pc => "pc",
+            Self::Pt => "pt",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssLengthDimension {
+    value: f32,
+    unit: CssLengthUnit,
+}
+
+impl CssLengthDimension {
+    #[must_use]
+    pub const fn new(value: f32, unit: CssLengthUnit) -> Self {
+        Self { value, unit }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        self.value
+    }
+
+    #[must_use]
+    pub const fn unit(self) -> CssLengthUnit {
+        self.unit
+    }
+
+    #[must_use]
+    pub fn to_css_string(self) -> String {
+        format!(
+            "{}{}",
+            format_css_number(self.value),
+            self.unit.as_css_str()
+        )
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssLength {
     Px(f32),
+    Dimension(CssLengthDimension),
     Percent(f32),
     Zero,
     Auto,
@@ -311,6 +509,14 @@ impl CssLength {
     #[must_use]
     pub const fn percent(value: f32) -> Self {
         Self::Percent(value)
+    }
+
+    #[must_use]
+    pub const fn dimension(value: f32, unit: CssLengthUnit) -> Self {
+        match unit {
+            CssLengthUnit::Px => Self::Px(value),
+            _ => Self::Dimension(CssLengthDimension::new(value, unit)),
+        }
     }
 }
 
@@ -403,6 +609,7 @@ impl CssCompoundSelector {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssCalcLength {
     Px(f32),
+    Dimension(CssLengthDimension),
     Percent(f32),
     Sum(Vec<CssCalcLengthTerm>),
 }
@@ -419,6 +626,14 @@ impl CssCalcLength {
     }
 
     #[must_use]
+    pub const fn dimension(value: f32, unit: CssLengthUnit) -> Self {
+        match unit {
+            CssLengthUnit::Px => Self::Px(value),
+            _ => Self::Dimension(CssLengthDimension::new(value, unit)),
+        }
+    }
+
+    #[must_use]
     pub fn sum(
         first: CssCalcLengthTerm,
         rest: impl IntoIterator<Item = CssCalcLengthTerm>,
@@ -432,6 +647,7 @@ impl CssCalcLength {
     pub fn uses_percentage(&self) -> bool {
         match self {
             Self::Px(_) => false,
+            Self::Dimension(_) => false,
             Self::Percent(_) => true,
             Self::Sum(terms) => terms.iter().any(|term| term.value.uses_percentage()),
         }
@@ -445,6 +661,7 @@ impl CssCalcLength {
     fn to_css_fragment(&self) -> String {
         match self {
             Self::Px(value) => format!("{}px", format_css_number(*value)),
+            Self::Dimension(length) => length.to_css_string(),
             Self::Percent(value) => format!("{}%", format_css_number(*value)),
             Self::Sum(terms) => {
                 let mut css = String::from("calc(");

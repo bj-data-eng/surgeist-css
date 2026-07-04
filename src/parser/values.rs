@@ -423,23 +423,6 @@ pub(super) fn parse_number<'i, 't>(
     input.expect_number().map_err(basic)
 }
 
-pub(super) fn parse_non_negative_number<'i, 't>(
-    input: &mut Parser<'i, 't>,
-    context: &str,
-) -> std::result::Result<f32, ParseError<'i, Error>> {
-    let location = input.current_source_location();
-    let value = input.expect_number().map_err(basic)?;
-    if value < 0.0 {
-        Err(unsupported_value_at(
-            location,
-            None,
-            format!("unsupported negative {context}"),
-        ))
-    } else {
-        Ok(value)
-    }
-}
-
 pub(super) fn parse_integer<'i, 't>(
     input: &mut Parser<'i, 't>,
     context: &str,

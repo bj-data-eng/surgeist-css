@@ -1,6 +1,6 @@
-use cssparser::{ParseError, Parser, Token, match_ignore_ascii_case};
+use cssparser::{ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
 
-use super::values::{parse_box_size_value, parse_integer, parse_non_negative_number};
+use super::values::{parse_box_size_value, parse_integer};
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
@@ -371,6 +371,72 @@ pub(super) fn parse_content_visibility<'i, 't>(
     }
 }
 
+pub(super) fn parse_opacity<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssOpacity, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let value = input.expect_number().map_err(basic)?;
+    CssOpacity::try_new(value).ok_or_else(|| {
+        unsupported_value_at(
+            location,
+            None,
+            "opacity must be a finite number between 0 and 1",
+        )
+    })
+}
+
+pub(super) fn parse_flex_factor<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    context: &str,
+) -> std::result::Result<CssFlexFactor, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let value = input.expect_number().map_err(basic)?;
+    CssFlexFactor::try_new(value).ok_or_else(|| {
+        unsupported_value_at(
+            location,
+            None,
+            format!("{context} must be a finite non-negative number"),
+        )
+    })
+}
+
+pub(super) fn parse_aspect_ratio<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAspectRatio, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let value = input.expect_number().map_err(basic)?;
+    CssAspectRatio::try_new(value).ok_or_else(|| {
+        unsupported_value_at(
+            location,
+            None,
+            "aspect-ratio must be a finite positive number",
+        )
+    })
+}
+
+pub(super) fn parse_scrollbar_width<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssScrollbarWidth, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Ident(ident) => match_ignore_ascii_case! { ident,
+            "auto" => Ok(CssScrollbarWidth::Auto),
+            "thin" => Ok(CssScrollbarWidth::Thin),
+            "none" => Ok(CssScrollbarWidth::None),
+            _ => Err(unsupported_value_at(
+                location,
+                None,
+                unsupported_keyword_reason("scrollbar-width", ident.as_ref()),
+            )),
+        },
+        token => Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported scrollbar-width `{}`", token.to_css_string()),
+        )),
+    }
+}
+
 pub(super) fn parse_order<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssOrder, ParseError<'i, Error>> {
@@ -392,12 +458,11 @@ pub(super) fn parse_flex<'i, 't>(
         };
     }
 
-    let grow = parse_non_negative_number(input, "flex-grow")?;
+    let grow = parse_flex_factor(input, "flex-grow")?;
     let mut shrink = None;
     let mut basis = None;
     if !input.is_exhausted() {
-        if let Ok(parsed_shrink) =
-            input.try_parse(|input| parse_non_negative_number(input, "flex-shrink"))
+        if let Ok(parsed_shrink) = input.try_parse(|input| parse_flex_factor(input, "flex-shrink"))
         {
             shrink = Some(parsed_shrink);
             if !input.is_exhausted() {

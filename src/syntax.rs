@@ -385,8 +385,13 @@ pub enum CssValue {
     BorderRadius(CssBorderRadii),
     CornerRadius(CssCornerRadius),
     BoxShadow(CssBoxShadow),
+    Opacity(CssOpacity),
+    FlexGrow(CssFlexFactor),
+    FlexShrink(CssFlexFactor),
     Order(CssOrder),
     Flex(CssFlex),
+    AspectRatio(CssAspectRatio),
+    ScrollbarWidth(CssScrollbarWidth),
     Cursor(CssCursor),
     PointerEvents(CssPointerEvents),
     UserSelect(CssUserSelect),
@@ -416,7 +421,76 @@ pub enum CssValue {
     AnimationFillMode(CssAnimationFillModeList),
     AnimationPlayState(CssAnimationPlayStateList),
     Animation(CssAnimationList),
-    Number(f32),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssOpacity {
+    value: f32,
+}
+
+impl CssOpacity {
+    #[must_use]
+    pub fn try_new(value: f32) -> Option<Self> {
+        if value.is_finite() && (0.0..=1.0).contains(&value) {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        self.value
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssFlexFactor {
+    value: f32,
+}
+
+impl CssFlexFactor {
+    #[must_use]
+    pub fn try_new(value: f32) -> Option<Self> {
+        if value.is_finite() && value >= 0.0 {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        self.value
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssAspectRatio {
+    value: f32,
+}
+
+impl CssAspectRatio {
+    #[must_use]
+    pub fn try_new(value: f32) -> Option<Self> {
+        if value.is_finite() && value > 0.0 {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        self.value
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssScrollbarWidth {
+    Auto,
+    Thin,
+    None,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1235,8 +1309,8 @@ pub enum CssFlex {
     None,
     Auto,
     Components {
-        grow: f32,
-        shrink: Option<f32>,
+        grow: CssFlexFactor,
+        shrink: Option<CssFlexFactor>,
         basis: Option<CssLength>,
     },
 }

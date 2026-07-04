@@ -144,8 +144,24 @@ fn assert_box_shadow_value(value: &CssValue) {
     assert!(matches!(value, CssValue::BoxShadow(_)));
 }
 
-fn assert_number_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Number(_)));
+fn assert_opacity_value(value: &CssValue) {
+    assert!(matches!(value, CssValue::Opacity(_)));
+}
+
+fn assert_flex_grow_value(value: &CssValue) {
+    assert!(matches!(value, CssValue::FlexGrow(_)));
+}
+
+fn assert_flex_shrink_value(value: &CssValue) {
+    assert!(matches!(value, CssValue::FlexShrink(_)));
+}
+
+fn assert_aspect_ratio_value(value: &CssValue) {
+    assert!(matches!(value, CssValue::AspectRatio(_)));
+}
+
+fn assert_scrollbar_width_value(value: &CssValue) {
+    assert!(matches!(value, CssValue::ScrollbarWidth(_)));
 }
 
 fn assert_order_value(value: &CssValue) {
@@ -890,6 +906,110 @@ fn rejection_negative_numbers_and_public_constructor_invariants_matrix() {
 }
 
 #[test]
+fn numeric_properties_use_property_specific_authored_models() {
+    assert_eq!(
+        single_declaration(".panel { opacity: 0.5; }").value(),
+        &CssValue::Opacity(CssOpacity::try_new(0.5).unwrap())
+    );
+    assert_eq!(
+        single_declaration(".panel { flex-grow: 2; }").value(),
+        &CssValue::FlexGrow(CssFlexFactor::try_new(2.0).unwrap())
+    );
+    assert_eq!(
+        single_declaration(".panel { flex-shrink: 0; }").value(),
+        &CssValue::FlexShrink(CssFlexFactor::try_new(0.0).unwrap())
+    );
+    assert_eq!(
+        single_declaration(".panel { aspect-ratio: 1.5; }").value(),
+        &CssValue::AspectRatio(CssAspectRatio::try_new(1.5).unwrap())
+    );
+    assert_eq!(
+        single_declaration(".panel { scrollbar-width: thin; }").value(),
+        &CssValue::ScrollbarWidth(CssScrollbarWidth::Thin)
+    );
+    assert_eq!(CssOpacity::try_new(0.5).unwrap().value(), 0.5);
+    assert_eq!(CssFlexFactor::try_new(2.0).unwrap().value(), 2.0);
+    assert_eq!(CssAspectRatio::try_new(1.5).unwrap().value(), 1.5);
+}
+
+#[test]
+fn numeric_property_models_reject_invalid_authored_values() {
+    assert_rejects_declarations(&[
+        RejectedDeclarationCase {
+            label: "opacity rejects negative values",
+            property_name: "opacity",
+            authored_value: "-0.1",
+            expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                property: "opacity",
+            },
+            property_name_should_be_recognized: true,
+        },
+        RejectedDeclarationCase {
+            label: "opacity rejects values above one",
+            property_name: "opacity",
+            authored_value: "2",
+            expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                property: "opacity",
+            },
+            property_name_should_be_recognized: true,
+        },
+        RejectedDeclarationCase {
+            label: "flex-grow rejects negative values",
+            property_name: "flex-grow",
+            authored_value: "-1",
+            expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                property: "flex-grow",
+            },
+            property_name_should_be_recognized: true,
+        },
+        RejectedDeclarationCase {
+            label: "flex-shrink rejects negative values",
+            property_name: "flex-shrink",
+            authored_value: "-1",
+            expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                property: "flex-shrink",
+            },
+            property_name_should_be_recognized: true,
+        },
+        RejectedDeclarationCase {
+            label: "aspect-ratio rejects zero",
+            property_name: "aspect-ratio",
+            authored_value: "0",
+            expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                property: "aspect-ratio",
+            },
+            property_name_should_be_recognized: true,
+        },
+        RejectedDeclarationCase {
+            label: "aspect-ratio rejects negative values",
+            property_name: "aspect-ratio",
+            authored_value: "-1",
+            expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                property: "aspect-ratio",
+            },
+            property_name_should_be_recognized: true,
+        },
+        RejectedDeclarationCase {
+            label: "scrollbar-width rejects numbers",
+            property_name: "scrollbar-width",
+            authored_value: "8",
+            expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                property: "scrollbar-width",
+            },
+            property_name_should_be_recognized: true,
+        },
+    ]);
+
+    assert_eq!(CssOpacity::try_new(-0.1), None);
+    assert_eq!(CssOpacity::try_new(1.1), None);
+    assert_eq!(CssOpacity::try_new(f32::NAN), None);
+    assert_eq!(CssFlexFactor::try_new(-1.0), None);
+    assert_eq!(CssFlexFactor::try_new(f32::INFINITY), None);
+    assert_eq!(CssAspectRatio::try_new(0.0), None);
+    assert_eq!(CssAspectRatio::try_new(f32::NEG_INFINITY), None);
+}
+
+#[test]
 fn rejection_unsupported_but_syntactically_valid_css_keywords_stay_rejected() {
     assert_rejects_declarations(&[
         RejectedDeclarationCase {
@@ -1583,7 +1703,7 @@ fn acceptance_color_background_border_outline_and_shadow_matrix_accepts_supporte
             "opacity",
             "0.5",
             CssProperty::Opacity,
-            assert_number_value
+            assert_opacity_value
         ),
     ];
 
@@ -1689,14 +1809,14 @@ fn acceptance_position_alignment_flex_and_grid_matrix_accepts_supported_values()
             "flex-grow",
             "2",
             CssProperty::FlexGrow,
-            assert_number_value
+            assert_flex_grow_value
         ),
         value_case!(
             "flex-shrink number",
             "flex-shrink",
             "0",
             CssProperty::FlexShrink,
-            assert_number_value
+            assert_flex_shrink_value
         ),
         value_case!(
             "order negative integer",
@@ -1738,14 +1858,14 @@ fn acceptance_position_alignment_flex_and_grid_matrix_accepts_supported_values()
             "aspect-ratio",
             "1.5",
             CssProperty::AspectRatio,
-            assert_number_value
+            assert_aspect_ratio_value
         ),
         value_case!(
-            "scrollbar-width number",
+            "scrollbar-width keyword",
             "scrollbar-width",
-            "12",
+            "thin",
             CssProperty::ScrollbarWidth,
-            assert_number_value
+            assert_scrollbar_width_value
         ),
         value_case!(
             "grid-flow-tolerance infinite",
@@ -4409,8 +4529,8 @@ fn parses_order_flex_and_track_alignment() {
     assert_eq!(
         declaration_value(".panel { flex: 2 0 10rem; }", CssProperty::Flex),
         CssValue::Flex(CssFlex::Components {
-            grow: 2.0,
-            shrink: Some(0.0),
+            grow: CssFlexFactor::try_new(2.0).unwrap(),
+            shrink: Some(CssFlexFactor::try_new(0.0).unwrap()),
             basis: Some(CssLength::dimension(10.0, CssLengthUnit::Rem)),
         })
     );

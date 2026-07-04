@@ -2686,7 +2686,10 @@ pub struct CssPosition {
 impl CssPosition {
     #[must_use]
     pub fn try_new(components: Vec<CssPositionComponent>) -> Option<Self> {
-        if components.is_empty() || components.len() > 4 {
+        if components.is_empty()
+            || components.len() > 4
+            || has_duplicate_axis_side_keywords(&components)
+        {
             None
         } else {
             Some(Self::new(components))
@@ -2702,6 +2705,37 @@ impl CssPosition {
     pub fn components(&self) -> &[CssPositionComponent] {
         &self.components
     }
+}
+
+fn has_duplicate_axis_side_keywords(components: &[CssPositionComponent]) -> bool {
+    let mut has_horizontal_side = false;
+    let mut has_vertical_side = false;
+
+    for component in components {
+        match component {
+            CssPositionComponent::Horizontal(
+                CssHorizontalPositionKeyword::Left | CssHorizontalPositionKeyword::Right,
+            ) => {
+                if has_horizontal_side {
+                    return true;
+                }
+                has_horizontal_side = true;
+            }
+            CssPositionComponent::Vertical(
+                CssVerticalPositionKeyword::Top | CssVerticalPositionKeyword::Bottom,
+            ) => {
+                if has_vertical_side {
+                    return true;
+                }
+                has_vertical_side = true;
+            }
+            CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Center)
+            | CssPositionComponent::Vertical(CssVerticalPositionKeyword::Center)
+            | CssPositionComponent::Length(_) => {}
+        }
+    }
+
+    false
 }
 
 #[derive(Clone, Debug, PartialEq)]

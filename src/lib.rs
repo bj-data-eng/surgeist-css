@@ -6322,6 +6322,20 @@ mod tests {
         assert_eq!(CssImageLayerList::try_new(Vec::new()), None);
         assert_eq!(CssCursorUrlList::try_new(Vec::new()), None);
         assert!(CssCursor::try_urls(Vec::new(), CssCursorKeyword::Pointer).is_none());
+        assert_eq!(
+            CssPosition::try_new(vec![
+                CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Left),
+                CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Right),
+            ]),
+            None
+        );
+        assert_eq!(
+            CssPosition::try_new(vec![
+                CssPositionComponent::Vertical(CssVerticalPositionKeyword::Top),
+                CssPositionComponent::Vertical(CssVerticalPositionKeyword::Bottom),
+            ]),
+            None
+        );
         assert_eq!(CssTranslateValues::try_new(Vec::new()), None);
         assert_eq!(
             CssTranslateValues::try_new(vec![
@@ -6469,6 +6483,43 @@ mod tests {
                 error.kind(),
                 ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
             ));
+        }
+    }
+
+    #[test]
+    fn rejects_duplicate_axis_position_keywords_across_shared_position_properties() {
+        for input in [
+            ".panel { background-position: left right; }",
+            ".panel { background-position: right left; }",
+            ".panel { background-position: top bottom; }",
+            ".panel { background-position: bottom top; }",
+            ".panel { mask-position: left right; }",
+            ".panel { mask-position: top bottom; }",
+            ".panel { transform-origin: left right; }",
+            ".panel { transform-origin: top bottom; }",
+            ".panel { mask: url(mask.png) left right / contain no-repeat; }",
+            ".panel { mask: url(mask.png) top bottom / contain no-repeat; }",
+        ] {
+            let error = parse_sheet(input).expect_err(input);
+            assert!(matches!(
+                error.kind(),
+                ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ));
+        }
+    }
+
+    #[test]
+    fn preserves_valid_position_keyword_forms_after_duplicate_axis_rejection() {
+        for input in [
+            ".panel { background-position: left top; }",
+            ".panel { background-position: right bottom; }",
+            ".panel { background-position: center center; }",
+            ".panel { background-position: left 10px top 20%; }",
+            ".panel { mask-position: center center; }",
+            ".panel { transform-origin: right bottom; }",
+            ".panel { mask: url(mask.png) left top / contain no-repeat; }",
+        ] {
+            parse_sheet(input).unwrap_or_else(|error| panic!("{input} should parse: {error}"));
         }
     }
 

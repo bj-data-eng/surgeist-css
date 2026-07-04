@@ -1180,6 +1180,41 @@ fn functional_selector_lists_reject_invalid_entries_strictly() {
 }
 
 #[test]
+fn selector_argument_surface_accepts_full_supported_strict_forms() {
+    for css in [
+        ":not(.field .icon, button.primary:hover) { color: black; }",
+        ":is(.card > .title, button.primary:hover, [data-state=\"open\"].active) { color: black; }",
+        ":where(.toolbar + .panel, .stack ~ .item) { color: black; }",
+        ".card:has(.field > .icon) { color: black; }",
+        ".card:has(> .icon, + .error, ~ .warning) { color: black; }",
+        "li:nth-child(2n+1 of li.important, .row[hidden]) { color: black; }",
+        "li:nth-last-child(even of .item.selected) { color: black; }",
+    ] {
+        parse_sheet(css).unwrap_or_else(|error| panic!("{css} should parse: {error:?}"));
+    }
+}
+
+#[test]
+fn selector_argument_surface_rejects_invalid_entries_without_recovery() {
+    for css in [
+        ":is(.valid, .bad..selector) { color: black; }",
+        ":where(.valid, .col || .cell) { color: black; }",
+        ":not(.valid, ::before) { color: black; }",
+        ".card:has() { color: black; }",
+        ".card:has(:has(.nested)) { color: black; }",
+        ".card:has(:is(:has(.nested))) { color: black; }",
+        ".card:has(:nth-child(odd of :has(.nested))) { color: black; }",
+        ".card:has(::before) { color: black; }",
+        ".card:has(.valid, .bad..selector) { color: black; }",
+        ":nth-child(odd of) { color: black; }",
+        ":nth-child(odd of .valid, .bad..selector) { color: black; }",
+        ":nth-of-type(odd of .item) { color: black; }",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject strictly");
+    }
+}
+
+#[test]
 fn has_accepts_strict_relative_selector_lists() {
     let sheet = parse_sheet(".card:has(.field > .icon) { color: black; }").unwrap();
     let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
@@ -2074,10 +2109,12 @@ fn practical_pseudo_class_matrix_accepts_supported_and_rejects_unsupported_forms
         ":nth-child(2n+1) { color: black; }",
         ":nth-child(2n of .item) { color: black; }",
         ":not(.disabled) { color: black; }",
+        ".field:not(.field .icon) { color: black; }",
         ":is(.primary, .secondary) { color: black; }",
         ":where(button, .link) { color: black; }",
         ".field:has(.error) { color: black; }",
         ".field:has(> .icon) { color: black; }",
+        ".field:has(.field > .icon) { color: black; }",
         ":modal { color: black; }",
         ":read-only { color: black; }",
     ];
@@ -2096,6 +2133,9 @@ fn practical_pseudo_class_matrix_accepts_supported_and_rejects_unsupported_forms
         ":not() { color: black; }",
         ":nth-of-type(2n of .item) { color: black; }",
         ".field:has(.col || .cell) { color: black; }",
+        ".field:has(:has(.nested)) { color: black; }",
+        ".field:has(.valid, .bad..selector) { color: black; }",
+        ".field:not(::before) { color: black; }",
     ];
 
     for css in rejected {

@@ -8,6 +8,8 @@ CSS custom properties are parsed as authored syntax. Custom property names are c
 
 Pseudo-classes for UI interaction, form state, structure, selector-list filtering, and overlay state are parsed as authored selector syntax. This crate does not evaluate pseudo-class matches; runtime matching belongs to downstream Surgeist layers with node and interaction state.
 
+Selector-list pseudo-class arguments are parsed as strict authored selector syntax. `:is`, `:where`, and `:not` preserve supported complex selector lists; `:has` preserves supported relative selector lists including leading child and sibling combinators; and `:nth-child` / `:nth-last-child` preserve optional `of` selector filters. Unlike browser forgiving selector lists, any unsupported or malformed selector argument rejects the whole sheet.
+
 Media queries are parsed as authored conditions on `@media` group rules. `surgeist-css` does not evaluate media query matches; environment-dependent matching belongs to downstream Surgeist layers.
 
 Container queries are parsed as authored conditions on `@container` group rules. `surgeist-css` does not evaluate container query matches; container-dependent matching belongs to downstream Surgeist layers.

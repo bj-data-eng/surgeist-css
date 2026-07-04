@@ -4074,6 +4074,78 @@ fn advanced_css_rule_surface_is_structurally_accessible() {
 }
 
 #[test]
+fn keyframes_and_flattened_nesting_are_structurally_accessible() {
+    let sheet = parse_sheet(
+        r#"@keyframes fade {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .card {
+            color: black;
+            &:hover { opacity: 0.9; }
+            @media (min-width: 600px) {
+                > .title { color: white; }
+            }
+        }"#,
+    )
+    .unwrap();
+
+    let [keyframes, base, hover, media] = sheet.rules() else {
+        panic!("expected keyframes and flattened style output");
+    };
+
+    let CssRule::Keyframes(keyframes) = keyframes else {
+        panic!("expected keyframes rule");
+    };
+    assert_eq!(
+        keyframes.name(),
+        &CssKeyframesName::Ident(CssCustomIdent::new("fade"))
+    );
+    let [from, to] = keyframes.blocks() else {
+        panic!("expected two keyframe blocks");
+    };
+    assert_eq!(from.selectors().selectors(), &[CssKeyframeSelector::From]);
+    assert_eq!(from.declarations()[0].property(), &CssProperty::Opacity);
+    assert_eq!(to.selectors().selectors(), &[CssKeyframeSelector::To]);
+    assert_eq!(to.declarations()[0].property(), &CssProperty::Opacity);
+
+    assert_eq!(
+        style_rule(base).selector(),
+        &CssSelector::Class("card".to_owned())
+    );
+    assert_eq!(
+        style_rule(base).declarations()[0].property(),
+        &CssProperty::Color
+    );
+
+    let CssSelector::Compound(hover_selector) = style_rule(hover).selector() else {
+        panic!("expected flattened hover selector");
+    };
+    assert_eq!(hover_selector.classes(), &["card".to_owned()]);
+    assert_eq!(hover_selector.pseudo_classes(), &[CssPseudoClass::Hover]);
+
+    let CssRule::Media(media) = media else {
+        panic!("expected media rule");
+    };
+    let [nested] = media.rules() else {
+        panic!("expected one nested flattened rule");
+    };
+    let CssSelector::Complex(selector) = style_rule(nested).selector() else {
+        panic!("expected complex nested title selector");
+    };
+    assert_eq!(selector.first().classes(), &["card".to_owned()]);
+    let [part] = selector.rest() else {
+        panic!("expected one child selector part");
+    };
+    assert_eq!(part.combinator(), CssSelectorCombinator::Child);
+    assert_eq!(part.selector().classes(), &["title".to_owned()]);
+    assert_eq!(
+        style_rule(nested).declarations()[0].property(),
+        &CssProperty::Color
+    );
+}
+
+#[test]
 fn checked_color_construction_rejects_invalid_channels() {
     let color = CssColor::try_rgba(0.25, 0.5, 0.75, 1.0).unwrap();
     assert_eq!(color.r(), 0.25);

@@ -46,6 +46,73 @@ fn media_rule(rule: &CssRule) -> &CssMediaRule {
 }
 
 #[test]
+fn import_layer_name_rejects_empty_components() {
+    assert!(CssLayerName::try_new(["theme"]).is_some());
+    assert!(CssLayerName::try_new(["theme", "components"]).is_some());
+    assert!(CssLayerName::try_new([""]).is_none());
+    assert!(CssLayerName::try_new(["theme", ""]).is_none());
+    assert!(CssLayerName::try_new(["theme", " \t\n "]).is_none());
+}
+
+#[test]
+fn import_layer_name_rejects_non_identifier_components() {
+    assert!(CssLayerName::try_new(["theme components"]).is_none());
+    assert!(CssLayerName::try_new(["theme.components"]).is_none());
+    assert!(CssLayerName::try_new(["theme;"]).is_none());
+    assert!(CssLayerName::try_new(["1theme"]).is_none());
+}
+
+#[test]
+fn import_layer_name_rejects_reserved_components() {
+    assert!(CssLayerName::try_new(["inherit"]).is_none());
+    assert!(CssLayerName::try_new(["theme", "initial"]).is_none());
+    assert!(CssLayerName::try_new(["theme", "unset"]).is_none());
+    assert!(CssLayerName::try_new(["theme", "revert"]).is_none());
+    assert!(CssLayerName::try_new(["theme", "revert-layer"]).is_none());
+}
+
+#[test]
+fn import_target_constructors_reject_empty_values() {
+    assert_eq!(CssImportUrl::try_new(""), None);
+    assert_eq!(CssImportUrl::try_new(" \t\n "), None);
+    assert_eq!(CssImportString::try_new(""), None);
+    assert_eq!(CssImportString::try_new(" \t\n "), None);
+    assert_eq!(
+        CssImportUrl::try_new("theme.css").unwrap().as_str(),
+        "theme.css"
+    );
+    assert_eq!(
+        CssImportString::try_new("theme.css").unwrap().as_str(),
+        "theme.css"
+    );
+}
+
+#[test]
+fn import_rule_accessors_expose_authored_structure() {
+    let target = CssImportTarget::Url(CssImportUrl::try_new("theme.css").unwrap());
+    let layer = CssImportLayer::Named(CssLayerName::try_new(["theme", "components"]).unwrap());
+    let media = CssMediaQueryList::try_new(vec![CssMediaQuery::Typed(CssTypedMediaQuery::new(
+        None,
+        CssMediaType::Screen,
+        None,
+    ))])
+    .unwrap();
+    let location = CssSourceLocation::new(3, 7);
+    let rule = CssImportRule::new(
+        target.clone(),
+        Some(layer.clone()),
+        Some(media.clone()),
+        location,
+    );
+
+    assert_eq!(rule.target(), &target);
+    assert_eq!(rule.layer(), Some(&layer));
+    assert_eq!(rule.media(), Some(&media));
+    assert_eq!(rule.location(), location);
+    assert_eq!(CssRule::Import(rule.clone()), CssRule::Import(rule));
+}
+
+#[test]
 fn parsed_style_rule_is_explicit_rule_variant() {
     let sheet = parse_sheet(".panel { width: 10px; }").unwrap();
     let [rule] = sheet.rules() else {

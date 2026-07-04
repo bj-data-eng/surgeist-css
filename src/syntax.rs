@@ -35,8 +35,182 @@ impl CssSheet {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssRule {
+    Import(CssImportRule),
     Style(CssStyleRule),
     Media(CssMediaRule),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssImportRule {
+    target: CssImportTarget,
+    layer: Option<CssImportLayer>,
+    media: Option<CssMediaQueryList>,
+    location: CssSourceLocation,
+}
+
+impl CssImportRule {
+    #[allow(dead_code)]
+    #[must_use]
+    pub(crate) const fn new(
+        target: CssImportTarget,
+        layer: Option<CssImportLayer>,
+        media: Option<CssMediaQueryList>,
+        location: CssSourceLocation,
+    ) -> Self {
+        Self {
+            target,
+            layer,
+            media,
+            location,
+        }
+    }
+
+    #[must_use]
+    pub const fn target(&self) -> &CssImportTarget {
+        &self.target
+    }
+
+    #[must_use]
+    pub const fn layer(&self) -> Option<&CssImportLayer> {
+        self.layer.as_ref()
+    }
+
+    #[must_use]
+    pub const fn media(&self) -> Option<&CssMediaQueryList> {
+        self.media.as_ref()
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssImportTarget {
+    Url(CssImportUrl),
+    String(CssImportString),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssImportUrl {
+    value: String,
+}
+
+impl CssImportUrl {
+    #[must_use]
+    pub fn try_new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            None
+        } else {
+            Some(Self::new(value))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(value: impl Into<String>) -> Self {
+        let value = value.into();
+        debug_assert!(!value.trim().is_empty());
+        Self { value }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssImportString {
+    value: String,
+}
+
+impl CssImportString {
+    #[must_use]
+    pub fn try_new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            None
+        } else {
+            Some(Self::new(value))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(value: impl Into<String>) -> Self {
+        let value = value.into();
+        debug_assert!(!value.trim().is_empty());
+        Self { value }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssImportLayer {
+    Anonymous,
+    Named(CssLayerName),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CssLayerName {
+    components: Vec<String>,
+}
+
+impl CssLayerName {
+    #[must_use]
+    pub fn try_new(components: impl IntoIterator<Item = impl Into<String>>) -> Option<Self> {
+        let components = components.into_iter().map(Into::into).collect::<Vec<_>>();
+        if components.is_empty()
+            || components
+                .iter()
+                .any(|component| !is_valid_layer_name_component(component))
+        {
+            None
+        } else {
+            Some(Self::new(components))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(components: Vec<String>) -> Self {
+        debug_assert!(!components.is_empty());
+        debug_assert!(
+            components
+                .iter()
+                .all(|component| is_valid_layer_name_component(component))
+        );
+        Self { components }
+    }
+
+    #[must_use]
+    pub fn components(&self) -> &[String] {
+        &self.components
+    }
+}
+
+fn is_valid_layer_name_component(component: &str) -> bool {
+    !is_parser_reserved_layer_name(component) && is_exact_css_identifier(component)
+}
+
+fn is_parser_reserved_layer_name(component: &str) -> bool {
+    matches!(
+        component.to_ascii_lowercase().as_str(),
+        "inherit" | "initial" | "unset" | "revert" | "revert-layer"
+    )
+}
+
+fn is_exact_css_identifier(value: &str) -> bool {
+    let mut input = cssparser::ParserInput::new(value);
+    let mut parser = cssparser::Parser::new(&mut input);
+    parser
+        .expect_ident_cloned()
+        .ok()
+        .is_some_and(|parsed| parser.expect_exhausted().is_ok() && parsed.as_ref() == value)
 }
 
 #[derive(Clone, Debug, PartialEq)]

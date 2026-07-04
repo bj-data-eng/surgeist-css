@@ -5105,9 +5105,10 @@ fn error_at<'i>(
 mod tests {
     use super::*;
     use crate::test_support::{
-        AcceptedDeclarationCase, ExpectedErrorKind, RejectedDeclarationCase,
-        accepted_declaration_cases, assert_accepts_declarations, assert_rejects_declarations,
-        assert_sheet_rejected, parse_single_declaration_value,
+        AcceptedDeclarationCase, AcceptedValueCase, ExpectedErrorKind, RejectedDeclarationCase,
+        accepted_declaration_cases, assert_accepts_declarations, assert_accepts_value_cases,
+        assert_rejects_declarations, assert_sheet_rejected, parse_single_declaration,
+        parse_single_declaration_value,
     };
 
     fn declaration_value(input: &str, property: CssProperty) -> CssValue {
@@ -5129,6 +5130,409 @@ mod tests {
             .find(|declaration| declaration.property() == property)
             .unwrap()
             .clone()
+    }
+
+    fn assert_global_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::GlobalKeyword(_)));
+    }
+
+    fn assert_display_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Display(_)));
+    }
+
+    fn assert_box_sizing_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BoxSizing(_)));
+    }
+
+    fn assert_position_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Position(_)));
+    }
+
+    fn assert_direction_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Direction(_)));
+    }
+
+    fn assert_overflow_value(value: &CssValue) {
+        assert!(matches!(
+            value,
+            CssValue::Overflow(_) | CssValue::OverflowAxes(_)
+        ));
+    }
+
+    fn assert_flex_direction_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::FlexDirection(_)));
+    }
+
+    fn assert_flex_wrap_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::FlexWrap(_)));
+    }
+
+    fn assert_float_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Float(_)));
+    }
+
+    fn assert_clear_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Clear(_)));
+    }
+
+    fn assert_alignment_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Alignment(_)));
+    }
+
+    fn assert_align_items_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::AlignItems(_)));
+    }
+
+    fn assert_place_alignment_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::PlaceAlignment(_)));
+    }
+
+    fn assert_visibility_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Visibility(_)));
+    }
+
+    fn assert_content_visibility_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::ContentVisibility(_)));
+    }
+
+    fn assert_length_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Length(_)));
+    }
+
+    fn assert_edges_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Edges(_)));
+    }
+
+    fn assert_color_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Color(_)));
+    }
+
+    fn assert_border_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Border(_)));
+    }
+
+    fn assert_border_style_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BorderStyle(_)));
+    }
+
+    fn assert_border_styles_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BorderStyles(_)));
+    }
+
+    fn assert_border_radius_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BorderRadius(_)));
+    }
+
+    fn assert_corner_radius_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::CornerRadius(_)));
+    }
+
+    fn assert_box_shadow_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BoxShadow(_)));
+    }
+
+    fn assert_number_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Number(_)));
+    }
+
+    fn assert_order_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Order(_)));
+    }
+
+    fn assert_flex_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Flex(_)));
+    }
+
+    fn assert_z_index_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::ZIndex(_)));
+    }
+
+    fn assert_box_decoration_break_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BoxDecorationBreak(_)));
+    }
+
+    fn assert_grid_flow_tolerance_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::GridFlowTolerance(_)));
+    }
+
+    fn assert_grid_track_list_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::GridTrackList(_)));
+    }
+
+    fn assert_grid_template_areas_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::GridTemplateAreas(_)));
+    }
+
+    fn assert_grid_template_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::GridTemplate(_)));
+    }
+
+    fn assert_grid_auto_flow_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::GridAutoFlow(_)));
+    }
+
+    fn assert_grid_line_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::GridLine(_)));
+    }
+
+    fn assert_grid_line_range_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::GridLineRange(_)));
+    }
+
+    fn assert_grid_area_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::GridArea(_)));
+    }
+
+    fn assert_grid_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Grid(_)));
+    }
+
+    fn assert_writing_mode_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::WritingMode(_)));
+    }
+
+    fn assert_text_align_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TextAlign(_)));
+    }
+
+    fn assert_text_align_last_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TextAlignLast(_)));
+    }
+
+    fn assert_text_indent_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TextIndent(_)));
+    }
+
+    fn assert_vertical_align_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::VerticalAlign(_)));
+    }
+
+    fn assert_font_family_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::FontFamily(_)));
+    }
+
+    fn assert_font_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Font(_)));
+    }
+
+    fn assert_font_weight_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::FontWeight(_)));
+    }
+
+    fn assert_font_style_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::FontStyle(_)));
+    }
+
+    fn assert_font_stretch_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::FontStretch(_)));
+    }
+
+    fn assert_font_variant_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::FontVariant(_)));
+    }
+
+    fn assert_font_feature_settings_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::FontFeatureSettings(_)));
+    }
+
+    fn assert_letter_spacing_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::LetterSpacing(_)));
+    }
+
+    fn assert_text_wrap_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TextWrap(_)));
+    }
+
+    fn assert_white_space_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::WhiteSpace(_)));
+    }
+
+    fn assert_word_break_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::WordBreak(_)));
+    }
+
+    fn assert_overflow_wrap_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::OverflowWrap(_)));
+    }
+
+    fn assert_text_overflow_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TextOverflow(_)));
+    }
+
+    fn assert_text_decoration_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TextDecoration(_)));
+    }
+
+    fn assert_text_decoration_line_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TextDecorationLine(_)));
+    }
+
+    fn assert_text_decoration_color_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TextDecorationColor(_)));
+    }
+
+    fn assert_text_decoration_style_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TextDecorationStyle(_)));
+    }
+
+    fn assert_text_decoration_thickness_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TextDecorationThickness(_)));
+    }
+
+    fn assert_text_transform_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TextTransform(_)));
+    }
+
+    fn assert_background_image_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BackgroundImage(_)));
+    }
+
+    fn assert_background_position_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BackgroundPosition(_)));
+    }
+
+    fn assert_background_size_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BackgroundSize(_)));
+    }
+
+    fn assert_background_repeat_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BackgroundRepeat(_)));
+    }
+
+    fn assert_background_box_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BackgroundBox(_)));
+    }
+
+    fn assert_background_attachment_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::BackgroundAttachment(_)));
+    }
+
+    fn assert_cursor_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Cursor(_)));
+    }
+
+    fn assert_pointer_events_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::PointerEvents(_)));
+    }
+
+    fn assert_user_select_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::UserSelect(_)));
+    }
+
+    fn assert_outline_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Outline(_)));
+    }
+
+    fn assert_outline_color_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::OutlineColor(_)));
+    }
+
+    fn assert_outline_style_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::OutlineStyle(_)));
+    }
+
+    fn assert_outline_width_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::OutlineWidth(_)));
+    }
+
+    fn assert_transform_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Transform(_)));
+    }
+
+    fn assert_transform_origin_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TransformOrigin(_)));
+    }
+
+    fn assert_translate_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Translate(_)));
+    }
+
+    fn assert_rotate_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Rotate(_)));
+    }
+
+    fn assert_scale_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Scale(_)));
+    }
+
+    fn assert_filter_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Filter(_)));
+    }
+
+    fn assert_clip_path_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::ClipPath(_)));
+    }
+
+    fn assert_mask_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Mask(_)));
+    }
+
+    fn assert_mask_image_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::MaskImage(_)));
+    }
+
+    fn assert_mask_size_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::MaskSize(_)));
+    }
+
+    fn assert_mask_position_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::MaskPosition(_)));
+    }
+
+    fn assert_mask_repeat_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::MaskRepeat(_)));
+    }
+
+    fn assert_transition_property_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TransitionProperty(_)));
+    }
+
+    fn assert_time_list_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::TimeList(_)));
+    }
+
+    fn assert_easing_list_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::EasingList(_)));
+    }
+
+    fn assert_transition_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Transition(_)));
+    }
+
+    fn assert_animation_name_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::AnimationName(_)));
+    }
+
+    fn assert_animation_iteration_count_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::AnimationIterationCount(_)));
+    }
+
+    fn assert_animation_direction_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::AnimationDirection(_)));
+    }
+
+    fn assert_animation_fill_mode_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::AnimationFillMode(_)));
+    }
+
+    fn assert_animation_play_state_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::AnimationPlayState(_)));
+    }
+
+    fn assert_animation_value(value: &CssValue) {
+        assert!(matches!(value, CssValue::Animation(_)));
+    }
+
+    macro_rules! value_case {
+        ($label:literal, $property_name:literal, $authored_value:literal, $property:expr, $assertion:path) => {
+            AcceptedValueCase {
+                label: $label,
+                property_name: $property_name,
+                authored_value: $authored_value,
+                expected_property: $property,
+                assert_value: $assertion,
+            }
+        };
     }
 
     #[test]
@@ -5176,6 +5580,1373 @@ mod tests {
             ".panel { width: inherit 10px; height: 20px; }",
             &ExpectedErrorKind::InvalidSyntax,
         );
+    }
+
+    #[test]
+    fn acceptance_css_wide_global_keyword_matrix_accepts_supported_globals() {
+        let cases = [
+            AcceptedDeclarationCase {
+                label: "all inherit",
+                property_name: "all",
+                authored_value: "inherit",
+                expected_property: CssProperty::All,
+                expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Inherit),
+            },
+            AcceptedDeclarationCase {
+                label: "all initial",
+                property_name: "all",
+                authored_value: "initial",
+                expected_property: CssProperty::All,
+                expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Initial),
+            },
+            AcceptedDeclarationCase {
+                label: "all unset",
+                property_name: "all",
+                authored_value: "unset",
+                expected_property: CssProperty::All,
+                expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Unset),
+            },
+            AcceptedDeclarationCase {
+                label: "all revert",
+                property_name: "all",
+                authored_value: "revert",
+                expected_property: CssProperty::All,
+                expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Revert),
+            },
+            AcceptedDeclarationCase {
+                label: "all revert-layer",
+                property_name: "all",
+                authored_value: "revert-layer",
+                expected_property: CssProperty::All,
+                expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::RevertLayer),
+            },
+            AcceptedDeclarationCase {
+                label: "display global initial",
+                property_name: "display",
+                authored_value: "initial",
+                expected_property: CssProperty::Display,
+                expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Initial),
+            },
+            AcceptedDeclarationCase {
+                label: "width global unset",
+                property_name: "width",
+                authored_value: "unset",
+                expected_property: CssProperty::Width,
+                expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Unset),
+            },
+            AcceptedDeclarationCase {
+                label: "color global revert",
+                property_name: "color",
+                authored_value: "revert",
+                expected_property: CssProperty::Color,
+                expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Revert),
+            },
+            AcceptedDeclarationCase {
+                label: "animation global revert-layer",
+                property_name: "animation",
+                authored_value: "revert-layer",
+                expected_property: CssProperty::Animation,
+                expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::RevertLayer),
+            },
+        ];
+
+        assert_accepts_declarations(&cases);
+
+        assert_accepts_value_cases(&[
+            value_case!(
+                "background-color global inherit aliases background property",
+                "background-color",
+                "inherit",
+                CssProperty::Background,
+                assert_global_value
+            ),
+            value_case!(
+                "mask global unset",
+                "mask",
+                "unset",
+                CssProperty::Mask,
+                assert_global_value
+            ),
+        ]);
+    }
+
+    #[test]
+    fn acceptance_box_layout_and_spacing_family_matrix_accepts_supported_values() {
+        let cases = [
+            value_case!(
+                "display block",
+                "display",
+                "block",
+                CssProperty::Display,
+                assert_display_value
+            ),
+            value_case!(
+                "display inline-grid-lanes",
+                "display",
+                "inline-grid-lanes",
+                CssProperty::Display,
+                assert_display_value
+            ),
+            value_case!(
+                "box-sizing border-box",
+                "box-sizing",
+                "border-box",
+                CssProperty::BoxSizing,
+                assert_box_sizing_value
+            ),
+            value_case!(
+                "position sticky",
+                "position",
+                "sticky",
+                CssProperty::Position,
+                assert_position_value
+            ),
+            value_case!(
+                "direction rtl",
+                "direction",
+                "rtl",
+                CssProperty::Direction,
+                assert_direction_value
+            ),
+            value_case!(
+                "overflow axes",
+                "overflow",
+                "hidden scroll",
+                CssProperty::Overflow,
+                assert_overflow_value
+            ),
+            value_case!(
+                "overflow-x clip",
+                "overflow-x",
+                "clip",
+                CssProperty::OverflowX,
+                assert_overflow_value
+            ),
+            value_case!(
+                "overflow-y visible",
+                "overflow-y",
+                "visible",
+                CssProperty::OverflowY,
+                assert_overflow_value
+            ),
+            value_case!(
+                "flex-direction column-reverse",
+                "flex-direction",
+                "column-reverse",
+                CssProperty::FlexDirection,
+                assert_flex_direction_value
+            ),
+            value_case!(
+                "flex-wrap wrap-reverse",
+                "flex-wrap",
+                "wrap-reverse",
+                CssProperty::FlexWrap,
+                assert_flex_wrap_value
+            ),
+            value_case!(
+                "width calc",
+                "width",
+                "calc(100% - 12px)",
+                CssProperty::Width,
+                assert_length_value
+            ),
+            value_case!(
+                "height auto",
+                "height",
+                "auto",
+                CssProperty::Height,
+                assert_length_value
+            ),
+            value_case!(
+                "min-width zero",
+                "min-width",
+                "0",
+                CssProperty::MinWidth,
+                assert_length_value
+            ),
+            value_case!(
+                "min-height min-content",
+                "min-height",
+                "min-content",
+                CssProperty::MinHeight,
+                assert_length_value
+            ),
+            value_case!(
+                "max-width max-content",
+                "max-width",
+                "max-content",
+                CssProperty::MaxWidth,
+                assert_length_value
+            ),
+            value_case!(
+                "max-height fit-content",
+                "max-height",
+                "fit-content",
+                CssProperty::MaxHeight,
+                assert_length_value
+            ),
+            value_case!(
+                "flex-basis rem",
+                "flex-basis",
+                "10rem",
+                CssProperty::FlexBasis,
+                assert_length_value
+            ),
+            value_case!(
+                "gap two lengths",
+                "gap",
+                "12px",
+                CssProperty::Gap,
+                assert_length_value
+            ),
+            value_case!(
+                "row-gap normal",
+                "row-gap",
+                "normal",
+                CssProperty::RowGap,
+                assert_length_value
+            ),
+            value_case!(
+                "column-gap percent",
+                "column-gap",
+                "5%",
+                CssProperty::ColumnGap,
+                assert_length_value
+            ),
+            value_case!(
+                "inset shorthand",
+                "inset",
+                "auto 10px 5%",
+                CssProperty::Inset,
+                assert_edges_value
+            ),
+            value_case!(
+                "top auto",
+                "top",
+                "auto",
+                CssProperty::Top,
+                assert_length_value
+            ),
+            value_case!(
+                "right length",
+                "right",
+                "10px",
+                CssProperty::Right,
+                assert_length_value
+            ),
+            value_case!(
+                "bottom percent",
+                "bottom",
+                "5%",
+                CssProperty::Bottom,
+                assert_length_value
+            ),
+            value_case!(
+                "left calc",
+                "left",
+                "calc(3px + 4%)",
+                CssProperty::Left,
+                assert_length_value
+            ),
+            value_case!(
+                "z-index integer",
+                "z-index",
+                "-2",
+                CssProperty::ZIndex,
+                assert_z_index_value
+            ),
+            value_case!(
+                "box-decoration-break clone",
+                "box-decoration-break",
+                "clone",
+                CssProperty::BoxDecorationBreak,
+                assert_box_decoration_break_value
+            ),
+            value_case!(
+                "margin shorthand",
+                "margin",
+                "auto 10px 5%",
+                CssProperty::Margin,
+                assert_edges_value
+            ),
+            value_case!(
+                "margin-top auto",
+                "margin-top",
+                "auto",
+                CssProperty::MarginTop,
+                assert_length_value
+            ),
+            value_case!(
+                "margin-right length",
+                "margin-right",
+                "10px",
+                CssProperty::MarginRight,
+                assert_length_value
+            ),
+            value_case!(
+                "margin-bottom percent",
+                "margin-bottom",
+                "5%",
+                CssProperty::MarginBottom,
+                assert_length_value
+            ),
+            value_case!(
+                "margin-left calc",
+                "margin-left",
+                "calc(3px + 4%)",
+                CssProperty::MarginLeft,
+                assert_length_value
+            ),
+            value_case!(
+                "padding shorthand",
+                "padding",
+                "1px 2% calc(3px + 4%) 0",
+                CssProperty::Padding,
+                assert_edges_value
+            ),
+            value_case!(
+                "padding-top length",
+                "padding-top",
+                "12px",
+                CssProperty::PaddingTop,
+                assert_length_value
+            ),
+            value_case!(
+                "padding-right percent",
+                "padding-right",
+                "2%",
+                CssProperty::PaddingRight,
+                assert_length_value
+            ),
+            value_case!(
+                "padding-bottom calc",
+                "padding-bottom",
+                "calc(3px + 4%)",
+                CssProperty::PaddingBottom,
+                assert_length_value
+            ),
+            value_case!(
+                "padding-left zero",
+                "padding-left",
+                "0",
+                CssProperty::PaddingLeft,
+                assert_length_value
+            ),
+            value_case!(
+                "border-width shorthand",
+                "border-width",
+                "1px 2px 3px 4px",
+                CssProperty::BorderWidth,
+                assert_edges_value
+            ),
+            value_case!(
+                "border-top-width length",
+                "border-top-width",
+                "1px",
+                CssProperty::BorderTopWidth,
+                assert_length_value
+            ),
+            value_case!(
+                "border-right-width length",
+                "border-right-width",
+                "2px",
+                CssProperty::BorderRightWidth,
+                assert_length_value
+            ),
+            value_case!(
+                "border-bottom-width length",
+                "border-bottom-width",
+                "3px",
+                CssProperty::BorderBottomWidth,
+                assert_length_value
+            ),
+            value_case!(
+                "border-left-width length",
+                "border-left-width",
+                "4px",
+                CssProperty::BorderLeftWidth,
+                assert_length_value
+            ),
+            value_case!(
+                "border-radius shorthand",
+                "border-radius",
+                "1px 2px 3px / 4px 5px",
+                CssProperty::BorderRadius,
+                assert_border_radius_value
+            ),
+            value_case!(
+                "border-top-left-radius pair",
+                "border-top-left-radius",
+                "4px 10%",
+                CssProperty::BorderTopLeftRadius,
+                assert_corner_radius_value
+            ),
+            value_case!(
+                "border-top-right-radius length",
+                "border-top-right-radius",
+                "1px",
+                CssProperty::BorderTopRightRadius,
+                assert_corner_radius_value
+            ),
+            value_case!(
+                "border-bottom-right-radius percent",
+                "border-bottom-right-radius",
+                "10%",
+                CssProperty::BorderBottomRightRadius,
+                assert_corner_radius_value
+            ),
+            value_case!(
+                "border-bottom-left-radius calc",
+                "border-bottom-left-radius",
+                "calc(1px + 2%)",
+                CssProperty::BorderBottomLeftRadius,
+                assert_corner_radius_value
+            ),
+        ];
+
+        assert_accepts_value_cases(&cases);
+    }
+
+    #[test]
+    fn acceptance_color_background_border_outline_and_shadow_matrix_accepts_supported_values() {
+        let cases = [
+            value_case!(
+                "color named",
+                "color",
+                "black",
+                CssProperty::Color,
+                assert_color_value
+            ),
+            value_case!(
+                "background color",
+                "background",
+                "#fff",
+                CssProperty::Background,
+                assert_color_value
+            ),
+            value_case!(
+                "background-color alias",
+                "background-color",
+                "transparent",
+                CssProperty::Background,
+                assert_color_value
+            ),
+            value_case!(
+                "border shorthand",
+                "border",
+                "solid 2px #fff",
+                CssProperty::Border,
+                assert_border_value
+            ),
+            value_case!(
+                "border-top shorthand",
+                "border-top",
+                "black dotted",
+                CssProperty::BorderTop,
+                assert_border_value
+            ),
+            value_case!(
+                "border-right width-only",
+                "border-right",
+                "1px",
+                CssProperty::BorderRight,
+                assert_border_value
+            ),
+            value_case!(
+                "border-bottom color-only",
+                "border-bottom",
+                "#fff",
+                CssProperty::BorderBottom,
+                assert_border_value
+            ),
+            value_case!(
+                "border-left style-color",
+                "border-left",
+                "dashed black",
+                CssProperty::BorderLeft,
+                assert_border_value
+            ),
+            value_case!(
+                "border-color named",
+                "border-color",
+                "black",
+                CssProperty::BorderColor,
+                assert_color_value
+            ),
+            value_case!(
+                "border-top-color named",
+                "border-top-color",
+                "black",
+                CssProperty::BorderTopColor,
+                assert_color_value
+            ),
+            value_case!(
+                "border-right-color named",
+                "border-right-color",
+                "white",
+                CssProperty::BorderRightColor,
+                assert_color_value
+            ),
+            value_case!(
+                "border-bottom-color transparent",
+                "border-bottom-color",
+                "transparent",
+                CssProperty::BorderBottomColor,
+                assert_color_value
+            ),
+            value_case!(
+                "border-left-color hex",
+                "border-left-color",
+                "#fff",
+                CssProperty::BorderLeftColor,
+                assert_color_value
+            ),
+            value_case!(
+                "border-style shorthand",
+                "border-style",
+                "none hidden dotted dashed",
+                CssProperty::BorderStyle,
+                assert_border_styles_value
+            ),
+            value_case!(
+                "border-top-style solid",
+                "border-top-style",
+                "solid",
+                CssProperty::BorderTopStyle,
+                assert_border_style_value
+            ),
+            value_case!(
+                "border-right-style double",
+                "border-right-style",
+                "double",
+                CssProperty::BorderRightStyle,
+                assert_border_style_value
+            ),
+            value_case!(
+                "border-bottom-style ridge",
+                "border-bottom-style",
+                "ridge",
+                CssProperty::BorderBottomStyle,
+                assert_border_style_value
+            ),
+            value_case!(
+                "border-left-style outset",
+                "border-left-style",
+                "outset",
+                CssProperty::BorderLeftStyle,
+                assert_border_style_value
+            ),
+            value_case!(
+                "background-image list",
+                "background-image",
+                "url(\"hero.png\"), none",
+                CssProperty::BackgroundImage,
+                assert_background_image_value
+            ),
+            value_case!(
+                "background-position offset",
+                "background-position",
+                "left 10px top 20%",
+                CssProperty::BackgroundPosition,
+                assert_background_position_value
+            ),
+            value_case!(
+                "background-size list",
+                "background-size",
+                "cover, 10px auto",
+                CssProperty::BackgroundSize,
+                assert_background_size_value
+            ),
+            value_case!(
+                "background-repeat list",
+                "background-repeat",
+                "repeat-x, no-repeat round",
+                CssProperty::BackgroundRepeat,
+                assert_background_repeat_value
+            ),
+            value_case!(
+                "background-origin box",
+                "background-origin",
+                "content-box",
+                CssProperty::BackgroundOrigin,
+                assert_background_box_value
+            ),
+            value_case!(
+                "background-clip box",
+                "background-clip",
+                "padding-box",
+                CssProperty::BackgroundClip,
+                assert_background_box_value
+            ),
+            value_case!(
+                "background-attachment list",
+                "background-attachment",
+                "fixed, local",
+                CssProperty::BackgroundAttachment,
+                assert_background_attachment_value
+            ),
+            value_case!(
+                "outline shorthand",
+                "outline",
+                "thick dotted white",
+                CssProperty::Outline,
+                assert_outline_value
+            ),
+            value_case!(
+                "outline-color",
+                "outline-color",
+                "black",
+                CssProperty::OutlineColor,
+                assert_outline_color_value
+            ),
+            value_case!(
+                "outline-style auto",
+                "outline-style",
+                "auto",
+                CssProperty::OutlineStyle,
+                assert_outline_style_value
+            ),
+            value_case!(
+                "outline-width length",
+                "outline-width",
+                "2px",
+                CssProperty::OutlineWidth,
+                assert_outline_width_value
+            ),
+            value_case!(
+                "box-shadow none",
+                "box-shadow",
+                "none",
+                CssProperty::BoxShadow,
+                assert_box_shadow_value
+            ),
+            value_case!(
+                "box-shadow list",
+                "box-shadow",
+                "inset 1px 2px 3px 4px black, 0 1px #fff",
+                CssProperty::BoxShadow,
+                assert_box_shadow_value
+            ),
+            value_case!(
+                "opacity number",
+                "opacity",
+                "0.5",
+                CssProperty::Opacity,
+                assert_number_value
+            ),
+        ];
+
+        assert_accepts_value_cases(&cases);
+    }
+
+    #[test]
+    fn acceptance_position_alignment_flex_and_grid_matrix_accepts_supported_values() {
+        let cases = [
+            value_case!(
+                "float left",
+                "float",
+                "left",
+                CssProperty::Float,
+                assert_float_value
+            ),
+            value_case!(
+                "clear both",
+                "clear",
+                "both",
+                CssProperty::Clear,
+                assert_clear_value
+            ),
+            value_case!(
+                "align-content distribution",
+                "align-content",
+                "space-between",
+                CssProperty::AlignContent,
+                assert_alignment_value
+            ),
+            value_case!(
+                "justify-content safe center",
+                "justify-content",
+                "safe center",
+                CssProperty::JustifyContent,
+                assert_alignment_value
+            ),
+            value_case!(
+                "align-items baseline",
+                "align-items",
+                "first baseline",
+                CssProperty::AlignItems,
+                assert_align_items_value
+            ),
+            value_case!(
+                "align-self safe flex-end",
+                "align-self",
+                "safe flex-end",
+                CssProperty::AlignSelf,
+                assert_align_items_value
+            ),
+            value_case!(
+                "justify-items stretch",
+                "justify-items",
+                "stretch",
+                CssProperty::JustifyItems,
+                assert_align_items_value
+            ),
+            value_case!(
+                "justify-self center",
+                "justify-self",
+                "center",
+                CssProperty::JustifySelf,
+                assert_align_items_value
+            ),
+            value_case!(
+                "place-content pair",
+                "place-content",
+                "center end",
+                CssProperty::PlaceContent,
+                assert_place_alignment_value
+            ),
+            value_case!(
+                "place-items single",
+                "place-items",
+                "stretch",
+                CssProperty::PlaceItems,
+                assert_place_alignment_value
+            ),
+            value_case!(
+                "place-self pair",
+                "place-self",
+                "end center",
+                CssProperty::PlaceSelf,
+                assert_place_alignment_value
+            ),
+            value_case!(
+                "visibility collapse",
+                "visibility",
+                "collapse",
+                CssProperty::Visibility,
+                assert_visibility_value
+            ),
+            value_case!(
+                "content-visibility auto",
+                "content-visibility",
+                "auto",
+                CssProperty::ContentVisibility,
+                assert_content_visibility_value
+            ),
+            value_case!(
+                "flex-grow number",
+                "flex-grow",
+                "2",
+                CssProperty::FlexGrow,
+                assert_number_value
+            ),
+            value_case!(
+                "flex-shrink number",
+                "flex-shrink",
+                "0",
+                CssProperty::FlexShrink,
+                assert_number_value
+            ),
+            value_case!(
+                "order negative integer",
+                "order",
+                "-2",
+                CssProperty::Order,
+                assert_order_value
+            ),
+            value_case!(
+                "flex components",
+                "flex",
+                "2 0 10rem",
+                CssProperty::Flex,
+                assert_flex_value
+            ),
+            value_case!(
+                "flex keyword none",
+                "flex",
+                "none",
+                CssProperty::Flex,
+                assert_flex_value
+            ),
+            value_case!(
+                "justify-tracks distribution",
+                "justify-tracks",
+                "space-evenly",
+                CssProperty::JustifyTracks,
+                assert_alignment_value
+            ),
+            value_case!(
+                "align-tracks center",
+                "align-tracks",
+                "center",
+                CssProperty::AlignTracks,
+                assert_alignment_value
+            ),
+            value_case!(
+                "aspect-ratio number",
+                "aspect-ratio",
+                "1.5",
+                CssProperty::AspectRatio,
+                assert_number_value
+            ),
+            value_case!(
+                "scrollbar-width number",
+                "scrollbar-width",
+                "12",
+                CssProperty::ScrollbarWidth,
+                assert_number_value
+            ),
+            value_case!(
+                "grid-flow-tolerance infinite",
+                "grid-flow-tolerance",
+                "infinite",
+                CssProperty::GridFlowTolerance,
+                assert_grid_flow_tolerance_value
+            ),
+            value_case!(
+                "grid-template-rows tracks",
+                "grid-template-rows",
+                "[top] 100px 1fr",
+                CssProperty::GridTemplateRows,
+                assert_grid_track_list_value
+            ),
+            value_case!(
+                "grid-template-columns repeat",
+                "grid-template-columns",
+                "repeat(2, minmax(10px, 1fr))",
+                CssProperty::GridTemplateColumns,
+                assert_grid_track_list_value
+            ),
+            value_case!(
+                "grid-template-areas rows",
+                "grid-template-areas",
+                "\"header header\" \"nav main\"",
+                CssProperty::GridTemplateAreas,
+                assert_grid_template_areas_value
+            ),
+            value_case!(
+                "grid-template shorthand",
+                "grid-template",
+                "100px 1fr / repeat(2, minmax(10px, 1fr))",
+                CssProperty::GridTemplate,
+                assert_grid_template_value
+            ),
+            value_case!(
+                "grid-auto-rows minmax",
+                "grid-auto-rows",
+                "minmax(10px, auto)",
+                CssProperty::GridAutoRows,
+                assert_grid_track_list_value
+            ),
+            value_case!(
+                "grid-auto-columns fit-content",
+                "grid-auto-columns",
+                "fit-content(20%)",
+                CssProperty::GridAutoColumns,
+                assert_grid_track_list_value
+            ),
+            value_case!(
+                "grid-auto-flow dense",
+                "grid-auto-flow",
+                "column dense",
+                CssProperty::GridAutoFlow,
+                assert_grid_auto_flow_value
+            ),
+            value_case!(
+                "grid-row-start span",
+                "grid-row-start",
+                "span 2 main",
+                CssProperty::GridRowStart,
+                assert_grid_line_value
+            ),
+            value_case!(
+                "grid-row-end auto",
+                "grid-row-end",
+                "auto",
+                CssProperty::GridRowEnd,
+                assert_grid_line_value
+            ),
+            value_case!(
+                "grid-column-start ident",
+                "grid-column-start",
+                "nav",
+                CssProperty::GridColumnStart,
+                assert_grid_line_value
+            ),
+            value_case!(
+                "grid-column-end integer",
+                "grid-column-end",
+                "4",
+                CssProperty::GridColumnEnd,
+                assert_grid_line_value
+            ),
+            value_case!(
+                "grid-row range",
+                "grid-row",
+                "1 / span 2",
+                CssProperty::GridRow,
+                assert_grid_line_range_value
+            ),
+            value_case!(
+                "grid-column range",
+                "grid-column",
+                "nav / main",
+                CssProperty::GridColumn,
+                assert_grid_line_range_value
+            ),
+            value_case!(
+                "grid-area shorthand",
+                "grid-area",
+                "header / 1 / span 2 / main",
+                CssProperty::GridArea,
+                assert_grid_area_value
+            ),
+            value_case!(
+                "grid auto-flow shorthand",
+                "grid",
+                "auto-flow dense 12px / repeat(auto-fit, 1fr)",
+                CssProperty::Grid,
+                assert_grid_value
+            ),
+        ];
+
+        assert_accepts_value_cases(&cases);
+    }
+
+    #[test]
+    fn acceptance_typography_and_text_family_matrix_accepts_supported_values() {
+        let cases = [
+            value_case!(
+                "font-size length",
+                "font-size",
+                "16px",
+                CssProperty::FontSize,
+                assert_length_value
+            ),
+            value_case!(
+                "line-height normal",
+                "line-height",
+                "normal",
+                CssProperty::LineHeight,
+                assert_length_value
+            ),
+            value_case!(
+                "writing-mode vertical",
+                "writing-mode",
+                "vertical-rl",
+                CssProperty::WritingMode,
+                assert_writing_mode_value
+            ),
+            value_case!(
+                "text-align start",
+                "text-align",
+                "start",
+                CssProperty::TextAlign,
+                assert_text_align_value
+            ),
+            value_case!(
+                "text-align-last justify",
+                "text-align-last",
+                "justify",
+                CssProperty::TextAlignLast,
+                assert_text_align_last_value
+            ),
+            value_case!(
+                "text-indent flags",
+                "text-indent",
+                "1rem hanging each-line",
+                CssProperty::TextIndent,
+                assert_text_indent_value
+            ),
+            value_case!(
+                "vertical-align keyword",
+                "vertical-align",
+                "super",
+                CssProperty::VerticalAlign,
+                assert_vertical_align_value
+            ),
+            value_case!(
+                "vertical-align length",
+                "vertical-align",
+                "4px",
+                CssProperty::VerticalAlign,
+                assert_vertical_align_value
+            ),
+            value_case!(
+                "font-family list",
+                "font-family",
+                "\"Avenir Next\", Gill Sans, sans-serif",
+                CssProperty::FontFamily,
+                assert_font_family_value
+            ),
+            value_case!(
+                "font shorthand",
+                "font",
+                "italic small-caps 700 condensed 16px/normal \"Avenir Next\", sans-serif",
+                CssProperty::Font,
+                assert_font_value
+            ),
+            value_case!(
+                "font-weight number",
+                "font-weight",
+                "725",
+                CssProperty::FontWeight,
+                assert_font_weight_value
+            ),
+            value_case!(
+                "font-style italic",
+                "font-style",
+                "italic",
+                CssProperty::FontStyle,
+                assert_font_style_value
+            ),
+            value_case!(
+                "font-stretch semi-condensed",
+                "font-stretch",
+                "semi-condensed",
+                CssProperty::FontStretch,
+                assert_font_stretch_value
+            ),
+            value_case!(
+                "font-variant small-caps",
+                "font-variant",
+                "small-caps",
+                CssProperty::FontVariant,
+                assert_font_variant_value
+            ),
+            value_case!(
+                "font-feature-settings list",
+                "font-feature-settings",
+                "\"kern\" on, \"liga\" 0",
+                CssProperty::FontFeatureSettings,
+                assert_font_feature_settings_value
+            ),
+            value_case!(
+                "letter-spacing normal",
+                "letter-spacing",
+                "normal",
+                CssProperty::LetterSpacing,
+                assert_letter_spacing_value
+            ),
+            value_case!(
+                "letter-spacing length",
+                "letter-spacing",
+                "0.1em",
+                CssProperty::LetterSpacing,
+                assert_letter_spacing_value
+            ),
+            value_case!(
+                "text-wrap balance",
+                "text-wrap",
+                "balance",
+                CssProperty::TextWrap,
+                assert_text_wrap_value
+            ),
+            value_case!(
+                "white-space pre-wrap",
+                "white-space",
+                "pre-wrap",
+                CssProperty::WhiteSpace,
+                assert_white_space_value
+            ),
+            value_case!(
+                "word-break keep-all",
+                "word-break",
+                "keep-all",
+                CssProperty::WordBreak,
+                assert_word_break_value
+            ),
+            value_case!(
+                "overflow-wrap anywhere",
+                "overflow-wrap",
+                "anywhere",
+                CssProperty::OverflowWrap,
+                assert_overflow_wrap_value
+            ),
+            value_case!(
+                "text-overflow ellipsis",
+                "text-overflow",
+                "ellipsis",
+                CssProperty::TextOverflow,
+                assert_text_overflow_value
+            ),
+            value_case!(
+                "text-decoration shorthand",
+                "text-decoration",
+                "underline dotted white 3px",
+                CssProperty::TextDecoration,
+                assert_text_decoration_value
+            ),
+            value_case!(
+                "text-decoration-line list",
+                "text-decoration-line",
+                "underline overline",
+                CssProperty::TextDecorationLine,
+                assert_text_decoration_line_value
+            ),
+            value_case!(
+                "text-decoration-color",
+                "text-decoration-color",
+                "black",
+                CssProperty::TextDecorationColor,
+                assert_text_decoration_color_value
+            ),
+            value_case!(
+                "text-decoration-style",
+                "text-decoration-style",
+                "wavy",
+                CssProperty::TextDecorationStyle,
+                assert_text_decoration_style_value
+            ),
+            value_case!(
+                "text-decoration-thickness length",
+                "text-decoration-thickness",
+                "2px",
+                CssProperty::TextDecorationThickness,
+                assert_text_decoration_thickness_value
+            ),
+            value_case!(
+                "text-transform uppercase",
+                "text-transform",
+                "uppercase",
+                CssProperty::TextTransform,
+                assert_text_transform_value
+            ),
+        ];
+
+        assert_accepts_value_cases(&cases);
+    }
+
+    #[test]
+    fn acceptance_interaction_effect_mask_transition_animation_matrix_accepts_supported_values() {
+        let cases = [
+            value_case!(
+                "cursor keyword",
+                "cursor",
+                "grab",
+                CssProperty::Cursor,
+                assert_cursor_value
+            ),
+            value_case!(
+                "cursor url fallback",
+                "cursor",
+                "url(cursor.png), pointer",
+                CssProperty::Cursor,
+                assert_cursor_value
+            ),
+            value_case!(
+                "pointer-events none",
+                "pointer-events",
+                "none",
+                CssProperty::PointerEvents,
+                assert_pointer_events_value
+            ),
+            value_case!(
+                "user-select text",
+                "user-select",
+                "text",
+                CssProperty::UserSelect,
+                assert_user_select_value
+            ),
+            value_case!(
+                "transform functions",
+                "transform",
+                "translate(10px, 20px) rotate(45deg) scale(1.5)",
+                CssProperty::Transform,
+                assert_transform_value
+            ),
+            value_case!(
+                "transform none",
+                "transform",
+                "none",
+                CssProperty::Transform,
+                assert_transform_value
+            ),
+            value_case!(
+                "transform-origin position",
+                "transform-origin",
+                "center top",
+                CssProperty::TransformOrigin,
+                assert_transform_origin_value
+            ),
+            value_case!(
+                "translate values",
+                "translate",
+                "10px 20px",
+                CssProperty::Translate,
+                assert_translate_value
+            ),
+            value_case!(
+                "rotate angle",
+                "rotate",
+                "45deg",
+                CssProperty::Rotate,
+                assert_rotate_value
+            ),
+            value_case!(
+                "scale values",
+                "scale",
+                "1.5 2",
+                CssProperty::Scale,
+                assert_scale_value
+            ),
+            value_case!(
+                "filter functions",
+                "filter",
+                "blur(4px) opacity(50%)",
+                CssProperty::Filter,
+                assert_filter_value
+            ),
+            value_case!(
+                "backdrop-filter none",
+                "backdrop-filter",
+                "none",
+                CssProperty::BackdropFilter,
+                assert_filter_value
+            ),
+            value_case!(
+                "clip-path shape",
+                "clip-path",
+                "circle(50% at center)",
+                CssProperty::ClipPath,
+                assert_clip_path_value
+            ),
+            value_case!(
+                "mask shorthand",
+                "mask",
+                "url(mask.png) center / contain no-repeat",
+                CssProperty::Mask,
+                assert_mask_value
+            ),
+            value_case!(
+                "mask-image list",
+                "mask-image",
+                "url(mask.png), none",
+                CssProperty::MaskImage,
+                assert_mask_image_value
+            ),
+            value_case!(
+                "mask-size contain",
+                "mask-size",
+                "contain",
+                CssProperty::MaskSize,
+                assert_mask_size_value
+            ),
+            value_case!(
+                "mask-position center",
+                "mask-position",
+                "center",
+                CssProperty::MaskPosition,
+                assert_mask_position_value
+            ),
+            value_case!(
+                "mask-repeat repeat",
+                "mask-repeat",
+                "repeat",
+                CssProperty::MaskRepeat,
+                assert_mask_repeat_value
+            ),
+            value_case!(
+                "transition-property list",
+                "transition-property",
+                "opacity, transform",
+                CssProperty::TransitionProperty,
+                assert_transition_property_value
+            ),
+            value_case!(
+                "transition-duration list",
+                "transition-duration",
+                "150ms, 2s",
+                CssProperty::TransitionDuration,
+                assert_time_list_value
+            ),
+            value_case!(
+                "transition-delay time",
+                "transition-delay",
+                "20ms",
+                CssProperty::TransitionDelay,
+                assert_time_list_value
+            ),
+            value_case!(
+                "transition-timing-function list",
+                "transition-timing-function",
+                "ease-in, cubic-bezier(0.1, 0.2, 0.3, 1)",
+                CssProperty::TransitionTimingFunction,
+                assert_easing_list_value
+            ),
+            value_case!(
+                "transition shorthand list",
+                "transition",
+                "opacity 150ms ease-in 20ms, transform 2s linear",
+                CssProperty::Transition,
+                assert_transition_value
+            ),
+            value_case!(
+                "animation-name list",
+                "animation-name",
+                "fade, none",
+                CssProperty::AnimationName,
+                assert_animation_name_value
+            ),
+            value_case!(
+                "animation-duration time",
+                "animation-duration",
+                "1s",
+                CssProperty::AnimationDuration,
+                assert_time_list_value
+            ),
+            value_case!(
+                "animation-delay time",
+                "animation-delay",
+                "200ms",
+                CssProperty::AnimationDelay,
+                assert_time_list_value
+            ),
+            value_case!(
+                "animation-timing-function easing",
+                "animation-timing-function",
+                "ease-out",
+                CssProperty::AnimationTimingFunction,
+                assert_easing_list_value
+            ),
+            value_case!(
+                "animation-iteration-count list",
+                "animation-iteration-count",
+                "2, infinite",
+                CssProperty::AnimationIterationCount,
+                assert_animation_iteration_count_value
+            ),
+            value_case!(
+                "animation-direction",
+                "animation-direction",
+                "alternate",
+                CssProperty::AnimationDirection,
+                assert_animation_direction_value
+            ),
+            value_case!(
+                "animation-fill-mode",
+                "animation-fill-mode",
+                "both",
+                CssProperty::AnimationFillMode,
+                assert_animation_fill_mode_value
+            ),
+            value_case!(
+                "animation-play-state list",
+                "animation-play-state",
+                "running, paused",
+                CssProperty::AnimationPlayState,
+                assert_animation_play_state_value
+            ),
+            value_case!(
+                "animation shorthand list",
+                "animation",
+                "fade 1s ease-in 200ms 3 alternate both running, slide 2s linear",
+                CssProperty::Animation,
+                assert_animation_value
+            ),
+        ];
+
+        assert_accepts_value_cases(&cases);
     }
 
     #[test]
@@ -5316,6 +7087,114 @@ mod tests {
             }
             assert_eq!(terms[1].value(), &CssCalcLength::Px(2.0));
         }
+    }
+
+    #[test]
+    fn unit_matrix_accepts_every_supported_length_unit_in_ordinary_length_contexts() {
+        for unit in supported_length_units() {
+            let authored = format!("1{}", unit.as_css_str());
+            let declaration = parse_single_declaration("width", &authored);
+
+            assert_eq!(declaration.property(), CssProperty::Width);
+            assert_eq!(
+                declaration.value(),
+                &CssValue::Length(CssLength::dimension(1.0, unit)),
+                "{authored} should preserve its supported length unit",
+            );
+        }
+    }
+
+    #[test]
+    fn unit_matrix_accepts_every_supported_length_unit_in_calc_contexts() {
+        for unit in supported_length_units() {
+            let authored = format!("calc(1{} + 2px)", unit.as_css_str());
+            let declaration = parse_single_declaration("width", &authored);
+
+            assert_eq!(declaration.property(), CssProperty::Width);
+            let CssValue::Length(CssLength::Calc(CssCalcLength::Sum(terms))) = declaration.value()
+            else {
+                panic!("{authored} should parse as a calc length");
+            };
+            assert_eq!(terms.len(), 2);
+            assert_eq!(
+                terms[0].value(),
+                &CssCalcLength::dimension(1.0, unit),
+                "{authored} should preserve its supported calc length unit",
+            );
+            assert_eq!(terms[1].value(), &CssCalcLength::Px(2.0));
+        }
+    }
+
+    #[test]
+    fn unit_matrix_rejects_unknown_length_units_in_ordinary_and_calc_contexts() {
+        assert_sheet_rejected(
+            ".panel { width: 1quux; }",
+            &ExpectedErrorKind::UnsupportedValue {
+                property: Some("width"),
+                reason: "unknown box size unit `quux`",
+            },
+        );
+        assert_sheet_rejected(
+            ".panel { width: calc(1quux + 2px); }",
+            &ExpectedErrorKind::UnsupportedValue {
+                property: Some("width"),
+                reason: "unknown calc length unit `quux`",
+            },
+        );
+    }
+
+    fn supported_length_units() -> [CssLengthUnit; 49] {
+        [
+            CssLengthUnit::Px,
+            CssLengthUnit::Em,
+            CssLengthUnit::Rem,
+            CssLengthUnit::Ex,
+            CssLengthUnit::Rex,
+            CssLengthUnit::Cap,
+            CssLengthUnit::Rcap,
+            CssLengthUnit::Ch,
+            CssLengthUnit::Rch,
+            CssLengthUnit::Ic,
+            CssLengthUnit::Ric,
+            CssLengthUnit::Lh,
+            CssLengthUnit::Rlh,
+            CssLengthUnit::Vw,
+            CssLengthUnit::Vh,
+            CssLengthUnit::Vi,
+            CssLengthUnit::Vb,
+            CssLengthUnit::Vmin,
+            CssLengthUnit::Vmax,
+            CssLengthUnit::Svw,
+            CssLengthUnit::Svh,
+            CssLengthUnit::Svi,
+            CssLengthUnit::Svb,
+            CssLengthUnit::Svmin,
+            CssLengthUnit::Svmax,
+            CssLengthUnit::Lvw,
+            CssLengthUnit::Lvh,
+            CssLengthUnit::Lvi,
+            CssLengthUnit::Lvb,
+            CssLengthUnit::Lvmin,
+            CssLengthUnit::Lvmax,
+            CssLengthUnit::Dvw,
+            CssLengthUnit::Dvh,
+            CssLengthUnit::Dvi,
+            CssLengthUnit::Dvb,
+            CssLengthUnit::Dvmin,
+            CssLengthUnit::Dvmax,
+            CssLengthUnit::Cqw,
+            CssLengthUnit::Cqh,
+            CssLengthUnit::Cqi,
+            CssLengthUnit::Cqb,
+            CssLengthUnit::Cqmin,
+            CssLengthUnit::Cqmax,
+            CssLengthUnit::Cm,
+            CssLengthUnit::Mm,
+            CssLengthUnit::Q,
+            CssLengthUnit::In,
+            CssLengthUnit::Pc,
+            CssLengthUnit::Pt,
+        ]
     }
 
     #[test]

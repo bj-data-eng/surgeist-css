@@ -43,6 +43,28 @@ impl AcceptedDeclarationCase {
     }
 }
 
+pub(crate) struct AcceptedValueCase {
+    pub(crate) label: &'static str,
+    pub(crate) property_name: &'static str,
+    pub(crate) authored_value: &'static str,
+    pub(crate) expected_property: CssProperty,
+    pub(crate) assert_value: fn(&CssValue),
+}
+
+impl AcceptedValueCase {
+    pub(crate) fn assert_accepts(&self) -> CssDeclaration {
+        let declaration = parse_single_declaration(self.property_name, self.authored_value);
+        assert_eq!(
+            declaration.property(),
+            self.expected_property,
+            "{} parsed to the wrong property",
+            self.label,
+        );
+        (self.assert_value)(declaration.value());
+        declaration
+    }
+}
+
 pub(crate) enum ExpectedErrorKind {
     InvalidSyntax,
     UnknownProperty {
@@ -95,6 +117,12 @@ impl RejectedDeclarationCase {
 }
 
 pub(crate) fn assert_accepts_declarations(cases: &[AcceptedDeclarationCase]) {
+    for case in cases {
+        case.assert_accepts();
+    }
+}
+
+pub(crate) fn assert_accepts_value_cases(cases: &[AcceptedValueCase]) {
     for case in cases {
         case.assert_accepts();
     }

@@ -491,6 +491,18 @@ fn rejects_trailing_tokens_in_nth_functions() {
 }
 
 #[test]
+fn nth_pseudo_class_arguments_are_publicly_inspectable() {
+    let sheet = parse_sheet(":nth-child(2n+1) { color: black; }").unwrap();
+    let CssSelector::PseudoClass(CssPseudoClass::NthChild(CssNthPattern::AnPlusB(value))) =
+        sheet.rules()[0].selector()
+    else {
+        panic!("expected nth-child an+b selector");
+    };
+    assert_eq!(value.a(), 2);
+    assert_eq!(value.b(), 1);
+}
+
+#[test]
 fn parses_selector_list_functional_pseudo_classes() {
     let sheet = parse_sheet(".button:not(.disabled, .loading) { color: black; }").unwrap();
     let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
@@ -544,6 +556,21 @@ fn parses_compound_selector_list_functional_pseudo_classes() {
             CssSelector::PseudoClass(CssPseudoClass::Disabled),
             CssSelector::PseudoClass(CssPseudoClass::Focus),
         ]
+    );
+}
+
+#[test]
+fn functional_pseudo_class_arguments_are_publicly_inspectable() {
+    let sheet = parse_sheet(".button:not(.disabled) { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+        panic!("expected compound selector");
+    };
+    let [CssPseudoClass::Not(list)] = selector.pseudo_classes() else {
+        panic!("expected :not selector list");
+    };
+    assert_eq!(
+        list.selectors(),
+        &[CssSelector::Class("disabled".to_owned())]
     );
 }
 
@@ -612,6 +639,43 @@ fn rejects_unsupported_relative_or_combinator_selector_forms() {
     assert!(parse_sheet(".field:has(> .icon) { color: black; }").is_err());
     assert!(parse_sheet(":has(.field > .icon) { color: black; }").is_err());
     assert!(parse_sheet(":not(.field .icon) { color: black; }").is_err());
+}
+
+#[test]
+fn practical_pseudo_class_matrix_accepts_supported_and_rejects_unsupported_forms() {
+    let accepted = [
+        ":hover { color: black; }",
+        ":focus-visible { color: black; }",
+        ":disabled { color: black; }",
+        ":first-child { color: black; }",
+        ":nth-child(2n+1) { color: black; }",
+        ":not(.disabled) { color: black; }",
+        ":is(.primary, .secondary) { color: black; }",
+        ":where(button, .link) { color: black; }",
+        ".field:has(.error) { color: black; }",
+        ":modal { color: black; }",
+        ":read-only { color: black; }",
+    ];
+
+    for css in accepted {
+        assert!(parse_sheet(css).is_ok(), "{css} should parse");
+    }
+
+    let rejected = [
+        ":visited { color: black; }",
+        ":target { color: black; }",
+        ":lang(en) { color: black; }",
+        ":host { color: black; }",
+        ":state(open) { color: black; }",
+        ":hover() { color: black; }",
+        ":not() { color: black; }",
+        ":nth-child(2n of .item) { color: black; }",
+        ".field:has(> .icon) { color: black; }",
+    ];
+
+    for css in rejected {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
 }
 
 #[test]

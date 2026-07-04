@@ -190,8 +190,64 @@ fn variable_references_accept_plain_and_empty_fallback_forms() {
 }
 
 #[test]
-fn variable_references_in_standard_properties_still_reject_before_task_4() {
-    assert!(parse_sheet(".panel { gap: var(--space); }").is_err());
+fn supported_properties_accept_variable_dependent_values_symbolically() {
+    let declaration = single_declaration(".panel { gap: var(--space, 8px); }");
+    assert_eq!(declaration.property(), &CssProperty::Gap);
+    let CssValue::VariableDependent(value) = declaration.value() else {
+        panic!("expected variable dependent value");
+    };
+    assert_eq!(value.as_css(), "var(--space, 8px)");
+    assert_eq!(value.references()[0].name().as_str(), "--space");
+}
+
+#[test]
+fn supported_properties_accept_embedded_variable_dependent_values_symbolically() {
+    let declaration = single_declaration(".panel { width: calc(var(--w) + 1px); }");
+    assert_eq!(declaration.property(), &CssProperty::Width);
+    let CssValue::VariableDependent(value) = declaration.value() else {
+        panic!("expected variable dependent value");
+    };
+    assert_eq!(value.as_css(), "calc(var(--w) + 1px)");
+    assert_eq!(value.references()[0].name().as_str(), "--w");
+}
+
+#[test]
+fn variable_dependent_values_skip_post_substitution_validation() {
+    let declaration = single_declaration(".panel { color: var(--brand, 8px); }");
+    assert_eq!(declaration.property(), &CssProperty::Color);
+    let CssValue::VariableDependent(value) = declaration.value() else {
+        panic!("expected variable dependent value");
+    };
+    assert_eq!(value.as_css(), "var(--brand, 8px)");
+    assert_eq!(value.references()[0].name().as_str(), "--brand");
+    assert_eq!(value.references()[0].fallback().unwrap().as_css(), "8px");
+}
+
+#[test]
+fn malformed_var_in_supported_property_rejects_whole_sheet() {
+    assert!(parse_sheet(".panel { gap: var(color); }").is_err());
+    assert!(parse_sheet(".panel { color: var(--brand); bogus: 1; }").is_err());
+}
+
+#[test]
+fn no_var_invalid_supported_values_still_reject_strictly() {
+    assert!(parse_sheet(".panel { gap: auto; }").is_err());
+}
+
+#[test]
+fn custom_property_with_var_remains_custom_property_value() {
+    let declaration = single_declaration(".theme { --gap: var(--space, 8px); }");
+    assert!(matches!(
+        declaration.value(),
+        CssValue::CustomProperty(value)
+            if value.as_css() == "var(--space, 8px)"
+                && value.references()[0].name().as_str() == "--space"
+    ));
+}
+
+#[test]
+fn unknown_property_with_var_rejects() {
+    assert!(parse_sheet(".panel { made-up-property: var(--space); }").is_err());
 }
 
 #[test]

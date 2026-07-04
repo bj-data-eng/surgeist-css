@@ -33,7 +33,9 @@ use selectors::parse_selector_list;
 use timing::*;
 use typography::*;
 use values::*;
-use variables::{parse_custom_property_name, parse_custom_property_value};
+use variables::{
+    collect_authored_declaration_value, parse_custom_property_name, parse_custom_property_value,
+};
 
 use crate::error::{
     Error, Result, basic, from_parse_error, invalid_syntax, property_name_error, unsupported_value,
@@ -145,6 +147,22 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
                 value,
                 location,
             ));
+        }
+
+        if let Some(supported_property) = property_for_supported_name(name.as_ref()) {
+            let state = input.state();
+            let (authored, references) = collect_authored_declaration_value(input)
+                .map_err(|error| with_property_context(error, name.as_ref()))?;
+            if !references.is_empty() {
+                return Ok(CssDeclaration::new(
+                    supported_property,
+                    CssValue::VariableDependent(CssVariableDependentValue::new(
+                        authored, references,
+                    )),
+                    location,
+                ));
+            }
+            input.reset(&state);
         }
 
         let state = input.state();

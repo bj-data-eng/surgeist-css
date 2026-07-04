@@ -6951,7 +6951,7 @@ impl CssSelector {
             Self::combine_with_combinator(parent, CssSelectorCombinator::Descendant, child_first)?;
         let (first, mut rest) = combined.into_complex_parts();
         rest.extend(child_rest);
-        Some(Self::Complex(CssComplexSelector::new(first, rest)))
+        CssComplexSelector::try_new(first, rest).map(Self::Complex)
     }
 
     #[must_use]
@@ -6962,7 +6962,7 @@ impl CssSelector {
     ) -> Option<Self> {
         let (first, mut rest) = parent.into_complex_parts();
         rest.push(CssComplexSelectorPart::new(combinator, child));
-        Some(Self::Complex(CssComplexSelector::new(first, rest)))
+        CssComplexSelector::try_new(first, rest).map(Self::Complex)
     }
 
     #[must_use]
@@ -6978,7 +6978,7 @@ impl CssSelector {
             }
             selector => {
                 let mut selector = selector.into_compound_selector();
-                selector.append_suffix(suffix);
+                selector.append_suffix(suffix)?;
                 Some(Self::Compound(selector))
             }
         }
@@ -7022,7 +7022,7 @@ pub struct CssComplexSelector {
 impl CssComplexSelector {
     #[must_use]
     pub fn try_new(first: CssCompoundSelector, rest: Vec<CssComplexSelectorPart>) -> Option<Self> {
-        if rest.is_empty() {
+        if rest.is_empty() || complex_selector_has_non_terminal_pseudo_elements(&first, &rest) {
             None
         } else {
             Some(Self::new(first, rest))
@@ -7030,8 +7030,11 @@ impl CssComplexSelector {
     }
 
     #[must_use]
-    pub(crate) fn new(first: CssCompoundSelector, rest: Vec<CssComplexSelectorPart>) -> Self {
+    fn new(first: CssCompoundSelector, rest: Vec<CssComplexSelectorPart>) -> Self {
         debug_assert!(!rest.is_empty());
+        debug_assert!(!complex_selector_has_non_terminal_pseudo_elements(
+            &first, &rest
+        ));
         Self { first, rest }
     }
 
@@ -7053,9 +7056,19 @@ impl CssComplexSelector {
     #[allow(dead_code)] // Used by staged selector composition helpers.
     fn append_to_subject(&mut self, suffix: CssCompoundSelector) -> Option<()> {
         let subject = self.rest.last_mut()?;
-        subject.selector.append_suffix(suffix);
-        Some(())
+        subject.selector.append_suffix(suffix)
     }
+}
+
+fn complex_selector_has_non_terminal_pseudo_elements(
+    first: &CssCompoundSelector,
+    rest: &[CssComplexSelectorPart],
+) -> bool {
+    first.has_pseudo_elements()
+        || rest
+            .iter()
+            .take(rest.len().saturating_sub(1))
+            .any(|part| part.selector().has_pseudo_elements())
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -7245,6 +7258,55 @@ pub enum CssPseudoClass {
     OutOfRange,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssPseudoElement {
+    Before,
+    After,
+    Marker,
+    Selection,
+    Backdrop,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssPseudoElementSequence {
+    pseudo_elements: Vec<CssPseudoElement>,
+}
+
+impl CssPseudoElementSequence {
+    #[must_use]
+    pub fn try_new(pseudo_elements: Vec<CssPseudoElement>) -> Option<Self> {
+        if Self::is_supported_sequence(&pseudo_elements) {
+            Some(Self::new(pseudo_elements))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(pseudo_elements: Vec<CssPseudoElement>) -> Self {
+        debug_assert!(Self::is_supported_sequence(&pseudo_elements));
+        Self { pseudo_elements }
+    }
+
+    #[must_use]
+    pub fn pseudo_elements(&self) -> &[CssPseudoElement] {
+        &self.pseudo_elements
+    }
+
+    fn is_supported_sequence(pseudo_elements: &[CssPseudoElement]) -> bool {
+        matches!(
+            pseudo_elements,
+            [CssPseudoElement::Before]
+                | [CssPseudoElement::After]
+                | [CssPseudoElement::Marker]
+                | [CssPseudoElement::Selection]
+                | [CssPseudoElement::Backdrop]
+                | [CssPseudoElement::Before, CssPseudoElement::Marker]
+                | [CssPseudoElement::After, CssPseudoElement::Marker]
+        )
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssNthChildPattern {
     pattern: CssNthPattern,
@@ -7310,6 +7372,7 @@ pub struct CssCompoundSelector {
     classes: Vec<String>,
     attributes: Vec<CssAttributeSelector>,
     pseudo_classes: Vec<CssPseudoClass>,
+    pseudo_elements: Option<CssPseudoElementSequence>,
 }
 
 impl CssCompoundSelector {
@@ -7333,6 +7396,27 @@ impl CssCompoundSelector {
         attributes: Vec<CssAttributeSelector>,
         pseudo_classes: Vec<CssPseudoClass>,
     ) -> Self {
+        Self::new_with_scope_anchor_and_pseudo_elements(
+            scope_anchor,
+            tag,
+            key,
+            classes,
+            attributes,
+            pseudo_classes,
+            None,
+        )
+    }
+
+    #[must_use]
+    pub(crate) fn new_with_scope_anchor_and_pseudo_elements(
+        scope_anchor: bool,
+        tag: Option<String>,
+        key: Option<String>,
+        classes: Vec<String>,
+        attributes: Vec<CssAttributeSelector>,
+        pseudo_classes: Vec<CssPseudoClass>,
+        pseudo_elements: Option<CssPseudoElementSequence>,
+    ) -> Self {
         Self {
             scope_anchor,
             tag,
@@ -7340,6 +7424,7 @@ impl CssCompoundSelector {
             classes,
             attributes,
             pseudo_classes,
+            pseudo_elements,
         }
     }
 
@@ -7373,14 +7458,29 @@ impl CssCompoundSelector {
         &self.pseudo_classes
     }
 
+    #[must_use]
+    pub const fn pseudo_elements(&self) -> Option<&CssPseudoElementSequence> {
+        self.pseudo_elements.as_ref()
+    }
+
+    #[must_use]
+    pub const fn has_pseudo_elements(&self) -> bool {
+        self.pseudo_elements.is_some()
+    }
+
     #[allow(dead_code)] // Used by staged selector composition helpers.
-    fn append_suffix(&mut self, suffix: Self) {
+    fn append_suffix(&mut self, suffix: Self) -> Option<()> {
         debug_assert!(suffix.tag.is_none());
         debug_assert!(suffix.key.is_none());
         debug_assert!(!suffix.scope_anchor);
+        if self.pseudo_elements.is_some() {
+            return None;
+        }
         self.classes.extend(suffix.classes);
         self.attributes.extend(suffix.attributes);
         self.pseudo_classes.extend(suffix.pseudo_classes);
+        self.pseudo_elements = suffix.pseudo_elements;
+        Some(())
     }
 }
 

@@ -1038,6 +1038,26 @@ fn scope_rule_parser_accepts_roots_limits_and_scoped_style_rules() {
 }
 
 #[test]
+fn scope_rule_parser_accepts_pseudo_elements_in_scoped_style_rules() {
+    let sheet = parse_sheet("@scope (.card) { .label::before { color: red; } }").unwrap();
+    let scope = scope_rule(&sheet.rules()[0]);
+    let [CssScopedRule::Style(style)] = scope.rules().rules() else {
+        panic!("expected scoped style rule");
+    };
+    let [CssScopedStyleSelector::Selector(CssSelector::Compound(selector))] =
+        style.selectors().selectors()
+    else {
+        panic!("expected compound scoped style selector");
+    };
+
+    assert_eq!(selector.classes(), &["label".to_owned()]);
+    assert_eq!(
+        selector.pseudo_elements().unwrap().pseudo_elements(),
+        &[CssPseudoElement::Before]
+    );
+}
+
+#[test]
 fn scope_rule_parser_accepts_limit_only_and_empty_prelude_scope() {
     let sheet = parse_sheet(
         r#"
@@ -1142,6 +1162,7 @@ fn scope_rule_parser_rejects_malformed_scope_syntax() {
         "@scope (.card,) { .title { color: black; } }",
         "@scope (.card) to (.stop) extra { .title { color: black; } }",
         "@scope (.card::before) { .title { color: black; } }",
+        "@scope (.card) to (.stop::after) { .title { color: black; } }",
         "@scope (.card) { @font-face { font-family: Test; src: local(Test); } }",
     ] {
         assert!(parse_sheet(css).is_err(), "{css} should reject");
@@ -1509,6 +1530,116 @@ fn rejects_function_syntax_for_non_functional_structural_pseudo_classes() {
 }
 
 #[test]
+fn parses_requested_double_colon_pseudo_elements() {
+    let cases = [
+        ("::selection { color: black; }", CssPseudoElement::Selection),
+        ("::before { color: black; }", CssPseudoElement::Before),
+        ("::after { color: black; }", CssPseudoElement::After),
+        ("::marker { color: black; }", CssPseudoElement::Marker),
+        ("::backdrop { color: black; }", CssPseudoElement::Backdrop),
+    ];
+
+    for (css, expected) in cases {
+        let sheet = parse_sheet(css).unwrap_or_else(|error| panic!("{css}: {error:?}"));
+        let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
+            panic!("expected compound selector for {css}");
+        };
+        assert_eq!(
+            selector.pseudo_elements().unwrap().pseudo_elements(),
+            &[expected]
+        );
+    }
+}
+
+#[test]
+fn parses_compound_and_complex_terminal_pseudo_element_selectors() {
+    let sheet = parse_sheet(
+        r#"
+            .button.primary:hover::before { color: black; }
+            li[data-kind="task"]::marker { color: red; }
+            .card > dialog::backdrop { color: blue; }
+        "#,
+    )
+    .unwrap();
+
+    let CssSelector::Compound(button) = style_rule(&sheet.rules()[0]).selector() else {
+        panic!("expected compound button selector");
+    };
+    assert_eq!(
+        button.classes(),
+        &["button".to_owned(), "primary".to_owned()]
+    );
+    assert_eq!(button.pseudo_classes(), &[CssPseudoClass::Hover]);
+    assert_eq!(
+        button.pseudo_elements().unwrap().pseudo_elements(),
+        &[CssPseudoElement::Before]
+    );
+
+    let CssSelector::Compound(marker) = style_rule(&sheet.rules()[1]).selector() else {
+        panic!("expected compound marker selector");
+    };
+    assert_eq!(marker.tag().map(String::as_str), Some("li"));
+    assert_eq!(
+        marker.pseudo_elements().unwrap().pseudo_elements(),
+        &[CssPseudoElement::Marker]
+    );
+
+    let CssSelector::Complex(backdrop) = style_rule(&sheet.rules()[2]).selector() else {
+        panic!("expected complex backdrop selector");
+    };
+    assert_eq!(backdrop.first().classes(), &["card".to_owned()]);
+    let [part] = backdrop.rest() else {
+        panic!("expected one complex selector part");
+    };
+    assert_eq!(part.combinator(), CssSelectorCombinator::Child);
+    assert_eq!(
+        part.selector().pseudo_elements().unwrap().pseudo_elements(),
+        &[CssPseudoElement::Backdrop]
+    );
+}
+
+#[test]
+fn parses_supported_generated_marker_pseudo_element_chains() {
+    for css in [
+        ".item::before::marker { color: black; }",
+        ".item::after::marker { color: black; }",
+    ] {
+        let sheet = parse_sheet(css).unwrap_or_else(|error| panic!("{css}: {error:?}"));
+        let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
+            panic!("expected compound selector for {css}");
+        };
+        assert_eq!(
+            selector.pseudo_elements().unwrap().pseudo_elements(),
+            if css.contains("before") {
+                &[CssPseudoElement::Before, CssPseudoElement::Marker][..]
+            } else {
+                &[CssPseudoElement::After, CssPseudoElement::Marker][..]
+            }
+        );
+    }
+}
+
+#[test]
+fn rejects_invalid_pseudo_element_forms_and_non_terminal_positions() {
+    for css in [
+        ":before { color: black; }",
+        "::part(foo) { color: black; }",
+        "::unknown { color: black; }",
+        ".button::before:hover { color: black; }",
+        ".button::before.primary { color: black; }",
+        ".button::before[data-x] { color: black; }",
+        ".button::before#icon { color: black; }",
+        ".button::before span { color: black; }",
+        ".button::before > span { color: black; }",
+        ".button::marker::before { color: black; }",
+        ".button::before::after { color: black; }",
+        ".button::selection::marker { color: black; }",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
+}
+
+#[test]
 fn selector_list_constructor_rejects_empty_lists() {
     assert_eq!(CssSelectorList::try_new(Vec::new()), None);
     let list = CssSelectorList::try_new(vec![CssSelector::Class("button".to_owned())]).unwrap();
@@ -1525,10 +1656,56 @@ fn pseudo_selector_list_constructor_accepts_complex_selectors() {
         CssSelectorCombinator::Descendant,
         CssCompoundSelector::new(None, None, vec!["icon".to_owned()], Vec::new(), Vec::new()),
     );
-    let complex = CssSelector::Complex(CssComplexSelector::new(first, vec![part]));
+    let complex = CssSelector::Complex(CssComplexSelector::try_new(first, vec![part]).unwrap());
 
     let list = CssPseudoSelectorList::try_new(vec![complex.clone()]).unwrap();
     assert_eq!(list.selectors(), &[complex]);
+}
+
+#[test]
+fn pseudo_element_sequence_constructor_guards_supported_terminal_shapes() {
+    let before = CssPseudoElementSequence::try_new(vec![CssPseudoElement::Before]).unwrap();
+    assert_eq!(before.pseudo_elements(), &[CssPseudoElement::Before]);
+
+    let before_marker =
+        CssPseudoElementSequence::try_new(vec![CssPseudoElement::Before, CssPseudoElement::Marker])
+            .unwrap();
+    assert_eq!(
+        before_marker.pseudo_elements(),
+        &[CssPseudoElement::Before, CssPseudoElement::Marker]
+    );
+
+    assert_eq!(CssPseudoElementSequence::try_new(Vec::new()), None);
+    assert_eq!(
+        CssPseudoElementSequence::try_new(
+            vec![CssPseudoElement::Marker, CssPseudoElement::Before,]
+        ),
+        None
+    );
+    assert_eq!(
+        CssPseudoElementSequence::try_new(vec![CssPseudoElement::Before, CssPseudoElement::After,]),
+        None
+    );
+}
+
+#[test]
+fn complex_selector_constructor_rejects_parts_after_pseudo_elements() {
+    let pseudo_element = CssPseudoElementSequence::try_new(vec![CssPseudoElement::Before]).unwrap();
+    let first = CssCompoundSelector::new_with_scope_anchor_and_pseudo_elements(
+        false,
+        None,
+        None,
+        vec!["button".to_owned()],
+        Vec::new(),
+        Vec::new(),
+        Some(pseudo_element),
+    );
+    let part = CssComplexSelectorPart::new(
+        CssSelectorCombinator::Descendant,
+        CssCompoundSelector::new(None, None, vec!["icon".to_owned()], Vec::new(), Vec::new()),
+    );
+
+    assert_eq!(CssComplexSelector::try_new(first, vec![part]), None);
 }
 
 #[test]
@@ -1858,6 +2035,18 @@ fn functional_selector_lists_reject_invalid_entries_strictly() {
 }
 
 #[test]
+fn functional_pseudo_class_selector_arguments_reject_pseudo_elements() {
+    for css in [
+        ":is(::before) { color: black; }",
+        ":where(.x::after) { color: black; }",
+        ":not(::marker) { color: black; }",
+        ":has(::backdrop) { color: black; }",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
+}
+
+#[test]
 fn selector_argument_surface_accepts_full_supported_strict_forms() {
     for css in [
         ":not(.field .icon, button.primary:hover) { color: black; }",
@@ -2102,13 +2291,22 @@ fn nesting_selector_composition_preserves_parent_and_child_structure() {
 #[test]
 fn nesting_selector_composition_preserves_child_complex_chain() {
     let parent = CssSelector::Class("card".to_owned());
-    let child = CssSelector::Complex(CssComplexSelector::new(
-        CssCompoundSelector::new(None, None, vec!["title".to_owned()], Vec::new(), Vec::new()),
-        vec![CssComplexSelectorPart::new(
-            CssSelectorCombinator::Child,
-            CssCompoundSelector::new(None, None, vec!["icon".to_owned()], Vec::new(), Vec::new()),
-        )],
-    ));
+    let child = CssSelector::Complex(
+        CssComplexSelector::try_new(
+            CssCompoundSelector::new(None, None, vec!["title".to_owned()], Vec::new(), Vec::new()),
+            vec![CssComplexSelectorPart::new(
+                CssSelectorCombinator::Child,
+                CssCompoundSelector::new(
+                    None,
+                    None,
+                    vec!["icon".to_owned()],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            )],
+        )
+        .unwrap(),
+    );
 
     let combined = CssSelector::combine_descendant(parent, child).unwrap();
     let CssSelector::Complex(combined) = combined else {
@@ -2126,19 +2324,22 @@ fn nesting_selector_composition_preserves_child_complex_chain() {
 
 #[test]
 fn nesting_selector_composition_preserves_complex_chains() {
-    let parent = CssSelector::Complex(CssComplexSelector::new(
-        CssCompoundSelector::new(None, None, vec!["card".to_owned()], Vec::new(), Vec::new()),
-        vec![CssComplexSelectorPart::new(
-            CssSelectorCombinator::Child,
-            CssCompoundSelector::new(
-                Some("button".to_owned()),
-                None,
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-            ),
-        )],
-    ));
+    let parent = CssSelector::Complex(
+        CssComplexSelector::try_new(
+            CssCompoundSelector::new(None, None, vec!["card".to_owned()], Vec::new(), Vec::new()),
+            vec![CssComplexSelectorPart::new(
+                CssSelectorCombinator::Child,
+                CssCompoundSelector::new(
+                    Some("button".to_owned()),
+                    None,
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            )],
+        )
+        .unwrap(),
+    );
     let child = CssCompoundSelector::new(
         None,
         None,
@@ -2479,6 +2680,33 @@ fn nesting_flattens_media_and_container_inside_style_rules() {
 }
 
 #[test]
+fn nesting_preserves_terminal_pseudo_elements_on_appended_selectors() {
+    let sheet = parse_sheet(".card { &::before { color: red; } }").unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected flattened pseudo-element rule");
+    };
+    let CssSelector::Compound(selector) = style_rule(rule).selector() else {
+        panic!("expected compound selector");
+    };
+
+    assert_eq!(selector.classes(), &["card".to_owned()]);
+    assert_eq!(
+        selector.pseudo_elements().unwrap().pseudo_elements(),
+        &[CssPseudoElement::Before]
+    );
+}
+
+#[test]
+fn nesting_rejects_selector_parts_after_pseudo_elements() {
+    for css in [
+        ".card::before { .icon { color: red; } }",
+        ".card { &::before .icon { color: red; } }",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
+}
+
+#[test]
 fn nesting_flattens_media_before_later_declaration_run_in_source_order() {
     let sheet = parse_sheet(
         r#".card {
@@ -2582,7 +2810,6 @@ fn nesting_rejects_unsupported_nested_selector_forms() {
         (".card { .theme & { color: black; } }", true),
         (".card { && { color: black; } }", true),
         (".card { & & { color: black; } }", true),
-        (".card { &::before { color: black; } }", true),
         (".card { svg|a { color: black; } }", false),
         (".card { [svg|href] { color: black; } }", true),
         (".card { .col || .cell { color: black; } }", true),
@@ -2608,7 +2835,6 @@ fn keyframes_and_nesting_reject_browser_recovery_forms() {
         ".card { & & { color: black; } }",
         ".card { .theme & { color: black; } }",
         ".card { && { color: black; } }",
-        ".card { &::before { color: black; } }",
         ".card { svg|a { color: black; } }",
         ".card { .col || .cell { color: black; } }",
         r#".card { @import url("theme.css"); }"#,

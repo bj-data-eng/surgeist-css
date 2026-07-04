@@ -725,6 +725,18 @@ fn rejection_property_specific_matrix_rejects_every_supported_property() {
 }
 
 #[test]
+fn coverage_global_keyword_cases_derive_from_supported_property_metadata() {
+    let cases = accepted_declaration_cases();
+    let supported_properties = crate::validation::supported_properties();
+
+    assert_eq!(cases.len(), supported_properties.len());
+    for (case, supported_property) in cases.iter().zip(supported_properties) {
+        assert_eq!(case.property_name, supported_property.name);
+        assert_eq!(case.expected_property, supported_property.property);
+    }
+}
+
+#[test]
 fn leakage_wrong_keyword_and_unit_matrix_rejects_property_family_crossovers() {
     assert_rejects_declarations(&[
         RejectedDeclarationCase {

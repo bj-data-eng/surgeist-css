@@ -19,7 +19,4 @@ pub use parser::parse_sheet;
 pub use syntax::*;
 
 #[cfg(test)]
-pub(crate) use parser::property_for_supported_name;
-
-#[cfg(test)]
 mod tests;

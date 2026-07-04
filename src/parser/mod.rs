@@ -11,6 +11,7 @@ mod background;
 mod box_model;
 mod effects;
 mod font_face;
+mod generated_content;
 mod grid;
 mod keyframes;
 mod layout;
@@ -32,6 +33,7 @@ use background::*;
 use box_model::*;
 use effects::*;
 use font_face::parse_font_face_rule;
+use generated_content::*;
 use grid::*;
 use keyframes::{parse_keyframes_name, parse_keyframes_rule};
 use layout::*;
@@ -790,7 +792,15 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             "place-items" => (CssProperty::PlaceItems, CssValue::PlaceAlignment(parse_place_alignment(input, parse_align_items, CssPlaceAlignment::items)?)),
             "place-self" => (CssProperty::PlaceSelf, CssValue::PlaceAlignment(parse_place_alignment(input, parse_align_items, CssPlaceAlignment::items)?)),
             "visibility" => (CssProperty::Visibility, CssValue::Visibility(parse_visibility(input)?)),
+            "content" => (CssProperty::Content, CssValue::Content(parse_content(input)?)),
             "content-visibility" => (CssProperty::ContentVisibility, CssValue::ContentVisibility(parse_content_visibility(input)?)),
+            "list-style-type" => (CssProperty::ListStyleType, CssValue::ListStyleType(parse_list_style_type(input)?)),
+            "list-style-position" => (CssProperty::ListStylePosition, CssValue::ListStylePosition(parse_list_style_position(input)?)),
+            "list-style-image" => (CssProperty::ListStyleImage, CssValue::ListStyleImage(parse_list_style_image(input)?)),
+            "list-style" => (CssProperty::ListStyle, CssValue::ListStyle(parse_list_style(input)?)),
+            "counter-reset" => (CssProperty::CounterReset, CssValue::CounterChanges(parse_counter_changes(input)?)),
+            "counter-increment" => (CssProperty::CounterIncrement, CssValue::CounterChanges(parse_counter_changes(input)?)),
+            "counter-set" => (CssProperty::CounterSet, CssValue::CounterChanges(parse_counter_changes(input)?)),
             "width" => (CssProperty::Width, CssValue::Length(parse_box_size_value(input)?)),
             "height" => (CssProperty::Height, CssValue::Length(parse_box_size_value(input)?)),
             "min-width" => (CssProperty::MinWidth, CssValue::Length(parse_box_size_value(input)?)),

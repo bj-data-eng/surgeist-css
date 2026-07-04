@@ -1420,6 +1420,281 @@ fn counter_style_name_constructor_uses_counter_style_ident_rules() {
 }
 
 #[test]
+fn parses_generated_content_values_symbolically() {
+    let cases = [
+        (
+            "content normal",
+            "normal",
+            CssValue::Content(CssContent::Normal),
+        ),
+        ("content none", "none", CssValue::Content(CssContent::None)),
+        (
+            "content string",
+            "\"Chapter \"",
+            CssValue::Content(CssContent::Items(
+                CssContentList::try_new(vec![CssContentItem::String(
+                    CssContentString::try_new("Chapter ").unwrap(),
+                )])
+                .unwrap(),
+            )),
+        ),
+        (
+            "content url",
+            "url(marker.svg)",
+            CssValue::Content(CssContent::Items(
+                CssContentList::try_new(vec![CssContentItem::Url(
+                    CssUrl::try_new("marker.svg").unwrap(),
+                )])
+                .unwrap(),
+            )),
+        ),
+        (
+            "content counter",
+            "counter(section)",
+            CssValue::Content(CssContent::Items(
+                CssContentList::try_new(vec![CssContentItem::Counter(CssCounterFunction::new(
+                    CssCounterName::try_new("section").unwrap(),
+                    None,
+                ))])
+                .unwrap(),
+            )),
+        ),
+        (
+            "content counter with style",
+            "counter(section, upper-roman)",
+            CssValue::Content(CssContent::Items(
+                CssContentList::try_new(vec![CssContentItem::Counter(CssCounterFunction::new(
+                    CssCounterName::try_new("section").unwrap(),
+                    Some(CssCounterStyle::BuiltIn(CssBuiltInCounterStyle::UpperRoman)),
+                ))])
+                .unwrap(),
+            )),
+        ),
+        (
+            "content counters",
+            "counters(section, \".\")",
+            CssValue::Content(CssContent::Items(
+                CssContentList::try_new(vec![CssContentItem::Counters(CssCountersFunction::new(
+                    CssCounterName::try_new("section").unwrap(),
+                    CssContentString::try_new(".").unwrap(),
+                    None,
+                ))])
+                .unwrap(),
+            )),
+        ),
+        (
+            "content counters with style",
+            "counters(section, \".\", lower-alpha)",
+            CssValue::Content(CssContent::Items(
+                CssContentList::try_new(vec![CssContentItem::Counters(CssCountersFunction::new(
+                    CssCounterName::try_new("section").unwrap(),
+                    CssContentString::try_new(".").unwrap(),
+                    Some(CssCounterStyle::BuiltIn(CssBuiltInCounterStyle::LowerAlpha)),
+                ))])
+                .unwrap(),
+            )),
+        ),
+        (
+            "content attr",
+            "attr(data-label)",
+            CssValue::Content(CssContent::Items(
+                CssContentList::try_new(vec![CssContentItem::Attr(
+                    CssAttributeName::try_new("data-label").unwrap(),
+                )])
+                .unwrap(),
+            )),
+        ),
+        (
+            "content quote keywords",
+            "open-quote close-quote no-open-quote no-close-quote",
+            CssValue::Content(CssContent::Items(
+                CssContentList::try_new(vec![
+                    CssContentItem::OpenQuote,
+                    CssContentItem::CloseQuote,
+                    CssContentItem::NoOpenQuote,
+                    CssContentItem::NoCloseQuote,
+                ])
+                .unwrap(),
+            )),
+        ),
+    ];
+
+    for (label, authored_value, expected_value) in cases {
+        let actual = parse_single_declaration_value("content", authored_value);
+        assert_eq!(actual, expected_value, "{label}");
+    }
+}
+
+#[test]
+fn parses_list_style_longhands_and_shorthand_symbolically() {
+    assert_eq!(
+        parse_single_declaration_value("list-style-type", "square"),
+        CssValue::ListStyleType(CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
+            CssBuiltInCounterStyle::Square,
+        )))
+    );
+    assert_eq!(
+        parse_single_declaration_value("list-style-type", "custom-counter"),
+        CssValue::ListStyleType(CssListStyleType::CounterStyle(CssCounterStyle::Named(
+            CssCounterStyleName::try_new("custom-counter").unwrap(),
+        )))
+    );
+    assert_eq!(
+        parse_single_declaration_value("list-style-type", "\"*\""),
+        CssValue::ListStyleType(CssListStyleType::String(
+            CssContentString::try_new("*").unwrap(),
+        ))
+    );
+    assert_eq!(
+        parse_single_declaration_value("list-style-position", "inside"),
+        CssValue::ListStylePosition(CssListStylePosition::Inside)
+    );
+    assert_eq!(
+        parse_single_declaration_value("list-style-image", "url(marker.svg)"),
+        CssValue::ListStyleImage(CssListStyleImage::Url(
+            CssUrl::try_new("marker.svg").unwrap(),
+        ))
+    );
+
+    let CssValue::ListStyle(list_style) =
+        parse_single_declaration_value("list-style", "url(marker.svg) inside square")
+    else {
+        panic!("list-style shorthand should parse");
+    };
+    assert_eq!(
+        list_style.style_type(),
+        Some(&CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
+            CssBuiltInCounterStyle::Square,
+        )))
+    );
+    assert_eq!(list_style.position(), Some(CssListStylePosition::Inside));
+    assert_eq!(
+        list_style.image(),
+        Some(&CssListStyleImage::Url(
+            CssUrl::try_new("marker.svg").unwrap()
+        ))
+    );
+
+    let CssValue::ListStyle(list_style) =
+        parse_single_declaration_value("list-style", "none inside")
+    else {
+        panic!("list-style shorthand should parse");
+    };
+    assert_eq!(list_style.style_type(), Some(&CssListStyleType::None));
+    assert_eq!(list_style.image(), Some(&CssListStyleImage::None));
+    assert_eq!(list_style.position(), Some(CssListStylePosition::Inside));
+
+    let CssValue::ListStyle(list_style) = parse_single_declaration_value("list-style", "none")
+    else {
+        panic!("list-style shorthand should parse");
+    };
+    assert_eq!(list_style.style_type(), Some(&CssListStyleType::None));
+    assert_eq!(list_style.image(), Some(&CssListStyleImage::None));
+    assert_eq!(list_style.position(), None);
+
+    for authored_value in ["square none", "none square"] {
+        let CssValue::ListStyle(list_style) =
+            parse_single_declaration_value("list-style", authored_value)
+        else {
+            panic!("{authored_value} should parse as list-style shorthand");
+        };
+        assert_eq!(
+            list_style.style_type(),
+            Some(&CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
+                CssBuiltInCounterStyle::Square,
+            ))),
+            "{authored_value}"
+        );
+        assert_eq!(
+            list_style.image(),
+            Some(&CssListStyleImage::None),
+            "{authored_value}"
+        );
+        assert_eq!(list_style.position(), None, "{authored_value}");
+    }
+
+    for authored_value in ["url(marker.svg) none", "none url(marker.svg)"] {
+        let CssValue::ListStyle(list_style) =
+            parse_single_declaration_value("list-style", authored_value)
+        else {
+            panic!("{authored_value} should parse as list-style shorthand");
+        };
+        assert_eq!(
+            list_style.style_type(),
+            Some(&CssListStyleType::None),
+            "{authored_value}"
+        );
+        assert_eq!(
+            list_style.image(),
+            Some(&CssListStyleImage::Url(
+                CssUrl::try_new("marker.svg").unwrap()
+            )),
+            "{authored_value}"
+        );
+        assert_eq!(list_style.position(), None, "{authored_value}");
+    }
+}
+
+#[test]
+fn parses_counter_change_values_symbolically() {
+    assert_eq!(
+        parse_single_declaration_value("counter-reset", "none"),
+        CssValue::CounterChanges(CssCounterChanges::None)
+    );
+
+    for property in ["counter-reset", "counter-increment", "counter-set"] {
+        let CssValue::CounterChanges(CssCounterChanges::Changes(changes)) =
+            parse_single_declaration_value(property, "section 2 page -1 item")
+        else {
+            panic!("{property} should parse counter changes");
+        };
+        assert_eq!(changes.changes().len(), 3, "{property}");
+        assert_eq!(changes.changes()[0].name().as_str(), "section");
+        assert_eq!(changes.changes()[0].value(), Some(2));
+        assert_eq!(changes.changes()[1].name().as_str(), "page");
+        assert_eq!(changes.changes()[1].value(), Some(-1));
+        assert_eq!(changes.changes()[2].name().as_str(), "item");
+        assert_eq!(changes.changes()[2].value(), None);
+    }
+}
+
+#[test]
+fn rejects_unsupported_generated_content_list_and_counter_forms() {
+    for (property_name, authored_value) in [
+        ("content", "normal \"x\""),
+        ("content", "counter()"),
+        ("content", "counters(item)"),
+        ("content", "attr()"),
+        ("content", "\"x\" / \"alt\""),
+        ("content", "contents"),
+        ("content", "linear-gradient(red, blue)"),
+        ("content", "target-counter(attr(href), page)"),
+        ("content", "counter(item, symbols(cyclic \"*\" \"+\"))"),
+        ("list-style-position", "center"),
+        ("list-style-image", "red"),
+        ("list-style-image", "linear-gradient(red, blue)"),
+        ("list-style", "inside outside"),
+        ("list-style", "none none"),
+        ("list-style", "none none inside"),
+        ("list-style", "symbols(cyclic \"*\" \"+\") inside"),
+        ("counter-reset", "none item"),
+        ("counter-increment", "1"),
+        ("counter-set", "inherit 1"),
+    ] {
+        RejectedDeclarationCase {
+            label: authored_value,
+            property_name,
+            authored_value,
+            expected_error: ExpectedErrorKind::InvalidSyntaxOrUnsupportedValueForProperty {
+                property: property_name,
+            },
+            property_name_should_be_recognized: true,
+        }
+        .assert_rejects();
+    }
+}
+
+#[test]
 fn authored_declaration_value_constructor_rejects_empty_css() {
     let value = CssAuthoredDeclarationValue::try_new("  8px  ").unwrap();
     assert_eq!(value.as_css(), "  8px  ");
@@ -3735,7 +4010,15 @@ fn property_specific_rejection_probe(property_name: &str) -> &'static str {
         "align-items" | "align-self" | "justify-items" | "justify-self" | "place-items"
         | "place-self" => "space-between",
         "visibility" => "auto",
+        "content" => "contents",
         "content-visibility" => "collapse",
+        "list-style-type" => "symbols(cyclic \"*\" \"+\")",
+        "list-style-position" => "center",
+        "list-style-image" => "red",
+        "list-style" => "inside outside",
+        "counter-reset" => "none item",
+        "counter-increment" => "1",
+        "counter-set" => "inherit 1",
         "width" | "height" | "min-width" | "min-height" | "max-width" | "max-height"
         | "flex-basis" | "inset" | "top" | "right" | "bottom" | "left" | "margin"
         | "margin-top" | "margin-right" | "margin-bottom" | "margin-left" => "solid",

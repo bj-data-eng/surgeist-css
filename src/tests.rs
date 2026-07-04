@@ -1324,6 +1324,219 @@ fn nesting_selector_composition_preserves_complex_chains() {
 }
 
 #[test]
+fn nesting_flattens_descendant_and_parent_selectors_in_source_order() {
+    let sheet = parse_sheet(
+        r#".card {
+            color: black;
+            .title { color: white; }
+            background-color: white;
+            &:hover { opacity: 0.8; }
+        }"#,
+    )
+    .unwrap();
+
+    let [base_before, title, base_after, hover] = sheet.rules() else {
+        panic!("expected four flattened rules");
+    };
+
+    assert_eq!(
+        style_rule(base_before).selector(),
+        &CssSelector::Class("card".to_owned())
+    );
+    assert_eq!(
+        style_rule(base_before).declarations()[0].property(),
+        &CssProperty::Color
+    );
+
+    let CssSelector::Complex(title_selector) = style_rule(title).selector() else {
+        panic!("expected descendant selector");
+    };
+    assert_eq!(title_selector.first().classes(), &["card".to_owned()]);
+    assert_eq!(
+        title_selector.rest()[0].combinator(),
+        CssSelectorCombinator::Descendant
+    );
+    assert_eq!(
+        title_selector.rest()[0].selector().classes(),
+        &["title".to_owned()]
+    );
+
+    assert_eq!(
+        style_rule(base_after).selector(),
+        &CssSelector::Class("card".to_owned())
+    );
+    assert_eq!(
+        style_rule(base_after).declarations()[0].property(),
+        &CssProperty::BackgroundColor
+    );
+
+    let CssSelector::Compound(hover_selector) = style_rule(hover).selector() else {
+        panic!("expected compound hover selector");
+    };
+    assert_eq!(hover_selector.classes(), &["card".to_owned()]);
+    assert_eq!(hover_selector.pseudo_classes(), &[CssPseudoClass::Hover]);
+}
+
+#[test]
+fn nesting_flattens_selector_lists_and_relative_combinators() {
+    let sheet = parse_sheet(
+        r#".button, .link {
+            &.active[aria-current=true] { color: black; }
+            > .icon { opacity: 1; }
+        }"#,
+    )
+    .unwrap();
+
+    let [button_active, link_active, button_icon, link_icon] = sheet.rules() else {
+        panic!("expected four flattened rules");
+    };
+    for rule in sheet.rules() {
+        assert!(matches!(rule, CssRule::Style(_)));
+    }
+
+    for (rule, parent_class) in [(button_active, "button"), (link_active, "link")] {
+        let CssSelector::Compound(selector) = style_rule(rule).selector() else {
+            panic!("expected appended compound selector");
+        };
+        assert_eq!(
+            selector.classes(),
+            &[parent_class.to_owned(), "active".to_owned()]
+        );
+        let [attribute] = selector.attributes() else {
+            panic!("expected appended attribute selector");
+        };
+        assert_eq!(attribute.name().as_str(), "aria-current");
+        assert_eq!(
+            attribute.matcher(),
+            &CssAttributeMatcher::Equals("true".to_owned())
+        );
+    }
+
+    for (rule, parent_class) in [(button_icon, "button"), (link_icon, "link")] {
+        let CssSelector::Complex(selector) = style_rule(rule).selector() else {
+            panic!("expected relative child selector");
+        };
+        assert_eq!(selector.first().classes(), &[parent_class.to_owned()]);
+        let [part] = selector.rest() else {
+            panic!("expected one child selector part");
+        };
+        assert_eq!(part.combinator(), CssSelectorCombinator::Child);
+        assert_eq!(part.selector().classes(), &["icon".to_owned()]);
+    }
+}
+
+#[test]
+fn nesting_flattens_ampersand_combinator_chain_and_suffixes() {
+    let sheet = parse_sheet(
+        r#".tabs {
+            & > .tab { color: black; }
+        }
+        .button {
+            &.active[aria-current=true]:hover { opacity: 1; }
+        }"#,
+    )
+    .unwrap();
+
+    let [tab, button] = sheet.rules() else {
+        panic!("expected two flattened rules");
+    };
+
+    let CssSelector::Complex(tab_selector) = style_rule(tab).selector() else {
+        panic!("expected ampersand child selector");
+    };
+    assert_eq!(tab_selector.first().classes(), &["tabs".to_owned()]);
+    let [part] = tab_selector.rest() else {
+        panic!("expected one child selector part");
+    };
+    assert_eq!(part.combinator(), CssSelectorCombinator::Child);
+    assert_eq!(part.selector().classes(), &["tab".to_owned()]);
+
+    let CssSelector::Compound(button_selector) = style_rule(button).selector() else {
+        panic!("expected appended compound selector");
+    };
+    assert_eq!(
+        button_selector.classes(),
+        &["button".to_owned(), "active".to_owned()]
+    );
+    let [attribute] = button_selector.attributes() else {
+        panic!("expected appended attribute selector");
+    };
+    assert_eq!(attribute.name().as_str(), "aria-current");
+    assert_eq!(button_selector.pseudo_classes(), &[CssPseudoClass::Hover]);
+}
+
+#[test]
+fn nesting_flattens_style_rules_inside_conditional_groups() {
+    let sheet = parse_sheet(
+        r#"@media screen {
+            .card { .title { color: white; } }
+        }
+        @container sidebar (inline-size > 30rem) {
+            .tabs { & > .tab { color: black; } }
+        }"#,
+    )
+    .unwrap();
+
+    let [media, container] = sheet.rules() else {
+        panic!("expected media and container rules");
+    };
+
+    let [media_title] = media_rule(media).rules() else {
+        panic!("expected one flattened media rule");
+    };
+    let CssSelector::Complex(title_selector) = style_rule(media_title).selector() else {
+        panic!("expected descendant selector inside media");
+    };
+    assert_eq!(title_selector.first().classes(), &["card".to_owned()]);
+    assert_eq!(
+        title_selector.rest()[0].combinator(),
+        CssSelectorCombinator::Descendant
+    );
+    assert_eq!(
+        title_selector.rest()[0].selector().classes(),
+        &["title".to_owned()]
+    );
+
+    let [container_tab] = container_rule(container).rules() else {
+        panic!("expected one flattened container rule");
+    };
+    let CssSelector::Complex(tab_selector) = style_rule(container_tab).selector() else {
+        panic!("expected child selector inside container");
+    };
+    assert_eq!(tab_selector.first().classes(), &["tabs".to_owned()]);
+    assert_eq!(
+        tab_selector.rest()[0].combinator(),
+        CssSelectorCombinator::Child
+    );
+    assert_eq!(
+        tab_selector.rest()[0].selector().classes(),
+        &["tab".to_owned()]
+    );
+}
+
+#[test]
+fn nesting_rejects_unsupported_nested_selector_forms() {
+    for (css, expects_selector_error) in [
+        (".card { .theme & { color: black; } }", true),
+        (".card { && { color: black; } }", true),
+        (".card { & & { color: black; } }", true),
+        (".card { &::before { color: black; } }", true),
+        (".card { svg|a { color: black; } }", false),
+        (".card { [svg|href] { color: black; } }", true),
+        (".card { .col || .cell { color: black; } }", true),
+        (".card { &:not(.field .icon) { color: black; } }", true),
+    ] {
+        let error = parse_sheet(css).expect_err(css);
+        if expects_selector_error {
+            assert!(
+                matches!(error.kind(), ErrorKind::InvalidSelector { .. }),
+                "{css} should reject as an invalid selector, got {error:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn rejects_invalid_combinator_selectors() {
     assert!(parse_sheet("> .item { color: black; }").is_err());
     assert!(parse_sheet(".a > > .b { color: black; }").is_err());

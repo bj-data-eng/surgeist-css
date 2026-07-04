@@ -14,6 +14,7 @@ mod font_face;
 mod grid;
 mod keyframes;
 mod layout;
+mod nesting;
 mod queries;
 mod selectors;
 mod timing;
@@ -23,8 +24,7 @@ mod variables;
 
 use cssparser::{
     AtRuleParser, CowRcStr, DeclarationParser, ParseError, Parser, ParserInput, ParserState,
-    QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, StyleSheetParser,
-    match_ignore_ascii_case,
+    QualifiedRuleParser, RuleBodyItemParser, StyleSheetParser, match_ignore_ascii_case,
 };
 
 use background::*;
@@ -34,6 +34,7 @@ use font_face::parse_font_face_rule;
 use grid::*;
 use keyframes::{parse_keyframes_name, parse_keyframes_rule};
 use layout::*;
+use nesting::parse_style_rule_block;
 #[cfg(test)]
 pub(crate) use queries::parse_container_condition_for_test;
 #[cfg(test)]
@@ -267,18 +268,9 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {
         _start: &ParserState,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
-        let mut declarations = Vec::new();
-        let mut declaration_parser = StrictDeclarationParser;
-        for declaration in RuleBodyParser::new(input, &mut declaration_parser) {
-            let declaration = declaration.map_err(|(error, _)| error)?;
-            declarations.push(declaration);
-        }
-
+        let rules = parse_style_rule_block(selectors, input)?;
         self.mark_non_import_top_level_rule();
-        Ok(selectors
-            .into_iter()
-            .map(|selector| CssRule::Style(CssStyleRule::new(selector, declarations.clone())))
-            .collect())
+        Ok(rules)
     }
 }
 

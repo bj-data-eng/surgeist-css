@@ -31,7 +31,7 @@ fn parse_pseudo_compound_selector_list<'i, 't>(
     Ok(selectors)
 }
 
-fn parse_rule_selector<'i, 't>(
+pub(super) fn parse_rule_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssSelector, ParseError<'i, Error>> {
     let first = parse_compound_selector_model(input)?;
@@ -97,7 +97,7 @@ fn parse_rule_selector<'i, 't>(
     }
 }
 
-fn parse_complex_selector_part<'i, 't>(
+pub(super) fn parse_complex_selector_part<'i, 't>(
     input: &mut Parser<'i, 't>,
     combinator: CssSelectorCombinator,
 ) -> std::result::Result<CssComplexSelectorPart, ParseError<'i, Error>> {
@@ -106,7 +106,7 @@ fn parse_complex_selector_part<'i, 't>(
     Ok(CssComplexSelectorPart::new(combinator, selector))
 }
 
-fn consume_selector_whitespace<'i, 't>(
+pub(super) fn consume_selector_whitespace<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<bool, ParseError<'i, Error>> {
     let mut consumed = false;
@@ -133,7 +133,7 @@ fn parse_compound_selector<'i, 't>(
     parse_compound_selector_model(input).map(compound_selector_to_selector)
 }
 
-fn parse_compound_selector_model<'i, 't>(
+pub(super) fn parse_compound_selector_model<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssCompoundSelector, ParseError<'i, Error>> {
     loop {
@@ -199,6 +199,9 @@ fn parse_compound_selector_model<'i, 't>(
             Ok(Token::IDHash(key)) => {
                 let key = key.to_string();
                 key_name = Some(key);
+            }
+            Ok(Token::Delim('|')) => {
+                return Err(invalid_selector(input, "unsupported selector namespace"));
             }
             Ok(token) => {
                 let message = format!("unexpected selector token `{}`", token.to_css_string());

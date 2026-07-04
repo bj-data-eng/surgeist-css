@@ -556,6 +556,58 @@ fn rejects_empty_selector_list_functional_pseudo_classes() {
 }
 
 #[test]
+fn parses_tier_4_runtime_state_pseudo_classes() {
+    let cases = [
+        (":modal { color: black; }", CssPseudoClass::Modal),
+        (":fullscreen { color: black; }", CssPseudoClass::Fullscreen),
+        (
+            ":popover-open { color: black; }",
+            CssPseudoClass::PopoverOpen,
+        ),
+        (":default { color: black; }", CssPseudoClass::Default),
+        (
+            ":indeterminate { color: black; }",
+            CssPseudoClass::Indeterminate,
+        ),
+        (":read-only { color: black; }", CssPseudoClass::ReadOnly),
+        (":read-write { color: black; }", CssPseudoClass::ReadWrite),
+        (":in-range { color: black; }", CssPseudoClass::InRange),
+        (
+            ":out-of-range { color: black; }",
+            CssPseudoClass::OutOfRange,
+        ),
+    ];
+
+    for (css, expected) in cases {
+        let sheet = parse_sheet(css).unwrap();
+        assert_eq!(
+            sheet.rules()[0].selector(),
+            &CssSelector::PseudoClass(expected)
+        );
+    }
+}
+
+#[test]
+fn parses_compound_runtime_state_pseudo_classes() {
+    let sheet = parse_sheet(".dialog:modal:fullscreen { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+        panic!("expected compound selector");
+    };
+    assert_eq!(selector.classes(), &["dialog".to_owned()]);
+    assert_eq!(
+        selector.pseudo_classes(),
+        &[CssPseudoClass::Modal, CssPseudoClass::Fullscreen]
+    );
+}
+
+#[test]
+fn rejects_function_syntax_for_runtime_state_pseudo_classes() {
+    assert!(parse_sheet(":modal() { color: black; }").is_err());
+    assert!(parse_sheet(":fullscreen() { color: black; }").is_err());
+    assert!(parse_sheet(":read-only() { color: black; }").is_err());
+}
+
+#[test]
 fn rejects_unsupported_relative_or_combinator_selector_forms() {
     assert!(parse_sheet(".field:has(> .icon) { color: black; }").is_err());
     assert!(parse_sheet(":has(.field > .icon) { color: black; }").is_err());

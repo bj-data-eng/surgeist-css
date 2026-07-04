@@ -171,6 +171,15 @@ fn parse_pseudo_class<'i, 't>(
             "first-of-type" => Ok(CssPseudoClass::FirstOfType),
             "last-of-type" => Ok(CssPseudoClass::LastOfType),
             "only-of-type" => Ok(CssPseudoClass::OnlyOfType),
+            "modal" => Ok(CssPseudoClass::Modal),
+            "fullscreen" => Ok(CssPseudoClass::Fullscreen),
+            "popover-open" => Ok(CssPseudoClass::PopoverOpen),
+            "default" => Ok(CssPseudoClass::Default),
+            "indeterminate" => Ok(CssPseudoClass::Indeterminate),
+            "read-only" => Ok(CssPseudoClass::ReadOnly),
+            "read-write" => Ok(CssPseudoClass::ReadWrite),
+            "in-range" => Ok(CssPseudoClass::InRange),
+            "out-of-range" => Ok(CssPseudoClass::OutOfRange),
             _ => {
                 let message = format!("unsupported pseudo-class `:{name}`");
                 Err(invalid_selector(input, message))

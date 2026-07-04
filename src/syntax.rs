@@ -424,14 +424,69 @@ pub enum CssValue {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct CssOpacity {
+pub struct CssFiniteNumber {
     value: f32,
+}
+
+impl CssFiniteNumber {
+    #[must_use]
+    pub fn try_new(value: f32) -> Option<Self> {
+        if value.is_finite() {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new_unchecked(value: f32) -> Self {
+        Self { value }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        self.value
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssNonNegativeNumber {
+    value: CssFiniteNumber,
+}
+
+impl CssNonNegativeNumber {
+    #[must_use]
+    pub fn try_new(value: f32) -> Option<Self> {
+        if value >= 0.0 {
+            CssFiniteNumber::try_new(value).map(|value| Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new_unchecked(value: f32) -> Self {
+        Self {
+            value: CssFiniteNumber::new_unchecked(value),
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        self.value.value()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssOpacity {
+    value: CssFiniteNumber,
 }
 
 impl CssOpacity {
     #[must_use]
     pub fn try_new(value: f32) -> Option<Self> {
-        if value.is_finite() && (0.0..=1.0).contains(&value) {
+        if (0.0..=1.0).contains(&value) {
+            let value = CssFiniteNumber::try_new(value)?;
             Some(Self { value })
         } else {
             None
@@ -440,40 +495,37 @@ impl CssOpacity {
 
     #[must_use]
     pub const fn value(self) -> f32 {
-        self.value
+        self.value.value()
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CssFlexFactor {
-    value: f32,
+    value: CssNonNegativeNumber,
 }
 
 impl CssFlexFactor {
     #[must_use]
     pub fn try_new(value: f32) -> Option<Self> {
-        if value.is_finite() && value >= 0.0 {
-            Some(Self { value })
-        } else {
-            None
-        }
+        CssNonNegativeNumber::try_new(value).map(|value| Self { value })
     }
 
     #[must_use]
     pub const fn value(self) -> f32 {
-        self.value
+        self.value.value()
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CssAspectRatio {
-    value: f32,
+    value: CssFiniteNumber,
 }
 
 impl CssAspectRatio {
     #[must_use]
     pub fn try_new(value: f32) -> Option<Self> {
-        if value.is_finite() && value > 0.0 {
+        if value > 0.0 {
+            let value = CssFiniteNumber::try_new(value)?;
             Some(Self { value })
         } else {
             None
@@ -482,7 +534,7 @@ impl CssAspectRatio {
 
     #[must_use]
     pub const fn value(self) -> f32 {
-        self.value
+        self.value.value()
     }
 }
 
@@ -760,7 +812,7 @@ fn is_valid_custom_ident(value: &str) -> bool {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssGridTrackBreadth {
     Length(CssLength),
-    Fraction(f32),
+    Fraction(CssNonNegativeNumber),
     MinContent,
     MaxContent,
     Auto,
@@ -770,6 +822,16 @@ impl CssGridTrackBreadth {
     #[must_use]
     pub const fn length(length: CssLength) -> Self {
         Self::Length(length)
+    }
+
+    #[must_use]
+    pub fn try_fraction(value: f32) -> Option<Self> {
+        CssNonNegativeNumber::try_new(value).map(Self::Fraction)
+    }
+
+    #[must_use]
+    pub(crate) const fn fraction(value: f32) -> Self {
+        Self::Fraction(CssNonNegativeNumber::new_unchecked(value))
     }
 }
 
@@ -1313,6 +1375,21 @@ pub enum CssFlex {
         shrink: Option<CssFlexFactor>,
         basis: Option<CssLength>,
     },
+}
+
+impl CssFlex {
+    #[must_use]
+    pub const fn components(
+        grow: CssFlexFactor,
+        shrink: Option<CssFlexFactor>,
+        basis: Option<CssLength>,
+    ) -> Self {
+        Self::Components {
+            grow,
+            shrink,
+            basis,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -2183,19 +2260,27 @@ impl CssLengthUnit {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CssLengthDimension {
-    value: f32,
+    value: CssFiniteNumber,
     unit: CssLengthUnit,
 }
 
 impl CssLengthDimension {
     #[must_use]
-    pub const fn new(value: f32, unit: CssLengthUnit) -> Self {
-        Self { value, unit }
+    pub fn try_new(value: f32, unit: CssLengthUnit) -> Option<Self> {
+        CssFiniteNumber::try_new(value).map(|value| Self { value, unit })
+    }
+
+    #[must_use]
+    pub(crate) const fn new(value: f32, unit: CssLengthUnit) -> Self {
+        Self {
+            value: CssFiniteNumber::new_unchecked(value),
+            unit,
+        }
     }
 
     #[must_use]
     pub const fn value(self) -> f32 {
-        self.value
+        self.value.value()
     }
 
     #[must_use]
@@ -2207,7 +2292,7 @@ impl CssLengthDimension {
     pub fn to_css_string(self) -> String {
         format!(
             "{}{}",
-            format_css_number(self.value),
+            format_css_number(self.value.value()),
             self.unit.as_css_str()
         )
     }
@@ -2215,9 +2300,9 @@ impl CssLengthDimension {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssLength {
-    Px(f32),
+    Px(CssFiniteNumber),
     Dimension(CssLengthDimension),
-    Percent(f32),
+    Percent(CssFiniteNumber),
     Zero,
     Auto,
     MinContent,
@@ -2229,19 +2314,37 @@ pub enum CssLength {
 
 impl CssLength {
     #[must_use]
-    pub const fn px(value: f32) -> Self {
-        Self::Px(value)
+    pub fn try_px(value: f32) -> Option<Self> {
+        CssFiniteNumber::try_new(value).map(Self::Px)
     }
 
     #[must_use]
-    pub const fn percent(value: f32) -> Self {
-        Self::Percent(value)
+    pub fn try_percent(value: f32) -> Option<Self> {
+        CssFiniteNumber::try_new(value).map(Self::Percent)
     }
 
     #[must_use]
-    pub const fn dimension(value: f32, unit: CssLengthUnit) -> Self {
+    pub fn try_dimension(value: f32, unit: CssLengthUnit) -> Option<Self> {
         match unit {
-            CssLengthUnit::Px => Self::Px(value),
+            CssLengthUnit::Px => Self::try_px(value),
+            _ => CssLengthDimension::try_new(value, unit).map(Self::Dimension),
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn px(value: f32) -> Self {
+        Self::Px(CssFiniteNumber::new_unchecked(value))
+    }
+
+    #[must_use]
+    pub(crate) const fn percent(value: f32) -> Self {
+        Self::Percent(CssFiniteNumber::new_unchecked(value))
+    }
+
+    #[must_use]
+    pub(crate) const fn dimension(value: f32, unit: CssLengthUnit) -> Self {
+        match unit {
+            CssLengthUnit::Px => Self::px(value),
             _ => Self::Dimension(CssLengthDimension::new(value, unit)),
         }
     }
@@ -2415,7 +2518,7 @@ impl CssCornerRadius {
 
 fn is_border_width(length: &CssLength) -> bool {
     match length {
-        CssLength::Px(value) => *value >= 0.0,
+        CssLength::Px(value) => value.value() >= 0.0,
         CssLength::Dimension(length) => length.value() >= 0.0,
         CssLength::Zero => true,
         CssLength::Calc(calc) => !calc.uses_percentage() && !calc_has_negative_component(calc),
@@ -2430,7 +2533,7 @@ fn is_border_width(length: &CssLength) -> bool {
 
 fn is_radius_length(length: &CssLength) -> bool {
     match length {
-        CssLength::Px(value) | CssLength::Percent(value) => *value >= 0.0,
+        CssLength::Px(value) | CssLength::Percent(value) => value.value() >= 0.0,
         CssLength::Dimension(length) => length.value() >= 0.0,
         CssLength::Zero => true,
         CssLength::Calc(calc) => !calc_has_negative_component(calc),
@@ -2629,7 +2732,7 @@ fn is_letter_spacing_length(length: &CssLength) -> bool {
 
 fn is_text_decoration_thickness_length(length: &CssLength) -> bool {
     match length {
-        CssLength::Px(value) | CssLength::Percent(value) => *value >= 0.0,
+        CssLength::Px(value) | CssLength::Percent(value) => value.value() >= 0.0,
         CssLength::Dimension(length) => length.value() >= 0.0,
         CssLength::Zero => true,
         CssLength::Calc(calc) => !calc_has_negative_component(calc),
@@ -3286,7 +3389,7 @@ pub struct CssScaleValues {
 impl CssScaleValues {
     #[must_use]
     pub fn try_new(values: Vec<f32>) -> Option<Self> {
-        if values.is_empty() || values.len() > 3 {
+        if values.is_empty() || values.len() > 3 || values.iter().any(|value| !value.is_finite()) {
             None
         } else {
             Some(Self::new(values))
@@ -3969,7 +4072,7 @@ impl CssAnimationList {
 
 pub(crate) fn length_has_negative_component(length: &CssLength) -> bool {
     match length {
-        CssLength::Px(value) | CssLength::Percent(value) => *value < 0.0,
+        CssLength::Px(value) | CssLength::Percent(value) => value.value() < 0.0,
         CssLength::Dimension(length) => length.value() < 0.0,
         CssLength::Calc(calc) => calc_has_negative_component(calc),
         CssLength::Zero
@@ -3983,7 +4086,7 @@ pub(crate) fn length_has_negative_component(length: &CssLength) -> bool {
 
 pub(crate) fn calc_has_negative_component(calc: &CssCalcLength) -> bool {
     match calc {
-        CssCalcLength::Px(value) | CssCalcLength::Percent(value) => *value < 0.0,
+        CssCalcLength::Px(value) | CssCalcLength::Percent(value) => value.value() < 0.0,
         CssCalcLength::Dimension(length) => length.value() < 0.0,
         CssCalcLength::Sum(terms) => terms
             .iter()
@@ -3993,19 +4096,51 @@ pub(crate) fn calc_has_negative_component(calc: &CssCalcLength) -> bool {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CssColor {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-    pub a: f32,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
 }
 
 impl CssColor {
-    pub const TRANSPARENT: Self = Self::rgba(0.0, 0.0, 0.0, 0.0);
-    pub const BLACK: Self = Self::rgba(0.0, 0.0, 0.0, 1.0);
-    pub const WHITE: Self = Self::rgba(1.0, 1.0, 1.0, 1.0);
+    pub const TRANSPARENT: Self = Self::rgba_unchecked(0.0, 0.0, 0.0, 0.0);
+    pub const BLACK: Self = Self::rgba_unchecked(0.0, 0.0, 0.0, 1.0);
+    pub const WHITE: Self = Self::rgba_unchecked(1.0, 1.0, 1.0, 1.0);
 
     #[must_use]
-    pub const fn rgba(r: f32, g: f32, b: f32, a: f32) -> Self {
+    pub const fn r(self) -> f32 {
+        self.r
+    }
+
+    #[must_use]
+    pub const fn g(self) -> f32 {
+        self.g
+    }
+
+    #[must_use]
+    pub const fn b(self) -> f32 {
+        self.b
+    }
+
+    #[must_use]
+    pub const fn a(self) -> f32 {
+        self.a
+    }
+
+    #[must_use]
+    pub fn try_rgba(r: f32, g: f32, b: f32, a: f32) -> Option<Self> {
+        if [r, g, b, a]
+            .into_iter()
+            .all(|channel| channel.is_finite() && (0.0..=1.0).contains(&channel))
+        {
+            Some(Self::rgba_unchecked(r, g, b, a))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn rgba_unchecked(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self { r, g, b, a }
     }
 }
@@ -4049,27 +4184,45 @@ impl CssCompoundSelector {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssCalcLength {
-    Px(f32),
+    Px(CssFiniteNumber),
     Dimension(CssLengthDimension),
-    Percent(f32),
+    Percent(CssFiniteNumber),
     Sum(Vec<CssCalcLengthTerm>),
 }
 
 impl CssCalcLength {
     #[must_use]
-    pub const fn px(value: f32) -> Self {
-        Self::Px(value)
+    pub fn try_px(value: f32) -> Option<Self> {
+        CssFiniteNumber::try_new(value).map(Self::Px)
     }
 
     #[must_use]
-    pub const fn percent(value: f32) -> Self {
-        Self::Percent(value)
+    pub fn try_percent(value: f32) -> Option<Self> {
+        CssFiniteNumber::try_new(value).map(Self::Percent)
     }
 
     #[must_use]
-    pub const fn dimension(value: f32, unit: CssLengthUnit) -> Self {
+    pub fn try_dimension(value: f32, unit: CssLengthUnit) -> Option<Self> {
         match unit {
-            CssLengthUnit::Px => Self::Px(value),
+            CssLengthUnit::Px => Self::try_px(value),
+            _ => CssLengthDimension::try_new(value, unit).map(Self::Dimension),
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn px(value: f32) -> Self {
+        Self::Px(CssFiniteNumber::new_unchecked(value))
+    }
+
+    #[must_use]
+    pub(crate) const fn percent(value: f32) -> Self {
+        Self::Percent(CssFiniteNumber::new_unchecked(value))
+    }
+
+    #[must_use]
+    pub(crate) const fn dimension(value: f32, unit: CssLengthUnit) -> Self {
+        match unit {
+            CssLengthUnit::Px => Self::px(value),
             _ => Self::Dimension(CssLengthDimension::new(value, unit)),
         }
     }
@@ -4101,9 +4254,9 @@ impl CssCalcLength {
 
     fn to_css_fragment(&self) -> String {
         match self {
-            Self::Px(value) => format!("{}px", format_css_number(*value)),
+            Self::Px(value) => format!("{}px", format_css_number(value.value())),
             Self::Dimension(length) => length.to_css_string(),
-            Self::Percent(value) => format!("{}%", format_css_number(*value)),
+            Self::Percent(value) => format!("{}%", format_css_number(value.value())),
             Self::Sum(terms) => {
                 let mut css = String::from("calc(");
                 for (index, term) in terms.iter().enumerate() {

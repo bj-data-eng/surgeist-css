@@ -26,7 +26,7 @@ pub(super) fn parse_grid_flow_tolerance<'i, 't>(
     }
 
     match parse_box_size_value(input)? {
-        CssLength::Percent(value) => Ok(CssGridFlowTolerance::Percent(value)),
+        CssLength::Percent(value) => Ok(CssGridFlowTolerance::Percent(value.value())),
         length => Ok(CssGridFlowTolerance::Length(length)),
     }
 }
@@ -165,6 +165,11 @@ pub(super) fn parse_grid_track_breadth<'i, 't>(
 ) -> std::result::Result<CssGridTrackBreadth, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
+        Token::Dimension { value, .. } if !value.is_finite() => Err(unsupported_value_at(
+            location,
+            None,
+            "unsupported non-finite grid track dimension",
+        )),
         Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("fr") => {
             if *value < 0.0 {
                 Err(unsupported_value_at(
@@ -173,7 +178,7 @@ pub(super) fn parse_grid_track_breadth<'i, 't>(
                     "unsupported negative grid flex fraction",
                 ))
             } else {
-                Ok(CssGridTrackBreadth::Fraction(*value))
+                Ok(CssGridTrackBreadth::fraction(*value))
             }
         }
         Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
@@ -191,6 +196,13 @@ pub(super) fn parse_grid_track_breadth<'i, 't>(
                 format!("unknown grid track unit `{unit}`"),
             )),
         },
+        Token::Percentage { unit_value, .. } if !unit_value.is_finite() => {
+            Err(unsupported_value_at(
+                location,
+                None,
+                "unsupported non-finite grid track percentage",
+            ))
+        }
         Token::Percentage { unit_value, .. } if *unit_value < 0.0 => Err(unsupported_value_at(
             location,
             None,

@@ -1010,6 +1010,93 @@ fn numeric_property_models_reject_invalid_authored_values() {
 }
 
 #[test]
+fn constructor_invariants_reject_invalid_public_numeric_values() {
+    assert_eq!(CssFiniteNumber::try_new(1.25).unwrap().value(), 1.25);
+    assert_eq!(CssFiniteNumber::try_new(f32::NAN), None);
+    assert_eq!(CssFiniteNumber::try_new(f32::INFINITY), None);
+
+    assert_eq!(CssNonNegativeNumber::try_new(1.25).unwrap().value(), 1.25);
+    assert_eq!(CssNonNegativeNumber::try_new(-0.1), None);
+    assert_eq!(CssNonNegativeNumber::try_new(f32::NEG_INFINITY), None);
+
+    assert_eq!(
+        CssLengthDimension::try_new(2.0, CssLengthUnit::Rem)
+            .unwrap()
+            .value(),
+        2.0
+    );
+    assert_eq!(
+        CssLengthDimension::try_new(f32::NAN, CssLengthUnit::Rem),
+        None
+    );
+
+    assert_eq!(CssLength::try_px(f32::NAN), None);
+    assert_eq!(CssLength::try_percent(f32::INFINITY), None);
+    assert_eq!(
+        CssLength::try_dimension(f32::NEG_INFINITY, CssLengthUnit::Rem),
+        None
+    );
+    assert_eq!(CssLength::try_px(3.0).unwrap(), CssLength::px(3.0));
+    assert_eq!(
+        CssLength::try_dimension(4.0, CssLengthUnit::Px).unwrap(),
+        CssLength::px(4.0)
+    );
+
+    assert_eq!(CssGridTrackBreadth::try_fraction(f32::NAN), None);
+    assert_eq!(CssGridTrackBreadth::try_fraction(-0.1), None);
+    assert_eq!(
+        CssGridTrackBreadth::try_fraction(1.0).unwrap(),
+        CssGridTrackBreadth::fraction(1.0)
+    );
+
+    assert_eq!(CssScaleValues::try_new(vec![1.0, f32::NAN]), None);
+    assert_eq!(CssScaleValues::try_new(vec![f32::INFINITY]), None);
+
+    assert_eq!(CssCalcLength::try_px(f32::NAN), None);
+    assert_eq!(CssCalcLength::try_percent(f32::INFINITY), None);
+    assert_eq!(
+        CssCalcLength::try_dimension(f32::NEG_INFINITY, CssLengthUnit::Rem),
+        None
+    );
+    assert_eq!(
+        CssCalcLengthTerm::add(CssCalcLength::try_px(1.0).unwrap()),
+        CssCalcLengthTerm::add(CssCalcLength::px(1.0))
+    );
+
+    assert_eq!(CssFlexFactor::try_new(f32::NAN), None);
+    assert_eq!(CssFlexFactor::try_new(-1.0), None);
+    assert_eq!(
+        CssFlex::components(
+            CssFlexFactor::try_new(1.0).unwrap(),
+            Some(CssFlexFactor::try_new(0.0).unwrap()),
+            Some(CssLength::px(2.0)),
+        ),
+        CssFlex::Components {
+            grow: CssFlexFactor::try_new(1.0).unwrap(),
+            shrink: Some(CssFlexFactor::try_new(0.0).unwrap()),
+            basis: Some(CssLength::px(2.0)),
+        }
+    );
+}
+
+#[test]
+fn checked_color_construction_rejects_invalid_channels() {
+    let color = CssColor::try_rgba(0.25, 0.5, 0.75, 1.0).unwrap();
+    assert_eq!(color.r(), 0.25);
+    assert_eq!(color.g(), 0.5);
+    assert_eq!(color.b(), 0.75);
+    assert_eq!(color.a(), 1.0);
+
+    assert_eq!(CssColor::try_rgba(f32::NAN, 0.0, 0.0, 1.0), None);
+    assert_eq!(CssColor::try_rgba(0.0, f32::INFINITY, 0.0, 1.0), None);
+    assert_eq!(CssColor::try_rgba(-0.1, 0.0, 0.0, 1.0), None);
+    assert_eq!(CssColor::try_rgba(0.0, 0.0, 0.0, 1.1), None);
+    assert_eq!(CssColor::BLACK.a(), 1.0);
+    assert_eq!(CssColor::WHITE.r(), 1.0);
+    assert_eq!(CssColor::TRANSPARENT.a(), 0.0);
+}
+
+#[test]
 fn rejection_unsupported_but_syntactically_valid_css_keywords_stay_rejected() {
     assert_rejects_declarations(&[
         RejectedDeclarationCase {
@@ -2467,7 +2554,7 @@ fn exposes_nested_calc_terms_structurally() {
     };
     assert_eq!(terms.len(), 2);
     assert_eq!(terms[0].operator(), CssCalcOperator::Add);
-    assert_eq!(terms[0].value(), &CssCalcLength::Percent(100.0));
+    assert_eq!(terms[0].value(), &CssCalcLength::percent(100.0));
     assert_eq!(terms[1].operator(), CssCalcOperator::Subtract);
 
     let nested_terms = match terms[1].value() {
@@ -2476,9 +2563,9 @@ fn exposes_nested_calc_terms_structurally() {
     };
     assert_eq!(nested_terms.len(), 2);
     assert_eq!(nested_terms[0].operator(), CssCalcOperator::Add);
-    assert_eq!(nested_terms[0].value(), &CssCalcLength::Px(12.0));
+    assert_eq!(nested_terms[0].value(), &CssCalcLength::px(12.0));
     assert_eq!(nested_terms[1].operator(), CssCalcOperator::Add);
-    assert_eq!(nested_terms[1].value(), &CssCalcLength::Percent(3.0));
+    assert_eq!(nested_terms[1].value(), &CssCalcLength::percent(3.0));
 }
 
 #[test]
@@ -2556,7 +2643,7 @@ fn parses_supported_calc_length_units_as_authored_dimensions() {
             }
             other => panic!("expected authored calc dimension for {authored}, got {other:?}"),
         }
-        assert_eq!(terms[1].value(), &CssCalcLength::Px(2.0));
+        assert_eq!(terms[1].value(), &CssCalcLength::px(2.0));
     }
 }
 
@@ -2592,7 +2679,7 @@ fn unit_matrix_accepts_every_supported_length_unit_in_calc_contexts() {
             &CssCalcLength::dimension(1.0, unit),
             "{authored} should preserve its supported calc length unit",
         );
-        assert_eq!(terms[1].value(), &CssCalcLength::Px(2.0));
+        assert_eq!(terms[1].value(), &CssCalcLength::px(2.0));
     }
 }
 
@@ -3983,8 +4070,8 @@ fn parses_spacing_inset_and_z_index_values() {
     assert_eq!(
         declaration_value(".panel { top: calc(10px + 5%); }", CssProperty::Top),
         CssValue::Length(CssLength::Calc(CssCalcLength::sum(
-            CssCalcLengthTerm::add(CssCalcLength::Px(10.0)),
-            [CssCalcLengthTerm::add(CssCalcLength::Percent(5.0))]
+            CssCalcLengthTerm::add(CssCalcLength::px(10.0)),
+            [CssCalcLengthTerm::add(CssCalcLength::percent(5.0))]
         )))
     );
     assert_eq!(
@@ -4144,8 +4231,8 @@ fn checked_border_constructor_rejects_parser_invalid_widths() {
         CssLength::px(-1.0),
         CssLength::MinContent,
         CssLength::Normal,
-        CssLength::Calc(CssCalcLength::Percent(10.0)),
-        CssLength::Calc(CssCalcLength::Px(-1.0)),
+        CssLength::Calc(CssCalcLength::percent(10.0)),
+        CssLength::Calc(CssCalcLength::px(-1.0)),
     ] {
         assert_eq!(
             CssBorder::try_new(Some(width), Some(CssBorderStyle::Solid), None),
@@ -4155,12 +4242,12 @@ fn checked_border_constructor_rejects_parser_invalid_widths() {
 
     assert_eq!(
         CssBorder::try_new(
-            Some(CssLength::Calc(CssCalcLength::Px(1.0))),
+            Some(CssLength::Calc(CssCalcLength::px(1.0))),
             Some(CssBorderStyle::Solid),
             None,
         ),
         Some(CssBorder::new(
-            Some(CssLength::Calc(CssCalcLength::Px(1.0))),
+            Some(CssLength::Calc(CssCalcLength::px(1.0))),
             Some(CssBorderStyle::Solid),
             None,
         ))
@@ -4177,8 +4264,8 @@ fn checked_corner_radius_constructor_rejects_parser_invalid_values() {
         CssLength::Normal,
         CssLength::px(-1.0),
         CssLength::percent(-1.0),
-        CssLength::Calc(CssCalcLength::Px(-1.0)),
-        CssLength::Calc(CssCalcLength::Percent(-1.0)),
+        CssLength::Calc(CssCalcLength::px(-1.0)),
+        CssLength::Calc(CssCalcLength::percent(-1.0)),
     ] {
         assert_eq!(
             CssCornerRadius::try_new(value.clone(), CssLength::px(1.0)),
@@ -4390,7 +4477,7 @@ fn parses_grid_track_lists_and_template_areas() {
                 CssGridTrackList::new(vec![CssGridTrackComponent::TrackSize(
                     CssGridTrackSize::minmax(
                         CssGridTrackBreadth::length(CssLength::px(10.0)),
-                        CssGridTrackBreadth::Fraction(1.0),
+                        CssGridTrackBreadth::fraction(1.0),
                     )
                 )]),
             )),
@@ -4480,7 +4567,7 @@ fn parses_grid_template_and_grid_shorthands() {
                     CssGridTrackBreadth::length(CssLength::px(100.0))
                 )),
                 CssGridTrackComponent::TrackSize(CssGridTrackSize::breadth(
-                    CssGridTrackBreadth::Fraction(1.0)
+                    CssGridTrackBreadth::fraction(1.0)
                 )),
             ]),
             columns: Some(CssGridTrackList::new(vec![CssGridTrackComponent::Repeat(
@@ -4489,7 +4576,7 @@ fn parses_grid_template_and_grid_shorthands() {
                     CssGridTrackList::new(vec![CssGridTrackComponent::TrackSize(
                         CssGridTrackSize::minmax(
                             CssGridTrackBreadth::length(CssLength::px(10.0)),
-                            CssGridTrackBreadth::Fraction(1.0),
+                            CssGridTrackBreadth::fraction(1.0),
                         )
                     )]),
                 )
@@ -4512,7 +4599,7 @@ fn parses_grid_template_and_grid_shorthands() {
                 CssGridRepeat::new(
                     CssGridRepeatCount::AutoFit,
                     CssGridTrackList::new(vec![CssGridTrackComponent::TrackSize(
-                        CssGridTrackSize::breadth(CssGridTrackBreadth::Fraction(1.0))
+                        CssGridTrackSize::breadth(CssGridTrackBreadth::fraction(1.0))
                     )]),
                 )
             )]),
@@ -4646,13 +4733,13 @@ fn checked_grid_constructors_reject_parser_invalid_states() {
         CssGridRepeat::try_new(
             CssGridRepeatCount::integer(1),
             CssGridTrackList::new(vec![CssGridTrackComponent::TrackSize(
-                CssGridTrackSize::breadth(CssGridTrackBreadth::Fraction(1.0))
+                CssGridTrackSize::breadth(CssGridTrackBreadth::fraction(1.0))
             )])
         ),
         Some(CssGridRepeat::new(
             CssGridRepeatCount::integer(1),
             CssGridTrackList::new(vec![CssGridTrackComponent::TrackSize(
-                CssGridTrackSize::breadth(CssGridTrackBreadth::Fraction(1.0))
+                CssGridTrackSize::breadth(CssGridTrackBreadth::fraction(1.0))
             )])
         ))
     );

@@ -472,11 +472,7 @@ pub(super) fn parse_flex<'i, 't>(
             basis = Some(parse_box_size_value(input)?);
         }
     }
-    Ok(CssFlex::Components {
-        grow,
-        shrink,
-        basis,
-    })
+    Ok(CssFlex::components(grow, shrink, basis))
 }
 
 pub(super) fn parse_z_index<'i, 't>(

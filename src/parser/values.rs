@@ -275,6 +275,11 @@ pub(super) fn parse_length_with<'i, 't>(
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
+        Token::Dimension { value, .. } if !value.is_finite() => Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported non-finite {context} length"),
+        )),
         Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
             LengthUnitStatus::Supported(_) if options.non_negative && *value < 0.0 => {
                 Err(unsupported_value_at(
@@ -290,6 +295,13 @@ pub(super) fn parse_length_with<'i, 't>(
                 format!("unknown {context} unit `{unit}`"),
             )),
         },
+        Token::Percentage { unit_value, .. } if !unit_value.is_finite() => {
+            Err(unsupported_value_at(
+                location,
+                None,
+                format!("unsupported non-finite {context} percentage"),
+            ))
+        }
         Token::Percentage { unit_value, .. } if options.non_negative && *unit_value < 0.0 => {
             Err(unsupported_value_at(
                 location,
@@ -378,6 +390,11 @@ pub(super) fn parse_calc_component<'i, 't>(
 ) -> std::result::Result<CssCalcLength, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
+        Token::Dimension { value, .. } if !value.is_finite() => Err(unsupported_value_at(
+            location,
+            None,
+            "unsupported non-finite calc length",
+        )),
         Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
             LengthUnitStatus::Supported(_) if options.non_negative && *value < 0.0 => Err(
                 unsupported_value_at(location, None, "unsupported negative calc length"),
@@ -389,6 +406,9 @@ pub(super) fn parse_calc_component<'i, 't>(
                 format!("unknown calc length unit `{unit}`"),
             )),
         },
+        Token::Percentage { unit_value, .. } if !unit_value.is_finite() => Err(
+            unsupported_value_at(location, None, "unsupported non-finite calc percentage"),
+        ),
         Token::Percentage { unit_value, .. } if options.non_negative && *unit_value < 0.0 => Err(
             unsupported_value_at(location, None, "unsupported negative calc percentage"),
         ),
@@ -550,7 +570,7 @@ pub(super) fn color_from_hex<'i>(
             format!("invalid hex color `#{hex}`"),
         )
     })?;
-    Ok(CssColor::rgba(
+    Ok(CssColor::rgba_unchecked(
         ((value >> 16) & 0xff) as f32 / 255.0,
         ((value >> 8) & 0xff) as f32 / 255.0,
         (value & 0xff) as f32 / 255.0,

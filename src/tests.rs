@@ -1163,6 +1163,167 @@ fn combinator_selectors_are_structurally_inspectable() {
 }
 
 #[test]
+fn nesting_selector_composition_preserves_parent_and_child_structure() {
+    let parent = CssSelector::Class("card".to_owned());
+    let child = CssSelector::Class("title".to_owned());
+
+    let descendant = CssSelector::combine_descendant(parent.clone(), child.clone()).unwrap();
+    let CssSelector::Complex(descendant) = descendant else {
+        panic!("expected descendant complex selector");
+    };
+    assert_eq!(descendant.first().classes(), &["card".to_owned()]);
+    let [part] = descendant.rest() else {
+        panic!("expected one descendant part");
+    };
+    assert_eq!(part.combinator(), CssSelectorCombinator::Descendant);
+    assert_eq!(part.selector().classes(), &["title".to_owned()]);
+
+    let appended = CssSelector::append_to_subject(
+        parent,
+        CssCompoundSelector::new(
+            None,
+            None,
+            vec!["active".to_owned()],
+            Vec::new(),
+            vec![CssPseudoClass::Hover],
+        ),
+    )
+    .unwrap();
+    let CssSelector::Compound(appended) = appended else {
+        panic!("expected compound selector");
+    };
+    assert_eq!(
+        appended.classes(),
+        &["card".to_owned(), "active".to_owned()]
+    );
+    assert_eq!(appended.pseudo_classes(), &[CssPseudoClass::Hover]);
+}
+
+#[test]
+fn nesting_selector_composition_preserves_child_complex_chain() {
+    let parent = CssSelector::Class("card".to_owned());
+    let child = CssSelector::Complex(CssComplexSelector::new(
+        CssCompoundSelector::new(None, None, vec!["title".to_owned()], Vec::new(), Vec::new()),
+        vec![CssComplexSelectorPart::new(
+            CssSelectorCombinator::Child,
+            CssCompoundSelector::new(None, None, vec!["icon".to_owned()], Vec::new(), Vec::new()),
+        )],
+    ));
+
+    let combined = CssSelector::combine_descendant(parent, child).unwrap();
+    let CssSelector::Complex(combined) = combined else {
+        panic!("expected complex selector");
+    };
+    assert_eq!(combined.first().classes(), &["card".to_owned()]);
+    let [title, icon] = combined.rest() else {
+        panic!("expected parent descendant link followed by child chain");
+    };
+    assert_eq!(title.combinator(), CssSelectorCombinator::Descendant);
+    assert_eq!(title.selector().classes(), &["title".to_owned()]);
+    assert_eq!(icon.combinator(), CssSelectorCombinator::Child);
+    assert_eq!(icon.selector().classes(), &["icon".to_owned()]);
+}
+
+#[test]
+fn nesting_selector_composition_preserves_complex_chains() {
+    let parent = CssSelector::Complex(CssComplexSelector::new(
+        CssCompoundSelector::new(None, None, vec!["card".to_owned()], Vec::new(), Vec::new()),
+        vec![CssComplexSelectorPart::new(
+            CssSelectorCombinator::Child,
+            CssCompoundSelector::new(
+                Some("button".to_owned()),
+                None,
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            ),
+        )],
+    ));
+    let child = CssCompoundSelector::new(
+        None,
+        None,
+        vec!["icon".to_owned()],
+        Vec::new(),
+        vec![CssPseudoClass::Hover],
+    );
+
+    let combined = CssSelector::combine_with_combinator(
+        parent.clone(),
+        CssSelectorCombinator::NextSibling,
+        child,
+    )
+    .unwrap();
+    let CssSelector::Complex(combined) = combined else {
+        panic!("expected complex selector");
+    };
+    assert_eq!(combined.first().classes(), &["card".to_owned()]);
+    let [button, icon] = combined.rest() else {
+        panic!("expected preserved parent part and appended child part");
+    };
+    assert_eq!(button.combinator(), CssSelectorCombinator::Child);
+    assert_eq!(button.selector().tag().map(String::as_str), Some("button"));
+    assert_eq!(icon.combinator(), CssSelectorCombinator::NextSibling);
+    assert_eq!(icon.selector().classes(), &["icon".to_owned()]);
+    assert_eq!(icon.selector().pseudo_classes(), &[CssPseudoClass::Hover]);
+
+    let appended = CssSelector::append_to_subject(
+        parent,
+        CssCompoundSelector::new(
+            None,
+            None,
+            vec!["primary".to_owned()],
+            vec![CssAttributeSelector::new(
+                CssAttributeName::new("aria-current"),
+                CssAttributeMatcher::Equals("true".to_owned()),
+                CssAttributeCaseSensitivity::DocumentDefault,
+            )],
+            vec![CssPseudoClass::Focus],
+        ),
+    )
+    .unwrap();
+    let CssSelector::Complex(appended) = appended else {
+        panic!("expected complex selector");
+    };
+    let [part] = appended.rest() else {
+        panic!("expected preserved complex selector part");
+    };
+    assert_eq!(part.selector().tag().map(String::as_str), Some("button"));
+    assert_eq!(part.selector().classes(), &["primary".to_owned()]);
+    assert_eq!(part.selector().pseudo_classes(), &[CssPseudoClass::Focus]);
+    let [attribute] = part.selector().attributes() else {
+        panic!("expected appended attribute selector");
+    };
+    assert_eq!(attribute.name().as_str(), "aria-current");
+
+    assert!(
+        CssSelector::append_to_subject(
+            CssSelector::Class("card".to_owned()),
+            CssCompoundSelector::new(
+                Some("button".to_owned()),
+                None,
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            ),
+        )
+        .is_none()
+    );
+    assert!(
+        CssSelector::append_to_subject(
+            CssSelector::Class("card".to_owned()),
+            CssCompoundSelector::new(
+                None,
+                Some("submit".to_owned()),
+                Vec::new(),
+                Vec::new(),
+                Vec::new()
+            ),
+        )
+        .is_none()
+    );
+}
+
+#[test]
 fn rejects_invalid_combinator_selectors() {
     assert!(parse_sheet("> .item { color: black; }").is_err());
     assert!(parse_sheet(".a > > .b { color: black; }").is_err());

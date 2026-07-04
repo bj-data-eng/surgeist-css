@@ -5872,6 +5872,77 @@ pub enum CssSelector {
     Complex(CssComplexSelector),
 }
 
+#[allow(dead_code)] // Staged for native nesting flattening in the parser.
+impl CssSelector {
+    #[must_use]
+    pub(crate) fn combine_descendant(parent: Self, child: Self) -> Option<Self> {
+        let (child_first, child_rest) = child.into_complex_parts();
+        let combined =
+            Self::combine_with_combinator(parent, CssSelectorCombinator::Descendant, child_first)?;
+        let (first, mut rest) = combined.into_complex_parts();
+        rest.extend(child_rest);
+        Some(Self::Complex(CssComplexSelector::new(first, rest)))
+    }
+
+    #[must_use]
+    pub(crate) fn combine_with_combinator(
+        parent: Self,
+        combinator: CssSelectorCombinator,
+        child: CssCompoundSelector,
+    ) -> Option<Self> {
+        let (first, mut rest) = parent.into_complex_parts();
+        rest.push(CssComplexSelectorPart::new(combinator, child));
+        Some(Self::Complex(CssComplexSelector::new(first, rest)))
+    }
+
+    #[must_use]
+    pub(crate) fn append_to_subject(parent: Self, suffix: CssCompoundSelector) -> Option<Self> {
+        if suffix.tag().is_some() || suffix.key().is_some() {
+            return None;
+        }
+
+        match parent {
+            Self::Complex(mut selector) => {
+                selector.append_to_subject(suffix)?;
+                Some(Self::Complex(selector))
+            }
+            selector => {
+                let mut selector = selector.into_compound_selector();
+                selector.append_suffix(suffix);
+                Some(Self::Compound(selector))
+            }
+        }
+    }
+
+    fn into_complex_parts(self) -> (CssCompoundSelector, Vec<CssComplexSelectorPart>) {
+        match self {
+            Self::Complex(selector) => selector.into_parts(),
+            selector => (selector.into_compound_selector(), Vec::new()),
+        }
+    }
+
+    fn into_compound_selector(self) -> CssCompoundSelector {
+        match self {
+            Self::Tag(tag) => {
+                CssCompoundSelector::new(Some(tag), None, Vec::new(), Vec::new(), Vec::new())
+            }
+            Self::Key(key) => {
+                CssCompoundSelector::new(None, Some(key), Vec::new(), Vec::new(), Vec::new())
+            }
+            Self::Class(class) => {
+                CssCompoundSelector::new(None, None, vec![class], Vec::new(), Vec::new())
+            }
+            Self::PseudoClass(pseudo_class) => {
+                CssCompoundSelector::new(None, None, Vec::new(), Vec::new(), vec![pseudo_class])
+            }
+            Self::Compound(selector) => selector,
+            Self::Complex(_) => {
+                unreachable!("complex selectors are handled before compound conversion")
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssComplexSelector {
     first: CssCompoundSelector,
@@ -5902,6 +5973,18 @@ impl CssComplexSelector {
     #[must_use]
     pub fn rest(&self) -> &[CssComplexSelectorPart] {
         &self.rest
+    }
+
+    #[allow(dead_code)] // Used by staged selector composition helpers.
+    fn into_parts(self) -> (CssCompoundSelector, Vec<CssComplexSelectorPart>) {
+        (self.first, self.rest)
+    }
+
+    #[allow(dead_code)] // Used by staged selector composition helpers.
+    fn append_to_subject(&mut self, suffix: CssCompoundSelector) -> Option<()> {
+        let subject = self.rest.last_mut()?;
+        subject.selector.append_suffix(suffix);
+        Some(())
     }
 }
 
@@ -6124,6 +6207,15 @@ impl CssCompoundSelector {
     #[must_use]
     pub fn pseudo_classes(&self) -> &[CssPseudoClass] {
         &self.pseudo_classes
+    }
+
+    #[allow(dead_code)] // Used by staged selector composition helpers.
+    fn append_suffix(&mut self, suffix: Self) {
+        debug_assert!(suffix.tag.is_none());
+        debug_assert!(suffix.key.is_none());
+        self.classes.extend(suffix.classes);
+        self.attributes.extend(suffix.attributes);
+        self.pseudo_classes.extend(suffix.pseudo_classes);
     }
 }
 

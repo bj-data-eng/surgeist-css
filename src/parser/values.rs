@@ -11,49 +11,49 @@ use crate::validation::{
 pub(super) fn parse_box_size_value<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, AllowedLengthSyntax::box_size(), "box size")
+    parse_length_with(input, LengthGrammar::BoxSize)
 }
 
 pub(super) fn parse_inset_component<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, AllowedLengthSyntax::box_size(), "inset")
+    parse_length_with(input, LengthGrammar::Inset)
 }
 
 pub(super) fn parse_margin_component<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, AllowedLengthSyntax::margin(), "margin")
+    parse_length_with(input, LengthGrammar::Margin)
 }
 
 pub(super) fn parse_padding_component<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, AllowedLengthSyntax::padding(), "padding")
+    parse_length_with(input, LengthGrammar::Padding)
 }
 
 pub(super) fn parse_border_width_component<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, AllowedLengthSyntax::border_width(), "border-width")
+    parse_length_with(input, LengthGrammar::BorderWidth)
 }
 
 pub(super) fn parse_radius_component<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, AllowedLengthSyntax::radius(), "border-radius")
+    parse_length_with(input, LengthGrammar::Radius)
 }
 
 pub(super) fn parse_shadow_length<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, AllowedLengthSyntax::shadow(), "box-shadow")
+    parse_length_with(input, LengthGrammar::ShadowOffset)
 }
 
 pub(super) fn parse_shadow_blur_length<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, AllowedLengthSyntax::shadow_blur(), "box-shadow blur")
+    parse_length_with(input, LengthGrammar::ShadowBlur)
 }
 
 pub(super) fn parse_gap_value<'i, 't>(
@@ -65,212 +65,132 @@ pub(super) fn parse_gap_value<'i, 't>(
     {
         Ok(CssLength::Normal)
     } else {
-        parse_length_with(input, AllowedLengthSyntax::gap(), "gap")
+        parse_length_with(input, LengthGrammar::Gap)
     }
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct AllowedLengthSyntax {
-    percent: bool,
-    auto: bool,
-    intrinsic: bool,
-    normal: bool,
-    calc_percent: bool,
-    non_negative: bool,
+pub(super) enum LengthGrammar {
+    BoxSize,
+    Inset,
+    Margin,
+    Padding,
+    BorderWidth,
+    Radius,
+    ShadowOffset,
+    ShadowBlur,
+    Gap,
+    FontSize,
+    LineHeight,
+    TextIndent,
+    VerticalAlign,
+    LetterSpacing,
+    TextDecorationThickness,
+    GridTrack,
+    BackgroundSize,
+    Position,
 }
 
-impl AllowedLengthSyntax {
-    pub(super) const fn box_size() -> Self {
-        Self {
-            percent: true,
-            auto: true,
-            intrinsic: true,
-            normal: false,
-            calc_percent: true,
-            non_negative: false,
-        }
+impl LengthGrammar {
+    const fn allows_percent(self) -> bool {
+        matches!(
+            self,
+            Self::BoxSize
+                | Self::Inset
+                | Self::Margin
+                | Self::Padding
+                | Self::Radius
+                | Self::Gap
+                | Self::FontSize
+                | Self::LineHeight
+                | Self::TextIndent
+                | Self::VerticalAlign
+                | Self::TextDecorationThickness
+                | Self::GridTrack
+                | Self::BackgroundSize
+                | Self::Position
+        )
     }
 
-    pub(super) const fn margin() -> Self {
-        Self {
-            percent: true,
-            auto: true,
-            intrinsic: false,
-            normal: false,
-            calc_percent: true,
-            non_negative: false,
-        }
+    const fn allows_auto(self) -> bool {
+        matches!(self, Self::BoxSize | Self::Inset | Self::Margin)
     }
 
-    pub(super) const fn padding() -> Self {
-        Self {
-            percent: true,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: true,
-            non_negative: true,
-        }
+    const fn allows_intrinsic(self) -> bool {
+        matches!(self, Self::BoxSize | Self::Inset)
     }
 
-    pub(super) const fn border_width() -> Self {
-        Self {
-            percent: false,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: false,
-            non_negative: true,
-        }
+    const fn allows_normal(self) -> bool {
+        matches!(self, Self::Gap | Self::LineHeight)
     }
 
-    pub(super) const fn radius() -> Self {
-        Self {
-            percent: true,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: true,
-            non_negative: true,
-        }
+    const fn allows_calc_percent(self) -> bool {
+        matches!(
+            self,
+            Self::BoxSize
+                | Self::Inset
+                | Self::Margin
+                | Self::Padding
+                | Self::Radius
+                | Self::Gap
+                | Self::FontSize
+                | Self::LineHeight
+                | Self::TextIndent
+                | Self::VerticalAlign
+                | Self::TextDecorationThickness
+                | Self::GridTrack
+                | Self::BackgroundSize
+                | Self::Position
+        )
     }
 
-    pub(super) const fn shadow() -> Self {
-        Self {
-            percent: false,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: false,
-            non_negative: false,
-        }
+    const fn requires_non_negative(self) -> bool {
+        matches!(
+            self,
+            Self::Padding
+                | Self::BorderWidth
+                | Self::Radius
+                | Self::ShadowBlur
+                | Self::TextDecorationThickness
+                | Self::GridTrack
+                | Self::BackgroundSize
+        )
     }
 
-    pub(super) const fn shadow_blur() -> Self {
-        Self {
-            percent: false,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: false,
-            non_negative: true,
-        }
-    }
-
-    pub(super) const fn gap() -> Self {
-        Self {
-            percent: true,
-            auto: false,
-            intrinsic: false,
-            normal: true,
-            calc_percent: true,
-            non_negative: false,
-        }
-    }
-
-    pub(super) const fn font_size() -> Self {
-        Self {
-            percent: true,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: true,
-            non_negative: false,
-        }
-    }
-
-    pub(super) const fn line_height() -> Self {
-        Self {
-            percent: true,
-            auto: false,
-            intrinsic: false,
-            normal: true,
-            calc_percent: true,
-            non_negative: false,
-        }
-    }
-
-    pub(super) const fn text_indent() -> Self {
-        Self {
-            percent: true,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: true,
-            non_negative: false,
-        }
-    }
-
-    pub(super) const fn vertical_align() -> Self {
-        Self {
-            percent: true,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: true,
-            non_negative: false,
-        }
-    }
-
-    pub(super) const fn letter_spacing() -> Self {
-        Self {
-            percent: false,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: false,
-            non_negative: false,
-        }
-    }
-
-    pub(super) const fn text_decoration_thickness() -> Self {
-        Self {
-            percent: true,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: true,
-            non_negative: true,
-        }
-    }
-
-    pub(super) const fn grid_track() -> Self {
-        Self {
-            percent: true,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: true,
-            non_negative: true,
-        }
-    }
-
-    pub(super) const fn position() -> Self {
-        Self {
-            percent: true,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: true,
-            non_negative: false,
-        }
-    }
-
-    pub(super) const fn background_size() -> Self {
-        Self {
-            percent: true,
-            auto: false,
-            intrinsic: false,
-            normal: false,
-            calc_percent: true,
-            non_negative: true,
+    const fn context(self) -> &'static str {
+        match self {
+            Self::BoxSize => "box size",
+            Self::Inset => "inset",
+            Self::Margin => "margin",
+            Self::Padding => "padding",
+            Self::BorderWidth => "border-width",
+            Self::Radius => "border-radius",
+            Self::ShadowOffset => "box-shadow",
+            Self::ShadowBlur => "box-shadow blur",
+            Self::Gap => "gap",
+            Self::FontSize => "font-size",
+            Self::LineHeight => "line-height",
+            Self::TextIndent => "text-indent",
+            Self::VerticalAlign => "vertical-align",
+            Self::LetterSpacing => "letter-spacing",
+            Self::TextDecorationThickness => "text-decoration-thickness",
+            Self::GridTrack => "grid track",
+            Self::BackgroundSize => "background-size",
+            Self::Position => "position",
         }
     }
 }
 
 pub(super) fn parse_length_with<'i, 't>(
     input: &mut Parser<'i, 't>,
-    options: AllowedLengthSyntax,
+    grammar: LengthGrammar,
+) -> std::result::Result<CssLength, ParseError<'i, Error>> {
+    parse_length_with_context(input, grammar, grammar.context())
+}
+
+pub(super) fn parse_length_with_context<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    grammar: LengthGrammar,
     context: &str,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
     let location = input.current_source_location();
@@ -281,7 +201,7 @@ pub(super) fn parse_length_with<'i, 't>(
             format!("unsupported non-finite {context} length"),
         )),
         Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
-            LengthUnitStatus::Supported(_) if options.non_negative && *value < 0.0 => {
+            LengthUnitStatus::Supported(_) if grammar.requires_non_negative() && *value < 0.0 => {
                 Err(unsupported_value_at(
                     location,
                     None,
@@ -302,14 +222,16 @@ pub(super) fn parse_length_with<'i, 't>(
                 format!("unsupported non-finite {context} percentage"),
             ))
         }
-        Token::Percentage { unit_value, .. } if options.non_negative && *unit_value < 0.0 => {
+        Token::Percentage { unit_value, .. }
+            if grammar.requires_non_negative() && *unit_value < 0.0 =>
+        {
             Err(unsupported_value_at(
                 location,
                 None,
                 format!("unsupported negative {context} percentage"),
             ))
         }
-        Token::Percentage { unit_value, .. } if options.percent => {
+        Token::Percentage { unit_value, .. } if grammar.allows_percent() => {
             Ok(CssLength::percent(*unit_value * 100.0))
         }
         Token::Percentage { .. } => Err(unsupported_value_at(
@@ -319,11 +241,11 @@ pub(super) fn parse_length_with<'i, 't>(
         )),
         Token::Number { value, .. } if *value == 0.0 => Ok(CssLength::Zero),
         Token::Ident(ident) => match_ignore_ascii_case! { ident,
-            "auto" if options.auto => Ok(CssLength::Auto),
-            "normal" if options.normal => Ok(CssLength::Normal),
-            "min-content" if options.intrinsic => Ok(CssLength::MinContent),
-            "max-content" if options.intrinsic => Ok(CssLength::MaxContent),
-            "fit-content" if options.intrinsic => Ok(CssLength::FitContent),
+            "auto" if grammar.allows_auto() => Ok(CssLength::Auto),
+            "normal" if grammar.allows_normal() => Ok(CssLength::Normal),
+            "min-content" if grammar.allows_intrinsic() => Ok(CssLength::MinContent),
+            "max-content" if grammar.allows_intrinsic() => Ok(CssLength::MaxContent),
+            "fit-content" if grammar.allows_intrinsic() => Ok(CssLength::FitContent),
             _ => Err(unsupported_value_at(
                 location,
                 None,
@@ -332,8 +254,8 @@ pub(super) fn parse_length_with<'i, 't>(
         },
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
             let calc =
-                input.parse_nested_block(|input| parse_calc_length_with_options(input, options))?;
-            if options.non_negative && syntax::calc_has_negative_component(&calc) {
+                input.parse_nested_block(|input| parse_calc_length_with_grammar(input, grammar))?;
+            if grammar.requires_non_negative() && syntax::calc_has_negative_component(&calc) {
                 return Err(unsupported_value_at(
                     location,
                     None,
@@ -351,13 +273,13 @@ pub(super) fn parse_length_with<'i, 't>(
     }
 }
 
-pub(super) fn parse_calc_length_with_options<'i, 't>(
+pub(super) fn parse_calc_length_with_grammar<'i, 't>(
     input: &mut Parser<'i, 't>,
-    options: AllowedLengthSyntax,
+    grammar: LengthGrammar,
 ) -> std::result::Result<CssCalcLength, ParseError<'i, Error>> {
     let mut terms = Vec::new();
     terms.push(CssCalcLengthTerm::add(parse_calc_component(
-        input, options,
+        input, grammar,
     )?));
 
     while !input.is_exhausted() {
@@ -373,7 +295,7 @@ pub(super) fn parse_calc_length_with_options<'i, 't>(
                 ));
             }
         };
-        let component = parse_calc_component(input, options)?;
+        let component = parse_calc_component(input, grammar)?;
         terms.push(operator(component));
     }
 
@@ -386,7 +308,7 @@ pub(super) fn parse_calc_length_with_options<'i, 't>(
 
 pub(super) fn parse_calc_component<'i, 't>(
     input: &mut Parser<'i, 't>,
-    options: AllowedLengthSyntax,
+    grammar: LengthGrammar,
 ) -> std::result::Result<CssCalcLength, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
@@ -396,9 +318,13 @@ pub(super) fn parse_calc_component<'i, 't>(
             "unsupported non-finite calc length",
         )),
         Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
-            LengthUnitStatus::Supported(_) if options.non_negative && *value < 0.0 => Err(
-                unsupported_value_at(location, None, "unsupported negative calc length"),
-            ),
+            LengthUnitStatus::Supported(_) if grammar.requires_non_negative() && *value < 0.0 => {
+                Err(unsupported_value_at(
+                    location,
+                    None,
+                    "unsupported negative calc length",
+                ))
+            }
             LengthUnitStatus::Supported(unit) => Ok(CssCalcLength::dimension(*value, unit)),
             LengthUnitStatus::Unknown => Err(unsupported_value_at(
                 location,
@@ -409,10 +335,16 @@ pub(super) fn parse_calc_component<'i, 't>(
         Token::Percentage { unit_value, .. } if !unit_value.is_finite() => Err(
             unsupported_value_at(location, None, "unsupported non-finite calc percentage"),
         ),
-        Token::Percentage { unit_value, .. } if options.non_negative && *unit_value < 0.0 => Err(
-            unsupported_value_at(location, None, "unsupported negative calc percentage"),
-        ),
-        Token::Percentage { unit_value, .. } if options.calc_percent => {
+        Token::Percentage { unit_value, .. }
+            if grammar.requires_non_negative() && *unit_value < 0.0 =>
+        {
+            Err(unsupported_value_at(
+                location,
+                None,
+                "unsupported negative calc percentage",
+            ))
+        }
+        Token::Percentage { unit_value, .. } if grammar.allows_calc_percent() => {
             Ok(CssCalcLength::percent(*unit_value * 100.0))
         }
         Token::Percentage { .. } => Err(unsupported_value_at(
@@ -422,7 +354,7 @@ pub(super) fn parse_calc_component<'i, 't>(
         )),
         Token::Number { value, .. } if *value == 0.0 => Ok(CssCalcLength::px(0.0)),
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
-            input.parse_nested_block(|input| parse_calc_length_with_options(input, options))
+            input.parse_nested_block(|input| parse_calc_length_with_grammar(input, grammar))
         }
         Token::Function(name) => Err(unsupported_value_at(
             location,

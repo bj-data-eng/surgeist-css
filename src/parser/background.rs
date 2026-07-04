@@ -2,7 +2,8 @@ use cssparser::{ParseError, Parser, match_ignore_ascii_case};
 
 use super::box_model::parse_border_style;
 use super::values::{
-    AllowedLengthSyntax, next_is_comma, next_is_delim, parse_color, parse_length_with,
+    LengthGrammar, next_is_comma, next_is_delim, parse_color, parse_length_with,
+    parse_length_with_context,
 };
 use crate::error::{Error, basic, unsupported_value};
 use crate::syntax::*;
@@ -114,8 +115,7 @@ pub(super) fn parse_position_component<'i, 't>(
         };
     }
     input.reset(&state);
-    parse_length_with(input, AllowedLengthSyntax::position(), "position")
-        .map(CssPositionComponent::Length)
+    parse_length_with(input, LengthGrammar::Position).map(CssPositionComponent::Length)
 }
 
 pub(super) fn parse_background_size_list<'i, 't>(
@@ -183,12 +183,8 @@ pub(super) fn parse_background_size_component<'i, 't>(
     {
         Ok(CssBackgroundSizeComponent::Auto)
     } else {
-        parse_length_with(
-            input,
-            AllowedLengthSyntax::background_size(),
-            "background-size",
-        )
-        .map(CssBackgroundSizeComponent::Length)
+        parse_length_with(input, LengthGrammar::BackgroundSize)
+            .map(CssBackgroundSizeComponent::Length)
     }
 }
 
@@ -464,6 +460,6 @@ pub(super) fn parse_outline_width<'i, 't>(
             )),
         };
     }
-    parse_length_with(input, AllowedLengthSyntax::border_width(), "outline-width")
+    parse_length_with_context(input, LengthGrammar::BorderWidth, "outline-width")
         .map(CssOutlineWidth::Length)
 }

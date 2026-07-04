@@ -320,6 +320,52 @@ fn rejects_function_syntax_for_simple_state_pseudo_classes() {
 }
 
 #[test]
+fn parses_tier_2_structural_simple_pseudo_classes() {
+    let cases = [
+        (":first-child { color: black; }", CssPseudoClass::FirstChild),
+        (":last-child { color: black; }", CssPseudoClass::LastChild),
+        (":only-child { color: black; }", CssPseudoClass::OnlyChild),
+        (":empty { color: black; }", CssPseudoClass::Empty),
+        (
+            ":first-of-type { color: black; }",
+            CssPseudoClass::FirstOfType,
+        ),
+        (
+            ":last-of-type { color: black; }",
+            CssPseudoClass::LastOfType,
+        ),
+        (
+            ":only-of-type { color: black; }",
+            CssPseudoClass::OnlyOfType,
+        ),
+    ];
+
+    for (css, expected) in cases {
+        let sheet = parse_sheet(css).unwrap();
+        assert_eq!(
+            sheet.rules()[0].selector(),
+            &CssSelector::PseudoClass(expected)
+        );
+    }
+}
+
+#[test]
+fn parses_compound_structural_simple_pseudo_classes() {
+    let sheet = parse_sheet("button:first-child { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+        panic!("expected compound selector");
+    };
+    assert_eq!(selector.tag().map(String::as_str), Some("button"));
+    assert_eq!(selector.pseudo_classes(), &[CssPseudoClass::FirstChild]);
+}
+
+#[test]
+fn rejects_function_syntax_for_non_functional_structural_pseudo_classes() {
+    assert!(parse_sheet(":first-child() { color: black; }").is_err());
+    assert!(parse_sheet(":empty() { color: black; }").is_err());
+}
+
+#[test]
 fn selector_list_constructor_rejects_empty_lists() {
     assert_eq!(CssSelectorList::try_new(Vec::new()), None);
     let list = CssSelectorList::try_new(vec![CssSelector::Class("button".to_owned())]).unwrap();
@@ -339,7 +385,7 @@ fn nth_pattern_model_exposes_an_plus_b_coefficients() {
 #[test]
 fn rejects_unsupported_pseudo_classes() {
     assert!(parse_sheet(":not(.theme) { --space: 8px; }").is_err());
-    assert!(parse_sheet(":first-child { --space: 8px; }").is_err());
+    assert!(parse_sheet(":nth-child(odd) { --space: 8px; }").is_err());
 }
 
 #[test]

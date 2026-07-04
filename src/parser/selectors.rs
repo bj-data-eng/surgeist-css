@@ -137,6 +137,13 @@ fn parse_pseudo_class<'i, 't>(
             "valid" => Ok(CssPseudoClass::Valid),
             "invalid" => Ok(CssPseudoClass::Invalid),
             "placeholder-shown" => Ok(CssPseudoClass::PlaceholderShown),
+            "first-child" => Ok(CssPseudoClass::FirstChild),
+            "last-child" => Ok(CssPseudoClass::LastChild),
+            "only-child" => Ok(CssPseudoClass::OnlyChild),
+            "empty" => Ok(CssPseudoClass::Empty),
+            "first-of-type" => Ok(CssPseudoClass::FirstOfType),
+            "last-of-type" => Ok(CssPseudoClass::LastOfType),
+            "only-of-type" => Ok(CssPseudoClass::OnlyOfType),
             _ => {
                 let message = format!("unsupported pseudo-class `:{name}`");
                 Err(invalid_selector(input, message))

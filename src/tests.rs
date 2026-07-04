@@ -1132,6 +1132,59 @@ fn functional_selector_lists_reject_invalid_entries_strictly() {
 }
 
 #[test]
+fn has_accepts_strict_relative_selector_lists() {
+    let sheet = parse_sheet(".card:has(.field > .icon) { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
+        panic!("expected compound selector");
+    };
+    let [CssPseudoClass::Has(list)] = selector.pseudo_classes() else {
+        panic!("expected :has selector list");
+    };
+    assert_eq!(list.selectors().len(), 1);
+    assert_eq!(
+        list.selectors()[0].combinator(),
+        CssSelectorCombinator::Descendant
+    );
+    assert!(matches!(
+        list.selectors()[0].selector(),
+        CssSelector::Complex(_)
+    ));
+
+    let sheet = parse_sheet(".card:has(> .icon, + .error, ~ .warning) { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
+        panic!("expected compound selector");
+    };
+    let [CssPseudoClass::Has(list)] = selector.pseudo_classes() else {
+        panic!("expected :has selector list");
+    };
+    assert_eq!(list.selectors().len(), 3);
+    assert_eq!(
+        list.selectors()[0].combinator(),
+        CssSelectorCombinator::Child
+    );
+    assert_eq!(
+        list.selectors()[1].combinator(),
+        CssSelectorCombinator::NextSibling
+    );
+    assert_eq!(
+        list.selectors()[2].combinator(),
+        CssSelectorCombinator::SubsequentSibling
+    );
+}
+
+#[test]
+fn has_rejects_invalid_relative_selector_entries_strictly() {
+    assert!(parse_sheet(".card:has() { color: black; }").is_err());
+    assert!(parse_sheet(".card:has(.valid, .bad..selector) { color: black; }").is_err());
+    assert!(parse_sheet(".card:has(:has(.nested)) { color: black; }").is_err());
+    assert!(parse_sheet(".card:has(:is(:has(.nested))) { color: black; }").is_err());
+    assert!(parse_sheet(".card:has(:nth-child(odd of :has(.nested))) { color: black; }").is_err());
+    assert!(parse_sheet(".card:has(::before) { color: black; }").is_err());
+    assert!(parse_sheet(".card:has(| .bad) { color: black; }").is_err());
+    assert!(parse_sheet(".card:has(.valid,) { color: black; }").is_err());
+}
+
+#[test]
 fn functional_pseudo_class_arguments_are_publicly_inspectable() {
     let sheet = parse_sheet(".button:not(.disabled) { color: black; }").unwrap();
     let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
@@ -1208,8 +1261,10 @@ fn rejects_function_syntax_for_runtime_state_pseudo_classes() {
 
 #[test]
 fn rejects_unsupported_relative_or_combinator_selector_forms() {
-    assert!(parse_sheet(".field:has(> .icon) { color: black; }").is_err());
-    assert!(parse_sheet(":has(.field > .icon) { color: black; }").is_err());
+    assert!(parse_sheet(".field:has(.col || .cell) { color: black; }").is_err());
+    assert!(parse_sheet(".field:has(|| .icon) { color: black; }").is_err());
+    assert!(parse_sheet(".field:has(::before) { color: black; }").is_err());
+    assert!(parse_sheet(".field:has(| .icon) { color: black; }").is_err());
 }
 
 #[test]
@@ -1830,8 +1885,8 @@ fn rejects_invalid_combinator_selectors() {
     assert!(parse_sheet(".a > > .b { color: black; }").is_err());
     assert!(parse_sheet(".a > { color: black; }").is_err());
     assert!(parse_sheet(".col || .cell { color: black; }").is_err());
-    assert!(parse_sheet(".field:has(> .icon) { color: black; }").is_err());
-    assert!(parse_sheet(".field:has(.field > .icon) { color: black; }").is_err());
+    assert!(parse_sheet(".field:has(> > .icon) { color: black; }").is_err());
+    assert!(parse_sheet(".field:has(.field > > .icon) { color: black; }").is_err());
 }
 
 #[test]
@@ -1973,6 +2028,7 @@ fn practical_pseudo_class_matrix_accepts_supported_and_rejects_unsupported_forms
         ":is(.primary, .secondary) { color: black; }",
         ":where(button, .link) { color: black; }",
         ".field:has(.error) { color: black; }",
+        ".field:has(> .icon) { color: black; }",
         ":modal { color: black; }",
         ":read-only { color: black; }",
     ];
@@ -1990,7 +2046,7 @@ fn practical_pseudo_class_matrix_accepts_supported_and_rejects_unsupported_forms
         ":hover() { color: black; }",
         ":not() { color: black; }",
         ":nth-child(2n of .item) { color: black; }",
-        ".field:has(> .icon) { color: black; }",
+        ".field:has(.col || .cell) { color: black; }",
     ];
 
     for css in rejected {
@@ -4021,6 +4077,7 @@ fn advanced_css_surface_matrix_accepts_supported_forms() {
         "@container sidebar (inline-size > 30rem) { .panel { color: black; } }",
         r#"@font-face { font-family: Inter; src: url("inter.woff2") format("woff2"); }"#,
         "@keyframes fade { from { opacity: 0; } to { opacity: 1; } }",
+        ".field:has(> .icon) { color: black; }",
     ];
 
     for css in accepted {
@@ -4035,7 +4092,7 @@ fn advanced_css_surface_matrix_rejects_unsupported_forms() {
         r#"@import url("late.css"); .panel { color: black; } @import url("later.css");"#,
         r#"@import url("theme.css") supports(display: grid);"#,
         "@font-face { font-family: Inter; }",
-        ".field:has(> .icon) { color: black; }",
+        ".field:has(::before) { color: black; }",
         "[svg|href] { color: black; }",
         ".col || .cell { color: black; }",
         "@container scroll-state(stuck: top) { .panel { color: black; } }",

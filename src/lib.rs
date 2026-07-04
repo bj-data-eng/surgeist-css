@@ -279,6 +279,30 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             "grid" => (CssProperty::Grid, CssValue::Grid(parse_grid(input)?)),
             "font-size" => (CssProperty::FontSize, CssValue::Length(parse_font_size(input)?)),
             "line-height" => (CssProperty::LineHeight, CssValue::Length(parse_line_height(input)?)),
+            "writing-mode" => (CssProperty::WritingMode, CssValue::WritingMode(parse_writing_mode(input)?)),
+            "text-align" => (CssProperty::TextAlign, CssValue::TextAlign(parse_text_align(input)?)),
+            "text-align-last" => (CssProperty::TextAlignLast, CssValue::TextAlignLast(parse_text_align_last(input)?)),
+            "text-indent" => (CssProperty::TextIndent, CssValue::TextIndent(parse_text_indent(input)?)),
+            "vertical-align" => (CssProperty::VerticalAlign, CssValue::VerticalAlign(parse_vertical_align(input)?)),
+            "font-family" => (CssProperty::FontFamily, CssValue::FontFamily(parse_font_family_list(input)?)),
+            "font" => (CssProperty::Font, CssValue::Font(parse_font(input)?)),
+            "font-weight" => (CssProperty::FontWeight, CssValue::FontWeight(parse_font_weight(input)?)),
+            "font-style" => (CssProperty::FontStyle, CssValue::FontStyle(parse_font_style(input)?)),
+            "font-stretch" => (CssProperty::FontStretch, CssValue::FontStretch(parse_font_stretch(input)?)),
+            "font-variant" => (CssProperty::FontVariant, CssValue::FontVariant(parse_font_variant(input)?)),
+            "font-feature-settings" => (CssProperty::FontFeatureSettings, CssValue::FontFeatureSettings(parse_font_feature_settings(input)?)),
+            "letter-spacing" => (CssProperty::LetterSpacing, CssValue::LetterSpacing(parse_letter_spacing(input)?)),
+            "text-wrap" => (CssProperty::TextWrap, CssValue::TextWrap(parse_text_wrap(input)?)),
+            "white-space" => (CssProperty::WhiteSpace, CssValue::WhiteSpace(parse_white_space(input)?)),
+            "word-break" => (CssProperty::WordBreak, CssValue::WordBreak(parse_word_break(input)?)),
+            "overflow-wrap" => (CssProperty::OverflowWrap, CssValue::OverflowWrap(parse_overflow_wrap(input)?)),
+            "text-overflow" => (CssProperty::TextOverflow, CssValue::TextOverflow(parse_text_overflow(input)?)),
+            "text-decoration" => (CssProperty::TextDecoration, CssValue::TextDecoration(parse_text_decoration(input)?)),
+            "text-decoration-line" => (CssProperty::TextDecorationLine, CssValue::TextDecorationLine(parse_text_decoration_line(input)?)),
+            "text-decoration-color" => (CssProperty::TextDecorationColor, CssValue::TextDecorationColor(parse_color(input)?)),
+            "text-decoration-style" => (CssProperty::TextDecorationStyle, CssValue::TextDecorationStyle(parse_text_decoration_style(input)?)),
+            "text-decoration-thickness" => (CssProperty::TextDecorationThickness, CssValue::TextDecorationThickness(parse_text_decoration_thickness(input)?)),
+            "text-transform" => (CssProperty::TextTransform, CssValue::TextTransform(parse_text_transform(input)?)),
             "inset" => (CssProperty::Inset, CssValue::Edges(parse_edges(input, parse_inset_component)?)),
             "top" => (CssProperty::Top, CssValue::Length(parse_inset_component(input)?)),
             "right" => (CssProperty::Right, CssValue::Length(parse_inset_component(input)?)),
@@ -1865,6 +1889,687 @@ fn parse_line_height<'i, 't>(
     }
 }
 
+fn parse_writing_mode<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssWritingMode, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "horizontal-tb" => Ok(CssWritingMode::HorizontalTb),
+        "vertical-rl" => Ok(CssWritingMode::VerticalRl),
+        "vertical-lr" => Ok(CssWritingMode::VerticalLr),
+        "sideways-rl" => Ok(CssWritingMode::SidewaysRl),
+        "sideways-lr" => Ok(CssWritingMode::SidewaysLr),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("writing-mode", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_text_align<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextAlign, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "start" => Ok(CssTextAlign::Start),
+        "end" => Ok(CssTextAlign::End),
+        "left" => Ok(CssTextAlign::Left),
+        "right" => Ok(CssTextAlign::Right),
+        "center" => Ok(CssTextAlign::Center),
+        "justify" => Ok(CssTextAlign::Justify),
+        "match-parent" => Ok(CssTextAlign::MatchParent),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("text-align", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_text_align_last<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextAlignLast, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "auto" => Ok(CssTextAlignLast::Auto),
+        "start" => Ok(CssTextAlignLast::Start),
+        "end" => Ok(CssTextAlignLast::End),
+        "left" => Ok(CssTextAlignLast::Left),
+        "right" => Ok(CssTextAlignLast::Right),
+        "center" => Ok(CssTextAlignLast::Center),
+        "justify" => Ok(CssTextAlignLast::Justify),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("text-align-last", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_text_indent<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextIndent, ParseError<'i, Error>> {
+    let length = parse_length_with(input, LengthOptions::text_indent(), "text-indent")?;
+    let mut hanging = false;
+    let mut each_line = false;
+
+    while !input.is_exhausted() {
+        let ident = input.expect_ident_cloned().map_err(basic)?;
+        match_ignore_ascii_case! { &ident,
+            "hanging" if !hanging => hanging = true,
+            "each-line" if !each_line => each_line = true,
+            _ => return Err(unsupported_value(
+                input,
+                None,
+                unsupported_keyword_reason("text-indent", ident.as_ref()),
+            )),
+        }
+    }
+
+    Ok(CssTextIndent::new(length, hanging, each_line))
+}
+
+fn parse_vertical_align<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssVerticalAlign, ParseError<'i, Error>> {
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        return match_ignore_ascii_case! { &ident,
+            "baseline" => Ok(CssVerticalAlign::Baseline),
+            "sub" => Ok(CssVerticalAlign::Sub),
+            "super" => Ok(CssVerticalAlign::Super),
+            "text-top" => Ok(CssVerticalAlign::TextTop),
+            "text-bottom" => Ok(CssVerticalAlign::TextBottom),
+            "middle" => Ok(CssVerticalAlign::Middle),
+            "top" => Ok(CssVerticalAlign::Top),
+            "bottom" => Ok(CssVerticalAlign::Bottom),
+            _ => Err(unsupported_value(
+                input,
+                None,
+                unsupported_keyword_reason("vertical-align", ident.as_ref()),
+            )),
+        };
+    }
+
+    parse_length_with(input, LengthOptions::vertical_align(), "vertical-align")
+        .map(CssVerticalAlignLength::new)
+        .map(CssVerticalAlign::Length)
+}
+
+fn parse_font_family_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontFamilyList, ParseError<'i, Error>> {
+    let mut families = Vec::new();
+    loop {
+        families.push(parse_font_family_name(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "font-family list has an empty item",
+            ));
+        }
+    }
+
+    CssFontFamilyList::try_new(families)
+        .ok_or_else(|| unsupported_value(input, None, "font-family list is empty"))
+}
+
+fn parse_font_family_name<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontFamilyName, ParseError<'i, Error>> {
+    if let Ok(name) = input.try_parse(Parser::expect_string_cloned) {
+        if name.is_empty() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "font family string is empty",
+            ));
+        }
+        return Ok(CssFontFamilyName::quoted(name.to_string()));
+    }
+
+    let mut parts = Vec::new();
+    while !input.is_exhausted() && !next_is_comma(input) {
+        let location = input.current_source_location();
+        match input.next().map_err(basic)? {
+            Token::Ident(ident) => parts.push(ident.to_string()),
+            token => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
+        }
+    }
+
+    if parts.is_empty() {
+        Err(unsupported_value(input, None, "font family name is empty"))
+    } else {
+        Ok(CssFontFamilyName::ident_sequence(parts.join(" ")))
+    }
+}
+
+fn parse_font<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFont, ParseError<'i, Error>> {
+    let mut style = None;
+    let mut variant = None;
+    let mut weight = None;
+    let mut stretch = None;
+    let size;
+
+    loop {
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "font shorthand is missing a size",
+            ));
+        }
+
+        if let Ok(parsed_size) = input.try_parse(parse_font_size) {
+            size = parsed_size;
+            break;
+        }
+
+        if let Ok(()) = input.try_parse(|input| {
+            input.expect_ident_matching("normal").map_err(basic)?;
+            if style.is_none() {
+                style = Some(CssFontStyle::Normal);
+            } else if variant.is_none() {
+                variant = Some(CssFontVariant::Normal);
+            } else if weight.is_none() {
+                weight = Some(CssFontWeight::Normal);
+            } else if stretch.is_none() {
+                stretch = Some(CssFontStretch::Normal);
+            } else {
+                return Err(unsupported_value(
+                    input,
+                    None,
+                    "duplicate font normal component",
+                ));
+            }
+            Ok(())
+        }) {
+            continue;
+        }
+
+        if style.is_none()
+            && let Ok(parsed_style) = input.try_parse(parse_font_style)
+        {
+            style = Some(parsed_style);
+            continue;
+        }
+        if variant.is_none()
+            && let Ok(parsed_variant) = input.try_parse(parse_font_variant)
+        {
+            variant = Some(parsed_variant);
+            continue;
+        }
+        if weight.is_none()
+            && let Ok(parsed_weight) = input.try_parse(parse_font_weight)
+        {
+            weight = Some(parsed_weight);
+            continue;
+        }
+        if stretch.is_none()
+            && let Ok(parsed_stretch) = input.try_parse(parse_font_stretch)
+        {
+            stretch = Some(parsed_stretch);
+            continue;
+        }
+
+        return Err(unsupported_value(
+            input,
+            None,
+            "unsupported font shorthand component before size",
+        ));
+    }
+
+    let line_height = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+        Some(parse_line_height(input)?)
+    } else {
+        None
+    };
+    let families = parse_font_family_list(input)?;
+
+    CssFont::try_new(style, variant, weight, stretch, size, line_height, families)
+        .ok_or_else(|| unsupported_value(input, None, "invalid font shorthand"))
+}
+
+fn parse_font_weight<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontWeight, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Ident(ident) => match_ignore_ascii_case! { ident,
+            "normal" => Ok(CssFontWeight::Normal),
+            "bold" => Ok(CssFontWeight::Bold),
+            "bolder" => Ok(CssFontWeight::Bolder),
+            "lighter" => Ok(CssFontWeight::Lighter),
+            _ => Err(unsupported_value_at(
+                location,
+                None,
+                unsupported_keyword_reason("font-weight", ident.as_ref()),
+            )),
+        },
+        Token::Number {
+            int_value: Some(value),
+            ..
+        } if CssFontWeightNumber::try_new(*value).is_some() => {
+            Ok(CssFontWeight::Number(CssFontWeightNumber::new(*value)))
+        }
+        Token::Number {
+            int_value: Some(_), ..
+        } => Err(unsupported_value_at(
+            location,
+            None,
+            "font-weight must be 1 through 1000",
+        )),
+        Token::Number { .. } => Err(unsupported_value_at(
+            location,
+            None,
+            "font-weight number must be an integer",
+        )),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+fn parse_font_style<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontStyle, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "normal" => Ok(CssFontStyle::Normal),
+        "italic" => Ok(CssFontStyle::Italic),
+        "oblique" => Ok(CssFontStyle::Oblique),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("font-style", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_font_stretch<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontStretch, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "normal" => Ok(CssFontStretch::Normal),
+        "ultra-condensed" => Ok(CssFontStretch::UltraCondensed),
+        "extra-condensed" => Ok(CssFontStretch::ExtraCondensed),
+        "condensed" => Ok(CssFontStretch::Condensed),
+        "semi-condensed" => Ok(CssFontStretch::SemiCondensed),
+        "semi-expanded" => Ok(CssFontStretch::SemiExpanded),
+        "expanded" => Ok(CssFontStretch::Expanded),
+        "extra-expanded" => Ok(CssFontStretch::ExtraExpanded),
+        "ultra-expanded" => Ok(CssFontStretch::UltraExpanded),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("font-stretch", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_font_variant<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontVariant, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "normal" => Ok(CssFontVariant::Normal),
+        "small-caps" => Ok(CssFontVariant::SmallCaps),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("font-variant", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_font_feature_settings<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontFeatureSettings, ParseError<'i, Error>> {
+    let state = input.state();
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        if ident.eq_ignore_ascii_case("normal") && input.is_exhausted() {
+            return Ok(CssFontFeatureSettings::Normal);
+        }
+        input.reset(&state);
+    }
+
+    let mut features = Vec::new();
+    loop {
+        features.push(parse_font_feature(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "font-feature-settings list has an empty item",
+            ));
+        }
+    }
+
+    CssFontFeatureList::try_new(features)
+        .map(CssFontFeatureSettings::Features)
+        .ok_or_else(|| unsupported_value(input, None, "font-feature-settings list is empty"))
+}
+
+fn parse_font_feature<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontFeature, ParseError<'i, Error>> {
+    let tag = input.expect_string_cloned().map_err(basic)?.to_string();
+    if tag.is_empty() {
+        return Err(unsupported_value(input, None, "font feature tag is empty"));
+    }
+
+    let value = if input.is_exhausted() || next_is_comma(input) {
+        None
+    } else if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        Some(match_ignore_ascii_case! { &ident,
+            "on" => CssFontFeatureValue::On,
+            "off" => CssFontFeatureValue::Off,
+            _ => return Err(unsupported_value(
+                input,
+                None,
+                unsupported_keyword_reason("font feature value", ident.as_ref()),
+            )),
+        })
+    } else {
+        let value = parse_integer(input, "font feature value")?;
+        Some(CssFontFeatureValue::Integer(value))
+    };
+
+    CssFontFeature::try_new(tag, value)
+        .ok_or_else(|| unsupported_value(input, None, "font feature tag must be four characters"))
+}
+
+fn parse_letter_spacing<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssLetterSpacing, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("normal"))
+        .is_ok()
+    {
+        Ok(CssLetterSpacing::Normal)
+    } else {
+        parse_length_with(input, LengthOptions::letter_spacing(), "letter-spacing")
+            .map(CssLetterSpacingLength::new)
+            .map(CssLetterSpacing::Length)
+    }
+}
+
+fn parse_text_wrap<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextWrap, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "wrap" => Ok(CssTextWrap::Wrap),
+        "nowrap" => Ok(CssTextWrap::NoWrap),
+        "balance" => Ok(CssTextWrap::Balance),
+        "pretty" => Ok(CssTextWrap::Pretty),
+        "stable" => Ok(CssTextWrap::Stable),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("text-wrap", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_white_space<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssWhiteSpace, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "normal" => Ok(CssWhiteSpace::Normal),
+        "nowrap" => Ok(CssWhiteSpace::NoWrap),
+        "pre" => Ok(CssWhiteSpace::Pre),
+        "pre-wrap" => Ok(CssWhiteSpace::PreWrap),
+        "pre-line" => Ok(CssWhiteSpace::PreLine),
+        "break-spaces" => Ok(CssWhiteSpace::BreakSpaces),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("white-space", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_word_break<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssWordBreak, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "normal" => Ok(CssWordBreak::Normal),
+        "break-all" => Ok(CssWordBreak::BreakAll),
+        "keep-all" => Ok(CssWordBreak::KeepAll),
+        "break-word" => Ok(CssWordBreak::BreakWord),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("word-break", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_overflow_wrap<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssOverflowWrap, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "normal" => Ok(CssOverflowWrap::Normal),
+        "break-word" => Ok(CssOverflowWrap::BreakWord),
+        "anywhere" => Ok(CssOverflowWrap::Anywhere),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("overflow-wrap", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_text_overflow<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextOverflow, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "clip" => Ok(CssTextOverflow::Clip),
+        "ellipsis" => Ok(CssTextOverflow::Ellipsis),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("text-overflow", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_text_decoration<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextDecoration, ParseError<'i, Error>> {
+    let mut line_components = Vec::new();
+    let mut line_none = false;
+    let mut color = None;
+    let mut style = None;
+    let mut thickness = None;
+
+    while !input.is_exhausted() {
+        if let Ok(component) = input.try_parse(parse_text_decoration_line_component) {
+            if line_none {
+                return Err(unsupported_value(
+                    input,
+                    None,
+                    "text-decoration line mixes none with line components",
+                ));
+            }
+            if line_components.contains(&component) {
+                return Err(unsupported_value(
+                    input,
+                    None,
+                    "duplicate text-decoration-line component",
+                ));
+            }
+            line_components.push(component);
+            continue;
+        }
+        if input
+            .try_parse(|input| input.expect_ident_matching("none"))
+            .is_ok()
+        {
+            if line_none || !line_components.is_empty() {
+                return Err(unsupported_value(
+                    input,
+                    None,
+                    "duplicate text-decoration-line none",
+                ));
+            }
+            line_none = true;
+            continue;
+        }
+        if style.is_none()
+            && let Ok(parsed_style) = input.try_parse(parse_text_decoration_style)
+        {
+            style = Some(parsed_style);
+            continue;
+        }
+        if thickness.is_none()
+            && let Ok(parsed_thickness) = input.try_parse(parse_text_decoration_thickness)
+        {
+            thickness = Some(parsed_thickness);
+            continue;
+        }
+        if color.is_none()
+            && let Ok(parsed_color) = input.try_parse(parse_color)
+        {
+            color = Some(parsed_color);
+            continue;
+        }
+
+        return Err(unsupported_value(
+            input,
+            None,
+            "unsupported text-decoration component",
+        ));
+    }
+
+    let line = if line_none {
+        Some(CssTextDecorationLine::none())
+    } else if line_components.is_empty() {
+        None
+    } else {
+        Some(CssTextDecorationLine::new(line_components))
+    };
+
+    CssTextDecoration::try_new(line, color, style, thickness)
+        .ok_or_else(|| unsupported_value(input, None, "text-decoration shorthand is empty"))
+}
+
+fn parse_text_decoration_line<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextDecorationLine, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("none"))
+        .is_ok()
+    {
+        return Ok(CssTextDecorationLine::none());
+    }
+
+    let mut components = Vec::new();
+    while !input.is_exhausted() {
+        let component = parse_text_decoration_line_component(input)?;
+        if components.contains(&component) {
+            return Err(unsupported_value(
+                input,
+                None,
+                "duplicate text-decoration-line component",
+            ));
+        }
+        components.push(component);
+    }
+
+    CssTextDecorationLine::try_new(components)
+        .ok_or_else(|| unsupported_value(input, None, "text-decoration-line is empty"))
+}
+
+fn parse_text_decoration_line_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextDecorationLineComponent, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "underline" => Ok(CssTextDecorationLineComponent::Underline),
+        "overline" => Ok(CssTextDecorationLineComponent::Overline),
+        "line-through" => Ok(CssTextDecorationLineComponent::LineThrough),
+        "blink" => Ok(CssTextDecorationLineComponent::Blink),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("text-decoration-line", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_text_decoration_style<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextDecorationStyle, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "solid" => Ok(CssTextDecorationStyle::Solid),
+        "double" => Ok(CssTextDecorationStyle::Double),
+        "dotted" => Ok(CssTextDecorationStyle::Dotted),
+        "dashed" => Ok(CssTextDecorationStyle::Dashed),
+        "wavy" => Ok(CssTextDecorationStyle::Wavy),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("text-decoration-style", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_text_decoration_thickness<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextDecorationThickness, ParseError<'i, Error>> {
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        return match_ignore_ascii_case! { &ident,
+            "auto" => Ok(CssTextDecorationThickness::Auto),
+            "from-font" => Ok(CssTextDecorationThickness::FromFont),
+            _ => Err(unsupported_value(
+                input,
+                None,
+                unsupported_keyword_reason("text-decoration-thickness", ident.as_ref()),
+            )),
+        };
+    }
+
+    parse_length_with(
+        input,
+        LengthOptions::text_decoration_thickness(),
+        "text-decoration-thickness",
+    )
+    .map(CssTextDecorationThicknessLength::new)
+    .map(CssTextDecorationThickness::Length)
+}
+
+fn parse_text_transform<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextTransform, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "none" => Ok(CssTextTransform::None),
+        "capitalize" => Ok(CssTextTransform::Capitalize),
+        "uppercase" => Ok(CssTextTransform::Uppercase),
+        "lowercase" => Ok(CssTextTransform::Lowercase),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("text-transform", ident.as_ref()),
+        )),
+    }
+}
+
 #[derive(Clone, Copy)]
 struct LengthOptions {
     percent: bool,
@@ -1983,6 +2688,50 @@ impl LengthOptions {
             normal: true,
             calc_percent: true,
             non_negative: false,
+        }
+    }
+
+    const fn text_indent() -> Self {
+        Self {
+            percent: true,
+            auto: false,
+            intrinsic: false,
+            normal: false,
+            calc_percent: true,
+            non_negative: false,
+        }
+    }
+
+    const fn vertical_align() -> Self {
+        Self {
+            percent: true,
+            auto: false,
+            intrinsic: false,
+            normal: false,
+            calc_percent: true,
+            non_negative: false,
+        }
+    }
+
+    const fn letter_spacing() -> Self {
+        Self {
+            percent: false,
+            auto: false,
+            intrinsic: false,
+            normal: false,
+            calc_percent: false,
+            non_negative: false,
+        }
+    }
+
+    const fn text_decoration_thickness() -> Self {
+        Self {
+            percent: true,
+            auto: false,
+            intrinsic: false,
+            normal: false,
+            calc_percent: true,
+            non_negative: true,
         }
     }
 
@@ -2236,6 +2985,13 @@ fn next_is_delim<'i, 't>(input: &mut Parser<'i, 't>, delim: char) -> bool {
     is_delim
 }
 
+fn next_is_comma<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let is_comma = input.try_parse(Parser::expect_comma).is_ok();
+    input.reset(&state);
+    is_comma
+}
+
 fn parse_color<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssColor, ParseError<'i, Error>> {
@@ -2457,6 +3213,30 @@ fn property_for_supported_name(name: &str) -> Option<CssProperty> {
         "grid" => CssProperty::Grid,
         "font-size" => CssProperty::FontSize,
         "line-height" => CssProperty::LineHeight,
+        "writing-mode" => CssProperty::WritingMode,
+        "text-align" => CssProperty::TextAlign,
+        "text-align-last" => CssProperty::TextAlignLast,
+        "text-indent" => CssProperty::TextIndent,
+        "vertical-align" => CssProperty::VerticalAlign,
+        "font-family" => CssProperty::FontFamily,
+        "font" => CssProperty::Font,
+        "font-weight" => CssProperty::FontWeight,
+        "font-style" => CssProperty::FontStyle,
+        "font-stretch" => CssProperty::FontStretch,
+        "font-variant" => CssProperty::FontVariant,
+        "font-feature-settings" => CssProperty::FontFeatureSettings,
+        "letter-spacing" => CssProperty::LetterSpacing,
+        "text-wrap" => CssProperty::TextWrap,
+        "white-space" => CssProperty::WhiteSpace,
+        "word-break" => CssProperty::WordBreak,
+        "overflow-wrap" => CssProperty::OverflowWrap,
+        "text-overflow" => CssProperty::TextOverflow,
+        "text-decoration" => CssProperty::TextDecoration,
+        "text-decoration-line" => CssProperty::TextDecorationLine,
+        "text-decoration-color" => CssProperty::TextDecorationColor,
+        "text-decoration-style" => CssProperty::TextDecorationStyle,
+        "text-decoration-thickness" => CssProperty::TextDecorationThickness,
+        "text-transform" => CssProperty::TextTransform,
         "inset" => CssProperty::Inset,
         "top" => CssProperty::Top,
         "right" => CssProperty::Right,
@@ -2764,35 +3544,6 @@ mod tests {
             }
             assert_eq!(terms[1].value(), &CssCalcLength::Px(2.0));
         }
-    }
-
-    #[test]
-    fn known_but_unsupported_property_has_typed_error_kind() {
-        let error = parse_sheet(".panel { text-align: left; }").unwrap_err();
-
-        assert_eq!(
-            error.kind(),
-            &ErrorKind::UnsupportedProperty {
-                name: "text-align".to_owned(),
-            }
-        );
-        assert!(
-            error
-                .message()
-                .contains("unsupported CSS property `text-align`")
-        );
-    }
-
-    #[test]
-    fn another_known_but_unsupported_property_is_not_treated_as_unknown() {
-        let error = parse_sheet(".panel { writing-mode: horizontal-tb; }").unwrap_err();
-
-        assert_eq!(
-            error.kind(),
-            &ErrorKind::UnsupportedProperty {
-                name: "writing-mode".to_owned(),
-            }
-        );
     }
 
     #[test]
@@ -3163,6 +3914,392 @@ mod tests {
     fn rejects_font_size_auto() {
         let error = parse_sheet(".panel { font-size: auto; }").unwrap_err();
         assert!(error.message().contains("unsupported font-size"));
+    }
+
+    #[test]
+    fn parses_typography_and_text_keyword_families() {
+        assert_eq!(
+            declaration_value(
+                ".panel { writing-mode: vertical-rl; }",
+                CssProperty::WritingMode,
+            ),
+            CssValue::WritingMode(CssWritingMode::VerticalRl)
+        );
+        assert_eq!(
+            declaration_value(".panel { text-align: start; }", CssProperty::TextAlign),
+            CssValue::TextAlign(CssTextAlign::Start)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { text-align-last: justify; }",
+                CssProperty::TextAlignLast,
+            ),
+            CssValue::TextAlignLast(CssTextAlignLast::Justify)
+        );
+        assert_eq!(
+            declaration_value(".panel { text-wrap: balance; }", CssProperty::TextWrap),
+            CssValue::TextWrap(CssTextWrap::Balance)
+        );
+        assert_eq!(
+            declaration_value(".panel { white-space: pre-wrap; }", CssProperty::WhiteSpace),
+            CssValue::WhiteSpace(CssWhiteSpace::PreWrap)
+        );
+        assert_eq!(
+            declaration_value(".panel { word-break: keep-all; }", CssProperty::WordBreak),
+            CssValue::WordBreak(CssWordBreak::KeepAll)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { overflow-wrap: anywhere; }",
+                CssProperty::OverflowWrap,
+            ),
+            CssValue::OverflowWrap(CssOverflowWrap::Anywhere)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { text-overflow: ellipsis; }",
+                CssProperty::TextOverflow
+            ),
+            CssValue::TextOverflow(CssTextOverflow::Ellipsis)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { text-transform: uppercase; }",
+                CssProperty::TextTransform
+            ),
+            CssValue::TextTransform(CssTextTransform::Uppercase)
+        );
+    }
+
+    #[test]
+    fn parses_typography_and_text_length_families() {
+        assert_eq!(
+            declaration_value(".panel { text-indent: 2em; }", CssProperty::TextIndent),
+            CssValue::TextIndent(CssTextIndent::new(
+                CssLength::dimension(2.0, CssLengthUnit::Em),
+                false,
+                false,
+            ))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { vertical-align: 4px; }",
+                CssProperty::VerticalAlign
+            ),
+            CssValue::VerticalAlign(CssVerticalAlign::Length(CssVerticalAlignLength::new(
+                CssLength::px(4.0)
+            )))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { letter-spacing: normal; }",
+                CssProperty::LetterSpacing
+            ),
+            CssValue::LetterSpacing(CssLetterSpacing::Normal)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { letter-spacing: 0.1em; }",
+                CssProperty::LetterSpacing
+            ),
+            CssValue::LetterSpacing(CssLetterSpacing::Length(CssLetterSpacingLength::new(
+                CssLength::dimension(0.1, CssLengthUnit::Em)
+            )))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { text-decoration-thickness: from-font; }",
+                CssProperty::TextDecorationThickness,
+            ),
+            CssValue::TextDecorationThickness(CssTextDecorationThickness::FromFont)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { text-decoration-thickness: 2px; }",
+                CssProperty::TextDecorationThickness,
+            ),
+            CssValue::TextDecorationThickness(CssTextDecorationThickness::Length(
+                CssTextDecorationThicknessLength::new(CssLength::px(2.0))
+            ))
+        );
+    }
+
+    #[test]
+    fn parses_font_families_and_font_shorthand_as_authored_syntax() {
+        let family = declaration_value(
+            ".panel { font-family: \"Avenir Next\", Gill Sans, sans-serif; }",
+            CssProperty::FontFamily,
+        );
+        let CssValue::FontFamily(family) = family else {
+            panic!("expected font family list");
+        };
+        assert_eq!(
+            family.families(),
+            [
+                CssFontFamilyName::try_quoted("Avenir Next").unwrap(),
+                CssFontFamilyName::try_ident_sequence("Gill Sans").unwrap(),
+                CssFontFamilyName::try_ident_sequence("sans-serif").unwrap(),
+            ]
+        );
+
+        assert_eq!(
+            declaration_value(".panel { font-weight: 725; }", CssProperty::FontWeight),
+            CssValue::FontWeight(CssFontWeight::Number(CssFontWeightNumber::new(725)))
+        );
+        assert_eq!(
+            declaration_value(".panel { font-style: italic; }", CssProperty::FontStyle),
+            CssValue::FontStyle(CssFontStyle::Italic)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { font-stretch: semi-condensed; }",
+                CssProperty::FontStretch,
+            ),
+            CssValue::FontStretch(CssFontStretch::SemiCondensed)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { font-variant: small-caps; }",
+                CssProperty::FontVariant
+            ),
+            CssValue::FontVariant(CssFontVariant::SmallCaps)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { font-feature-settings: \"kern\" on, \"liga\" 0; }",
+                CssProperty::FontFeatureSettings,
+            ),
+            CssValue::FontFeatureSettings(CssFontFeatureSettings::Features(
+                CssFontFeatureList::new(vec![
+                    CssFontFeature::new("kern", Some(CssFontFeatureValue::On)),
+                    CssFontFeature::new("liga", Some(CssFontFeatureValue::Integer(0))),
+                ])
+            ))
+        );
+
+        let shorthand = declaration_value(
+            ".panel { font: italic small-caps 700 condensed 16px/normal \"Avenir Next\", sans-serif; }",
+            CssProperty::Font,
+        );
+        let CssValue::Font(font) = shorthand else {
+            panic!("expected font shorthand");
+        };
+        assert_eq!(font.style(), Some(CssFontStyle::Italic));
+        assert_eq!(font.variant(), Some(CssFontVariant::SmallCaps));
+        assert_eq!(
+            font.weight(),
+            Some(CssFontWeight::Number(CssFontWeightNumber::new(700)))
+        );
+        assert_eq!(font.stretch(), Some(CssFontStretch::Condensed));
+        assert_eq!(font.size(), &CssLength::px(16.0));
+        assert_eq!(font.line_height(), Some(&CssLength::Normal));
+        assert_eq!(
+            font.families().families(),
+            [
+                CssFontFamilyName::try_quoted("Avenir Next").unwrap(),
+                CssFontFamilyName::try_ident_sequence("sans-serif").unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_text_decoration_family() {
+        assert_eq!(
+            declaration_value(
+                ".panel { text-decoration-line: underline overline; }",
+                CssProperty::TextDecorationLine,
+            ),
+            CssValue::TextDecorationLine(CssTextDecorationLine::new(vec![
+                CssTextDecorationLineComponent::Underline,
+                CssTextDecorationLineComponent::Overline,
+            ]))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { text-decoration-color: black; }",
+                CssProperty::TextDecorationColor,
+            ),
+            CssValue::TextDecorationColor(CssColor::BLACK)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { text-decoration-style: wavy; }",
+                CssProperty::TextDecorationStyle,
+            ),
+            CssValue::TextDecorationStyle(CssTextDecorationStyle::Wavy)
+        );
+
+        let value = declaration_value(
+            ".panel { text-decoration: underline dotted white 3px; }",
+            CssProperty::TextDecoration,
+        );
+        assert_eq!(
+            value,
+            CssValue::TextDecoration(CssTextDecoration::new(
+                Some(CssTextDecorationLine::new(vec![
+                    CssTextDecorationLineComponent::Underline
+                ])),
+                Some(CssColor::WHITE),
+                Some(CssTextDecorationStyle::Dotted),
+                Some(CssTextDecorationThickness::Length(
+                    CssTextDecorationThicknessLength::new(CssLength::px(3.0))
+                )),
+            ))
+        );
+    }
+
+    #[test]
+    fn checked_typography_constructors_reject_invalid_states() {
+        assert_eq!(CssFontFamilyList::try_new(Vec::new()), None);
+        assert_eq!(CssFontWeightNumber::try_new(0), None);
+        assert_eq!(CssFontWeightNumber::try_new(1001), None);
+        assert_eq!(
+            CssFontWeightNumber::try_new(500),
+            Some(CssFontWeightNumber::new(500))
+        );
+        assert_eq!(CssFontFeatureList::try_new(Vec::new()), None);
+        assert_eq!(CssTextDecorationLine::try_new(Vec::new()), None);
+        assert!(
+            CssFont::try_new(
+                None,
+                None,
+                None,
+                None,
+                CssLength::px(12.0),
+                None,
+                CssFontFamilyList::new(vec![CssFontFamilyName::ident_sequence("sans-serif")]),
+            )
+            .is_some(),
+        );
+        assert_eq!(
+            CssFont::try_new(
+                None,
+                None,
+                None,
+                None,
+                CssLength::Auto,
+                None,
+                CssFontFamilyList::new(vec![CssFontFamilyName::ident_sequence("sans-serif")]),
+            ),
+            None
+        );
+        assert_eq!(CssFontFamilyName::try_quoted(""), None);
+        assert_eq!(CssFontFamilyName::try_ident_sequence(""), None);
+        assert_eq!(
+            CssFontFamilyList::try_new(vec![CssFontFamilyName::ident_sequence("")]),
+            None
+        );
+        assert_eq!(CssFontFeature::try_new("abc", None), None);
+        assert_eq!(CssFontFeature::try_new("abcde", None), None);
+        assert_eq!(
+            CssFontFeature::try_new("kern", Some(CssFontFeatureValue::On)),
+            Some(CssFontFeature::new("kern", Some(CssFontFeatureValue::On)))
+        );
+        assert_eq!(CssVerticalAlignLength::try_new(CssLength::Auto), None);
+        assert_eq!(
+            CssLetterSpacingLength::try_new(CssLength::percent(10.0)),
+            None
+        );
+        assert_eq!(
+            CssTextDecorationThicknessLength::try_new(CssLength::px(-1.0)),
+            None
+        );
+        assert_eq!(
+            CssTextDecorationLine::try_new(vec![
+                CssTextDecorationLineComponent::Underline,
+                CssTextDecorationLineComponent::Underline,
+            ]),
+            None
+        );
+    }
+
+    #[test]
+    fn parses_every_task_5_supported_property_name() {
+        let sheet = parse_sheet(
+            ".panel {
+                writing-mode: horizontal-tb;
+                text-align: center;
+                text-align-last: auto;
+                text-indent: 1rem hanging each-line;
+                vertical-align: super;
+                font-family: \"Avenir Next\", sans-serif;
+                font: italic 700 16px/normal \"Avenir Next\", sans-serif;
+                font-weight: bold;
+                font-style: oblique;
+                font-stretch: expanded;
+                font-variant: normal;
+                font-feature-settings: normal;
+                letter-spacing: 1px;
+                text-wrap: wrap;
+                white-space: nowrap;
+                word-break: break-word;
+                overflow-wrap: break-word;
+                text-overflow: clip;
+                text-decoration: underline solid black 1px;
+                text-decoration-line: none;
+                text-decoration-color: transparent;
+                text-decoration-style: solid;
+                text-decoration-thickness: auto;
+                text-transform: capitalize;
+            }",
+        )
+        .unwrap();
+        let declarations = sheet.rules()[0].declarations();
+
+        for property in [
+            CssProperty::WritingMode,
+            CssProperty::TextAlign,
+            CssProperty::TextAlignLast,
+            CssProperty::TextIndent,
+            CssProperty::VerticalAlign,
+            CssProperty::FontFamily,
+            CssProperty::Font,
+            CssProperty::FontWeight,
+            CssProperty::FontStyle,
+            CssProperty::FontStretch,
+            CssProperty::FontVariant,
+            CssProperty::FontFeatureSettings,
+            CssProperty::LetterSpacing,
+            CssProperty::TextWrap,
+            CssProperty::WhiteSpace,
+            CssProperty::WordBreak,
+            CssProperty::OverflowWrap,
+            CssProperty::TextOverflow,
+            CssProperty::TextDecoration,
+            CssProperty::TextDecorationLine,
+            CssProperty::TextDecorationColor,
+            CssProperty::TextDecorationStyle,
+            CssProperty::TextDecorationThickness,
+            CssProperty::TextTransform,
+        ] {
+            assert!(
+                declarations
+                    .iter()
+                    .any(|declaration| declaration.property() == property),
+                "missing parsed declaration for {property:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_task_5_cross_family_leakage_values() {
+        for input in [
+            ".panel { font-size: auto; }",
+            ".panel { font-weight: 1001; }",
+            ".panel { font-style: bold; }",
+            ".panel { font-family:; }",
+            ".panel { letter-spacing: auto; }",
+            ".panel { text-decoration-style: 2px; }",
+            ".panel { text-transform: wrap; }",
+            ".panel { font-feature-settings: \"abc\" on; }",
+            ".panel { font-feature-settings: \"abcde\" on; }",
+        ] {
+            let error = parse_sheet(input).expect_err(input);
+            assert!(matches!(
+                error.kind(),
+                ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ));
+        }
     }
 
     #[test]

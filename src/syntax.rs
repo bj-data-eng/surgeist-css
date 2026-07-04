@@ -185,6 +185,30 @@ pub enum CssProperty {
     Grid,
     FontSize,
     LineHeight,
+    WritingMode,
+    TextAlign,
+    TextAlignLast,
+    TextIndent,
+    VerticalAlign,
+    FontFamily,
+    Font,
+    FontWeight,
+    FontStyle,
+    FontStretch,
+    FontVariant,
+    FontFeatureSettings,
+    LetterSpacing,
+    TextWrap,
+    WhiteSpace,
+    WordBreak,
+    OverflowWrap,
+    TextOverflow,
+    TextDecoration,
+    TextDecorationLine,
+    TextDecorationColor,
+    TextDecorationStyle,
+    TextDecorationThickness,
+    TextTransform,
     Inset,
     Top,
     Right,
@@ -278,6 +302,30 @@ pub enum CssValue {
     GridLineRange(CssGridLineRange),
     GridArea(CssGridArea),
     Grid(CssGrid),
+    WritingMode(CssWritingMode),
+    TextAlign(CssTextAlign),
+    TextAlignLast(CssTextAlignLast),
+    TextIndent(CssTextIndent),
+    VerticalAlign(CssVerticalAlign),
+    FontFamily(CssFontFamilyList),
+    Font(CssFont),
+    FontWeight(CssFontWeight),
+    FontStyle(CssFontStyle),
+    FontStretch(CssFontStretch),
+    FontVariant(CssFontVariant),
+    FontFeatureSettings(CssFontFeatureSettings),
+    LetterSpacing(CssLetterSpacing),
+    TextWrap(CssTextWrap),
+    WhiteSpace(CssWhiteSpace),
+    WordBreak(CssWordBreak),
+    OverflowWrap(CssOverflowWrap),
+    TextOverflow(CssTextOverflow),
+    TextDecoration(CssTextDecoration),
+    TextDecorationLine(CssTextDecorationLine),
+    TextDecorationColor(CssColor),
+    TextDecorationStyle(CssTextDecorationStyle),
+    TextDecorationThickness(CssTextDecorationThickness),
+    TextTransform(CssTextTransform),
     Edges(CssEdges),
     Color(CssColor),
     ZIndex(CssZIndex),
@@ -1128,6 +1176,695 @@ pub enum CssBoxDecorationBreak {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssWritingMode {
+    HorizontalTb,
+    VerticalRl,
+    VerticalLr,
+    SidewaysRl,
+    SidewaysLr,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssTextAlign {
+    Start,
+    End,
+    Left,
+    Right,
+    Center,
+    Justify,
+    MatchParent,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssTextAlignLast {
+    Auto,
+    Start,
+    End,
+    Left,
+    Right,
+    Center,
+    Justify,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTextIndent {
+    length: CssLength,
+    hanging: bool,
+    each_line: bool,
+}
+
+impl CssTextIndent {
+    #[must_use]
+    pub fn try_new(length: CssLength, hanging: bool, each_line: bool) -> Option<Self> {
+        if is_text_length(&length) {
+            Some(Self::new(length, hanging, each_line))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(length: CssLength, hanging: bool, each_line: bool) -> Self {
+        Self {
+            length,
+            hanging,
+            each_line,
+        }
+    }
+
+    #[must_use]
+    pub const fn length(&self) -> &CssLength {
+        &self.length
+    }
+
+    #[must_use]
+    pub const fn hanging(&self) -> bool {
+        self.hanging
+    }
+
+    #[must_use]
+    pub const fn each_line(&self) -> bool {
+        self.each_line
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssVerticalAlign {
+    Baseline,
+    Sub,
+    Super,
+    TextTop,
+    TextBottom,
+    Middle,
+    Top,
+    Bottom,
+    Length(CssVerticalAlignLength),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssVerticalAlignLength {
+    length: CssLength,
+}
+
+impl CssVerticalAlignLength {
+    #[must_use]
+    pub fn try_new(length: CssLength) -> Option<Self> {
+        if is_vertical_align_length(&length) {
+            Some(Self::new(length))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(length: CssLength) -> Self {
+        Self { length }
+    }
+
+    #[must_use]
+    pub const fn length(&self) -> &CssLength {
+        &self.length
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssFontFamilyNameKind {
+    Quoted,
+    IdentSequence,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssFontFamilyName {
+    kind: CssFontFamilyNameKind,
+    value: String,
+}
+
+impl CssFontFamilyName {
+    #[must_use]
+    pub fn try_quoted(value: impl Into<String>) -> Option<Self> {
+        Self::try_new(CssFontFamilyNameKind::Quoted, value)
+    }
+
+    #[must_use]
+    pub fn try_ident_sequence(value: impl Into<String>) -> Option<Self> {
+        Self::try_new(CssFontFamilyNameKind::IdentSequence, value)
+    }
+
+    #[must_use]
+    pub(crate) fn quoted(value: impl Into<String>) -> Self {
+        Self::new(CssFontFamilyNameKind::Quoted, value)
+    }
+
+    #[must_use]
+    pub(crate) fn ident_sequence(value: impl Into<String>) -> Self {
+        Self::new(CssFontFamilyNameKind::IdentSequence, value)
+    }
+
+    fn try_new(kind: CssFontFamilyNameKind, value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        if value.is_empty() {
+            None
+        } else {
+            Some(Self::new(kind, value))
+        }
+    }
+
+    fn new(kind: CssFontFamilyNameKind, value: impl Into<String>) -> Self {
+        Self {
+            kind,
+            value: value.into(),
+        }
+    }
+
+    #[must_use]
+    pub const fn kind(&self) -> CssFontFamilyNameKind {
+        self.kind
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssFontFamilyList {
+    families: Vec<CssFontFamilyName>,
+}
+
+impl CssFontFamilyList {
+    #[must_use]
+    pub fn try_new(families: Vec<CssFontFamilyName>) -> Option<Self> {
+        if families.is_empty() || families.iter().any(|family| family.as_str().is_empty()) {
+            None
+        } else {
+            Some(Self::new(families))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(families: Vec<CssFontFamilyName>) -> Self {
+        Self { families }
+    }
+
+    #[must_use]
+    pub fn families(&self) -> &[CssFontFamilyName] {
+        &self.families
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssFontWeight {
+    Normal,
+    Bold,
+    Bolder,
+    Lighter,
+    Number(CssFontWeightNumber),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssFontWeightNumber {
+    value: i32,
+}
+
+impl CssFontWeightNumber {
+    #[must_use]
+    pub const fn try_new(value: i32) -> Option<Self> {
+        if value >= 1 && value <= 1000 {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(value: i32) -> Self {
+        match Self::try_new(value) {
+            Some(value) => value,
+            None => panic!("font weight number must be between 1 and 1000"),
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> i32 {
+        self.value
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssFontStyle {
+    Normal,
+    Italic,
+    Oblique,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssFontStretch {
+    Normal,
+    UltraCondensed,
+    ExtraCondensed,
+    Condensed,
+    SemiCondensed,
+    SemiExpanded,
+    Expanded,
+    ExtraExpanded,
+    UltraExpanded,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssFontVariant {
+    Normal,
+    SmallCaps,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssFontFeatureSettings {
+    Normal,
+    Features(CssFontFeatureList),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssFontFeatureList {
+    features: Vec<CssFontFeature>,
+}
+
+impl CssFontFeatureList {
+    #[must_use]
+    pub fn try_new(features: Vec<CssFontFeature>) -> Option<Self> {
+        if features.is_empty() {
+            None
+        } else {
+            Some(Self::new(features))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(features: Vec<CssFontFeature>) -> Self {
+        Self { features }
+    }
+
+    #[must_use]
+    pub fn features(&self) -> &[CssFontFeature] {
+        &self.features
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssFontFeature {
+    tag: String,
+    value: Option<CssFontFeatureValue>,
+}
+
+impl CssFontFeature {
+    #[must_use]
+    pub fn try_new(tag: impl Into<String>, value: Option<CssFontFeatureValue>) -> Option<Self> {
+        let tag = tag.into();
+        if !is_valid_font_feature_tag(&tag) {
+            None
+        } else {
+            Some(Self::new(tag, value))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(tag: impl Into<String>, value: Option<CssFontFeatureValue>) -> Self {
+        Self {
+            tag: tag.into(),
+            value,
+        }
+    }
+
+    #[must_use]
+    pub fn tag(&self) -> &str {
+        &self.tag
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> Option<CssFontFeatureValue> {
+        self.value
+    }
+}
+
+fn is_valid_font_feature_tag(tag: &str) -> bool {
+    tag.chars().count() == 4
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssFontFeatureValue {
+    On,
+    Off,
+    Integer(i32),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssFont {
+    style: Option<CssFontStyle>,
+    variant: Option<CssFontVariant>,
+    weight: Option<CssFontWeight>,
+    stretch: Option<CssFontStretch>,
+    size: CssLength,
+    line_height: Option<CssLength>,
+    families: CssFontFamilyList,
+}
+
+impl CssFont {
+    #[must_use]
+    pub fn try_new(
+        style: Option<CssFontStyle>,
+        variant: Option<CssFontVariant>,
+        weight: Option<CssFontWeight>,
+        stretch: Option<CssFontStretch>,
+        size: CssLength,
+        line_height: Option<CssLength>,
+        families: CssFontFamilyList,
+    ) -> Option<Self> {
+        if !is_font_size_length(&size)
+            || line_height.as_ref().is_some_and(|line_height| {
+                !matches!(
+                    line_height,
+                    CssLength::Px(_)
+                        | CssLength::Dimension(_)
+                        | CssLength::Percent(_)
+                        | CssLength::Zero
+                        | CssLength::Normal
+                        | CssLength::Calc(_)
+                )
+            })
+            || families.families().is_empty()
+        {
+            None
+        } else {
+            Some(Self::new(
+                style,
+                variant,
+                weight,
+                stretch,
+                size,
+                line_height,
+                families,
+            ))
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(
+        style: Option<CssFontStyle>,
+        variant: Option<CssFontVariant>,
+        weight: Option<CssFontWeight>,
+        stretch: Option<CssFontStretch>,
+        size: CssLength,
+        line_height: Option<CssLength>,
+        families: CssFontFamilyList,
+    ) -> Self {
+        Self {
+            style,
+            variant,
+            weight,
+            stretch,
+            size,
+            line_height,
+            families,
+        }
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<CssFontStyle> {
+        self.style
+    }
+
+    #[must_use]
+    pub const fn variant(&self) -> Option<CssFontVariant> {
+        self.variant
+    }
+
+    #[must_use]
+    pub const fn weight(&self) -> Option<CssFontWeight> {
+        self.weight
+    }
+
+    #[must_use]
+    pub const fn stretch(&self) -> Option<CssFontStretch> {
+        self.stretch
+    }
+
+    #[must_use]
+    pub const fn size(&self) -> &CssLength {
+        &self.size
+    }
+
+    #[must_use]
+    pub const fn line_height(&self) -> Option<&CssLength> {
+        self.line_height.as_ref()
+    }
+
+    #[must_use]
+    pub const fn families(&self) -> &CssFontFamilyList {
+        &self.families
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssLetterSpacing {
+    Normal,
+    Length(CssLetterSpacingLength),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssLetterSpacingLength {
+    length: CssLength,
+}
+
+impl CssLetterSpacingLength {
+    #[must_use]
+    pub fn try_new(length: CssLength) -> Option<Self> {
+        if is_letter_spacing_length(&length) {
+            Some(Self::new(length))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(length: CssLength) -> Self {
+        Self { length }
+    }
+
+    #[must_use]
+    pub const fn length(&self) -> &CssLength {
+        &self.length
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssTextWrap {
+    Wrap,
+    NoWrap,
+    Balance,
+    Pretty,
+    Stable,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssWhiteSpace {
+    Normal,
+    NoWrap,
+    Pre,
+    PreWrap,
+    PreLine,
+    BreakSpaces,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssWordBreak {
+    Normal,
+    BreakAll,
+    KeepAll,
+    BreakWord,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssOverflowWrap {
+    Normal,
+    BreakWord,
+    Anywhere,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssTextOverflow {
+    Clip,
+    Ellipsis,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTextDecoration {
+    line: Option<CssTextDecorationLine>,
+    color: Option<CssColor>,
+    style: Option<CssTextDecorationStyle>,
+    thickness: Option<CssTextDecorationThickness>,
+}
+
+impl CssTextDecoration {
+    #[must_use]
+    pub fn try_new(
+        line: Option<CssTextDecorationLine>,
+        color: Option<CssColor>,
+        style: Option<CssTextDecorationStyle>,
+        thickness: Option<CssTextDecorationThickness>,
+    ) -> Option<Self> {
+        if line.is_none() && color.is_none() && style.is_none() && thickness.is_none() {
+            None
+        } else {
+            Some(Self::new(line, color, style, thickness))
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(
+        line: Option<CssTextDecorationLine>,
+        color: Option<CssColor>,
+        style: Option<CssTextDecorationStyle>,
+        thickness: Option<CssTextDecorationThickness>,
+    ) -> Self {
+        Self {
+            line,
+            color,
+            style,
+            thickness,
+        }
+    }
+
+    #[must_use]
+    pub const fn line(&self) -> Option<&CssTextDecorationLine> {
+        self.line.as_ref()
+    }
+
+    #[must_use]
+    pub const fn color(&self) -> Option<CssColor> {
+        self.color
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<CssTextDecorationStyle> {
+        self.style
+    }
+
+    #[must_use]
+    pub const fn thickness(&self) -> Option<&CssTextDecorationThickness> {
+        self.thickness.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTextDecorationLine {
+    components: Vec<CssTextDecorationLineComponent>,
+    none: bool,
+}
+
+impl CssTextDecorationLine {
+    #[must_use]
+    pub fn try_new(components: Vec<CssTextDecorationLineComponent>) -> Option<Self> {
+        if components.is_empty() || has_duplicate_decoration_line_components(&components) {
+            None
+        } else {
+            Some(Self::new(components))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(components: Vec<CssTextDecorationLineComponent>) -> Self {
+        Self {
+            components,
+            none: false,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn none() -> Self {
+        Self {
+            components: Vec::new(),
+            none: true,
+        }
+    }
+
+    #[must_use]
+    pub const fn is_none(&self) -> bool {
+        self.none
+    }
+
+    #[must_use]
+    pub fn components(&self) -> &[CssTextDecorationLineComponent] {
+        &self.components
+    }
+}
+
+fn has_duplicate_decoration_line_components(components: &[CssTextDecorationLineComponent]) -> bool {
+    components.iter().enumerate().any(|(index, component)| {
+        components
+            .iter()
+            .skip(index + 1)
+            .any(|candidate| candidate == component)
+    })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssTextDecorationLineComponent {
+    Underline,
+    Overline,
+    LineThrough,
+    Blink,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssTextDecorationStyle {
+    Solid,
+    Double,
+    Dotted,
+    Dashed,
+    Wavy,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssTextDecorationThickness {
+    Auto,
+    FromFont,
+    Length(CssTextDecorationThicknessLength),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTextDecorationThicknessLength {
+    length: CssLength,
+}
+
+impl CssTextDecorationThicknessLength {
+    #[must_use]
+    pub fn try_new(length: CssLength) -> Option<Self> {
+        if is_text_decoration_thickness_length(&length) {
+            Some(Self::new(length))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(length: CssLength) -> Self {
+        Self { length }
+    }
+
+    #[must_use]
+    pub const fn length(&self) -> &CssLength {
+        &self.length
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssTextTransform {
+    None,
+    Capitalize,
+    Uppercase,
+    Lowercase,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CssLengthUnit {
     Px,
     Em,
@@ -1708,6 +2445,59 @@ fn is_shadow_length(length: &CssLength) -> bool {
         | CssLength::FitContent
         | CssLength::Normal => false,
     }
+}
+
+fn is_text_length(length: &CssLength) -> bool {
+    matches!(
+        length,
+        CssLength::Px(_)
+            | CssLength::Dimension(_)
+            | CssLength::Percent(_)
+            | CssLength::Zero
+            | CssLength::Calc(_)
+    )
+}
+
+fn is_vertical_align_length(length: &CssLength) -> bool {
+    is_text_length(length)
+}
+
+fn is_letter_spacing_length(length: &CssLength) -> bool {
+    match length {
+        CssLength::Px(_) | CssLength::Dimension(_) | CssLength::Zero => true,
+        CssLength::Calc(calc) => !calc.uses_percentage(),
+        CssLength::Percent(_)
+        | CssLength::Auto
+        | CssLength::MinContent
+        | CssLength::MaxContent
+        | CssLength::FitContent
+        | CssLength::Normal => false,
+    }
+}
+
+fn is_text_decoration_thickness_length(length: &CssLength) -> bool {
+    match length {
+        CssLength::Px(value) | CssLength::Percent(value) => *value >= 0.0,
+        CssLength::Dimension(length) => length.value() >= 0.0,
+        CssLength::Zero => true,
+        CssLength::Calc(calc) => !calc_has_negative_component(calc),
+        CssLength::Auto
+        | CssLength::MinContent
+        | CssLength::MaxContent
+        | CssLength::FitContent
+        | CssLength::Normal => false,
+    }
+}
+
+fn is_font_size_length(length: &CssLength) -> bool {
+    matches!(
+        length,
+        CssLength::Px(_)
+            | CssLength::Dimension(_)
+            | CssLength::Percent(_)
+            | CssLength::Zero
+            | CssLength::Calc(_)
+    )
 }
 
 pub(crate) fn length_has_negative_component(length: &CssLength) -> bool {

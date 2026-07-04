@@ -469,8 +469,12 @@ fn parse_pseudo_class<'i, 't>(
             let name = name.clone();
             input.parse_nested_block(|input| {
                 let pseudo_class = match_ignore_ascii_case! { &name,
-                    "nth-child" => CssPseudoClass::NthChild(parse_nth_pattern(input)?),
-                    "nth-last-child" => CssPseudoClass::NthLastChild(parse_nth_pattern(input)?),
+                    "nth-child" => {
+                        CssPseudoClass::NthChild(CssNthChildPattern::new(parse_nth_pattern(input)?, None))
+                    },
+                    "nth-last-child" => {
+                        CssPseudoClass::NthLastChild(CssNthChildPattern::new(parse_nth_pattern(input)?, None))
+                    },
                     "nth-of-type" => CssPseudoClass::NthOfType(parse_nth_pattern(input)?),
                     "nth-last-of-type" => {
                         CssPseudoClass::NthLastOfType(parse_nth_pattern(input)?)
@@ -478,7 +482,7 @@ fn parse_pseudo_class<'i, 't>(
                     "not" => CssPseudoClass::Not(parse_pseudo_selector_list(input)?),
                     "is" => CssPseudoClass::Is(parse_pseudo_selector_list(input)?),
                     "where" => CssPseudoClass::Where(parse_pseudo_selector_list(input)?),
-                    "has" => CssPseudoClass::Has(parse_pseudo_selector_list(input)?),
+                    "has" => CssPseudoClass::Has(parse_relative_selector_list(input)?),
                     _ => {
                         let message = format!("unsupported pseudo-class `:{name}(`");
                         return Err(invalid_selector(input, message));
@@ -506,6 +510,17 @@ fn parse_pseudo_selector_list<'i, 't>(
     let selectors = parse_pseudo_compound_selector_list(input)?;
     CssPseudoSelectorList::try_new(selectors)
         .ok_or_else(|| invalid_selector(input, "pseudo-class selector list must not be empty"))
+}
+
+fn parse_relative_selector_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssRelativeSelectorList, ParseError<'i, Error>> {
+    let selectors = parse_pseudo_compound_selector_list(input)?
+        .into_iter()
+        .map(|selector| CssRelativeSelector::new(CssSelectorCombinator::Descendant, selector))
+        .collect();
+    CssRelativeSelectorList::try_new(selectors)
+        .ok_or_else(|| invalid_selector(input, "relative selector list must not be empty"))
 }
 
 fn parse_nth_pattern<'i, 't>(

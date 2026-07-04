@@ -838,25 +838,51 @@ fn selector_list_constructor_rejects_empty_lists() {
 }
 
 #[test]
-fn pseudo_selector_list_constructor_rejects_empty_and_complex_selectors() {
+fn pseudo_selector_list_constructor_accepts_complex_selectors() {
     assert_eq!(CssPseudoSelectorList::try_new(Vec::new()), None);
 
     let first =
         CssCompoundSelector::new(None, None, vec!["field".to_owned()], Vec::new(), Vec::new());
-    let rest = vec![CssComplexSelectorPart::new(
+    let part = CssComplexSelectorPart::new(
         CssSelectorCombinator::Descendant,
         CssCompoundSelector::new(None, None, vec!["icon".to_owned()], Vec::new(), Vec::new()),
-    )];
-    let complex = CssComplexSelector::new(first, rest);
+    );
+    let complex = CssSelector::Complex(CssComplexSelector::new(first, vec![part]));
 
-    assert_eq!(
-        CssPseudoSelectorList::try_new(vec![CssSelector::Complex(complex)]),
-        None
+    let list = CssPseudoSelectorList::try_new(vec![complex.clone()]).unwrap();
+    assert_eq!(list.selectors(), &[complex]);
+}
+
+#[test]
+fn relative_selector_list_constructor_requires_selectors() {
+    assert_eq!(CssRelativeSelectorList::try_new(Vec::new()), None);
+}
+
+#[test]
+fn relative_selector_preserves_combinator_and_selector() {
+    let selector = CssRelativeSelector::new(
+        CssSelectorCombinator::Child,
+        CssSelector::Class("icon".to_owned()),
     );
 
+    assert_eq!(selector.combinator(), CssSelectorCombinator::Child);
+    assert_eq!(selector.selector(), &CssSelector::Class("icon".to_owned()));
+}
+
+#[test]
+fn nth_child_pattern_preserves_optional_selector_list() {
     let list =
-        CssPseudoSelectorList::try_new(vec![CssSelector::Class("button".to_owned())]).unwrap();
-    assert_eq!(list.selectors(), &[CssSelector::Class("button".to_owned())]);
+        CssPseudoSelectorList::try_new(vec![CssSelector::Class("important".to_owned())]).unwrap();
+    let pattern =
+        CssNthChildPattern::new(CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 1)), Some(list));
+
+    assert!(
+        matches!(pattern.pattern(), CssNthPattern::AnPlusB(value) if value.a() == 2 && value.b() == 1)
+    );
+    assert_eq!(
+        pattern.selector_list().unwrap().selectors(),
+        &[CssSelector::Class("important".to_owned())]
+    );
 }
 
 #[test]
@@ -872,62 +898,56 @@ fn nth_pattern_model_exposes_an_plus_b_coefficients() {
 #[test]
 fn parses_nth_child_patterns() {
     let cases = [
-        (
-            ":nth-child(odd) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::Odd),
-        ),
-        (
-            ":nth-child(even) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::Even),
-        ),
-        (
-            ":nth-child(3) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::Integer(3)),
-        ),
+        (":nth-child(odd) { color: black; }", CssNthPattern::Odd),
+        (":nth-child(even) { color: black; }", CssNthPattern::Even),
+        (":nth-child(3) { color: black; }", CssNthPattern::Integer(3)),
         (
             ":nth-child(-1) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::Integer(-1)),
+            CssNthPattern::Integer(-1),
         ),
         (
             ":nth-child(+3) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::Integer(3)),
+            CssNthPattern::Integer(3),
         ),
         (
             ":nth-child(n) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(1, 0))),
+            CssNthPattern::AnPlusB(CssNthAnPlusB::new(1, 0)),
         ),
         (
             ":nth-child(-n) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(-1, 0))),
+            CssNthPattern::AnPlusB(CssNthAnPlusB::new(-1, 0)),
         ),
         (
             ":nth-child(+n) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(1, 0))),
+            CssNthPattern::AnPlusB(CssNthAnPlusB::new(1, 0)),
         ),
         (
             ":nth-child(2n+1) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 1))),
+            CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 1)),
         ),
         (
             ":nth-child(2n-1) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, -1))),
+            CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, -1)),
         ),
         (
             ":nth-child(-n+3) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(-1, 3))),
+            CssNthPattern::AnPlusB(CssNthAnPlusB::new(-1, 3)),
         ),
         (
             ":nth-child(+3n-2) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(3, -2))),
+            CssNthPattern::AnPlusB(CssNthAnPlusB::new(3, -2)),
         ),
     ];
 
     for (css, expected) in cases {
         let sheet = parse_sheet(css).unwrap_or_else(|error| panic!("{css}: {error:?}"));
-        assert_eq!(
-            style_rule(&sheet.rules()[0]).selector(),
-            &CssSelector::PseudoClass(expected)
-        );
+        let CssSelector::PseudoClass(CssPseudoClass::NthChild(pattern)) =
+            style_rule(&sheet.rules()[0]).selector()
+        else {
+            panic!("expected nth-child selector");
+        };
+        assert_eq!(pattern.pattern(), expected);
+        assert!(pattern.selector_list().is_none());
     }
 }
 
@@ -936,11 +956,17 @@ fn parses_all_nth_structural_pseudo_classes() {
     let cases = [
         (
             ":nth-child(2n) { color: black; }",
-            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 0))),
+            CssPseudoClass::NthChild(CssNthChildPattern::new(
+                CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 0)),
+                None,
+            )),
         ),
         (
             ":nth-last-child(2n) { color: black; }",
-            CssPseudoClass::NthLastChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 0))),
+            CssPseudoClass::NthLastChild(CssNthChildPattern::new(
+                CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 0)),
+                None,
+            )),
         ),
         (
             ":nth-of-type(2n) { color: black; }",
@@ -958,6 +984,12 @@ fn parses_all_nth_structural_pseudo_classes() {
             style_rule(&sheet.rules()[0]).selector(),
             &CssSelector::PseudoClass(expected)
         );
+        if let CssSelector::PseudoClass(
+            CssPseudoClass::NthChild(pattern) | CssPseudoClass::NthLastChild(pattern),
+        ) = style_rule(&sheet.rules()[0]).selector()
+        {
+            assert!(pattern.selector_list().is_none());
+        }
     }
 }
 
@@ -980,13 +1012,17 @@ fn rejects_trailing_tokens_in_nth_functions() {
 #[test]
 fn nth_pseudo_class_arguments_are_publicly_inspectable() {
     let sheet = parse_sheet(":nth-child(2n+1) { color: black; }").unwrap();
-    let CssSelector::PseudoClass(CssPseudoClass::NthChild(CssNthPattern::AnPlusB(value))) =
+    let CssSelector::PseudoClass(CssPseudoClass::NthChild(pattern)) =
         style_rule(&sheet.rules()[0]).selector()
     else {
         panic!("expected nth-child an+b selector");
     };
+    let CssNthPattern::AnPlusB(value) = pattern.pattern() else {
+        panic!("expected nth-child an+b pattern");
+    };
     assert_eq!(value.a(), 2);
     assert_eq!(value.b(), 1);
+    assert!(pattern.selector_list().is_none());
 }
 
 #[test]

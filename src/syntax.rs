@@ -6060,7 +6060,7 @@ pub struct CssPseudoSelectorList {
 impl CssPseudoSelectorList {
     #[must_use]
     pub fn try_new(selectors: Vec<CssSelector>) -> Option<Self> {
-        if selectors.is_empty() || selectors.iter().any(selector_contains_complex) {
+        if selectors.is_empty() {
             None
         } else {
             Some(Self::new(selectors))
@@ -6070,7 +6070,6 @@ impl CssPseudoSelectorList {
     #[must_use]
     pub(crate) fn new(selectors: Vec<CssSelector>) -> Self {
         debug_assert!(!selectors.is_empty());
-        debug_assert!(!selectors.iter().any(selector_contains_complex));
         Self { selectors }
     }
 
@@ -6080,8 +6079,57 @@ impl CssPseudoSelectorList {
     }
 }
 
-fn selector_contains_complex(selector: &CssSelector) -> bool {
-    matches!(selector, CssSelector::Complex(_))
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssRelativeSelector {
+    combinator: CssSelectorCombinator,
+    selector: CssSelector,
+}
+
+impl CssRelativeSelector {
+    #[must_use]
+    pub const fn new(combinator: CssSelectorCombinator, selector: CssSelector) -> Self {
+        Self {
+            combinator,
+            selector,
+        }
+    }
+
+    #[must_use]
+    pub const fn combinator(&self) -> CssSelectorCombinator {
+        self.combinator
+    }
+
+    #[must_use]
+    pub const fn selector(&self) -> &CssSelector {
+        &self.selector
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssRelativeSelectorList {
+    selectors: Vec<CssRelativeSelector>,
+}
+
+impl CssRelativeSelectorList {
+    #[must_use]
+    pub fn try_new(selectors: Vec<CssRelativeSelector>) -> Option<Self> {
+        if selectors.is_empty() {
+            None
+        } else {
+            Some(Self::new(selectors))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(selectors: Vec<CssRelativeSelector>) -> Self {
+        debug_assert!(!selectors.is_empty());
+        Self { selectors }
+    }
+
+    #[must_use]
+    pub fn selectors(&self) -> &[CssRelativeSelector] {
+        &self.selectors
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -6104,8 +6152,8 @@ pub enum CssPseudoClass {
     LastChild,
     OnlyChild,
     Empty,
-    NthChild(CssNthPattern),
-    NthLastChild(CssNthPattern),
+    NthChild(CssNthChildPattern),
+    NthLastChild(CssNthChildPattern),
     FirstOfType,
     LastOfType,
     OnlyOfType,
@@ -6114,7 +6162,7 @@ pub enum CssPseudoClass {
     Not(CssPseudoSelectorList),
     Is(CssPseudoSelectorList),
     Where(CssPseudoSelectorList),
-    Has(CssPseudoSelectorList),
+    Has(CssRelativeSelectorList),
     Modal,
     Fullscreen,
     PopoverOpen,
@@ -6124,6 +6172,32 @@ pub enum CssPseudoClass {
     ReadWrite,
     InRange,
     OutOfRange,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssNthChildPattern {
+    pattern: CssNthPattern,
+    selector_list: Option<CssPseudoSelectorList>,
+}
+
+impl CssNthChildPattern {
+    #[must_use]
+    pub const fn new(pattern: CssNthPattern, selector_list: Option<CssPseudoSelectorList>) -> Self {
+        Self {
+            pattern,
+            selector_list,
+        }
+    }
+
+    #[must_use]
+    pub const fn pattern(&self) -> CssNthPattern {
+        self.pattern
+    }
+
+    #[must_use]
+    pub const fn selector_list(&self) -> Option<&CssPseudoSelectorList> {
+        self.selector_list.as_ref()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

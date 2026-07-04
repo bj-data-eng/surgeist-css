@@ -170,12 +170,12 @@ pub(super) fn parse_clear<'i, 't>(
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct AlignmentOptions {
+pub(super) struct AllowedAlignmentKeywords {
     normal: bool,
     distribution: bool,
 }
 
-impl AlignmentOptions {
+impl AllowedAlignmentKeywords {
     const fn content() -> Self {
         Self {
             normal: true,
@@ -194,13 +194,13 @@ impl AlignmentOptions {
 pub(super) fn parse_content_alignment<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssAlignment, ParseError<'i, Error>> {
-    parse_alignment(input, AlignmentOptions::content())
+    parse_alignment(input, AllowedAlignmentKeywords::content())
 }
 
 pub(super) fn parse_align_items<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssAlignItems, ParseError<'i, Error>> {
-    let alignment = parse_alignment(input, AlignmentOptions::item())?;
+    let alignment = parse_alignment(input, AllowedAlignmentKeywords::item())?;
     Ok(match alignment {
         CssAlignment::Normal => CssAlignItems::Normal,
         CssAlignment::Start => CssAlignItems::Start,
@@ -223,7 +223,7 @@ pub(super) fn parse_align_items<'i, 't>(
 
 pub(super) fn parse_alignment<'i, 't>(
     input: &mut Parser<'i, 't>,
-    options: AlignmentOptions,
+    options: AllowedAlignmentKeywords,
 ) -> std::result::Result<CssAlignment, ParseError<'i, Error>> {
     let first = input.expect_ident_cloned().map_err(basic)?;
     let first = first.to_ascii_lowercase();

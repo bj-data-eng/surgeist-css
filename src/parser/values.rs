@@ -11,49 +11,49 @@ use crate::validation::{
 pub(super) fn parse_box_size_value<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, LengthOptions::box_size(), "box size")
+    parse_length_with(input, AllowedLengthSyntax::box_size(), "box size")
 }
 
 pub(super) fn parse_inset_component<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, LengthOptions::box_size(), "inset")
+    parse_length_with(input, AllowedLengthSyntax::box_size(), "inset")
 }
 
 pub(super) fn parse_margin_component<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, LengthOptions::margin(), "margin")
+    parse_length_with(input, AllowedLengthSyntax::margin(), "margin")
 }
 
 pub(super) fn parse_padding_component<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, LengthOptions::padding(), "padding")
+    parse_length_with(input, AllowedLengthSyntax::padding(), "padding")
 }
 
 pub(super) fn parse_border_width_component<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, LengthOptions::border_width(), "border-width")
+    parse_length_with(input, AllowedLengthSyntax::border_width(), "border-width")
 }
 
 pub(super) fn parse_radius_component<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, LengthOptions::radius(), "border-radius")
+    parse_length_with(input, AllowedLengthSyntax::radius(), "border-radius")
 }
 
 pub(super) fn parse_shadow_length<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, LengthOptions::shadow(), "box-shadow")
+    parse_length_with(input, AllowedLengthSyntax::shadow(), "box-shadow")
 }
 
 pub(super) fn parse_shadow_blur_length<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, LengthOptions::shadow_blur(), "box-shadow blur")
+    parse_length_with(input, AllowedLengthSyntax::shadow_blur(), "box-shadow blur")
 }
 
 pub(super) fn parse_gap_value<'i, 't>(
@@ -65,12 +65,12 @@ pub(super) fn parse_gap_value<'i, 't>(
     {
         Ok(CssLength::Normal)
     } else {
-        parse_length_with(input, LengthOptions::gap(), "gap")
+        parse_length_with(input, AllowedLengthSyntax::gap(), "gap")
     }
 }
 
 #[derive(Clone, Copy)]
-pub(super) struct LengthOptions {
+pub(super) struct AllowedLengthSyntax {
     percent: bool,
     auto: bool,
     intrinsic: bool,
@@ -79,7 +79,7 @@ pub(super) struct LengthOptions {
     non_negative: bool,
 }
 
-impl LengthOptions {
+impl AllowedLengthSyntax {
     pub(super) const fn box_size() -> Self {
         Self {
             percent: true,
@@ -270,7 +270,7 @@ impl LengthOptions {
 
 pub(super) fn parse_length_with<'i, 't>(
     input: &mut Parser<'i, 't>,
-    options: LengthOptions,
+    options: AllowedLengthSyntax,
     context: &str,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
     let location = input.current_source_location();
@@ -341,7 +341,7 @@ pub(super) fn parse_length_with<'i, 't>(
 
 pub(super) fn parse_calc_length_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
-    options: LengthOptions,
+    options: AllowedLengthSyntax,
 ) -> std::result::Result<CssCalcLength, ParseError<'i, Error>> {
     let mut terms = Vec::new();
     terms.push(CssCalcLengthTerm::add(parse_calc_component(
@@ -374,7 +374,7 @@ pub(super) fn parse_calc_length_with_options<'i, 't>(
 
 pub(super) fn parse_calc_component<'i, 't>(
     input: &mut Parser<'i, 't>,
-    options: LengthOptions,
+    options: AllowedLengthSyntax,
 ) -> std::result::Result<CssCalcLength, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use cssparser::{ParseError, Parser, Token, match_ignore_ascii_case};
 
 use super::values::{
-    LengthOptions, next_is_delim, parse_box_size_value, parse_calc_length_with_options,
+    AllowedLengthSyntax, next_is_delim, parse_box_size_value, parse_calc_length_with_options,
     parse_custom_ident_from_str_at, parse_length_with, parse_positive_integer,
 };
 use crate::error::{Error, ErrorKind, basic, error_at, unsupported_value, unsupported_value_at};
@@ -140,8 +140,11 @@ pub(super) fn parse_grid_track_size<'i, 't>(
         }
         Token::Function(name) if name.eq_ignore_ascii_case("fit-content") => input
             .parse_nested_block(|input| {
-                let limit =
-                    parse_length_with(input, LengthOptions::grid_track(), "grid fit-content")?;
+                let limit = parse_length_with(
+                    input,
+                    AllowedLengthSyntax::grid_track(),
+                    "grid fit-content",
+                )?;
                 input.expect_exhausted().map_err(basic)?;
                 Ok(CssGridTrackSize::fit_content(limit))
             }),
@@ -211,7 +214,7 @@ pub(super) fn parse_grid_track_breadth<'i, 't>(
         },
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
             let calc = input.parse_nested_block(|input| {
-                parse_calc_length_with_options(input, LengthOptions::grid_track())
+                parse_calc_length_with_options(input, AllowedLengthSyntax::grid_track())
             })?;
             if syntax::calc_has_negative_component(&calc) {
                 return Err(unsupported_value_at(

@@ -5,7 +5,9 @@ use super::background::{
     parse_url,
 };
 use super::box_model::parse_shadow;
-use super::values::{LengthOptions, next_is_comma, next_is_ident, parse_length_with, parse_number};
+use super::values::{
+    AllowedLengthSyntax, next_is_comma, next_is_ident, parse_length_with, parse_number,
+};
 use crate::error::{Error, basic, unsupported_value};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
@@ -220,7 +222,7 @@ pub(super) fn validate_length_sequence<'i, 't>(
     let mut count = 0;
     while !input.is_exhausted() {
         if count == max
-            || parse_length_with(input, LengthOptions::position(), "function length").is_err()
+            || parse_length_with(input, AllowedLengthSyntax::position(), "function length").is_err()
         {
             return false;
         }
@@ -233,7 +235,12 @@ pub(super) fn validate_length_sequence<'i, 't>(
 }
 
 pub(super) fn validate_non_negative_length<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
-    parse_length_with(input, LengthOptions::border_width(), "function length").is_ok()
+    parse_length_with(
+        input,
+        AllowedLengthSyntax::border_width(),
+        "function length",
+    )
+    .is_ok()
         && input.is_exhausted()
 }
 
@@ -327,7 +334,12 @@ pub(super) fn validate_shape_radius<'i, 't>(input: &mut Parser<'i, 't>) -> bool 
     {
         true
     } else {
-        parse_length_with(input, LengthOptions::background_size(), "shape radius").is_ok()
+        parse_length_with(
+            input,
+            AllowedLengthSyntax::background_size(),
+            "shape radius",
+        )
+        .is_ok()
     }
 }
 
@@ -378,7 +390,8 @@ pub(super) fn validate_inset_shape<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
     let mut count = 0;
     while !input.is_exhausted() && !next_is_ident(input, "round") {
         if count == 4
-            || parse_length_with(input, LengthOptions::background_size(), "inset shape").is_err()
+            || parse_length_with(input, AllowedLengthSyntax::background_size(), "inset shape")
+                .is_err()
         {
             return false;
         }
@@ -399,8 +412,8 @@ pub(super) fn validate_inset_shape<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
 pub(super) fn validate_polygon_shape<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
     let mut points = 0;
     loop {
-        if parse_length_with(input, LengthOptions::position(), "polygon x").is_err()
-            || parse_length_with(input, LengthOptions::position(), "polygon y").is_err()
+        if parse_length_with(input, AllowedLengthSyntax::position(), "polygon x").is_err()
+            || parse_length_with(input, AllowedLengthSyntax::position(), "polygon y").is_err()
         {
             return false;
         }
@@ -469,7 +482,7 @@ pub(super) fn parse_translate<'i, 't>(
     while !input.is_exhausted() {
         values.push(parse_length_with(
             input,
-            LengthOptions::position(),
+            AllowedLengthSyntax::position(),
             "translate",
         )?);
         if values.len() > 3 {

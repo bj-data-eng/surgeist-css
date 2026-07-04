@@ -1,6 +1,8 @@
 use cssparser::{ParseError, Parser, Token, match_ignore_ascii_case};
 
-use super::values::{LengthOptions, next_is_comma, parse_color, parse_integer, parse_length_with};
+use super::values::{
+    AllowedLengthSyntax, next_is_comma, parse_color, parse_integer, parse_length_with,
+};
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
@@ -8,7 +10,7 @@ use crate::validation::unsupported_keyword_reason;
 pub(super) fn parse_font_size<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, LengthOptions::font_size(), "font-size")
+    parse_length_with(input, AllowedLengthSyntax::font_size(), "font-size")
 }
 
 pub(super) fn parse_line_height<'i, 't>(
@@ -20,7 +22,7 @@ pub(super) fn parse_line_height<'i, 't>(
     {
         Ok(CssLength::Normal)
     } else {
-        parse_length_with(input, LengthOptions::line_height(), "line-height")
+        parse_length_with(input, AllowedLengthSyntax::line_height(), "line-height")
     }
 }
 
@@ -85,7 +87,7 @@ pub(super) fn parse_text_align_last<'i, 't>(
 pub(super) fn parse_text_indent<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssTextIndent, ParseError<'i, Error>> {
-    let length = parse_length_with(input, LengthOptions::text_indent(), "text-indent")?;
+    let length = parse_length_with(input, AllowedLengthSyntax::text_indent(), "text-indent")?;
     let mut hanging = false;
     let mut each_line = false;
 
@@ -126,9 +128,13 @@ pub(super) fn parse_vertical_align<'i, 't>(
         };
     }
 
-    parse_length_with(input, LengthOptions::vertical_align(), "vertical-align")
-        .map(CssVerticalAlignLength::new)
-        .map(CssVerticalAlign::Length)
+    parse_length_with(
+        input,
+        AllowedLengthSyntax::vertical_align(),
+        "vertical-align",
+    )
+    .map(CssVerticalAlignLength::new)
+    .map(CssVerticalAlign::Length)
 }
 
 pub(super) fn parse_font_family_list<'i, 't>(
@@ -431,9 +437,13 @@ pub(super) fn parse_letter_spacing<'i, 't>(
     {
         Ok(CssLetterSpacing::Normal)
     } else {
-        parse_length_with(input, LengthOptions::letter_spacing(), "letter-spacing")
-            .map(CssLetterSpacingLength::new)
-            .map(CssLetterSpacing::Length)
+        parse_length_with(
+            input,
+            AllowedLengthSyntax::letter_spacing(),
+            "letter-spacing",
+        )
+        .map(CssLetterSpacingLength::new)
+        .map(CssLetterSpacing::Length)
     }
 }
 
@@ -681,7 +691,7 @@ pub(super) fn parse_text_decoration_thickness<'i, 't>(
 
     parse_length_with(
         input,
-        LengthOptions::text_decoration_thickness(),
+        AllowedLengthSyntax::text_decoration_thickness(),
         "text-decoration-thickness",
     )
     .map(CssTextDecorationThicknessLength::new)

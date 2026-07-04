@@ -239,6 +239,7 @@ pub enum CssProperty {
     BorderLeftWidth,
     Color,
     Background,
+    BackgroundColor,
     BorderColor,
     BorderTopColor,
     BorderRightColor,

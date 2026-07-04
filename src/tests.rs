@@ -27,6 +27,24 @@ fn declaration(input: &str, property: CssProperty) -> CssDeclaration {
         .clone()
 }
 
+fn single_declaration(input: &str) -> CssDeclaration {
+    let sheet = parse_sheet(input).unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("{input} should parse exactly one rule");
+    };
+    let [declaration] = rule.declarations() else {
+        panic!("{input} should parse exactly one declaration");
+    };
+    declaration.clone()
+}
+
+#[test]
+fn background_color_preserves_authored_property_identity() {
+    let declaration = single_declaration(".panel { background-color: black; }");
+    assert_eq!(declaration.property(), CssProperty::BackgroundColor);
+    assert_eq!(declaration.value(), &CssValue::Color(CssColor::BLACK));
+}
+
 fn assert_global_value(value: &CssValue) {
     assert!(matches!(value, CssValue::GlobalKeyword(_)));
 }
@@ -987,10 +1005,10 @@ fn acceptance_css_wide_global_keyword_matrix_accepts_supported_globals() {
 
     assert_accepts_value_cases(&[
         value_case!(
-            "background-color global inherit aliases background property",
+            "background-color global inherit preserves authored property",
             "background-color",
             "inherit",
-            CssProperty::Background,
+            CssProperty::BackgroundColor,
             assert_global_value
         ),
         value_case!(
@@ -1358,10 +1376,10 @@ fn acceptance_color_background_border_outline_and_shadow_matrix_accepts_supporte
             assert_color_value
         ),
         value_case!(
-            "background-color alias",
+            "background-color authored property",
             "background-color",
             "transparent",
-            CssProperty::Background,
+            CssProperty::BackgroundColor,
             assert_color_value
         ),
         value_case!(

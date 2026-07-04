@@ -159,7 +159,7 @@ pub(super) fn parse_transition_list<'i, 't>(
 ) -> std::result::Result<CssTransitionList, ParseError<'i, Error>> {
     let mut items = Vec::new();
     loop {
-        items.push(parse_transition_item(input)?);
+        items.push(parse_single_transition(input)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -175,7 +175,7 @@ pub(super) fn parse_transition_list<'i, 't>(
         .ok_or_else(|| unsupported_value(input, None, "transition list is empty"))
 }
 
-pub(super) fn parse_transition_item<'i, 't>(
+pub(super) fn parse_single_transition<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssTransition, ParseError<'i, Error>> {
     let mut property = None;
@@ -409,7 +409,7 @@ pub(super) fn parse_animation_list<'i, 't>(
 ) -> std::result::Result<CssAnimationList, ParseError<'i, Error>> {
     let mut items = Vec::new();
     loop {
-        items.push(parse_animation_item(input)?);
+        items.push(parse_single_animation(input)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -425,7 +425,7 @@ pub(super) fn parse_animation_list<'i, 't>(
         .ok_or_else(|| unsupported_value(input, None, "animation list is empty"))
 }
 
-pub(super) fn parse_animation_item<'i, 't>(
+pub(super) fn parse_single_animation<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssAnimation, ParseError<'i, Error>> {
     let mut name = None;

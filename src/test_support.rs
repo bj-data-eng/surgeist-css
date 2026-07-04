@@ -344,7 +344,7 @@ const ACCEPTED_DECLARATION_CASES: &[AcceptedDeclarationCase] = &[
     global_inherit_case!("border-left-width", CssProperty::BorderLeftWidth),
     global_inherit_case!("color", CssProperty::Color),
     global_inherit_case!("background", CssProperty::Background),
-    global_inherit_case!("background-color", CssProperty::Background),
+    global_inherit_case!("background-color", CssProperty::BackgroundColor),
     global_inherit_case!("border-color", CssProperty::BorderColor),
     global_inherit_case!("border-top-color", CssProperty::BorderTopColor),
     global_inherit_case!("border-right-color", CssProperty::BorderRightColor),

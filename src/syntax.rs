@@ -36,6 +36,44 @@ impl CssSheet {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssRule {
     Style(CssStyleRule),
+    Media(CssMediaRule),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssMediaRule {
+    query: CssMediaQueryList,
+    rules: Vec<CssRule>,
+    location: CssSourceLocation,
+}
+
+impl CssMediaRule {
+    #[must_use]
+    pub(crate) const fn new(
+        query: CssMediaQueryList,
+        rules: Vec<CssRule>,
+        location: CssSourceLocation,
+    ) -> Self {
+        Self {
+            query,
+            rules,
+            location,
+        }
+    }
+
+    #[must_use]
+    pub const fn query(&self) -> &CssMediaQueryList {
+        &self.query
+    }
+
+    #[must_use]
+    pub fn rules(&self) -> &[CssRule] {
+        &self.rules
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

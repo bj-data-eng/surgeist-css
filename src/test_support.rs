@@ -240,6 +240,8 @@ fn only_declaration(sheet: &CssSheet, input: &str) -> CssDeclaration {
 }
 
 fn style_rule(rule: &CssRule) -> &CssStyleRule {
-    let CssRule::Style(rule) = rule;
-    rule
+    match rule {
+        CssRule::Style(rule) => rule,
+        unexpected => panic!("expected style rule, got {unexpected:?}"),
+    }
 }

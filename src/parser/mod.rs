@@ -12,8 +12,6 @@ mod box_model;
 mod effects;
 mod grid;
 mod layout;
-// @media rule parsing is a later task; this parser is exercised through tests for now.
-#[allow(dead_code)]
 mod queries;
 mod selectors;
 mod timing;
@@ -32,6 +30,7 @@ use box_model::*;
 use effects::*;
 use grid::*;
 use layout::*;
+use queries::parse_media_query_list;
 #[cfg(test)]
 pub(crate) use queries::parse_media_query_list_for_test;
 use selectors::parse_rule_selector_list;
@@ -68,10 +67,56 @@ pub fn parse_sheet(input: &str) -> Result<CssSheet> {
 
 struct StrictRuleParser;
 
+enum StrictAtRulePrelude {
+    Media(CssMediaQueryList),
+}
+
 impl<'i> AtRuleParser<'i> for StrictRuleParser {
-    type Prelude = ();
+    type Prelude = StrictAtRulePrelude;
     type AtRule = Vec<CssRule>;
     type Error = Error;
+
+    fn parse_prelude<'t>(
+        &mut self,
+        name: CowRcStr<'i>,
+        input: &mut Parser<'i, 't>,
+    ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
+        match_ignore_ascii_case! { &name,
+            "media" => {
+                let query = parse_media_query_list(input)?;
+                if !input.is_exhausted() {
+                    return Err(invalid_syntax(
+                        input.current_source_location(),
+                        "unexpected token after media query list",
+                    ));
+                }
+                Ok(StrictAtRulePrelude::Media(query))
+            },
+            _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
+        }
+    }
+
+    fn parse_block<'t>(
+        &mut self,
+        prelude: Self::Prelude,
+        start: &ParserState,
+        input: &mut Parser<'i, 't>,
+    ) -> std::result::Result<Self::AtRule, ParseError<'i, Self::Error>> {
+        match prelude {
+            StrictAtRulePrelude::Media(query) => {
+                let mut rule_parser = StrictRuleParser;
+                let mut rules = Vec::new();
+                for rule in StyleSheetParser::new(input, &mut rule_parser) {
+                    rules.extend(rule.map_err(|(error, _)| error)?);
+                }
+                Ok(vec![CssRule::Media(CssMediaRule::new(
+                    query,
+                    rules,
+                    CssSourceLocation::from_cssparser(start.source_location()),
+                ))])
+            }
+        }
+    }
 }
 
 impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {

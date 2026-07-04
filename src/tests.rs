@@ -7,8 +7,10 @@ use crate::test_support::{
 };
 
 fn style_rule(rule: &CssRule) -> &CssStyleRule {
-    let CssRule::Style(rule) = rule;
-    rule
+    match rule {
+        CssRule::Style(rule) => rule,
+        unexpected => panic!("expected style rule, got {unexpected:?}"),
+    }
 }
 
 fn declaration_value(input: &str, property: CssProperty) -> CssValue {
@@ -36,13 +38,20 @@ fn parse_media_query_list_for_test(input: &str) -> Result<CssMediaQueryList> {
     crate::parser::parse_media_query_list_for_test(input)
 }
 
+fn media_rule(rule: &CssRule) -> &CssMediaRule {
+    match rule {
+        CssRule::Media(rule) => rule,
+        unexpected => panic!("expected media rule, got {unexpected:?}"),
+    }
+}
+
 #[test]
 fn parsed_style_rule_is_explicit_rule_variant() {
     let sheet = parse_sheet(".panel { width: 10px; }").unwrap();
     let [rule] = sheet.rules() else {
         panic!("style sheet should parse exactly one rule");
     };
-    let CssRule::Style(style_rule) = rule;
+    let style_rule = style_rule(rule);
 
     assert_eq!(
         style_rule.selector(),
@@ -1586,8 +1595,8 @@ fn strict_no_recovery_whole_sheet_rejects_every_invalid_surface() {
         },
         RejectedSheetCase {
             label: "unsupported at-rule fails the whole sheet",
-            input: "@media screen { .panel { width: 10px; } }",
-            expected_error: ExpectedErrorKind::UnsupportedAtRule { name: "media" },
+            input: "@unknown screen { .panel { width: 10px; } }",
+            expected_error: ExpectedErrorKind::UnsupportedAtRule { name: "unknown" },
         },
         RejectedSheetCase {
             label: "invalid selector fails the whole sheet",
@@ -2213,6 +2222,64 @@ fn media_query_parser_preserves_comma_separated_queries() {
     assert_eq!(
         print,
         &CssMediaQuery::Typed(CssTypedMediaQuery::new(None, CssMediaType::Print, None,))
+    );
+}
+
+#[test]
+fn media_rule_parser_accepts_style_rule_body() {
+    let sheet =
+        parse_sheet("@media screen and (min-width: 600px) { .panel { color: black; } }").unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one media rule");
+    };
+    let rule = media_rule(rule);
+
+    let [CssMediaQuery::Typed(query)] = rule.query().queries() else {
+        panic!("expected typed media query");
+    };
+    assert_eq!(query.media_type(), CssMediaType::Screen);
+    assert!(query.condition().is_some());
+    assert_eq!(rule.location(), CssSourceLocation::new(0, 1));
+
+    let [nested] = rule.rules() else {
+        panic!("expected one nested style rule");
+    };
+    assert_eq!(
+        style_rule(nested).selector(),
+        &CssSelector::Class("panel".to_owned())
+    );
+}
+
+#[test]
+fn media_rule_parser_accepts_nested_media_rule() {
+    let sheet =
+        parse_sheet("@media screen { @media (min-width: 600px) { .panel { color: black; } } }")
+            .unwrap();
+    let [outer] = sheet.rules() else {
+        panic!("expected one outer media rule");
+    };
+    let outer = media_rule(outer);
+    let [inner] = outer.rules() else {
+        panic!("expected one inner media rule");
+    };
+    let inner = media_rule(inner);
+    let [nested] = inner.rules() else {
+        panic!("expected one nested style rule");
+    };
+
+    assert_eq!(
+        style_rule(nested).selector(),
+        &CssSelector::Class("panel".to_owned())
+    );
+}
+
+#[test]
+fn media_rule_parser_rejects_unknown_features_and_invalid_bodies() {
+    assert!(parse_sheet("@media (unknown: yes) { .panel { color: black; } }").is_err());
+    assert!(parse_sheet("@media screen { .panel { made-up: value; } }").is_err());
+    assert!(
+        parse_sheet("@media screen { @container (width > 300px) { .panel { color: black; } } }")
+            .is_err()
     );
 }
 

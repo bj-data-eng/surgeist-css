@@ -190,6 +190,50 @@ fn rejects_invalid_color_mix_forms_strictly() {
 }
 
 #[test]
+fn parses_relative_colors_symbolically() {
+    let CssValue::Color(CssColor::Relative(relative)) = declaration_value(
+        ".panel { color: rgb(from red r g b / alpha); }",
+        CssProperty::Color,
+    ) else {
+        panic!("expected relative color");
+    };
+
+    assert_eq!(relative.function(), &CssRelativeColorFunction::Rgb);
+    assert!(matches!(relative.source(), CssColor::Rgba(_)));
+    assert_eq!(relative.components().len(), 3);
+    assert_eq!(relative.components()[0].authored().as_css(), "r");
+    assert_eq!(relative.alpha().unwrap().authored().as_css(), "alpha");
+}
+
+#[test]
+fn parses_relative_oklch_with_component_expressions() {
+    let CssValue::Color(CssColor::Relative(relative)) = declaration_value(
+        ".panel { color: oklch(from red l c calc(h + 20deg) / 80%); }",
+        CssProperty::Color,
+    ) else {
+        panic!("expected relative color");
+    };
+
+    assert_eq!(relative.function(), &CssRelativeColorFunction::Oklch);
+    assert_eq!(relative.components().len(), 3);
+    assert_eq!(
+        relative.components()[2].authored().as_css(),
+        "calc(h + 20deg)"
+    );
+}
+
+#[test]
+fn rejects_invalid_relative_color_forms_strictly() {
+    assert!(parse_sheet(".panel { color: rgb(from red r g); }").is_err());
+    assert!(parse_sheet(".panel { color: rgb(from red r g b /); }").is_err());
+    assert!(parse_sheet(".panel { color: rgb(from red r g b extra); }").is_err());
+    assert!(parse_sheet(".panel { color: hsl(from red h s); }").is_err());
+    assert!(parse_sheet(".panel { color: rgb(from red foo(r) g b); }").is_err());
+    assert!(parse_sheet(".panel { color: rgb(from red calc() g b); }").is_err());
+    assert!(parse_sheet(".panel { color: rgb(from red calc(h +) g b); }").is_err());
+}
+
+#[test]
 fn rgba_hex_alpha_preserves_channels() {
     let CssValue::Color(color) =
         declaration_value(".panel { color: #11223344; }", CssProperty::Color)

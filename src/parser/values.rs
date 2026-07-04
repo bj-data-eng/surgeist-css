@@ -486,11 +486,201 @@ fn parse_color_inner<'i, 't>(
 fn parse_relative_color<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssColor, ParseError<'i, Error>> {
-    Err(unsupported_value(
-        input,
-        None,
-        "relative color syntax is not implemented yet",
-    ))
+    let state = input.state();
+    let location = input.current_source_location();
+    let token = input.next().map_err(basic)?.clone();
+    match token {
+        Token::Function(name) => {
+            let Some(function) = relative_color_function_from_name(&name) else {
+                input.reset(&state);
+                return Err(location.new_unexpected_token_error::<Error>(Token::Function(name)));
+            };
+            input
+                .parse_nested_block(|input| parse_relative_color_arguments(input, function))
+                .map(CssColor::Relative)
+        }
+        token => {
+            input.reset(&state);
+            Err(location.new_unexpected_token_error::<Error>(token))
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum RelativeColorFunction {
+    Rgb,
+    Hsl,
+    Hwb,
+    Lab,
+    Lch,
+    Oklab,
+    Oklch,
+    Color,
+}
+
+fn relative_color_function_from_name(name: &str) -> Option<RelativeColorFunction> {
+    let function = match_ignore_ascii_case! { name,
+        "rgb" | "rgba" => RelativeColorFunction::Rgb,
+        "hsl" | "hsla" => RelativeColorFunction::Hsl,
+        "hwb" => RelativeColorFunction::Hwb,
+        "lab" => RelativeColorFunction::Lab,
+        "lch" => RelativeColorFunction::Lch,
+        "oklab" => RelativeColorFunction::Oklab,
+        "oklch" => RelativeColorFunction::Oklch,
+        "color" => RelativeColorFunction::Color,
+        _ => return None,
+    };
+    Some(function)
+}
+
+fn parse_relative_color_arguments<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    function: RelativeColorFunction,
+) -> std::result::Result<CssRelativeColor, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    input.expect_ident_matching("from").map_err(basic)?;
+    let source = parse_color_inner(input)?;
+    let function = match function {
+        RelativeColorFunction::Rgb => CssRelativeColorFunction::Rgb,
+        RelativeColorFunction::Hsl => CssRelativeColorFunction::Hsl,
+        RelativeColorFunction::Hwb => CssRelativeColorFunction::Hwb,
+        RelativeColorFunction::Lab => CssRelativeColorFunction::Lab,
+        RelativeColorFunction::Lch => CssRelativeColorFunction::Lch,
+        RelativeColorFunction::Oklab => CssRelativeColorFunction::Oklab,
+        RelativeColorFunction::Oklch => CssRelativeColorFunction::Oklch,
+        RelativeColorFunction::Color => {
+            CssRelativeColorFunction::Color(parse_relative_predefined_color_space(input)?)
+        }
+    };
+
+    let mut components = Vec::with_capacity(function.component_count());
+    for _ in 0..function.component_count() {
+        components.push(parse_color_component_expression(input)?);
+    }
+
+    let alpha = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+        Some(parse_color_component_expression(input)?)
+    } else {
+        None
+    };
+
+    input.expect_exhausted().map_err(basic)?;
+    CssRelativeColor::try_new(function, source, components, alpha).ok_or_else(|| {
+        unsupported_value_at(location, None, "unsupported relative color component count")
+    })
+}
+
+fn parse_relative_predefined_color_space<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssPredefinedColorSpace, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    let color_space = match_ignore_ascii_case! { &ident,
+        "srgb" => CssPredefinedColorSpace::Srgb,
+        "srgb-linear" => CssPredefinedColorSpace::SrgbLinear,
+        "display-p3" => CssPredefinedColorSpace::DisplayP3,
+        "display-p3-linear" => CssPredefinedColorSpace::DisplayP3Linear,
+        "a98-rgb" => CssPredefinedColorSpace::A98Rgb,
+        "prophoto-rgb" => CssPredefinedColorSpace::ProphotoRgb,
+        "rec2020" => CssPredefinedColorSpace::Rec2020,
+        "xyz" => CssPredefinedColorSpace::XyzD65,
+        "xyz-d50" => CssPredefinedColorSpace::XyzD50,
+        "xyz-d65" => CssPredefinedColorSpace::XyzD65,
+        _ => return Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported relative color space `{ident}`"),
+        )),
+    };
+    Ok(color_space)
+}
+
+fn parse_color_component_expression<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColorComponentExpression, ParseError<'i, Error>> {
+    input.skip_whitespace();
+    let start = input.position();
+    consume_color_component_expression(input)?;
+    let authored = CssAuthoredDeclarationValue::new(input.slice_from(start).trim_end());
+    Ok(CssColorComponentExpression::new(authored, Vec::new()))
+}
+
+fn consume_color_component_expression<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<(), ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let token = input.next().map_err(basic)?.clone();
+    if token.is_parse_error() {
+        return Err(input.new_unexpected_token_error(token));
+    }
+    match token {
+        Token::Ident(_)
+        | Token::Number { .. }
+        | Token::Percentage { .. }
+        | Token::Dimension { .. } => Ok(()),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            input.parse_nested_block(parse_color_component_calc_expression)
+        }
+        Token::Function(name) => Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported relative color component function `{name}`"),
+        )),
+        token => Err(location.new_unexpected_token_error::<Error>(token)),
+    }
+}
+
+fn parse_color_component_calc_expression<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<(), ParseError<'i, Error>> {
+    parse_color_component_calc_operand(input)?;
+    while !input.is_exhausted() {
+        parse_color_component_calc_operator(input)?;
+        parse_color_component_calc_operand(input)?;
+    }
+    Ok(())
+}
+
+fn parse_color_component_calc_operator<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<(), ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Delim('+') | Token::Delim('-') | Token::Delim('*') | Token::Delim('/') => Ok(()),
+        token => Err(unsupported_value_at(
+            location,
+            None,
+            format!(
+                "expected relative color calc operator, got `{}`",
+                token.to_css_string()
+            ),
+        )),
+    }
+}
+
+fn parse_color_component_calc_operand<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<(), ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let token = input.next().map_err(basic)?.clone();
+    if token.is_parse_error() {
+        return Err(input.new_unexpected_token_error(token));
+    }
+    match token {
+        Token::Ident(_)
+        | Token::Number { .. }
+        | Token::Percentage { .. }
+        | Token::Dimension { .. } => Ok(()),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            input.parse_nested_block(parse_color_component_calc_expression)
+        }
+        Token::Function(name) => Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported relative color calc function `{name}`"),
+        )),
+        token => Err(location.new_unexpected_token_error::<Error>(token)),
+    }
 }
 
 fn parse_color_mix<'i, 't>(

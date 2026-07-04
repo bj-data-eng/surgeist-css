@@ -814,7 +814,7 @@ git commit -m "Parse symbolic color-mix syntax"
 - Modify: `/Users/codex/Development/surgeist-css/src/parser/values.rs`
 - Modify: `/Users/codex/Development/surgeist-css/src/tests.rs`
 
-- [ ] **Step 1: Add relative color tests**
+- [x] **Step 1: Add relative color tests**
 
 Add tests:
 
@@ -860,7 +860,7 @@ fn rejects_invalid_relative_color_forms_strictly() {
 }
 ```
 
-- [ ] **Step 2: Implement parser**
+- [x] **Step 2: Implement parser**
 
 Implement relative parsing as a fallback before `cssparser-color` reports unsupported function syntax.
 
@@ -893,7 +893,7 @@ Store components as `CssColorComponentExpression`, preserving authored token tex
 
 Plain declarations containing `var(...)` still become `CssValue::VariableDependent` before reaching `parse_color`; do not fight the existing whole-value variable policy in this task. Component-level `references()` should therefore be empty in this pass. Keep the field for the later variable-aware color pass.
 
-- [ ] **Step 3: Run checks**
+- [x] **Step 3: Run checks**
 
 ```sh
 cargo fmt --check
@@ -905,7 +905,7 @@ git diff --check
 
 Expected: pass.
 
-- [ ] **Step 4: Report**
+- [x] **Step 4: Report**
 
 Report changed files, checks run, and `git status --short --branch`. Workers do not commit.
 

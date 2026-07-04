@@ -260,6 +260,38 @@ fn rejects_non_finite_cssparser_color_components() {
     }
 }
 
+#[test]
+fn color_surface_accepts_expanded_strict_forms() {
+    for css in [
+        ".panel { color: red; }",
+        ".panel { background-color: rebeccapurple; }",
+        ".panel { border-color: #11223344; }",
+        ".panel { outline-color: rgb(255 0 0 / 50%); }",
+        ".panel { text-decoration-color: oklch(0.7 0.2 240deg / 80%); }",
+        ".panel { box-shadow: 0 1px 2px color(display-p3 0.8 0.2 0.1 / 0.9); }",
+        ".panel { color: CanvasText; }",
+        ".panel { color: color-mix(in oklch, red 40%, blue); }",
+        ".panel { color: rgb(from red r g b / alpha); }",
+    ] {
+        parse_sheet(css).unwrap_or_else(|error| panic!("{css} should parse: {error:?}"));
+    }
+}
+
+#[test]
+fn color_surface_rejects_invalid_forms_without_recovery() {
+    for css in [
+        ".panel { color: rgb(1, 2 3); }",
+        ".panel { color: color(unknown-space 1 0 0); }",
+        ".panel { color: MadeUpSystemColor; }",
+        ".panel { color: color-mix(); }",
+        ".panel { color: color-mix(in oklch, red); }",
+        ".panel { color: rgb(from red r g); }",
+        ".panel { color: rgb(from red r g b /); }",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject strictly");
+    }
+}
+
 fn font_face_rule(rule: &CssRule) -> &CssFontFaceRule {
     match rule {
         CssRule::FontFace(rule) => rule,

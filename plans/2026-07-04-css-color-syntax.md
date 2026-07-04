@@ -925,7 +925,7 @@ git commit -m "Parse symbolic relative color syntax"
 - Modify: `/Users/codex/Development/surgeist-css/src/tests.rs`
 - Modify: `/Users/codex/Development/surgeist-css/README.md`
 
-- [ ] **Step 1: Add broad acceptance matrix**
+- [x] **Step 1: Add broad acceptance matrix**
 
 Add:
 
@@ -948,7 +948,7 @@ fn color_surface_accepts_expanded_strict_forms() {
 }
 ```
 
-- [ ] **Step 2: Add strict rejection matrix**
+- [x] **Step 2: Add strict rejection matrix**
 
 Add:
 
@@ -969,7 +969,7 @@ fn color_surface_rejects_invalid_forms_without_recovery() {
 }
 ```
 
-- [ ] **Step 3: Update README**
+- [x] **Step 3: Update README**
 
 Add a paragraph:
 
@@ -977,7 +977,7 @@ Add a paragraph:
 Colors are parsed as authored CSS color syntax. `surgeist-css` accepts named colors, alpha hex, modern color functions, `currentcolor`, system colors, `color-mix()`, and relative color syntax as typed syntax, but does not resolve system colors, substitute variables, evaluate relative channels, mix colors, convert color spaces, or adapt colors to a renderer gamut. Downstream style/render layers own those resolution steps.
 ```
 
-- [ ] **Step 4: Run full checks**
+- [x] **Step 4: Run full checks**
 
 ```sh
 cargo fmt --check
@@ -990,7 +990,7 @@ git diff --check
 
 Expected: pass.
 
-- [ ] **Step 5: Report**
+- [x] **Step 5: Report**
 
 Report changed files, checks run, and `git status --short --branch`. Workers do not commit.
 

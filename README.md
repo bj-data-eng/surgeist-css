@@ -6,6 +6,8 @@ Unlike a browser CSS parser, this crate does not recover from invalid applicatio
 
 CSS custom properties are parsed as authored syntax. Custom property names are case-sensitive, `var(...)` references and fallback token text remain symbolic, and supported properties containing `var(...)` parse as variable-dependent authored values. This crate does not resolve variables, run cascade substitution, or validate post-substitution values.
 
+Colors are parsed as authored CSS color syntax. `surgeist-css` accepts named colors, alpha hex, modern color functions, `currentcolor`, system colors, `color-mix()`, and relative color syntax as typed syntax, but does not resolve system colors, substitute variables, evaluate relative channels, mix colors, convert color spaces, or adapt colors to a renderer gamut. Downstream style/render layers own those resolution steps.
+
 Pseudo-classes for UI interaction, form state, structure, selector-list filtering, and overlay state are parsed as authored selector syntax. This crate does not evaluate pseudo-class matches; runtime matching belongs to downstream Surgeist layers with node and interaction state.
 
 Selector-list pseudo-class arguments are parsed as strict authored selector syntax. `:is`, `:where`, and `:not` preserve supported complex selector lists; `:has` preserves supported relative selector lists including leading child and sibling combinators; and `:nth-child` / `:nth-last-child` preserve optional `of` selector filters. Unlike browser forgiving selector lists, any unsupported or malformed selector argument rejects the whole sheet.

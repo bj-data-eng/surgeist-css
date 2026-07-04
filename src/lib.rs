@@ -5106,9 +5106,9 @@ mod tests {
     use super::*;
     use crate::test_support::{
         AcceptedDeclarationCase, AcceptedValueCase, ExpectedErrorKind, RejectedDeclarationCase,
-        accepted_declaration_cases, assert_accepts_declarations, assert_accepts_value_cases,
-        assert_rejects_declarations, assert_sheet_rejected, parse_single_declaration,
-        parse_single_declaration_value,
+        RejectedSheetCase, accepted_declaration_cases, assert_accepts_declarations,
+        assert_accepts_value_cases, assert_rejects_declarations, assert_rejects_sheets,
+        assert_sheet_rejected, parse_single_declaration, parse_single_declaration_value,
     };
 
     fn declaration_value(input: &str, property: CssProperty) -> CssValue {
@@ -5706,6 +5706,67 @@ mod tests {
             ".panel { width: inherit 10px; height: 20px; }",
             &ExpectedErrorKind::InvalidSyntax,
         );
+    }
+
+    #[test]
+    fn strict_no_recovery_whole_sheet_rejects_every_invalid_surface() {
+        assert_rejects_sheets(&[
+            RejectedSheetCase {
+                label: "valid declaration before invalid declaration fails the whole sheet",
+                input: ".panel { width: 10px; display: inline; height: 20px; }",
+                expected_error: ExpectedErrorKind::UnsupportedValue {
+                    property: Some("display"),
+                    reason: "unsupported display keyword `inline`",
+                },
+            },
+            RejectedSheetCase {
+                label: "invalid declaration before valid declaration fails the whole sheet",
+                input: ".panel { display: inline; width: 10px; }",
+                expected_error: ExpectedErrorKind::UnsupportedValue {
+                    property: Some("display"),
+                    reason: "unsupported display keyword `inline`",
+                },
+            },
+            RejectedSheetCase {
+                label: "unknown property fails the whole sheet",
+                input: ".panel { widht: 10px; width: 20px; }",
+                expected_error: ExpectedErrorKind::UnknownProperty { name: "widht" },
+            },
+            RejectedSheetCase {
+                label: "unsupported at-rule fails the whole sheet",
+                input: "@media screen { .panel { width: 10px; } }",
+                expected_error: ExpectedErrorKind::UnsupportedAtRule { name: "media" },
+            },
+            RejectedSheetCase {
+                label: "invalid selector fails the whole sheet",
+                input: "??? { width: 10px; }",
+                expected_error: ExpectedErrorKind::InvalidSelector,
+            },
+            RejectedSheetCase {
+                label: "malformed declaration block fails the whole sheet",
+                input: ".panel { width 10px; height: 20px; }",
+                expected_error: ExpectedErrorKind::InvalidSyntax,
+            },
+            RejectedSheetCase {
+                label: "trailing junk after a value fails the whole sheet",
+                input: ".panel { width: 10px solid; }",
+                expected_error: ExpectedErrorKind::InvalidSyntax,
+            },
+            RejectedSheetCase {
+                label: "invalid comma-list item fails the whole sheet",
+                input: ".panel { transition-duration: 150ms, solid; }",
+                expected_error: ExpectedErrorKind::InvalidSyntaxOrUnsupportedValueForProperty {
+                    property: "transition-duration",
+                },
+            },
+            RejectedSheetCase {
+                label: "invalid shorthand component fails the whole sheet",
+                input: ".panel { border: 1px solid dotted; }",
+                expected_error: ExpectedErrorKind::InvalidSyntaxOrUnsupportedValueForProperty {
+                    property: "border",
+                },
+            },
+        ]);
     }
 
     #[test]

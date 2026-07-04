@@ -67,8 +67,12 @@ impl AcceptedValueCase {
 
 pub(crate) enum ExpectedErrorKind {
     InvalidSyntax,
+    InvalidSelector,
     InvalidSyntaxOrUnsupportedValueForProperty {
         property: &'static str,
+    },
+    UnsupportedAtRule {
+        name: &'static str,
     },
     UnknownProperty {
         name: &'static str,
@@ -86,6 +90,7 @@ impl ExpectedErrorKind {
     fn assert_matches(&self, actual: &ErrorKind, label: &str) {
         match (self, actual) {
             (Self::InvalidSyntax, ErrorKind::InvalidSyntax { .. }) => {}
+            (Self::InvalidSelector, ErrorKind::InvalidSelector { .. }) => {}
             (
                 Self::InvalidSyntaxOrUnsupportedValueForProperty { property },
                 ErrorKind::UnsupportedValue {
@@ -97,6 +102,8 @@ impl ExpectedErrorKind {
                 Self::InvalidSyntaxOrUnsupportedValueForProperty { .. },
                 ErrorKind::InvalidSyntax { .. },
             ) => {}
+            (Self::UnsupportedAtRule { name }, ErrorKind::UnsupportedAtRule { name: actual })
+                if name == actual => {}
             (Self::UnknownProperty { name }, ErrorKind::UnknownProperty { name: actual })
                 if name == actual => {}
             (
@@ -115,6 +122,20 @@ impl ExpectedErrorKind {
             ) if *property == actual_property.as_deref() && *reason == actual_reason => {}
             _ => panic!("{label} rejected with unexpected error kind: {actual:?}"),
         }
+    }
+}
+
+pub(crate) struct RejectedSheetCase {
+    pub(crate) label: &'static str,
+    pub(crate) input: &'static str,
+    pub(crate) expected_error: ExpectedErrorKind,
+}
+
+impl RejectedSheetCase {
+    pub(crate) fn assert_rejects(&self) -> Error {
+        let error = parse_sheet(self.input).expect_err("invalid CSS must reject the whole sheet");
+        self.expected_error.assert_matches(error.kind(), self.label);
+        error
     }
 }
 
@@ -153,6 +174,12 @@ pub(crate) fn assert_accepts_value_cases(cases: &[AcceptedValueCase]) {
 }
 
 pub(crate) fn assert_rejects_declarations(cases: &[RejectedDeclarationCase]) {
+    for case in cases {
+        case.assert_rejects();
+    }
+}
+
+pub(crate) fn assert_rejects_sheets(cases: &[RejectedSheetCase]) {
     for case in cases {
         case.assert_rejects();
     }

@@ -14,6 +14,7 @@ pub(crate) enum PropertyNameStatus {
 }
 
 const SUPPORTED_PROPERTY_NAMES: &[&str] = &[
+    "all",
     "display",
     "box-sizing",
     "position",
@@ -186,7 +187,7 @@ const SUPPORTED_PROPERTY_NAMES: &[&str] = &[
     "animation",
 ];
 
-const KNOWN_UNSUPPORTED_PROPERTY_NAMES: &[&str] = &["all"];
+const KNOWN_UNSUPPORTED_PROPERTY_NAMES: &[&str] = &[];
 
 pub(crate) fn classify_property_name(name: &str) -> PropertyNameStatus {
     if contains_ascii_case(SUPPORTED_PROPERTY_NAMES, name) {
@@ -227,4 +228,14 @@ fn contains_ascii_case(haystack: &[&str], needle: &str) -> bool {
     haystack
         .iter()
         .any(|candidate| candidate.eq_ignore_ascii_case(needle))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn known_unsupported_property_registry_is_empty() {
+        assert!(KNOWN_UNSUPPORTED_PROPERTY_NAMES.is_empty());
+    }
 }

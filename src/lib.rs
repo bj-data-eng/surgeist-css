@@ -229,6 +229,7 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
         }
         let result = (|| {
             Ok(match_ignore_ascii_case! { &name,
+            "all" => return Err(unsupported_value(input, None, "`all` only accepts CSS-wide global keywords")),
             "display" => (CssProperty::Display, CssValue::Display(parse_display(input)?)),
             "box-sizing" => (CssProperty::BoxSizing, CssValue::BoxSizing(parse_box_sizing(input)?)),
             "position" => (CssProperty::Position, CssValue::Position(parse_position(input)?)),
@@ -4838,6 +4839,7 @@ fn property_name_error<'i, 't>(input: &Parser<'i, 't>, name: &str) -> ParseError
 
 fn property_for_supported_name(name: &str) -> Option<CssProperty> {
     Some(match_ignore_ascii_case! { name,
+        "all" => CssProperty::All,
         "display" => CssProperty::Display,
         "box-sizing" => CssProperty::BoxSizing,
         "position" => CssProperty::Position,
@@ -5301,6 +5303,39 @@ mod tests {
             declaration_value(".panel { margin: revert-layer; }", CssProperty::Margin),
             CssValue::GlobalKeyword(CssGlobalKeyword::RevertLayer)
         );
+    }
+
+    #[test]
+    fn parses_all_property_global_keywords_as_authored_syntax() {
+        let cases = [
+            ("inherit", CssGlobalKeyword::Inherit),
+            ("initial", CssGlobalKeyword::Initial),
+            ("unset", CssGlobalKeyword::Unset),
+            ("revert", CssGlobalKeyword::Revert),
+            ("revert-layer", CssGlobalKeyword::RevertLayer),
+        ];
+
+        for (authored, expected) in cases {
+            assert_eq!(
+                declaration_value(&format!(".panel {{ all: {authored}; }}"), CssProperty::All,),
+                CssValue::GlobalKeyword(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_non_global_all_values_with_typed_unsupported_value() {
+        for input in [".panel { all: block; }", ".panel { all: 1px; }"] {
+            let error = parse_sheet(input).expect_err(input);
+
+            assert_eq!(
+                error.kind(),
+                &ErrorKind::UnsupportedValue {
+                    property: Some("all".to_owned()),
+                    reason: "`all` only accepts CSS-wide global keywords".to_owned(),
+                }
+            );
+        }
     }
 
     #[test]

@@ -135,6 +135,7 @@ impl CssSourceLocation {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CssProperty {
+    All,
     Display,
     BoxSizing,
     Position,

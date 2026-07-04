@@ -383,9 +383,116 @@ fn nth_pattern_model_exposes_an_plus_b_coefficients() {
 }
 
 #[test]
+fn parses_nth_child_patterns() {
+    let cases = [
+        (
+            ":nth-child(odd) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::Odd),
+        ),
+        (
+            ":nth-child(even) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::Even),
+        ),
+        (
+            ":nth-child(3) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::Integer(3)),
+        ),
+        (
+            ":nth-child(-1) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::Integer(-1)),
+        ),
+        (
+            ":nth-child(+3) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::Integer(3)),
+        ),
+        (
+            ":nth-child(n) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(1, 0))),
+        ),
+        (
+            ":nth-child(-n) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(-1, 0))),
+        ),
+        (
+            ":nth-child(+n) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(1, 0))),
+        ),
+        (
+            ":nth-child(2n+1) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 1))),
+        ),
+        (
+            ":nth-child(2n-1) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, -1))),
+        ),
+        (
+            ":nth-child(-n+3) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(-1, 3))),
+        ),
+        (
+            ":nth-child(+3n-2) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(3, -2))),
+        ),
+    ];
+
+    for (css, expected) in cases {
+        let sheet = parse_sheet(css).unwrap_or_else(|error| panic!("{css}: {error:?}"));
+        assert_eq!(
+            sheet.rules()[0].selector(),
+            &CssSelector::PseudoClass(expected)
+        );
+    }
+}
+
+#[test]
+fn parses_all_nth_structural_pseudo_classes() {
+    let cases = [
+        (
+            ":nth-child(2n) { color: black; }",
+            CssPseudoClass::NthChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 0))),
+        ),
+        (
+            ":nth-last-child(2n) { color: black; }",
+            CssPseudoClass::NthLastChild(CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 0))),
+        ),
+        (
+            ":nth-of-type(2n) { color: black; }",
+            CssPseudoClass::NthOfType(CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 0))),
+        ),
+        (
+            ":nth-last-of-type(2n) { color: black; }",
+            CssPseudoClass::NthLastOfType(CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 0))),
+        ),
+    ];
+
+    for (css, expected) in cases {
+        let sheet = parse_sheet(css).unwrap();
+        assert_eq!(
+            sheet.rules()[0].selector(),
+            &CssSelector::PseudoClass(expected)
+        );
+    }
+}
+
+#[test]
+fn rejects_unsupported_nth_patterns_and_of_selector_forms() {
+    assert!(parse_sheet(":nth-child() { color: black; }").is_err());
+    assert!(parse_sheet(":nth-child(foo) { color: black; }").is_err());
+    assert!(parse_sheet(":nth-child(2n +) { color: black; }").is_err());
+    assert!(parse_sheet(":nth-child(2n + 1) { color: black; }").is_err());
+    assert!(parse_sheet(":nth-child(2n of .item) { color: black; }").is_err());
+}
+
+#[test]
+fn rejects_trailing_tokens_in_nth_functions() {
+    assert!(parse_sheet(":nth-child(odd even) { color: black; }").is_err());
+    assert!(parse_sheet(":nth-child(1 2) { color: black; }").is_err());
+    assert!(parse_sheet(":nth-child(2n+1 extra) { color: black; }").is_err());
+}
+
+#[test]
 fn rejects_unsupported_pseudo_classes() {
     assert!(parse_sheet(":not(.theme) { --space: 8px; }").is_err());
-    assert!(parse_sheet(":nth-child(odd) { --space: 8px; }").is_err());
 }
 
 #[test]

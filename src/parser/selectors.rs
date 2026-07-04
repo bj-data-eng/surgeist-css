@@ -149,6 +149,25 @@ fn parse_pseudo_class<'i, 't>(
                 Err(invalid_selector(input, message))
             }
         },
+        Ok(Token::Function(name)) => {
+            let name = name.clone();
+            input.parse_nested_block(|input| {
+                let pseudo_class = match_ignore_ascii_case! { &name,
+                    "nth-child" => CssPseudoClass::NthChild(parse_nth_pattern(input)?),
+                    "nth-last-child" => CssPseudoClass::NthLastChild(parse_nth_pattern(input)?),
+                    "nth-of-type" => CssPseudoClass::NthOfType(parse_nth_pattern(input)?),
+                    "nth-last-of-type" => {
+                        CssPseudoClass::NthLastOfType(parse_nth_pattern(input)?)
+                    },
+                    _ => {
+                        let message = format!("unsupported pseudo-class `:{name}(`");
+                        return Err(invalid_selector(input, message));
+                    }
+                };
+                input.expect_exhausted().map_err(selector_basic)?;
+                Ok(pseudo_class)
+            })
+        }
         Ok(token) => {
             let message = format!("unsupported pseudo-class `:{}`", token.to_css_string());
             input.reset(&state);
@@ -157,6 +176,111 @@ fn parse_pseudo_class<'i, 't>(
         Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => Err(
             invalid_selector(input, "selector pseudo-class is missing a name"),
         ),
+        Err(error) => Err(selector_basic(error)),
+    }
+}
+
+fn parse_nth_pattern<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssNthPattern, ParseError<'i, Error>> {
+    let token = input.next().map_err(selector_basic)?.clone();
+    match token {
+        Token::Ident(value) => parse_nth_ident(input, &value),
+        Token::Number {
+            int_value: Some(value),
+            ..
+        } => Ok(CssNthPattern::Integer(value)),
+        Token::Dimension {
+            int_value: Some(a),
+            unit,
+            ..
+        } if unit.eq_ignore_ascii_case("n") => parse_nth_dimension(input, a),
+        Token::Dimension {
+            int_value: Some(a),
+            unit,
+            ..
+        } => parse_nth_dimension_unit(input, a, &unit),
+        Token::Delim('+') => {
+            let token = input.next_including_whitespace().map_err(selector_basic)?;
+            match token {
+                Token::Ident(value) if value.eq_ignore_ascii_case("n") => {
+                    Ok(CssNthPattern::AnPlusB(CssNthAnPlusB::new(1, 0)))
+                }
+                _ => Err(invalid_selector(
+                    input,
+                    "unsupported nth pseudo-class pattern",
+                )),
+            }
+        }
+        _ => Err(invalid_selector(
+            input,
+            "unsupported nth pseudo-class pattern",
+        )),
+    }
+}
+
+fn parse_nth_ident<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    value: &str,
+) -> std::result::Result<CssNthPattern, ParseError<'i, Error>> {
+    match_ignore_ascii_case! { value,
+        "odd" => Ok(CssNthPattern::Odd),
+        "even" => Ok(CssNthPattern::Even),
+        "n" => Ok(CssNthPattern::AnPlusB(CssNthAnPlusB::new(1, 0))),
+        "-n" => parse_optional_nth_b(input, -1),
+        _ => Err(invalid_selector(input, "unsupported nth pseudo-class pattern")),
+    }
+}
+
+fn parse_nth_dimension<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    a: i32,
+) -> std::result::Result<CssNthPattern, ParseError<'i, Error>> {
+    parse_optional_nth_b(input, a)
+}
+
+fn parse_nth_dimension_unit<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    a: i32,
+    unit: &str,
+) -> std::result::Result<CssNthPattern, ParseError<'i, Error>> {
+    let Some(b_digits) = unit.strip_prefix("n-").or_else(|| unit.strip_prefix("N-")) else {
+        return Err(invalid_selector(
+            input,
+            "unsupported nth pseudo-class pattern",
+        ));
+    };
+    if b_digits.is_empty() || !b_digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(invalid_selector(
+            input,
+            "unsupported nth pseudo-class pattern",
+        ));
+    }
+    let b = b_digits
+        .parse::<i32>()
+        .map_err(|_| invalid_selector(input, "unsupported nth pseudo-class pattern"))?;
+    Ok(CssNthPattern::AnPlusB(CssNthAnPlusB::new(a, -b)))
+}
+
+fn parse_optional_nth_b<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    a: i32,
+) -> std::result::Result<CssNthPattern, ParseError<'i, Error>> {
+    let state = input.state();
+    match input.next_including_whitespace() {
+        Ok(Token::Number {
+            has_sign: true,
+            int_value: Some(b),
+            ..
+        }) => Ok(CssNthPattern::AnPlusB(CssNthAnPlusB::new(a, *b))),
+        Ok(_) => {
+            input.reset(&state);
+            Ok(CssNthPattern::AnPlusB(CssNthAnPlusB::new(a, 0)))
+        }
+        Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+            input.reset(&state);
+            Ok(CssNthPattern::AnPlusB(CssNthAnPlusB::new(a, 0)))
+        }
         Err(error) => Err(selector_basic(error)),
     }
 }

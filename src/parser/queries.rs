@@ -2,6 +2,7 @@
 use cssparser::ParserInput;
 use cssparser::{ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
 
+use super::variables::collect_authored_declaration_value;
 use crate::error::{Error, basic, invalid_syntax, unsupported_value_at};
 #[cfg(test)]
 use crate::error::{Result as CrateResult, from_parse_error};
@@ -31,6 +32,183 @@ pub(crate) fn parse_media_query_list_for_test(input: &str) -> CrateResult<CssMed
         )));
     }
     Ok(list)
+}
+
+#[allow(dead_code)]
+pub(crate) fn parse_container_condition<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssContainerCondition, ParseError<'i, Error>> {
+    let first = parse_container_condition_atom(input)?;
+
+    if input
+        .try_parse(|input| input.expect_ident_matching("and"))
+        .is_ok()
+    {
+        let mut conditions = vec![first, parse_container_condition_atom(input)?];
+        while input
+            .try_parse(|input| input.expect_ident_matching("and"))
+            .is_ok()
+        {
+            conditions.push(parse_container_condition_atom(input)?);
+        }
+        return Ok(CssContainerCondition::And(CssContainerConditionList::new(
+            conditions,
+        )));
+    }
+
+    if input
+        .try_parse(|input| input.expect_ident_matching("or"))
+        .is_ok()
+    {
+        let mut conditions = vec![first, parse_container_condition_atom(input)?];
+        while input
+            .try_parse(|input| input.expect_ident_matching("or"))
+            .is_ok()
+        {
+            conditions.push(parse_container_condition_atom(input)?);
+        }
+        return Ok(CssContainerCondition::Or(CssContainerConditionList::new(
+            conditions,
+        )));
+    }
+
+    Ok(first)
+}
+
+#[cfg(test)]
+pub(crate) fn parse_container_condition_for_test(
+    input: &str,
+) -> CrateResult<CssContainerCondition> {
+    let mut input = ParserInput::new(input);
+    let mut parser = Parser::new(&mut input);
+    let condition = parse_container_condition(&mut parser).map_err(from_parse_error)?;
+    if !parser.is_exhausted() {
+        return Err(from_parse_error(invalid_syntax(
+            parser.current_source_location(),
+            "unexpected token after container condition",
+        )));
+    }
+    Ok(condition)
+}
+
+#[allow(dead_code)]
+fn parse_container_condition_atom<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssContainerCondition, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("not"))
+        .is_ok()
+    {
+        return Ok(CssContainerCondition::Not(Box::new(
+            parse_container_condition_atom(input)?,
+        )));
+    }
+
+    if let Ok(style) = input.try_parse(parse_container_style_query) {
+        return Ok(CssContainerCondition::Style(style));
+    }
+
+    input.expect_parenthesis_block().map_err(basic)?;
+    let feature = input.parse_nested_block(|input| {
+        let feature = parse_container_feature_query(input)?;
+        if !input.is_exhausted() {
+            return Err(invalid_syntax(
+                input.current_source_location(),
+                "unexpected token in container feature query",
+            ));
+        }
+        Ok(feature)
+    })?;
+    Ok(CssContainerCondition::Feature(feature))
+}
+
+#[allow(dead_code)]
+fn parse_container_feature_query<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssContainerFeatureQuery, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    let Some(feature_name) = ContainerFeatureName::parse(&ident) else {
+        return Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported container feature `{ident}`"),
+        ));
+    };
+
+    match feature_name {
+        ContainerFeatureName::Width(prefix) => {
+            let comparison = parse_range_feature_comparison(input, prefix)?;
+            let value = parse_query_length(input)?;
+            Ok(CssContainerFeatureQuery::Width(CssRangeFeature::new(
+                comparison, value,
+            )))
+        }
+        ContainerFeatureName::Height(prefix) => {
+            let comparison = parse_range_feature_comparison(input, prefix)?;
+            let value = parse_query_length(input)?;
+            Ok(CssContainerFeatureQuery::Height(CssRangeFeature::new(
+                comparison, value,
+            )))
+        }
+        ContainerFeatureName::InlineSize(prefix) => {
+            let comparison = parse_range_feature_comparison(input, prefix)?;
+            let value = parse_query_length(input)?;
+            Ok(CssContainerFeatureQuery::InlineSize(CssRangeFeature::new(
+                comparison, value,
+            )))
+        }
+        ContainerFeatureName::BlockSize(prefix) => {
+            let comparison = parse_range_feature_comparison(input, prefix)?;
+            let value = parse_query_length(input)?;
+            Ok(CssContainerFeatureQuery::BlockSize(CssRangeFeature::new(
+                comparison, value,
+            )))
+        }
+        ContainerFeatureName::AspectRatio(prefix) => {
+            let comparison = parse_range_feature_comparison(input, prefix)?;
+            let value = parse_ratio(input)?;
+            Ok(CssContainerFeatureQuery::AspectRatio(CssRangeFeature::new(
+                comparison, value,
+            )))
+        }
+        ContainerFeatureName::Orientation => {
+            input.expect_colon().map_err(basic)?;
+            parse_orientation(input).map(CssContainerFeatureQuery::Orientation)
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn parse_container_style_query<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssContainerStyleQuery, ParseError<'i, Error>> {
+    input.expect_function_matching("style").map_err(basic)?;
+    input.parse_nested_block(|input| {
+        let location = input.current_source_location();
+        let name = input.expect_ident_cloned().map_err(basic)?;
+        let Some(name) = CssCustomPropertyName::try_new(name.to_string()) else {
+            return Err(invalid_syntax(
+                location,
+                "container style queries only support custom properties",
+            ));
+        };
+
+        if input.is_exhausted() {
+            return Ok(CssContainerStyleQuery::CustomPropertyPresence(name));
+        }
+
+        input.expect_colon().map_err(basic)?;
+        let (value, _) = collect_authored_declaration_value(input)?;
+        if value.as_css().trim().is_empty() {
+            return Err(invalid_syntax(
+                input.current_source_location(),
+                "container style query custom property value must not be empty",
+            ));
+        }
+
+        Ok(CssContainerStyleQuery::CustomPropertyValue { name, value })
+    })
 }
 
 fn parse_media_query<'i, 't>(
@@ -282,6 +460,42 @@ enum MediaFeatureName {
     DisplayMode,
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Copy)]
+enum ContainerFeatureName {
+    Width(Option<RangePrefix>),
+    Height(Option<RangePrefix>),
+    InlineSize(Option<RangePrefix>),
+    BlockSize(Option<RangePrefix>),
+    AspectRatio(Option<RangePrefix>),
+    Orientation,
+}
+
+#[allow(dead_code)]
+impl ContainerFeatureName {
+    fn parse(name: &str) -> Option<Self> {
+        Some(match name.to_ascii_lowercase().as_str() {
+            "width" => Self::Width(None),
+            "min-width" => Self::Width(Some(RangePrefix::Min)),
+            "max-width" => Self::Width(Some(RangePrefix::Max)),
+            "height" => Self::Height(None),
+            "min-height" => Self::Height(Some(RangePrefix::Min)),
+            "max-height" => Self::Height(Some(RangePrefix::Max)),
+            "inline-size" => Self::InlineSize(None),
+            "min-inline-size" => Self::InlineSize(Some(RangePrefix::Min)),
+            "max-inline-size" => Self::InlineSize(Some(RangePrefix::Max)),
+            "block-size" => Self::BlockSize(None),
+            "min-block-size" => Self::BlockSize(Some(RangePrefix::Min)),
+            "max-block-size" => Self::BlockSize(Some(RangePrefix::Max)),
+            "aspect-ratio" => Self::AspectRatio(None),
+            "min-aspect-ratio" => Self::AspectRatio(Some(RangePrefix::Min)),
+            "max-aspect-ratio" => Self::AspectRatio(Some(RangePrefix::Max)),
+            "orientation" => Self::Orientation,
+            _ => return None,
+        })
+    }
+}
+
 impl MediaFeatureName {
     fn parse(name: &str) -> Option<Self> {
         Some(match name.to_ascii_lowercase().as_str() {
@@ -390,6 +604,40 @@ fn parse_query_length<'i, 't>(
             format!("unsupported media query length `{}`", token.to_css_string()),
         )),
     }
+}
+
+#[allow(dead_code)]
+fn parse_ratio<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssRatio, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let numerator = match input.next().map_err(basic)? {
+        Token::Number { value, .. } => *value,
+        token => {
+            return Err(unsupported_value_at(
+                location,
+                None,
+                format!("unsupported query ratio `{}`", token.to_css_string()),
+            ));
+        }
+    };
+
+    input.expect_delim('/').map_err(basic)?;
+
+    let denominator_location = input.current_source_location();
+    let denominator = match input.next().map_err(basic)? {
+        Token::Number { value, .. } => *value,
+        token => {
+            return Err(unsupported_value_at(
+                denominator_location,
+                None,
+                format!("unsupported query ratio `{}`", token.to_css_string()),
+            ));
+        }
+    };
+
+    CssRatio::try_new(numerator, denominator)
+        .ok_or_else(|| unsupported_value_at(location, None, "unsupported query ratio"))
 }
 
 fn parse_resolution<'i, 't>(

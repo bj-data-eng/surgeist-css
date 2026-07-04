@@ -38,6 +38,10 @@ fn parse_media_query_list_for_test(input: &str) -> Result<CssMediaQueryList> {
     crate::parser::parse_media_query_list_for_test(input)
 }
 
+fn parse_container_condition_for_test(input: &str) -> Result<CssContainerCondition> {
+    crate::parser::parse_container_condition_for_test(input)
+}
+
 fn media_rule(rule: &CssRule) -> &CssMediaRule {
     match rule {
         CssRule::Media(rule) => rule,
@@ -2412,6 +2416,165 @@ fn media_query_parser_preserves_comma_separated_queries() {
     assert_eq!(
         print,
         &CssMediaQuery::Typed(CssTypedMediaQuery::new(None, CssMediaType::Print, None,))
+    );
+}
+
+#[test]
+fn container_name_constructor_rejects_invalid_and_reserved_names() {
+    assert_eq!(
+        CssContainerName::try_new("sidebar").unwrap().as_str(),
+        "sidebar"
+    );
+    assert_eq!(
+        CssContainerName::try_new("layout-pane").unwrap().as_str(),
+        "layout-pane"
+    );
+
+    for name in ["", " \t\n ", "two names", "1pane", "pane;", "none"] {
+        assert_eq!(
+            CssContainerName::try_new(name),
+            None,
+            "{name} should reject"
+        );
+    }
+    for reserved in [
+        "and",
+        "or",
+        "not",
+        "style",
+        "NoNe",
+        "inherit",
+        "initial",
+        "unset",
+        "revert",
+        "revert-layer",
+        "InItIaL",
+    ] {
+        assert_eq!(
+            CssContainerName::try_new(reserved),
+            None,
+            "{reserved} should reject"
+        );
+    }
+}
+
+#[test]
+fn container_condition_list_constructor_requires_at_least_two_conditions() {
+    let width =
+        CssContainerCondition::Feature(CssContainerFeatureQuery::Width(CssRangeFeature::new(
+            Some(CssQueryComparison::GreaterThan),
+            CssQueryLength::try_new(600.0, CssLengthUnit::Px).unwrap(),
+        )));
+    assert_eq!(CssContainerConditionList::try_new(Vec::new()), None);
+    assert_eq!(
+        CssContainerConditionList::try_new(vec![width.clone()]),
+        None
+    );
+    assert!(CssContainerConditionList::try_new(vec![width.clone(), width]).is_some());
+}
+
+#[test]
+fn container_condition_parser_accepts_plan_examples() {
+    for css in [
+        "(width > 600px)",
+        "(inline-size >= 30rem)",
+        "(aspect-ratio > 1 / 1)",
+        "(orientation: landscape)",
+        "not (width < 300px)",
+        "(width > 600px) and (orientation: landscape)",
+        "(width > 600px) or (orientation: portrait)",
+        "style(--theme)",
+        "style(--theme: dark)",
+    ] {
+        parse_container_condition_for_test(css).unwrap_or_else(|error| {
+            panic!("{css} should parse as a container condition: {error}");
+        });
+    }
+}
+
+#[test]
+fn container_condition_parser_rejects_unknown_and_malformed_plan_examples() {
+    for css in [
+        "(unknown > 1px)",
+        "(width: auto)",
+        "(width: min-content)",
+        "(aspect-ratio: -1 / 1)",
+        "(aspect-ratio: 1 / 0)",
+        "style(color: red)",
+        "scroll-state(stuck: top)",
+        "(width > )",
+    ] {
+        assert!(
+            parse_container_condition_for_test(css).is_err(),
+            "{css} should reject"
+        );
+    }
+}
+
+#[test]
+fn container_condition_parser_preserves_size_feature_structure() {
+    let condition = parse_container_condition_for_test("(inline-size >= 30rem)").unwrap();
+    let CssContainerCondition::Feature(CssContainerFeatureQuery::InlineSize(inline_size)) =
+        condition
+    else {
+        panic!("expected inline-size feature");
+    };
+
+    assert_eq!(
+        inline_size.comparison(),
+        Some(CssQueryComparison::GreaterThanOrEqual)
+    );
+    assert_eq!(inline_size.value().value().value(), 30.0);
+    assert_eq!(inline_size.value().unit(), CssLengthUnit::Rem);
+}
+
+#[test]
+fn container_condition_parser_preserves_ratio_and_logic_structure() {
+    let condition =
+        parse_container_condition_for_test("(aspect-ratio > 1 / 1) and (orientation: landscape)")
+            .unwrap();
+    let CssContainerCondition::And(list) = condition else {
+        panic!("expected and condition list");
+    };
+    let [ratio, orientation] = list.conditions() else {
+        panic!("expected two conditions");
+    };
+
+    let CssContainerCondition::Feature(CssContainerFeatureQuery::AspectRatio(ratio)) = ratio else {
+        panic!("expected aspect-ratio feature");
+    };
+    assert_eq!(ratio.comparison(), Some(CssQueryComparison::GreaterThan));
+    assert_eq!(ratio.value().numerator().value(), 1.0);
+    assert_eq!(ratio.value().denominator().value(), 1.0);
+
+    assert_eq!(
+        orientation,
+        &CssContainerCondition::Feature(CssContainerFeatureQuery::Orientation(
+            CssOrientation::Landscape
+        ))
+    );
+}
+
+#[test]
+fn container_style_query_preserves_custom_property_presence() {
+    let condition = parse_container_condition_for_test("style(--theme)").unwrap();
+    assert_eq!(
+        condition,
+        CssContainerCondition::Style(CssContainerStyleQuery::CustomPropertyPresence(
+            CssCustomPropertyName::try_new("--theme").unwrap()
+        ))
+    );
+}
+
+#[test]
+fn container_style_query_preserves_custom_property_authored_value() {
+    let condition = parse_container_condition_for_test("style(--theme: dark)").unwrap();
+    assert_eq!(
+        condition,
+        CssContainerCondition::Style(CssContainerStyleQuery::CustomPropertyValue {
+            name: CssCustomPropertyName::try_new("--theme").unwrap(),
+            value: CssAuthoredDeclarationValue::try_new("dark").unwrap(),
+        })
     );
 }
 

@@ -30,6 +30,8 @@ use box_model::*;
 use effects::*;
 use grid::*;
 use layout::*;
+#[cfg(test)]
+pub(crate) use queries::parse_container_condition_for_test;
 use queries::parse_media_query_list;
 #[cfg(test)]
 pub(crate) use queries::parse_media_query_list_for_test;

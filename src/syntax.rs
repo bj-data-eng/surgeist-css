@@ -340,6 +340,110 @@ pub enum CssMediaCondition {
     Or(CssMediaConditionList),
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CssContainerName {
+    name: String,
+}
+
+impl CssContainerName {
+    #[must_use]
+    pub fn try_new(name: impl Into<String>) -> Option<Self> {
+        let name = name.into();
+        if is_valid_container_name(&name) {
+            Some(Self::new(name))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(name: impl Into<String>) -> Self {
+        let name = name.into();
+        debug_assert!(is_valid_container_name(&name));
+        Self { name }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.name
+    }
+}
+
+fn is_valid_container_name(name: &str) -> bool {
+    is_exact_css_identifier(name) && !is_parser_reserved_container_name(name)
+}
+
+fn is_parser_reserved_container_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "inherit"
+            | "initial"
+            | "unset"
+            | "revert"
+            | "revert-layer"
+            | "none"
+            | "and"
+            | "or"
+            | "not"
+            | "style"
+    )
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssContainerCondition {
+    Feature(CssContainerFeatureQuery),
+    Style(CssContainerStyleQuery),
+    Not(Box<CssContainerCondition>),
+    And(CssContainerConditionList),
+    Or(CssContainerConditionList),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssContainerConditionList {
+    conditions: Vec<CssContainerCondition>,
+}
+
+impl CssContainerConditionList {
+    #[must_use]
+    pub fn try_new(conditions: Vec<CssContainerCondition>) -> Option<Self> {
+        if conditions.len() < 2 {
+            None
+        } else {
+            Some(Self::new(conditions))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(conditions: Vec<CssContainerCondition>) -> Self {
+        debug_assert!(conditions.len() >= 2);
+        Self { conditions }
+    }
+
+    #[must_use]
+    pub fn conditions(&self) -> &[CssContainerCondition] {
+        &self.conditions
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssContainerFeatureQuery {
+    Width(CssRangeFeature<CssQueryLength>),
+    Height(CssRangeFeature<CssQueryLength>),
+    InlineSize(CssRangeFeature<CssQueryLength>),
+    BlockSize(CssRangeFeature<CssQueryLength>),
+    AspectRatio(CssRangeFeature<CssRatio>),
+    Orientation(CssOrientation),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssContainerStyleQuery {
+    CustomPropertyPresence(CssCustomPropertyName),
+    CustomPropertyValue {
+        name: CssCustomPropertyName,
+        value: CssAuthoredDeclarationValue,
+    },
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssMediaConditionList {
     conditions: Vec<CssMediaCondition>,

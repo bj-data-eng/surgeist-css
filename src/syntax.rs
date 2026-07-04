@@ -39,6 +39,369 @@ pub enum CssRule {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct CssMediaQueryList {
+    queries: Vec<CssMediaQuery>,
+}
+
+impl CssMediaQueryList {
+    #[must_use]
+    pub fn try_new(queries: Vec<CssMediaQuery>) -> Option<Self> {
+        if queries.is_empty() {
+            None
+        } else {
+            Some(Self::new(queries))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(queries: Vec<CssMediaQuery>) -> Self {
+        debug_assert!(!queries.is_empty());
+        Self { queries }
+    }
+
+    #[must_use]
+    pub fn queries(&self) -> &[CssMediaQuery] {
+        &self.queries
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssMediaQuery {
+    Condition(CssMediaCondition),
+    Typed(CssTypedMediaQuery),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTypedMediaQuery {
+    modifier: Option<CssMediaQueryModifier>,
+    media_type: CssMediaType,
+    condition: Option<CssMediaCondition>,
+}
+
+impl CssTypedMediaQuery {
+    #[must_use]
+    pub fn new(
+        modifier: Option<CssMediaQueryModifier>,
+        media_type: CssMediaType,
+        condition: Option<CssMediaCondition>,
+    ) -> Self {
+        Self {
+            modifier,
+            media_type,
+            condition,
+        }
+    }
+
+    #[must_use]
+    pub const fn modifier(&self) -> Option<CssMediaQueryModifier> {
+        self.modifier
+    }
+
+    #[must_use]
+    pub const fn media_type(&self) -> CssMediaType {
+        self.media_type
+    }
+
+    #[must_use]
+    pub const fn condition(&self) -> Option<&CssMediaCondition> {
+        self.condition.as_ref()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssMediaQueryModifier {
+    Not,
+    Only,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssMediaType {
+    All,
+    Screen,
+    Print,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssMediaCondition {
+    Feature(CssMediaFeatureQuery),
+    Not(Box<CssMediaCondition>),
+    And(CssMediaConditionList),
+    Or(CssMediaConditionList),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssMediaConditionList {
+    conditions: Vec<CssMediaCondition>,
+}
+
+impl CssMediaConditionList {
+    #[must_use]
+    pub fn try_new(conditions: Vec<CssMediaCondition>) -> Option<Self> {
+        if conditions.len() < 2 {
+            None
+        } else {
+            Some(Self::new(conditions))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(conditions: Vec<CssMediaCondition>) -> Self {
+        debug_assert!(conditions.len() >= 2);
+        Self { conditions }
+    }
+
+    #[must_use]
+    pub fn conditions(&self) -> &[CssMediaCondition] {
+        &self.conditions
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssMediaFeatureQuery {
+    Width(CssRangeFeature<CssQueryLength>),
+    Height(CssRangeFeature<CssQueryLength>),
+    Resolution(CssRangeFeature<CssResolution>),
+    Color(CssRangeFeature<CssNonNegativeInteger>),
+    Monochrome(CssRangeFeature<CssNonNegativeInteger>),
+    Orientation(CssOrientation),
+    PrefersColorScheme(CssColorSchemePreference),
+    PrefersReducedMotion(CssReducedMotionPreference),
+    PrefersReducedTransparency(CssReducedTransparencyPreference),
+    PrefersContrast(CssContrastPreference),
+    ForcedColors(CssForcedColorsMode),
+    Hover(CssHoverCapability),
+    AnyHover(CssHoverCapability),
+    Pointer(CssPointerCapability),
+    AnyPointer(CssPointerCapability),
+    DisplayMode(CssDisplayMode),
+}
+
+impl CssMediaFeatureQuery {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Width(_) => "width",
+            Self::Height(_) => "height",
+            Self::Resolution(_) => "resolution",
+            Self::Color(_) => "color",
+            Self::Monochrome(_) => "monochrome",
+            Self::Orientation(_) => "orientation",
+            Self::PrefersColorScheme(_) => "prefers-color-scheme",
+            Self::PrefersReducedMotion(_) => "prefers-reduced-motion",
+            Self::PrefersReducedTransparency(_) => "prefers-reduced-transparency",
+            Self::PrefersContrast(_) => "prefers-contrast",
+            Self::ForcedColors(_) => "forced-colors",
+            Self::Hover(_) => "hover",
+            Self::AnyHover(_) => "any-hover",
+            Self::Pointer(_) => "pointer",
+            Self::AnyPointer(_) => "any-pointer",
+            Self::DisplayMode(_) => "display-mode",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssQueryComparison {
+    LessThan,
+    LessThanOrEqual,
+    Equal,
+    GreaterThanOrEqual,
+    GreaterThan,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssRangeFeature<T> {
+    comparison: Option<CssQueryComparison>,
+    value: T,
+}
+
+impl<T> CssRangeFeature<T> {
+    #[allow(dead_code)]
+    #[must_use]
+    pub(crate) fn new(comparison: Option<CssQueryComparison>, value: T) -> Self {
+        Self { comparison, value }
+    }
+
+    #[must_use]
+    pub const fn comparison(&self) -> Option<CssQueryComparison> {
+        self.comparison
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &T {
+        &self.value
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssNonNegativeInteger {
+    value: u32,
+}
+
+impl CssNonNegativeInteger {
+    #[must_use]
+    pub const fn new(value: u32) -> Self {
+        Self { value }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> u32 {
+        self.value
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssOrientation {
+    Portrait,
+    Landscape,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssColorSchemePreference {
+    Light,
+    Dark,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssReducedMotionPreference {
+    Reduce,
+    NoPreference,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssReducedTransparencyPreference {
+    Reduce,
+    NoPreference,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssContrastPreference {
+    NoPreference,
+    More,
+    Less,
+    Custom,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssForcedColorsMode {
+    None,
+    Active,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssHoverCapability {
+    None,
+    Hover,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssPointerCapability {
+    None,
+    Coarse,
+    Fine,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssDisplayMode {
+    Fullscreen,
+    Standalone,
+    MinimalUi,
+    Browser,
+    PictureInPicture,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssResolution {
+    value: CssFiniteNumber,
+    unit: CssResolutionUnit,
+}
+
+impl CssResolution {
+    #[must_use]
+    pub fn try_new(value: f32, unit: CssResolutionUnit) -> Option<Self> {
+        if value > 0.0 {
+            CssFiniteNumber::try_new(value).map(|value| Self { value, unit })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> CssFiniteNumber {
+        self.value
+    }
+
+    #[must_use]
+    pub const fn unit(self) -> CssResolutionUnit {
+        self.unit
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssResolutionUnit {
+    Dpi,
+    Dpcm,
+    Dppx,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssRatio {
+    numerator: CssFiniteNumber,
+    denominator: CssFiniteNumber,
+}
+
+impl CssRatio {
+    #[must_use]
+    pub fn try_new(numerator: f32, denominator: f32) -> Option<Self> {
+        if numerator >= 0.0 && denominator > 0.0 {
+            Some(Self {
+                numerator: CssFiniteNumber::try_new(numerator)?,
+                denominator: CssFiniteNumber::try_new(denominator)?,
+            })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn numerator(self) -> CssFiniteNumber {
+        self.numerator
+    }
+
+    #[must_use]
+    pub const fn denominator(self) -> CssFiniteNumber {
+        self.denominator
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssQueryLength {
+    value: CssFiniteNumber,
+    unit: CssLengthUnit,
+}
+
+impl CssQueryLength {
+    #[must_use]
+    pub fn try_new(value: f32, unit: CssLengthUnit) -> Option<Self> {
+        if value >= 0.0 {
+            CssFiniteNumber::try_new(value).map(|value| Self { value, unit })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> CssFiniteNumber {
+        self.value
+    }
+
+    #[must_use]
+    pub const fn unit(self) -> CssLengthUnit {
+        self.unit
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct CssStyleRule {
     selector: CssSelector,
     declarations: Vec<CssDeclaration>,

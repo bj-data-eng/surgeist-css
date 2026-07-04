@@ -12,6 +12,9 @@ mod box_model;
 mod effects;
 mod grid;
 mod layout;
+// @media rule parsing is a later task; this parser is exercised through tests for now.
+#[allow(dead_code)]
+mod queries;
 mod selectors;
 mod timing;
 mod typography;
@@ -29,6 +32,8 @@ use box_model::*;
 use effects::*;
 use grid::*;
 use layout::*;
+#[cfg(test)]
+pub(crate) use queries::parse_media_query_list_for_test;
 use selectors::parse_rule_selector_list;
 use timing::*;
 use typography::*;

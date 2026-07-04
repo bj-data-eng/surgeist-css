@@ -32,6 +32,10 @@ fn declaration(input: &str, property: CssProperty) -> CssDeclaration {
         .clone()
 }
 
+fn parse_media_query_list_for_test(input: &str) -> Result<CssMediaQueryList> {
+    crate::parser::parse_media_query_list_for_test(input)
+}
+
 #[test]
 fn parsed_style_rule_is_explicit_rule_variant() {
     let sheet = parse_sheet(".panel { width: 10px; }").unwrap();
@@ -2010,6 +2014,205 @@ fn constructor_invariants_reject_invalid_public_numeric_values() {
             shrink: Some(CssFlexFactor::try_new(0.0).unwrap()),
             basis: Some(CssLength::px(2.0)),
         }
+    );
+}
+
+#[test]
+fn media_query_list_constructor_requires_queries() {
+    assert_eq!(CssMediaQueryList::try_new(Vec::new()), None);
+    assert!(
+        CssMediaQueryList::try_new(vec![CssMediaQuery::Typed(CssTypedMediaQuery::new(
+            None,
+            CssMediaType::Screen,
+            None,
+        ))])
+        .is_some()
+    );
+}
+
+#[test]
+fn media_condition_list_constructor_requires_at_least_two_conditions() {
+    let width = CssMediaCondition::Feature(CssMediaFeatureQuery::Width(CssRangeFeature::new(
+        Some(CssQueryComparison::GreaterThanOrEqual),
+        CssQueryLength::try_new(600.0, CssLengthUnit::Px).unwrap(),
+    )));
+    assert_eq!(CssMediaConditionList::try_new(Vec::new()), None);
+    assert_eq!(CssMediaConditionList::try_new(vec![width.clone()]), None);
+    assert!(CssMediaConditionList::try_new(vec![width.clone(), width]).is_some());
+}
+
+#[test]
+fn media_feature_numeric_constructors_enforce_query_invariants() {
+    assert_eq!(
+        CssQueryLength::try_new(12.0, CssLengthUnit::Rem)
+            .unwrap()
+            .value()
+            .value(),
+        12.0
+    );
+    assert_eq!(
+        CssQueryLength::try_new(12.0, CssLengthUnit::Rem)
+            .unwrap()
+            .unit(),
+        CssLengthUnit::Rem
+    );
+    assert_eq!(CssQueryLength::try_new(-0.1, CssLengthUnit::Px), None);
+    assert_eq!(CssQueryLength::try_new(f32::NAN, CssLengthUnit::Px), None);
+
+    assert_eq!(
+        CssRatio::try_new(16.0, 9.0).unwrap().numerator().value(),
+        16.0
+    );
+    assert_eq!(
+        CssRatio::try_new(16.0, 9.0).unwrap().denominator().value(),
+        9.0
+    );
+    assert_eq!(CssRatio::try_new(-1.0, 1.0), None);
+    assert_eq!(CssRatio::try_new(1.0, 0.0), None);
+    assert_eq!(CssRatio::try_new(f32::INFINITY, 1.0), None);
+
+    assert_eq!(
+        CssResolution::try_new(2.0, CssResolutionUnit::Dppx)
+            .unwrap()
+            .unit(),
+        CssResolutionUnit::Dppx
+    );
+    assert_eq!(CssResolution::try_new(0.0, CssResolutionUnit::Dpi), None);
+    assert_eq!(
+        CssResolution::try_new(f32::NAN, CssResolutionUnit::Dpi),
+        None
+    );
+}
+
+#[test]
+fn media_feature_names_are_canonical() {
+    assert_eq!(
+        CssMediaFeatureQuery::Width(CssRangeFeature::new(
+            None,
+            CssQueryLength::try_new(1.0, CssLengthUnit::Px).unwrap(),
+        ))
+        .name(),
+        "width"
+    );
+    assert_eq!(
+        CssMediaFeatureQuery::PrefersColorScheme(CssColorSchemePreference::Dark).name(),
+        "prefers-color-scheme"
+    );
+    assert_eq!(
+        CssMediaFeatureQuery::AnyPointer(CssPointerCapability::Fine).name(),
+        "any-pointer"
+    );
+}
+
+#[test]
+fn media_query_parser_accepts_plan_examples() {
+    for css in [
+        "screen",
+        "print",
+        "screen and (min-width: 600px)",
+        "(width >= 600px)",
+        "(orientation: landscape)",
+        "(prefers-color-scheme: dark)",
+        "(hover: hover) and (pointer: fine)",
+        "not screen and (max-width: 400px)",
+        "screen, print",
+    ] {
+        parse_media_query_list_for_test(css).unwrap_or_else(|error| {
+            panic!("{css} should parse as a media query list: {error}");
+        });
+    }
+}
+
+#[test]
+fn media_query_parser_rejects_unknown_and_malformed_plan_examples() {
+    for css in [
+        "tv",
+        "(unknown-feature: yes)",
+        "(width: auto)",
+        "(width: min-content)",
+        "(width >= )",
+        "screen and",
+        "screen or print",
+    ] {
+        assert!(
+            parse_media_query_list_for_test(css).is_err(),
+            "{css} should reject"
+        );
+    }
+}
+
+#[test]
+fn media_query_parser_preserves_typed_query_structure() {
+    let query_list = parse_media_query_list_for_test("not screen and (max-width: 400px)").unwrap();
+    let [CssMediaQuery::Typed(query)] = query_list.queries() else {
+        panic!("expected one typed media query");
+    };
+
+    assert_eq!(query.modifier(), Some(CssMediaQueryModifier::Not));
+    assert_eq!(query.media_type(), CssMediaType::Screen);
+    let Some(CssMediaCondition::Feature(CssMediaFeatureQuery::Width(width))) = query.condition()
+    else {
+        panic!("expected width condition");
+    };
+    assert_eq!(
+        width.comparison(),
+        Some(CssQueryComparison::LessThanOrEqual)
+    );
+    assert_eq!(width.value().value().value(), 400.0);
+    assert_eq!(width.value().unit(), CssLengthUnit::Px);
+}
+
+#[test]
+fn media_query_parser_preserves_condition_only_range_structure() {
+    let query_list = parse_media_query_list_for_test("(width >= 600px)").unwrap();
+    let [CssMediaQuery::Condition(CssMediaCondition::Feature(CssMediaFeatureQuery::Width(width)))] =
+        query_list.queries()
+    else {
+        panic!("expected one condition-only width query");
+    };
+
+    assert_eq!(
+        width.comparison(),
+        Some(CssQueryComparison::GreaterThanOrEqual)
+    );
+    assert_eq!(width.value().value().value(), 600.0);
+    assert_eq!(width.value().unit(), CssLengthUnit::Px);
+}
+
+#[test]
+fn media_query_parser_preserves_discrete_and_condition_list_structure() {
+    let query_list = parse_media_query_list_for_test("(hover: hover) and (pointer: fine)").unwrap();
+    let [CssMediaQuery::Condition(CssMediaCondition::And(list))] = query_list.queries() else {
+        panic!("expected one condition-only and query");
+    };
+    let [hover, pointer] = list.conditions() else {
+        panic!("expected two conditions");
+    };
+
+    assert_eq!(
+        hover,
+        &CssMediaCondition::Feature(CssMediaFeatureQuery::Hover(CssHoverCapability::Hover))
+    );
+    assert_eq!(
+        pointer,
+        &CssMediaCondition::Feature(CssMediaFeatureQuery::Pointer(CssPointerCapability::Fine))
+    );
+}
+
+#[test]
+fn media_query_parser_preserves_comma_separated_queries() {
+    let query_list = parse_media_query_list_for_test("screen, print").unwrap();
+    let [screen, print] = query_list.queries() else {
+        panic!("expected two media queries");
+    };
+
+    assert_eq!(
+        screen,
+        &CssMediaQuery::Typed(CssTypedMediaQuery::new(None, CssMediaType::Screen, None,))
+    );
+    assert_eq!(
+        print,
+        &CssMediaQuery::Typed(CssTypedMediaQuery::new(None, CssMediaType::Print, None,))
     );
 }
 

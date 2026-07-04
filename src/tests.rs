@@ -663,6 +663,133 @@ fn rejects_unsupported_relative_or_combinator_selector_forms() {
 }
 
 #[test]
+fn parses_attribute_selector_matcher_forms() {
+    let cases = [
+        ("[disabled] { color: black; }", CssAttributeMatcher::Exists),
+        (
+            "[data-state=open] { color: black; }",
+            CssAttributeMatcher::Equals("open".to_owned()),
+        ),
+        (
+            r#"[data-role~="button"] { color: black; }"#,
+            CssAttributeMatcher::Includes("button".to_owned()),
+        ),
+        (
+            "[lang|=en] { color: black; }",
+            CssAttributeMatcher::DashMatch("en".to_owned()),
+        ),
+        (
+            r#"[href^="https"] { color: black; }"#,
+            CssAttributeMatcher::Prefix("https".to_owned()),
+        ),
+        (
+            r#"[src$=".svg"] { color: black; }"#,
+            CssAttributeMatcher::Suffix(".svg".to_owned()),
+        ),
+        (
+            r#"[data-id*="card"] { color: black; }"#,
+            CssAttributeMatcher::Substring("card".to_owned()),
+        ),
+    ];
+
+    for (css, expected) in cases {
+        let sheet = parse_sheet(css).unwrap();
+        let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
+            panic!("{css} should parse as a compound selector");
+        };
+        let [attribute] = selector.attributes() else {
+            panic!("{css} should have one attribute selector");
+        };
+        assert_eq!(attribute.matcher(), &expected);
+        assert_eq!(
+            attribute.case_sensitivity(),
+            CssAttributeCaseSensitivity::DocumentDefault
+        );
+    }
+}
+
+#[test]
+fn attribute_selectors_are_structurally_inspectable() {
+    let sheet = parse_sheet(r#"[data-state="open" i] { color: black; }"#).unwrap();
+    let rule = style_rule(&sheet.rules()[0]);
+    let CssSelector::Compound(selector) = rule.selector() else {
+        panic!("expected compound selector");
+    };
+    let [attribute] = selector.attributes() else {
+        panic!("expected one attribute selector");
+    };
+    assert_eq!(attribute.name().as_str(), "data-state");
+    assert_eq!(
+        attribute.matcher(),
+        &CssAttributeMatcher::Equals("open".to_owned())
+    );
+    assert_eq!(
+        attribute.case_sensitivity(),
+        CssAttributeCaseSensitivity::AsciiCaseInsensitive
+    );
+}
+
+#[test]
+fn parses_attribute_selector_case_modifiers_and_compound_position() {
+    let insensitive = parse_sheet(r#"[data-state="OPEN" i] { color: black; }"#).unwrap();
+    let CssSelector::Compound(selector) = style_rule(&insensitive.rules()[0]).selector() else {
+        panic!("expected compound selector");
+    };
+    assert_eq!(
+        selector.attributes()[0].case_sensitivity(),
+        CssAttributeCaseSensitivity::AsciiCaseInsensitive
+    );
+
+    let sensitive = parse_sheet(r#"[data-state="open" s] { color: black; }"#).unwrap();
+    let CssSelector::Compound(selector) = style_rule(&sensitive.rules()[0]).selector() else {
+        panic!("expected compound selector");
+    };
+    assert_eq!(
+        selector.attributes()[0].case_sensitivity(),
+        CssAttributeCaseSensitivity::ExplicitSensitive
+    );
+
+    let mixed = parse_sheet("button.primary[aria-expanded=true]:hover { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = style_rule(&mixed.rules()[0]).selector() else {
+        panic!("expected compound selector");
+    };
+    assert_eq!(selector.tag().map(String::as_str), Some("button"));
+    assert_eq!(selector.classes(), &["primary".to_owned()]);
+    assert_eq!(selector.pseudo_classes(), &[CssPseudoClass::Hover]);
+    let [attribute] = selector.attributes() else {
+        panic!("expected one attribute selector");
+    };
+    assert_eq!(attribute.name().as_str(), "aria-expanded");
+    assert_eq!(
+        attribute.matcher(),
+        &CssAttributeMatcher::Equals("true".to_owned())
+    );
+}
+
+#[test]
+fn rejects_invalid_attribute_selectors() {
+    assert!(parse_sheet("[svg|href] { color: black; }").is_err());
+    assert!(parse_sheet("[data-state=] { color: black; }").is_err());
+    assert!(parse_sheet("[data-state=open q] { color: black; }").is_err());
+    assert!(parse_sheet("[] { color: black; }").is_err());
+    assert!(parse_sheet("[data-state=open extra] { color: black; }").is_err());
+}
+
+#[test]
+fn attribute_name_constructor_matches_parser_identifier_invariants() {
+    assert_eq!(
+        CssAttributeName::try_new("data-state").unwrap().as_str(),
+        "data-state"
+    );
+    assert_eq!(CssAttributeName::try_new(""), None);
+    assert_eq!(CssAttributeName::try_new(" \t\n "), None);
+    assert_eq!(CssAttributeName::try_new("data state"), None);
+    assert_eq!(CssAttributeName::try_new("svg|href"), None);
+    assert_eq!(CssAttributeName::try_new("data-state extra"), None);
+    assert_eq!(CssAttributeName::try_new("data-state;"), None);
+}
+
+#[test]
 fn practical_pseudo_class_matrix_accepts_supported_and_rejects_unsupported_forms() {
     let accepted = [
         ":hover { color: black; }",

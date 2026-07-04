@@ -4524,6 +4524,7 @@ pub struct CssCompoundSelector {
     tag: Option<String>,
     key: Option<String>,
     classes: Vec<String>,
+    attributes: Vec<CssAttributeSelector>,
     pseudo_classes: Vec<CssPseudoClass>,
 }
 
@@ -4533,12 +4534,14 @@ impl CssCompoundSelector {
         tag: Option<String>,
         key: Option<String>,
         classes: Vec<String>,
+        attributes: Vec<CssAttributeSelector>,
         pseudo_classes: Vec<CssPseudoClass>,
     ) -> Self {
         Self {
             tag,
             key,
             classes,
+            attributes,
             pseudo_classes,
         }
     }
@@ -4559,9 +4562,101 @@ impl CssCompoundSelector {
     }
 
     #[must_use]
+    pub fn attributes(&self) -> &[CssAttributeSelector] {
+        &self.attributes
+    }
+
+    #[must_use]
     pub fn pseudo_classes(&self) -> &[CssPseudoClass] {
         &self.pseudo_classes
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAttributeSelector {
+    name: CssAttributeName,
+    matcher: CssAttributeMatcher,
+    case_sensitivity: CssAttributeCaseSensitivity,
+}
+
+impl CssAttributeSelector {
+    #[must_use]
+    pub(crate) const fn new(
+        name: CssAttributeName,
+        matcher: CssAttributeMatcher,
+        case_sensitivity: CssAttributeCaseSensitivity,
+    ) -> Self {
+        Self {
+            name,
+            matcher,
+            case_sensitivity,
+        }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> &CssAttributeName {
+        &self.name
+    }
+
+    #[must_use]
+    pub const fn matcher(&self) -> &CssAttributeMatcher {
+        &self.matcher
+    }
+
+    #[must_use]
+    pub const fn case_sensitivity(&self) -> CssAttributeCaseSensitivity {
+        self.case_sensitivity
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CssAttributeName {
+    name: String,
+}
+
+impl CssAttributeName {
+    #[must_use]
+    pub fn try_new(name: impl Into<String>) -> Option<Self> {
+        let name = name.into();
+        let is_valid = {
+            let mut input = cssparser::ParserInput::new(&name);
+            let mut parser = cssparser::Parser::new(&mut input);
+            let parsed = parser.expect_ident_cloned().ok()?;
+            parser.expect_exhausted().ok()?;
+            parsed.as_ref() == name
+        };
+        if is_valid { Some(Self { name }) } else { None }
+    }
+
+    #[must_use]
+    pub(crate) fn new(name: impl Into<String>) -> Self {
+        let name = name.into();
+        debug_assert!(Self::try_new(name.clone()).is_some());
+        Self { name }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.name
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssAttributeMatcher {
+    Exists,
+    Equals(String),
+    Includes(String),
+    DashMatch(String),
+    Prefix(String),
+    Suffix(String),
+    Substring(String),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssAttributeCaseSensitivity {
+    DocumentDefault,
+    AsciiCaseInsensitive,
+    ExplicitSensitive,
 }
 
 #[derive(Clone, Debug, PartialEq)]

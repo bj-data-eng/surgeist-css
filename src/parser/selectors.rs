@@ -39,6 +39,7 @@ pub(super) fn parse_compound_selector<'i, 't>(
     let mut tag_name = None;
     let mut key_name = None;
     let mut class_names = Vec::new();
+    let mut attributes = Vec::new();
     let mut pseudo_classes = Vec::new();
 
     if let Ok(tag) = input.try_parse(Parser::expect_ident_cloned) {
@@ -65,6 +66,12 @@ pub(super) fn parse_compound_selector<'i, 't>(
             continue;
         }
 
+        if input.try_parse(Parser::expect_square_bracket_block).is_ok() {
+            let attribute = input.parse_nested_block(parse_attribute_selector)?;
+            attributes.push(attribute);
+            continue;
+        }
+
         if input.try_parse(Parser::expect_colon).is_ok() {
             let pseudo_class = parse_pseudo_class(input)?;
             pseudo_classes.push(pseudo_class);
@@ -83,6 +90,7 @@ pub(super) fn parse_compound_selector<'i, 't>(
                 if tag_name.is_none()
                     && key_name.is_none()
                     && class_names.is_empty()
+                    && attributes.is_empty()
                     && pseudo_classes.is_empty()
                 {
                     return Err(invalid_selector(input, message));
@@ -97,6 +105,7 @@ pub(super) fn parse_compound_selector<'i, 't>(
     if tag_name.is_none()
         && key_name.is_none()
         && class_names.is_empty()
+        && attributes.is_empty()
         && pseudo_classes.is_empty()
     {
         return Err(invalid_selector(
@@ -104,34 +113,38 @@ pub(super) fn parse_compound_selector<'i, 't>(
             "selector is missing a simple selector",
         ));
     }
-    if let (None, None, [class], []) = (
+    if let (None, None, [class], [], []) = (
         tag_name.as_ref(),
         key_name.as_ref(),
         class_names.as_slice(),
+        attributes.as_slice(),
         pseudo_classes.as_slice(),
     ) {
         return Ok(CssSelector::Class(class.clone()));
     }
-    if let (Some(tag), None, [], []) = (
+    if let (Some(tag), None, [], [], []) = (
         tag_name.as_ref(),
         key_name.as_ref(),
         class_names.as_slice(),
+        attributes.as_slice(),
         pseudo_classes.as_slice(),
     ) {
         return Ok(CssSelector::Tag(tag.clone()));
     }
-    if let (None, Some(key), [], []) = (
+    if let (None, Some(key), [], [], []) = (
         tag_name.as_ref(),
         key_name.as_ref(),
         class_names.as_slice(),
+        attributes.as_slice(),
         pseudo_classes.as_slice(),
     ) {
         return Ok(CssSelector::Key(key.clone()));
     }
-    if let (None, None, [], [pseudo_class]) = (
+    if let (None, None, [], [], [pseudo_class]) = (
         tag_name.as_ref(),
         key_name.as_ref(),
         class_names.as_slice(),
+        attributes.as_slice(),
         pseudo_classes.as_slice(),
     ) {
         return Ok(CssSelector::PseudoClass(pseudo_class.clone()));
@@ -140,8 +153,92 @@ pub(super) fn parse_compound_selector<'i, 't>(
         tag_name,
         key_name,
         class_names,
+        attributes,
         pseudo_classes,
     )))
+}
+
+fn parse_attribute_selector<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAttributeSelector, ParseError<'i, Error>> {
+    let name = input.expect_ident_cloned().map_err(selector_basic)?;
+    let name = CssAttributeName::new(name.to_string());
+
+    let matcher = match input.next() {
+        Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+            return Ok(CssAttributeSelector::new(
+                name,
+                CssAttributeMatcher::Exists,
+                CssAttributeCaseSensitivity::DocumentDefault,
+            ));
+        }
+        Err(error) => return Err(selector_basic(error)),
+        Ok(Token::Delim('=')) => {
+            CssAttributeMatcher::Equals(parse_attribute_selector_value(input)?)
+        }
+        Ok(Token::IncludeMatch) => {
+            CssAttributeMatcher::Includes(parse_attribute_selector_value(input)?)
+        }
+        Ok(Token::DashMatch) => {
+            CssAttributeMatcher::DashMatch(parse_attribute_selector_value(input)?)
+        }
+        Ok(Token::PrefixMatch) => {
+            CssAttributeMatcher::Prefix(parse_attribute_selector_value(input)?)
+        }
+        Ok(Token::SuffixMatch) => {
+            CssAttributeMatcher::Suffix(parse_attribute_selector_value(input)?)
+        }
+        Ok(Token::SubstringMatch) => {
+            CssAttributeMatcher::Substring(parse_attribute_selector_value(input)?)
+        }
+        Ok(token) => {
+            let message = format!(
+                "unsupported attribute selector token `{}`",
+                token.to_css_string()
+            );
+            return Err(invalid_selector(input, message));
+        }
+    };
+
+    let case_sensitivity = parse_attribute_case_sensitivity(input)?;
+    input.expect_exhausted().map_err(selector_basic)?;
+    Ok(CssAttributeSelector::new(name, matcher, case_sensitivity))
+}
+
+fn parse_attribute_selector_value<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<String, ParseError<'i, Error>> {
+    let value = input
+        .expect_ident_or_string()
+        .map_err(selector_basic)?
+        .to_string();
+    Ok(value)
+}
+
+fn parse_attribute_case_sensitivity<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAttributeCaseSensitivity, ParseError<'i, Error>> {
+    let state = input.state();
+    match input.next() {
+        Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+            input.reset(&state);
+            Ok(CssAttributeCaseSensitivity::DocumentDefault)
+        }
+        Err(error) => Err(selector_basic(error)),
+        Ok(Token::Ident(modifier)) if modifier.eq_ignore_ascii_case("i") => {
+            Ok(CssAttributeCaseSensitivity::AsciiCaseInsensitive)
+        }
+        Ok(Token::Ident(modifier)) if modifier.eq_ignore_ascii_case("s") => {
+            Ok(CssAttributeCaseSensitivity::ExplicitSensitive)
+        }
+        Ok(token) => {
+            let message = format!(
+                "unsupported attribute selector case modifier `{}`",
+                token.to_css_string()
+            );
+            Err(invalid_selector(input, message))
+        }
+    }
 }
 
 fn parse_pseudo_class<'i, 't>(

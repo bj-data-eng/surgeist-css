@@ -45,6 +45,13 @@ fn media_rule(rule: &CssRule) -> &CssMediaRule {
     }
 }
 
+fn import_rule(rule: &CssRule) -> &CssImportRule {
+    match rule {
+        CssRule::Import(rule) => rule,
+        unexpected => panic!("expected import rule, got {unexpected:?}"),
+    }
+}
+
 #[test]
 fn import_layer_name_rejects_empty_components() {
     assert!(CssLayerName::try_new(["theme"]).is_some());
@@ -110,6 +117,122 @@ fn import_rule_accessors_expose_authored_structure() {
     assert_eq!(rule.media(), Some(&media));
     assert_eq!(rule.location(), location);
     assert_eq!(CssRule::Import(rule.clone()), CssRule::Import(rule));
+}
+
+#[test]
+fn import_rule_parser_accepts_targets_layers_and_media() {
+    let sheet = parse_sheet(r#"@import "theme.css";"#).unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one import rule");
+    };
+    let rule = import_rule(rule);
+    assert_eq!(
+        rule.target(),
+        &CssImportTarget::String(CssImportString::try_new("theme.css").unwrap())
+    );
+    assert_eq!(rule.layer(), None);
+    assert_eq!(rule.media(), None);
+
+    let sheet = parse_sheet(r#"@import url("layout.css");"#).unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one import rule");
+    };
+    assert_eq!(
+        import_rule(rule).target(),
+        &CssImportTarget::Url(CssImportUrl::try_new("layout.css").unwrap())
+    );
+
+    let sheet = parse_sheet("@import url(tokens.css) layer;").unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one import rule");
+    };
+    let rule = import_rule(rule);
+    assert_eq!(
+        rule.target(),
+        &CssImportTarget::Url(CssImportUrl::try_new("tokens.css").unwrap())
+    );
+    assert_eq!(rule.layer(), Some(&CssImportLayer::Anonymous));
+
+    let sheet = parse_sheet(r#"@import url("components.css") layer(components.buttons);"#).unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one import rule");
+    };
+    let rule = import_rule(rule);
+    assert_eq!(
+        rule.layer(),
+        Some(&CssImportLayer::Named(
+            CssLayerName::try_new(["components", "buttons"]).unwrap()
+        ))
+    );
+
+    let sheet = parse_sheet(r#"@import url("print.css") print;"#).unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one import rule");
+    };
+    assert_eq!(
+        import_rule(rule).media().unwrap().queries(),
+        &[CssMediaQuery::Typed(CssTypedMediaQuery::new(
+            None,
+            CssMediaType::Print,
+            None,
+        ))]
+    );
+
+    let sheet = parse_sheet(r#"@import url("wide.css") screen and (min-width: 900px);"#).unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one import rule");
+    };
+    let [CssMediaQuery::Typed(query)] = import_rule(rule).media().unwrap().queries() else {
+        panic!("expected typed media query");
+    };
+    assert_eq!(query.media_type(), CssMediaType::Screen);
+    assert!(query.condition().is_some());
+
+    let sheet = parse_sheet(
+        r#"@import url("components.css") layer(components) screen and (min-width: 900px);"#,
+    )
+    .unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one import rule");
+    };
+    let rule = import_rule(rule);
+    assert_eq!(
+        rule.layer(),
+        Some(&CssImportLayer::Named(
+            CssLayerName::try_new(["components"]).unwrap()
+        ))
+    );
+    assert!(rule.media().is_some());
+}
+
+#[test]
+fn import_rule_parser_allows_imports_before_style_rules() {
+    let sheet = parse_sheet(
+        r#"
+            @import "theme.css";
+            @import url("components.css") layer(components) screen;
+            .panel { color: black; }
+        "#,
+    )
+    .unwrap();
+
+    assert!(matches!(
+        sheet.rules(),
+        [CssRule::Import(_), CssRule::Import(_), CssRule::Style(_)]
+    ));
+}
+
+#[test]
+fn import_rule_parser_rejects_late_nested_unsupported_and_malformed_imports() {
+    for css in [
+        r#".panel { color: black; } @import "late.css";"#,
+        r#"@media screen { @import "nested.css"; }"#,
+        r#"@import url("theme.css") supports(display: grid);"#,
+        r#"@import url("theme.css") screen layer(components);"#,
+        "@import;",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
 }
 
 #[test]

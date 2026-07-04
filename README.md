@@ -9,3 +9,5 @@ CSS custom properties are parsed as authored syntax. Custom property names are c
 Pseudo-classes for UI interaction, form state, structure, selector-list filtering, and overlay state are parsed as authored selector syntax. This crate does not evaluate pseudo-class matches; runtime matching belongs to downstream Surgeist layers with node and interaction state.
 
 Media queries are parsed as authored conditions on `@media` group rules. `surgeist-css` does not evaluate media query matches; environment-dependent matching belongs to downstream Surgeist layers.
+
+Imports are parsed as authored `@import` contracts only. `surgeist-css` preserves import targets, layer clauses, and media conditions, but does not resolve paths, load files, or merge imported sheets; root/style-owned Surgeist integration performs loading and composition.

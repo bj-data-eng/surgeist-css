@@ -53,7 +53,7 @@ pub(crate) use crate::validation::property_for_supported_name;
 pub fn parse_sheet(input: &str) -> Result<CssSheet> {
     let mut input = ParserInput::new(input);
     let mut parser = Parser::new(&mut input);
-    let mut rule_parser = StrictRuleParser;
+    let mut rule_parser = StrictRuleParser::top_level();
     let mut sheet = CssSheet::new();
 
     for rule in StyleSheetParser::new(&mut parser, &mut rule_parser) {
@@ -65,10 +65,42 @@ pub fn parse_sheet(input: &str) -> Result<CssSheet> {
     Ok(sheet)
 }
 
-struct StrictRuleParser;
+struct StrictRuleParser {
+    is_top_level: bool,
+    imports_allowed: bool,
+}
+
+impl StrictRuleParser {
+    const fn top_level() -> Self {
+        Self {
+            is_top_level: true,
+            imports_allowed: true,
+        }
+    }
+
+    const fn nested() -> Self {
+        Self {
+            is_top_level: false,
+            imports_allowed: false,
+        }
+    }
+
+    fn mark_non_import_top_level_rule(&mut self) {
+        if self.is_top_level {
+            self.imports_allowed = false;
+        }
+    }
+}
 
 enum StrictAtRulePrelude {
+    Import(CssImportPrelude),
     Media(CssMediaQueryList),
+}
+
+struct CssImportPrelude {
+    target: CssImportTarget,
+    layer: Option<CssImportLayer>,
+    media: Option<CssMediaQueryList>,
 }
 
 impl<'i> AtRuleParser<'i> for StrictRuleParser {
@@ -82,6 +114,21 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
         match_ignore_ascii_case! { &name,
+            "import" => {
+                if !self.is_top_level {
+                    return Err(invalid_syntax(
+                        input.current_source_location(),
+                        "@import rules are only supported at the top level",
+                    ));
+                }
+                if !self.imports_allowed {
+                    return Err(invalid_syntax(
+                        input.current_source_location(),
+                        "@import rules must precede all non-import top-level rules",
+                    ));
+                }
+                Ok(StrictAtRulePrelude::Import(parse_import_prelude(input)?))
+            },
             "media" => {
                 let query = parse_media_query_list(input)?;
                 if !input.is_exhausted() {
@@ -96,6 +143,22 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
         }
     }
 
+    fn rule_without_block(
+        &mut self,
+        prelude: Self::Prelude,
+        start: &ParserState,
+    ) -> std::result::Result<Self::AtRule, ()> {
+        match prelude {
+            StrictAtRulePrelude::Import(prelude) => Ok(vec![CssRule::Import(CssImportRule::new(
+                prelude.target,
+                prelude.layer,
+                prelude.media,
+                CssSourceLocation::from_cssparser(start.source_location()),
+            ))]),
+            StrictAtRulePrelude::Media(_) => Err(()),
+        }
+    }
+
     fn parse_block<'t>(
         &mut self,
         prelude: Self::Prelude,
@@ -103,12 +166,17 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::AtRule, ParseError<'i, Self::Error>> {
         match prelude {
+            StrictAtRulePrelude::Import(_) => Err(invalid_syntax(
+                start.source_location(),
+                "@import rules must not have a block",
+            )),
             StrictAtRulePrelude::Media(query) => {
-                let mut rule_parser = StrictRuleParser;
+                let mut rule_parser = StrictRuleParser::nested();
                 let mut rules = Vec::new();
                 for rule in StyleSheetParser::new(input, &mut rule_parser) {
                     rules.extend(rule.map_err(|(error, _)| error)?);
                 }
+                self.mark_non_import_top_level_rule();
                 Ok(vec![CssRule::Media(CssMediaRule::new(
                     query,
                     rules,
@@ -144,11 +212,102 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {
             declarations.push(declaration);
         }
 
+        self.mark_non_import_top_level_rule();
         Ok(selectors
             .into_iter()
             .map(|selector| CssRule::Style(CssStyleRule::new(selector, declarations.clone())))
             .collect())
     }
+}
+
+fn parse_import_prelude<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssImportPrelude, ParseError<'i, Error>> {
+    let target = parse_import_target(input)?;
+    let layer = parse_import_layer(input)?;
+    let media = if input.is_exhausted() {
+        None
+    } else {
+        Some(parse_media_query_list(input)?)
+    };
+
+    if !input.is_exhausted() {
+        return Err(invalid_syntax(
+            input.current_source_location(),
+            "unexpected token after import rule",
+        ));
+    }
+
+    Ok(CssImportPrelude {
+        target,
+        layer,
+        media,
+    })
+}
+
+fn parse_import_target<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssImportTarget, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+
+    if let Ok(value) = input.try_parse(Parser::expect_string_cloned) {
+        return CssImportString::try_new(value.as_ref())
+            .map(CssImportTarget::String)
+            .ok_or_else(|| invalid_syntax(location, "import string target must not be empty"));
+    }
+
+    if let Ok(value) = input.try_parse(Parser::expect_url) {
+        return CssImportUrl::try_new(value.as_ref())
+            .map(CssImportTarget::Url)
+            .ok_or_else(|| invalid_syntax(location, "import URL target must not be empty"));
+    }
+
+    Err(invalid_syntax(
+        location,
+        "expected string or URL import target",
+    ))
+}
+
+fn parse_import_layer<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Option<CssImportLayer>, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("layer"))
+        .is_ok()
+    {
+        return Ok(Some(CssImportLayer::Anonymous));
+    }
+
+    if input
+        .try_parse(|input| input.expect_function_matching("layer"))
+        .is_ok()
+    {
+        let layer_name = input.parse_nested_block(parse_layer_name)?;
+        return Ok(Some(CssImportLayer::Named(layer_name)));
+    }
+
+    Ok(None)
+}
+
+fn parse_layer_name<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssLayerName, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let mut components = vec![input.expect_ident_cloned().map_err(basic)?.to_string()];
+
+    while input.try_parse(|input| input.expect_delim('.')).is_ok() {
+        components.push(input.expect_ident_cloned().map_err(basic)?.to_string());
+    }
+
+    if !input.is_exhausted() {
+        return Err(invalid_syntax(
+            input.current_source_location(),
+            "unexpected token in import layer name",
+        ));
+    }
+
+    CssLayerName::try_new(components)
+        .ok_or_else(|| invalid_syntax(location, "invalid import layer name"))
 }
 
 struct StrictDeclarationParser;

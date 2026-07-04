@@ -49,7 +49,6 @@ pub struct CssImportRule {
 }
 
 impl CssImportRule {
-    #[allow(dead_code)]
     #[must_use]
     pub(crate) const fn new(
         target: CssImportTarget,

@@ -130,6 +130,69 @@ fn variable_dependent_value_constructor_requires_references() {
     );
 }
 
+#[test]
+fn parses_custom_property_declarations_as_authored_syntax() {
+    let declaration = single_declaration(".theme { --BrandColor: #fff; }");
+    assert_eq!(
+        declaration.property(),
+        &CssProperty::Custom(CssCustomPropertyName::try_new("--BrandColor").unwrap())
+    );
+    let CssValue::CustomProperty(value) = declaration.value() else {
+        panic!("expected custom property value");
+    };
+    assert_eq!(value.as_css(), "#fff");
+    assert!(value.references().is_empty());
+}
+
+#[test]
+fn custom_property_values_preserve_authored_var_syntax_without_structural_parsing() {
+    let declaration = single_declaration(".theme { --gap: calc(1px + var(--space)); }");
+    let CssValue::CustomProperty(value) = declaration.value() else {
+        panic!("expected custom property value");
+    };
+    assert_eq!(value.as_css(), "calc(1px + var(--space))");
+    assert!(value.references().is_empty());
+}
+
+#[test]
+fn custom_property_global_keyword_must_be_whole_value() {
+    assert_eq!(
+        single_declaration(".theme { --gap: inherit; }").value(),
+        &CssValue::GlobalKeyword(CssGlobalKeyword::Inherit)
+    );
+    assert!(parse_sheet(".theme { --gap: inherit 1px; }").is_err());
+}
+
+#[test]
+fn custom_property_names_are_case_sensitive_when_parsed() {
+    let declaration = single_declaration(".theme { --BrandColor: 1px; }");
+    assert_eq!(
+        declaration.property(),
+        &CssProperty::Custom(CssCustomPropertyName::try_new("--BrandColor").unwrap())
+    );
+    assert_ne!(
+        declaration.property(),
+        &CssProperty::Custom(CssCustomPropertyName::try_new("--brandcolor").unwrap())
+    );
+}
+
+#[test]
+fn parser_accepts_escaped_custom_property_names_from_cssparser_ident_tokens() {
+    assert_eq!(CssCustomPropertyName::try_new("--bad name"), None);
+
+    let declaration = single_declaration(".theme { --bad\\ name: 1px; }");
+    let CssProperty::Custom(name) = declaration.property() else {
+        panic!("expected custom property");
+    };
+    assert_eq!(name.as_str(), "--bad name");
+}
+
+#[test]
+fn rejects_malformed_custom_property_names() {
+    assert!(parse_sheet(".theme { --: 1px; }").is_err());
+    assert!(parse_sheet(".theme { --bad name: 1px; }").is_err());
+}
+
 fn assert_global_value(value: &CssValue) {
     assert!(matches!(value, CssValue::GlobalKeyword(_)));
 }

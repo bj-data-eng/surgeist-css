@@ -16,6 +16,7 @@ mod selectors;
 mod timing;
 mod typography;
 mod values;
+mod variables;
 
 use cssparser::{
     AtRuleParser, CowRcStr, DeclarationParser, ParseError, Parser, ParserInput, ParserState,
@@ -32,6 +33,7 @@ use selectors::parse_selector_list;
 use timing::*;
 use typography::*;
 use values::*;
+use variables::{parse_custom_property_name, parse_custom_property_value};
 
 use crate::error::{
     Error, Result, basic, from_parse_error, invalid_syntax, property_name_error, unsupported_value,
@@ -132,6 +134,19 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
         declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
         let location = CssSourceLocation::from_cssparser(declaration_start.source_location());
+        if name.starts_with("--") {
+            let Some(custom_name) = parse_custom_property_name(name.as_ref()) else {
+                return Err(property_name_error(input, name.as_ref()));
+            };
+            let value = parse_custom_property_value(input)
+                .map_err(|error| with_property_context(error, name.as_ref()))?;
+            return Ok(CssDeclaration::new(
+                CssProperty::Custom(custom_name),
+                value,
+                location,
+            ));
+        }
+
         let state = input.state();
         if let Ok(ident) = input.expect_ident_cloned() {
             if let Some(keyword) = parse_global_keyword(&ident) {

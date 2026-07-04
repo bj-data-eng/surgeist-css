@@ -491,8 +491,75 @@ fn rejects_trailing_tokens_in_nth_functions() {
 }
 
 #[test]
-fn rejects_unsupported_pseudo_classes() {
-    assert!(parse_sheet(":not(.theme) { --space: 8px; }").is_err());
+fn parses_selector_list_functional_pseudo_classes() {
+    let sheet = parse_sheet(".button:not(.disabled, .loading) { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+        panic!("expected compound selector");
+    };
+    let [CssPseudoClass::Not(list)] = selector.pseudo_classes() else {
+        panic!("expected :not selector list");
+    };
+    assert_eq!(
+        list.selectors(),
+        &[
+            CssSelector::Class("disabled".to_owned()),
+            CssSelector::Class("loading".to_owned()),
+        ]
+    );
+
+    let sheet = parse_sheet(":is(.primary, .secondary) { color: black; }").unwrap();
+    assert!(matches!(
+        sheet.rules()[0].selector(),
+        CssSelector::PseudoClass(CssPseudoClass::Is(_))
+    ));
+
+    let sheet = parse_sheet(":where(button, .link) { color: black; }").unwrap();
+    assert!(matches!(
+        sheet.rules()[0].selector(),
+        CssSelector::PseudoClass(CssPseudoClass::Where(_))
+    ));
+
+    let sheet = parse_sheet(".field:has(.error) { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+        panic!("expected compound selector");
+    };
+    assert!(matches!(
+        selector.pseudo_classes(),
+        [CssPseudoClass::Has(_)]
+    ));
+}
+
+#[test]
+fn parses_compound_selector_list_functional_pseudo_classes() {
+    let sheet = parse_sheet(".field:not(:disabled, :focus) { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+        panic!("expected compound selector");
+    };
+    let [CssPseudoClass::Not(list)] = selector.pseudo_classes() else {
+        panic!("expected :not selector list");
+    };
+    assert_eq!(
+        list.selectors(),
+        &[
+            CssSelector::PseudoClass(CssPseudoClass::Disabled),
+            CssSelector::PseudoClass(CssPseudoClass::Focus),
+        ]
+    );
+}
+
+#[test]
+fn rejects_empty_selector_list_functional_pseudo_classes() {
+    assert!(parse_sheet(":not() { color: black; }").is_err());
+    assert!(parse_sheet(":is() { color: black; }").is_err());
+    assert!(parse_sheet(":where() { color: black; }").is_err());
+    assert!(parse_sheet(":has() { color: black; }").is_err());
+}
+
+#[test]
+fn rejects_unsupported_relative_or_combinator_selector_forms() {
+    assert!(parse_sheet(".field:has(> .icon) { color: black; }").is_err());
+    assert!(parse_sheet(":has(.field > .icon) { color: black; }").is_err());
+    assert!(parse_sheet(":not(.field .icon) { color: black; }").is_err());
 }
 
 #[test]

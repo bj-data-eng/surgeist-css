@@ -20,6 +20,22 @@ pub(super) fn parse_selector_list<'i, 't>(
 pub(super) fn parse_compound_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssSelector, ParseError<'i, Error>> {
+    loop {
+        let state = input.state();
+        match input.next_including_whitespace() {
+            Ok(Token::WhiteSpace(_)) => continue,
+            Ok(_) => {
+                input.reset(&state);
+                break;
+            }
+            Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+                input.reset(&state);
+                break;
+            }
+            Err(error) => return Err(selector_basic(error)),
+        }
+    }
+
     let mut tag_name = None;
     let mut key_name = None;
     let mut class_names = Vec::new();
@@ -31,6 +47,17 @@ pub(super) fn parse_compound_selector<'i, 't>(
     }
 
     loop {
+        let state = input.state();
+        match input.next_including_whitespace() {
+            Ok(Token::WhiteSpace(_)) => {
+                input.reset(&state);
+                break;
+            }
+            Ok(_) => input.reset(&state),
+            Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => break,
+            Err(error) => return Err(selector_basic(error)),
+        }
+
         if input.try_parse(|input| input.expect_delim('.')).is_ok() {
             let class = input.expect_ident_cloned().map_err(selector_basic)?;
             let class = class.to_string();
@@ -159,6 +186,10 @@ fn parse_pseudo_class<'i, 't>(
                     "nth-last-of-type" => {
                         CssPseudoClass::NthLastOfType(parse_nth_pattern(input)?)
                     },
+                    "not" => CssPseudoClass::Not(parse_pseudo_selector_list(input)?),
+                    "is" => CssPseudoClass::Is(parse_pseudo_selector_list(input)?),
+                    "where" => CssPseudoClass::Where(parse_pseudo_selector_list(input)?),
+                    "has" => CssPseudoClass::Has(parse_pseudo_selector_list(input)?),
                     _ => {
                         let message = format!("unsupported pseudo-class `:{name}(`");
                         return Err(invalid_selector(input, message));
@@ -178,6 +209,14 @@ fn parse_pseudo_class<'i, 't>(
         ),
         Err(error) => Err(selector_basic(error)),
     }
+}
+
+fn parse_pseudo_selector_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssSelectorList, ParseError<'i, Error>> {
+    let selectors = parse_selector_list(input)?;
+    CssSelectorList::try_new(selectors)
+        .ok_or_else(|| invalid_selector(input, "pseudo-class selector list must not be empty"))
 }
 
 fn parse_nth_pattern<'i, 't>(

@@ -10,6 +10,7 @@
 mod background;
 mod box_model;
 mod effects;
+mod font_face;
 mod grid;
 mod layout;
 mod queries;
@@ -28,6 +29,7 @@ use cssparser::{
 use background::*;
 use box_model::*;
 use effects::*;
+use font_face::parse_font_face_rule;
 use grid::*;
 use layout::*;
 #[cfg(test)]
@@ -96,6 +98,7 @@ impl StrictRuleParser {
 
 enum StrictAtRulePrelude {
     Import(CssImportPrelude),
+    FontFace,
     Media(CssMediaQueryList),
     Container(CssContainerPrelude),
 }
@@ -137,6 +140,15 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 }
                 Ok(StrictAtRulePrelude::Import(parse_import_prelude(input)?))
             },
+            "font-face" => {
+                if !input.is_exhausted() {
+                    return Err(invalid_syntax(
+                        input.current_source_location(),
+                        "unexpected token after font-face at-rule name",
+                    ));
+                }
+                Ok(StrictAtRulePrelude::FontFace)
+            },
             "media" => {
                 let query = parse_media_query_list(input)?;
                 if !input.is_exhausted() {
@@ -173,6 +185,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 prelude.media,
                 CssSourceLocation::from_cssparser(start.source_location()),
             ))]),
+            StrictAtRulePrelude::FontFace => Err(()),
             StrictAtRulePrelude::Media(_) => Err(()),
             StrictAtRulePrelude::Container(_) => Err(()),
         }
@@ -189,6 +202,11 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 start.source_location(),
                 "@import rules must not have a block",
             )),
+            StrictAtRulePrelude::FontFace => {
+                let rule = parse_font_face_rule(input, start)?;
+                self.mark_non_import_top_level_rule();
+                Ok(vec![CssRule::FontFace(rule)])
+            }
             StrictAtRulePrelude::Media(query) => {
                 let rules = parse_nested_group_rules(input)?;
                 self.mark_non_import_top_level_rule();

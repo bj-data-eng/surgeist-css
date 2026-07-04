@@ -63,6 +63,13 @@ fn import_rule(rule: &CssRule) -> &CssImportRule {
     }
 }
 
+fn font_face_rule(rule: &CssRule) -> &CssFontFaceRule {
+    match rule {
+        CssRule::FontFace(rule) => rule,
+        unexpected => panic!("expected font-face rule, got {unexpected:?}"),
+    }
+}
+
 #[test]
 fn import_layer_name_rejects_empty_components() {
     assert!(CssLayerName::try_new(["theme"]).is_some());
@@ -2689,6 +2696,151 @@ fn font_face_rule_accessors_expose_authored_structure() {
     assert_eq!(rule.descriptors(), &descriptors);
     assert_eq!(rule.location(), location);
     assert_eq!(CssRule::FontFace(rule.clone()), CssRule::FontFace(rule));
+}
+
+#[test]
+fn font_face_rule_parser_accepts_descriptor_block() {
+    let sheet = parse_sheet(
+        r#"@font-face {
+            font-family: "Inter";
+            src: url("inter.woff2") format("woff2");
+            font-weight: 400 700;
+            font-style: normal;
+            font-display: swap;
+            unicode-range: U+0000-00FF, U+0100-017F;
+        }"#,
+    )
+    .unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one font-face rule");
+    };
+
+    let descriptors = font_face_rule(rule).descriptors();
+    assert_eq!(descriptors.font_family().as_str(), "Inter");
+    let [CssFontFaceSource::Url(source)] = descriptors.src().sources() else {
+        panic!("expected one URL font source");
+    };
+    assert_eq!(source.url(), "inter.woff2");
+    assert_eq!(source.format(), Some(&CssFontFormatHint::Woff2));
+    assert!(source.tech().is_empty());
+    assert_eq!(
+        descriptors.font_weight().unwrap().start().value().value(),
+        400.0
+    );
+    assert_eq!(
+        descriptors
+            .font_weight()
+            .unwrap()
+            .end()
+            .unwrap()
+            .value()
+            .value(),
+        700.0
+    );
+    assert_eq!(descriptors.font_style(), Some(&CssFontFaceStyle::Normal));
+    assert_eq!(descriptors.font_display(), Some(CssFontDisplay::Swap));
+    assert_eq!(
+        descriptors.unicode_range().unwrap().ranges(),
+        &[
+            CssUnicodeRange::try_new(0x0000, 0x00ff).unwrap(),
+            CssUnicodeRange::try_new(0x0100, 0x017f).unwrap()
+        ]
+    );
+}
+
+#[test]
+fn font_face_rule_parser_accepts_source_list_forms() {
+    let sheet = parse_sheet(
+        r#"@font-face {
+            font-family: Avenir Next;
+            src: local("Inter"), url("inter.woff2") format("woff2"), url("inter-var.woff2") tech(variations);
+        }"#,
+    )
+    .unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one font-face rule");
+    };
+
+    let descriptors = font_face_rule(rule).descriptors();
+    assert_eq!(descriptors.font_family().as_str(), "Avenir Next");
+    let [
+        CssFontFaceSource::Local(local),
+        CssFontFaceSource::Url(woff2),
+        CssFontFaceSource::Url(variable),
+    ] = descriptors.src().sources()
+    else {
+        panic!("expected local source and two URL sources");
+    };
+    assert_eq!(local.as_str(), "Inter");
+    assert_eq!(woff2.url(), "inter.woff2");
+    assert_eq!(woff2.format(), Some(&CssFontFormatHint::Woff2));
+    assert!(woff2.tech().is_empty());
+    assert_eq!(variable.url(), "inter-var.woff2");
+    assert_eq!(variable.format(), None);
+    assert_eq!(variable.tech(), &[CssFontTechHint::Variations]);
+}
+
+#[test]
+fn font_face_rule_parser_accepts_strict_numeric_ranges() {
+    let sheet = parse_sheet(
+        r#"@font-face {
+            font-family: Inter;
+            src: url(inter.woff2);
+            font-style: oblique -10deg 20deg;
+            font-stretch: 75% 125%;
+        }"#,
+    )
+    .unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one font-face rule");
+    };
+
+    let descriptors = font_face_rule(rule).descriptors();
+    let Some(CssFontFaceStyle::Oblique(Some(oblique))) = descriptors.font_style() else {
+        panic!("expected oblique range");
+    };
+    assert_eq!(oblique.start_degrees().value(), -10.0);
+    assert_eq!(oblique.end_degrees().unwrap().value(), 20.0);
+    assert_eq!(
+        descriptors
+            .font_stretch()
+            .unwrap()
+            .start()
+            .percent()
+            .value(),
+        75.0
+    );
+    assert_eq!(
+        descriptors
+            .font_stretch()
+            .unwrap()
+            .end()
+            .unwrap()
+            .percent()
+            .value(),
+        125.0
+    );
+}
+
+#[test]
+fn font_face_rule_parser_rejects_invalid_descriptor_blocks() {
+    for css in [
+        "@font-face { font-family: Inter; }",
+        "@font-face { src: url(a.woff2); }",
+        "@font-face { font-family: Inter; src: url(a.woff2); unknown: x; }",
+        "@font-face { font-family: Inter; font-family: Other; src: url(a.woff2); }",
+        "@font-face { font-family: Inter; src: url(a.woff2); @media screen {} }",
+        "@font-face { font-family: Inter; src: url(a.woff2); .nested {} }",
+        "@font-face { font-family: Inter; src: url(a.woff2); font-weight: bolder; }",
+        "@font-face { font-family: Inter; src: url(a.woff2) format(woff3); }",
+        "@font-face { font-family: Inter; src: url(a.woff2) tech(color-paint); }",
+        r#"@font-face { font-family: Inter; src: url("a.woff2") tech(variations) format(woff2); }"#,
+        r#"@font-face { font-family: Inter; src: url("a.woff2") tech(variations color-svg); }"#,
+        "@font-face { font-family: Inter; src: url(a.woff2); unicode-range: U+110000-110001; }",
+        ".panel { src: url(a.woff2); }",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
 }
 
 #[test]

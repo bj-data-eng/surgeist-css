@@ -164,7 +164,6 @@ pub struct CssFontFaceRule {
 }
 
 impl CssFontFaceRule {
-    #[allow(dead_code)]
     #[must_use]
     pub(crate) const fn new(
         descriptors: CssFontFaceDescriptors,

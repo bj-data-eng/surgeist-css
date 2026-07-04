@@ -240,6 +240,12 @@ pub(super) fn parse_animation_name<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssAnimationName, ParseError<'i, Error>> {
     let location = input.current_source_location();
+    if let Ok(value) = input.try_parse(Parser::expect_string_cloned) {
+        return CssKeyframesString::try_new(value.to_string())
+            .map(CssAnimationName::String)
+            .ok_or_else(|| unsupported_value_at(location, None, "animation string name is empty"));
+    }
+
     let ident = input.expect_ident_cloned().map_err(basic)?;
     if ident.eq_ignore_ascii_case("none") {
         Ok(CssAnimationName::None)

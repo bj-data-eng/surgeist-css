@@ -70,6 +70,13 @@ fn font_face_rule(rule: &CssRule) -> &CssFontFaceRule {
     }
 }
 
+fn keyframes_rule(rule: &CssRule) -> &CssKeyframesRule {
+    match rule {
+        CssRule::Keyframes(rule) => rule,
+        unexpected => panic!("expected keyframes rule, got {unexpected:?}"),
+    }
+}
+
 #[test]
 fn keyframes_rule_accessors_expose_authored_structure() {
     let name = CssKeyframesName::Ident(CssCustomIdent::new("fade"));
@@ -100,6 +107,148 @@ fn keyframes_rule_accessors_expose_authored_structure() {
     assert_eq!(block.declarations(), &[declaration]);
     assert_eq!(CssKeyframeSelector::From.offset().value().value(), 0.0);
     assert_eq!(CssKeyframeSelector::To.offset().value().value(), 100.0);
+}
+
+#[test]
+fn keyframes_rule_parser_accepts_strict_blocks() {
+    let sheet = parse_sheet(
+        r#"@keyframes fade {
+            from { opacity: 0; transform: translateX(0px); }
+            50% { opacity: 0.5; }
+            to { opacity: 1; transform: translateX(10px); }
+        }"#,
+    )
+    .unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected one keyframes rule");
+    };
+    let rule = keyframes_rule(rule);
+
+    assert_eq!(
+        rule.name(),
+        &CssKeyframesName::Ident(CssCustomIdent::new("fade"))
+    );
+    assert_eq!(rule.blocks().len(), 3);
+    assert_eq!(
+        rule.blocks()[0].selectors().selectors(),
+        &[CssKeyframeSelector::From]
+    );
+    assert_eq!(
+        rule.blocks()[1].selectors().selectors(),
+        &[CssKeyframeSelector::Percent(CssKeyframePercent::new(50.0))]
+    );
+    assert_eq!(
+        rule.blocks()[0].declarations()[0].property(),
+        &CssProperty::Opacity
+    );
+}
+
+#[test]
+fn keyframes_rule_parser_accepts_string_names_and_selector_lists() {
+    let sheet = parse_sheet(
+        r#"@keyframes "fade in" {
+            0%, 100% { opacity: 1; }
+        }
+        .panel { animation-name: "fade in"; animation: "fade in" 120ms ease; }"#,
+    )
+    .unwrap();
+    let [keyframes, style] = sheet.rules() else {
+        panic!("expected keyframes and style rules");
+    };
+
+    assert_eq!(
+        keyframes_rule(keyframes).name(),
+        &CssKeyframesName::String(CssKeyframesString::new("fade in"))
+    );
+    assert_eq!(
+        keyframes_rule(keyframes).blocks()[0]
+            .selectors()
+            .selectors(),
+        &[
+            CssKeyframeSelector::Percent(CssKeyframePercent::new(0.0)),
+            CssKeyframeSelector::Percent(CssKeyframePercent::new(100.0)),
+        ]
+    );
+
+    let declarations = style_rule(style).declarations();
+    assert_eq!(declarations[0].property(), &CssProperty::AnimationName);
+    assert_eq!(declarations[1].property(), &CssProperty::Animation);
+
+    let CssValue::AnimationName(names) = declarations[0].value() else {
+        panic!("expected animation-name value");
+    };
+    assert_eq!(
+        names.names(),
+        &[CssAnimationName::String(CssKeyframesString::new("fade in"))]
+    );
+
+    let CssValue::Animation(animations) = declarations[1].value() else {
+        panic!("expected animation shorthand value");
+    };
+    assert_eq!(
+        animations.items()[0].name(),
+        Some(&CssAnimationName::String(CssKeyframesString::new(
+            "fade in"
+        )))
+    );
+}
+
+#[test]
+fn keyframes_rule_parser_accepts_keyframes_inside_conditional_groups() {
+    let sheet = parse_sheet(
+        r#"@media screen {
+            @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+        }
+        @container sidebar (inline-size > 30rem) {
+            @keyframes slide { 0% { transform: translateX(0px); } 100% { transform: translateX(10px); } }
+        }"#,
+    )
+    .unwrap();
+
+    let [media, container] = sheet.rules() else {
+        panic!("expected media and container rules");
+    };
+    let [media_keyframes] = media_rule(media).rules() else {
+        panic!("expected keyframes inside media");
+    };
+    let [container_keyframes] = container_rule(container).rules() else {
+        panic!("expected keyframes inside container");
+    };
+
+    assert_eq!(
+        keyframes_rule(media_keyframes).name(),
+        &CssKeyframesName::Ident(CssCustomIdent::new("fade"))
+    );
+    assert_eq!(
+        keyframes_rule(container_keyframes).name(),
+        &CssKeyframesName::Ident(CssCustomIdent::new("slide"))
+    );
+}
+
+#[test]
+fn keyframes_rule_parser_rejects_invalid_blocks() {
+    for css in [
+        "@keyframes fade;",
+        "@keyframes { from { opacity: 0; } }",
+        "@keyframes none { from { opacity: 0; } }",
+        r#"@keyframes "" { from { opacity: 0; } }"#,
+        "@keyframes fade { }",
+        "@keyframes fade { 0 { opacity: 0; } }",
+        "@keyframes fade { -1% { opacity: 0; } }",
+        "@keyframes fade { 101% { opacity: 0; } }",
+        "@keyframes fade { from, 0% { opacity: 0; } }",
+        "@keyframes fade { from { opacity: 0; } 0% { opacity: 1; } }",
+        "@keyframes fade { from { } }",
+        "@keyframes fade { from { made-up: value; } }",
+        "@keyframes fade { from { opacity: 0 !important; } }",
+        "@keyframes fade { from { .nested { opacity: 0; } } }",
+        "@keyframes fade { from { @media screen { opacity: 0; } } }",
+        ".panel { @keyframes fade { from { opacity: 0; } } }",
+        r#".panel { animation-name: ""; }"#,
+        r#".panel { animation: "" 120ms ease; }"#,
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
 }
 
 #[test]
@@ -3210,6 +3359,7 @@ fn advanced_css_surface_matrix_accepts_supported_forms() {
         "@media (prefers-color-scheme: dark) { .panel { color: black; } }",
         "@container sidebar (inline-size > 30rem) { .panel { color: black; } }",
         r#"@font-face { font-family: Inter; src: url("inter.woff2") format("woff2"); }"#,
+        "@keyframes fade { from { opacity: 0; } to { opacity: 1; } }",
     ];
 
     for css in accepted {
@@ -3221,7 +3371,6 @@ fn advanced_css_surface_matrix_accepts_supported_forms() {
 fn advanced_css_surface_matrix_rejects_unsupported_forms() {
     let rejected = [
         "@supports (display: grid) { .panel { color: black; } }",
-        "@keyframes fade { from { opacity: 0; } to { opacity: 1; } }",
         r#"@import url("late.css"); .panel { color: black; } @import url("later.css");"#,
         r#"@import url("theme.css") supports(display: grid);"#,
         "@font-face { font-family: Inter; }",

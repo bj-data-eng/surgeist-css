@@ -12,6 +12,7 @@ mod box_model;
 mod effects;
 mod font_face;
 mod grid;
+mod keyframes;
 mod layout;
 mod queries;
 mod selectors;
@@ -31,6 +32,7 @@ use box_model::*;
 use effects::*;
 use font_face::parse_font_face_rule;
 use grid::*;
+use keyframes::{parse_keyframes_name, parse_keyframes_rule};
 use layout::*;
 #[cfg(test)]
 pub(crate) use queries::parse_container_condition_for_test;
@@ -99,6 +101,7 @@ impl StrictRuleParser {
 enum StrictAtRulePrelude {
     Import(CssImportPrelude),
     FontFace,
+    Keyframes(CssKeyframesName),
     Media(CssMediaQueryList),
     Container(CssContainerPrelude),
 }
@@ -149,6 +152,16 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 }
                 Ok(StrictAtRulePrelude::FontFace)
             },
+            "keyframes" => {
+                let name = parse_keyframes_name(input)?;
+                if !input.is_exhausted() {
+                    return Err(invalid_syntax(
+                        input.current_source_location(),
+                        "unexpected token after keyframes name",
+                    ));
+                }
+                Ok(StrictAtRulePrelude::Keyframes(name))
+            },
             "media" => {
                 let query = parse_media_query_list(input)?;
                 if !input.is_exhausted() {
@@ -186,6 +199,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 CssSourceLocation::from_cssparser(start.source_location()),
             ))]),
             StrictAtRulePrelude::FontFace => Err(()),
+            StrictAtRulePrelude::Keyframes(_) => Err(()),
             StrictAtRulePrelude::Media(_) => Err(()),
             StrictAtRulePrelude::Container(_) => Err(()),
         }
@@ -206,6 +220,11 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 let rule = parse_font_face_rule(input, start)?;
                 self.mark_non_import_top_level_rule();
                 Ok(vec![CssRule::FontFace(rule)])
+            }
+            StrictAtRulePrelude::Keyframes(name) => {
+                let rule = parse_keyframes_rule(name, input, start)?;
+                self.mark_non_import_top_level_rule();
+                Ok(vec![CssRule::Keyframes(rule)])
             }
             StrictAtRulePrelude::Media(query) => {
                 let rules = parse_nested_group_rules(input)?;

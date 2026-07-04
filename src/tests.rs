@@ -1699,6 +1699,48 @@ fn nesting_rejects_unsupported_nested_selector_forms() {
 }
 
 #[test]
+fn keyframes_and_nesting_reject_browser_recovery_forms() {
+    let rejected = [
+        "@-webkit-keyframes fade { from { opacity: 0; } }",
+        "@keyframes fade { 0 { opacity: 0; } }",
+        "@keyframes fade { 50% { opacity: 0; } 50% { opacity: 1; } }",
+        "@keyframes fade { from { @media screen { opacity: 0; } } }",
+        "@keyframes fade { from { .nested { opacity: 0; } } }",
+        ".card { & & { color: black; } }",
+        ".card { .theme & { color: black; } }",
+        ".card { && { color: black; } }",
+        ".card { &::before { color: black; } }",
+        ".card { svg|a { color: black; } }",
+        ".card { .col || .cell { color: black; } }",
+        r#".card { @import url("theme.css"); }"#,
+        r#".card { @font-face { font-family: Inter; src: url("inter.woff2"); } }"#,
+        ".card { @keyframes fade { from { opacity: 0; } } }",
+    ];
+
+    for css in rejected {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
+}
+
+#[test]
+fn keyframes_and_nesting_accept_practical_surface_matrix() {
+    let accepted = [
+        r#"@keyframes fade { from { opacity: 0; } to { opacity: 1; } }"#,
+        r#"@keyframes "fade in" { 0%, 100% { opacity: 1; } }"#,
+        ".card { color: black; .title { color: white; } }",
+        ".card { &:hover { opacity: 0.9; } }",
+        ".card { > .title[aria-current=true] { color: white; } }",
+        ".card { @media (min-width: 600px) { &:hover { opacity: 0.9; } } }",
+        "@media screen { .card { .title { color: black; } } }",
+        "@container sidebar (inline-size > 30rem) { .card { &:hover { opacity: 1; } } }",
+    ];
+
+    for css in accepted {
+        assert!(parse_sheet(css).is_ok(), "{css} should parse");
+    }
+}
+
+#[test]
 fn rejects_invalid_combinator_selectors() {
     assert!(parse_sheet("> .item { color: black; }").is_err());
     assert!(parse_sheet(".a > > .b { color: black; }").is_err());

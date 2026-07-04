@@ -73,6 +73,64 @@ fn cssparser_color_dependency_is_available_for_color_parsing() {
     assert!(parsed.is_ok());
 }
 
+#[test]
+fn parses_cssparser_color_absolute_forms() {
+    let cases = [
+        ("red", "rgba"),
+        ("rebeccapurple", "rgba"),
+        ("transparent", "rgba"),
+        ("currentcolor", "currentcolor"),
+        ("#abcd", "rgba"),
+        ("#11223344", "rgba"),
+        ("rgb(255 0 0 / 50%)", "rgba"),
+        ("rgba(255, 0, 0, 0.5)", "rgba"),
+        ("hsl(120deg 100% 25% / 0.75)", "hsl"),
+        ("hwb(90 10% 20% / 0.8)", "hwb"),
+        ("lab(50% 20 -30 / 0.9)", "lab"),
+        ("lch(60% 40 120deg)", "lch"),
+        ("oklab(0.6 0.1 -0.1)", "oklab"),
+        ("oklch(0.7 0.2 240deg / 80%)", "oklch"),
+        ("color(display-p3 0.8 0.2 0.1 / 0.9)", "color"),
+        ("color(display-p3-linear 0.8 0.2 0.1 / 0.9)", "color"),
+    ];
+
+    for (value, expected_kind) in cases {
+        let css = format!(".panel {{ color: {value}; }}");
+        let value = declaration_value(&css, CssProperty::Color);
+        let CssValue::Color(color) = value else {
+            panic!("{css} should parse as a color");
+        };
+        assert_eq!(color.kind_name(), expected_kind, "{css}");
+    }
+}
+
+#[test]
+fn rgba_hex_alpha_preserves_channels() {
+    let CssValue::Color(color) =
+        declaration_value(".panel { color: #11223344; }", CssProperty::Color)
+    else {
+        panic!("expected color");
+    };
+    let rgba = color.as_rgba().unwrap();
+    assert_eq!((rgba.red(), rgba.green(), rgba.blue()), (0x11, 0x22, 0x33));
+    assert!((rgba.alpha() - (0x44 as f32 / 255.0)).abs() < 0.0001);
+}
+
+#[test]
+fn rejects_non_finite_cssparser_color_components() {
+    for css in [
+        ".panel { color: hsl(1e999 100% 50%); }",
+        ".panel { color: hwb(1e999 10% 20%); }",
+        ".panel { color: lab(50% 1e999 0); }",
+        ".panel { color: lch(50% 1e999 0); }",
+        ".panel { color: oklab(0.5 1e999 0); }",
+        ".panel { color: oklch(0.5 1e999 0); }",
+        ".panel { color: color(display-p3 1e999 0 0 / 1); }",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
+}
+
 fn font_face_rule(rule: &CssRule) -> &CssFontFaceRule {
     match rule {
         CssRule::FontFace(rule) => rule,

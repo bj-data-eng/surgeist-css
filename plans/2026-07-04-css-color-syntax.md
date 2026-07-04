@@ -469,7 +469,7 @@ git commit -m "Model authored CSS color syntax"
 - Modify: `/Users/codex/Development/surgeist-css/src/parser/values.rs`
 - Modify: `/Users/codex/Development/surgeist-css/src/tests.rs`
 
-- [ ] **Step 1: Add absolute color parser tests**
+- [x] **Step 1: Add absolute color parser tests**
 
 Add tests:
 
@@ -529,7 +529,7 @@ cargo test -p surgeist-css rgba_hex_alpha_preserves_channels
 
 Expected before implementation: failures for unsupported forms.
 
-- [ ] **Step 2: Implement mapping**
+- [x] **Step 2: Implement mapping**
 
 In `src/parser/values.rs`:
 
@@ -577,11 +577,11 @@ Add `map_parsed_color(parsed: ParsedColor) -> CssColor`, mapping every `cssparse
 
 Map `cssparser::color::PredefinedColorSpace` into `CssPredefinedColorSpace`.
 
-- [ ] **Step 3: Preserve strict property parsing**
+- [x] **Step 3: Preserve strict property parsing**
 
 Do not use string reparsing. Do not allow trailing tokens. Existing declaration parser exhaustion should still reject trailing junk.
 
-- [ ] **Step 4: Run focused and regression tests**
+- [x] **Step 4: Run focused and regression tests**
 
 ```sh
 cargo fmt --check
@@ -595,7 +595,7 @@ git diff --check
 
 Expected: pass.
 
-- [ ] **Step 5: Report**
+- [x] **Step 5: Report**
 
 Report changed files, checks run, and `git status --short --branch`. Workers do not commit.
 

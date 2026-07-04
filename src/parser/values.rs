@@ -1,12 +1,14 @@
-use cssparser::{ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
+use cssparser::{
+    ParseError, Parser, ToCss, Token, color::PredefinedColorSpace as ParsedPredefinedColorSpace,
+    match_ignore_ascii_case,
+};
+use cssparser_color::{Color as ParsedColor, DefaultColorParser, parse_color_with};
 
 use crate::error::{
-    Error, ErrorKind, basic, error_at, invalid_color, invalid_syntax, unsupported_value_at,
+    Error, ErrorKind, basic, error_at, invalid_color, unsupported_value, unsupported_value_at,
 };
 use crate::syntax::{self, *};
-use crate::validation::{
-    LengthUnitStatus, classify_length_unit, parse_global_keyword, unsupported_keyword_reason,
-};
+use crate::validation::{LengthUnitStatus, classify_length_unit, parse_global_keyword};
 
 pub(super) fn parse_box_size_value<'i, 't>(
     input: &mut Parser<'i, 't>,
@@ -460,52 +462,135 @@ pub(super) fn next_is_ident<'i, 't>(input: &mut Parser<'i, 't>, expected: &str) 
 pub(super) fn parse_color<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssColor, ParseError<'i, Error>> {
+    parse_color_inner(input)
+}
+
+fn parse_color_inner<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColor, ParseError<'i, Error>> {
+    if let Ok(color) = input.try_parse(parse_relative_color) {
+        return Ok(color);
+    }
+    if let Ok(color) = input.try_parse(parse_color_mix) {
+        return Ok(color);
+    }
+    if let Ok(color) = input.try_parse(parse_absolute_color_with_cssparser_color) {
+        return Ok(color);
+    }
+    if let Ok(color) = input.try_parse(parse_system_color) {
+        return Ok(color);
+    }
+    Err(unsupported_value(input, None, "unsupported color syntax"))
+}
+
+fn parse_relative_color<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColor, ParseError<'i, Error>> {
+    Err(unsupported_value(
+        input,
+        None,
+        "relative color syntax is not implemented yet",
+    ))
+}
+
+fn parse_color_mix<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColor, ParseError<'i, Error>> {
+    Err(unsupported_value(
+        input,
+        None,
+        "color-mix syntax is not implemented yet",
+    ))
+}
+
+fn parse_absolute_color_with_cssparser_color<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColor, ParseError<'i, Error>> {
     let location = input.current_source_location();
-    match input.next().map_err(basic)? {
-        Token::IDHash(hex) | Token::Hash(hex) => color_from_hex(location, hex.as_ref()),
-        Token::Ident(ident) => match_ignore_ascii_case! { ident,
-            "transparent" => Ok(CssColor::TRANSPARENT),
-            "black" => Ok(CssColor::BLACK),
-            "white" => Ok(CssColor::WHITE),
-            _ => Err(unsupported_value_at(
-                location,
-                None,
-                unsupported_keyword_reason("color", ident.as_ref()),
-            )),
-        },
-        token => Err(invalid_syntax(
+    match parse_color_with(&DefaultColorParser, input) {
+        Ok(parsed) => map_parsed_color(parsed, location),
+        Err(_) => Err(invalid_color(
             location,
-            format!("unexpected CSS token `{}`", token.to_css_string()),
+            "<color>",
+            "unsupported color syntax",
         )),
     }
 }
 
-pub(super) fn color_from_hex<'i>(
-    location: cssparser::SourceLocation,
-    hex: &str,
+fn parse_system_color<'i, 't>(
+    input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssColor, ParseError<'i, Error>> {
-    let expanded = match hex.len() {
-        3 => hex.chars().flat_map(|ch| [ch, ch]).collect::<String>(),
-        6 => hex.to_owned(),
-        _ => {
-            return Err(invalid_color(
-                location,
-                format!("#{hex}"),
-                format!("unsupported hex color `#{hex}`"),
-            ));
-        }
-    };
-    let value = u32::from_str_radix(&expanded, 16).map_err(|_| {
-        invalid_color(
-            location,
-            format!("#{hex}"),
-            format!("invalid hex color `#{hex}`"),
-        )
-    })?;
-    Ok(CssColor::rgba_unchecked(
-        ((value >> 16) & 0xff) as f32 / 255.0,
-        ((value >> 8) & 0xff) as f32 / 255.0,
-        (value & 0xff) as f32 / 255.0,
-        1.0,
+    Err(unsupported_value(
+        input,
+        None,
+        "system color syntax is not implemented yet",
     ))
+}
+
+fn map_parsed_color<'i>(
+    parsed: ParsedColor,
+    location: cssparser::SourceLocation,
+) -> std::result::Result<CssColor, ParseError<'i, Error>> {
+    let color = match parsed {
+        ParsedColor::CurrentColor => CssColor::CurrentColor,
+        ParsedColor::Rgba(color) => CssColor::Rgba(
+            CssRgbaColor::try_new(color.red, color.green, color.blue, color.alpha)
+                .ok_or_else(|| invalid_color_component(location))?,
+        ),
+        ParsedColor::Hsl(color) => CssColor::Hsl(
+            CssHslColor::try_new(color.hue, color.saturation, color.lightness, color.alpha)
+                .ok_or_else(|| invalid_color_component(location))?,
+        ),
+        ParsedColor::Hwb(color) => CssColor::Hwb(
+            CssHwbColor::try_new(color.hue, color.whiteness, color.blackness, color.alpha)
+                .ok_or_else(|| invalid_color_component(location))?,
+        ),
+        ParsedColor::Lab(color) => CssColor::Lab(
+            CssLabColor::try_new(color.lightness, color.a, color.b, color.alpha)
+                .ok_or_else(|| invalid_color_component(location))?,
+        ),
+        ParsedColor::Lch(color) => CssColor::Lch(
+            CssLchColor::try_new(color.lightness, color.chroma, color.hue, color.alpha)
+                .ok_or_else(|| invalid_color_component(location))?,
+        ),
+        ParsedColor::Oklab(color) => CssColor::Oklab(
+            CssLabColor::try_new(color.lightness, color.a, color.b, color.alpha)
+                .ok_or_else(|| invalid_color_component(location))?,
+        ),
+        ParsedColor::Oklch(color) => CssColor::Oklch(
+            CssLchColor::try_new(color.lightness, color.chroma, color.hue, color.alpha)
+                .ok_or_else(|| invalid_color_component(location))?,
+        ),
+        ParsedColor::ColorFunction(color) => CssColor::ColorFunction(
+            CssColorFunction::try_new(
+                map_predefined_color_space(color.color_space),
+                [color.c1, color.c2, color.c3],
+                color.alpha,
+            )
+            .ok_or_else(|| invalid_color_component(location))?,
+        ),
+    };
+    Ok(color)
+}
+
+fn invalid_color_component<'i>(location: cssparser::SourceLocation) -> ParseError<'i, Error> {
+    invalid_color(
+        location,
+        "<color>",
+        "unsupported non-finite color component",
+    )
+}
+
+fn map_predefined_color_space(color_space: ParsedPredefinedColorSpace) -> CssPredefinedColorSpace {
+    match color_space {
+        ParsedPredefinedColorSpace::Srgb => CssPredefinedColorSpace::Srgb,
+        ParsedPredefinedColorSpace::SrgbLinear => CssPredefinedColorSpace::SrgbLinear,
+        ParsedPredefinedColorSpace::DisplayP3 => CssPredefinedColorSpace::DisplayP3,
+        ParsedPredefinedColorSpace::DisplayP3Linear => CssPredefinedColorSpace::DisplayP3Linear,
+        ParsedPredefinedColorSpace::A98Rgb => CssPredefinedColorSpace::A98Rgb,
+        ParsedPredefinedColorSpace::ProphotoRgb => CssPredefinedColorSpace::ProphotoRgb,
+        ParsedPredefinedColorSpace::Rec2020 => CssPredefinedColorSpace::Rec2020,
+        ParsedPredefinedColorSpace::XyzD50 => CssPredefinedColorSpace::XyzD50,
+        ParsedPredefinedColorSpace::XyzD65 => CssPredefinedColorSpace::XyzD65,
+    }
 }

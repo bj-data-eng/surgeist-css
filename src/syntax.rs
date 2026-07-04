@@ -36,11 +36,14 @@ impl CssSheet {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssRule {
     Import(CssImportRule),
+    LayerStatement(CssLayerStatementRule),
+    LayerBlock(CssLayerBlockRule),
     FontFace(CssFontFaceRule),
     Keyframes(CssKeyframesRule),
     Style(CssStyleRule),
     Media(CssMediaRule),
     Container(CssContainerRule),
+    Scope(CssScopeRule),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -921,6 +924,95 @@ impl CssLayerName {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssLayerNameList {
+    names: Vec<CssLayerName>,
+}
+
+impl CssLayerNameList {
+    #[must_use]
+    pub fn try_new(names: Vec<CssLayerName>) -> Option<Self> {
+        if names.is_empty() {
+            None
+        } else {
+            Some(Self::new(names))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(names: Vec<CssLayerName>) -> Self {
+        debug_assert!(!names.is_empty());
+        Self { names }
+    }
+
+    #[must_use]
+    pub fn names(&self) -> &[CssLayerName] {
+        &self.names
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssLayerStatementRule {
+    names: CssLayerNameList,
+    location: CssSourceLocation,
+}
+
+impl CssLayerStatementRule {
+    #[must_use]
+    #[allow(dead_code)] // Staged for @layer parser construction.
+    pub(crate) const fn new(names: CssLayerNameList, location: CssSourceLocation) -> Self {
+        Self { names, location }
+    }
+
+    #[must_use]
+    pub const fn names(&self) -> &CssLayerNameList {
+        &self.names
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssLayerBlockRule {
+    name: Option<CssLayerName>,
+    rules: Vec<CssRule>,
+    location: CssSourceLocation,
+}
+
+impl CssLayerBlockRule {
+    #[must_use]
+    #[allow(dead_code)] // Staged for @layer parser construction.
+    pub(crate) const fn new(
+        name: Option<CssLayerName>,
+        rules: Vec<CssRule>,
+        location: CssSourceLocation,
+    ) -> Self {
+        Self {
+            name,
+            rules,
+            location,
+        }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> Option<&CssLayerName> {
+        self.name.as_ref()
+    }
+
+    #[must_use]
+    pub fn rules(&self) -> &[CssRule] {
+        &self.rules
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
 fn is_valid_layer_name_component(component: &str) -> bool {
     !is_parser_reserved_layer_name(component) && is_exact_css_identifier(component)
 }
@@ -1014,6 +1106,321 @@ impl CssContainerRule {
 
     #[must_use]
     pub fn rules(&self) -> &[CssRule] {
+        &self.rules
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssScopeRule {
+    root: Option<CssScopeSelectorList>,
+    limit: Option<CssScopeSelectorList>,
+    rules: CssScopedRuleList,
+    location: CssSourceLocation,
+}
+
+impl CssScopeRule {
+    #[must_use]
+    #[allow(dead_code)] // Staged for @scope parser construction.
+    pub(crate) const fn new(
+        root: Option<CssScopeSelectorList>,
+        limit: Option<CssScopeSelectorList>,
+        rules: CssScopedRuleList,
+        location: CssSourceLocation,
+    ) -> Self {
+        Self {
+            root,
+            limit,
+            rules,
+            location,
+        }
+    }
+
+    #[must_use]
+    pub const fn root(&self) -> Option<&CssScopeSelectorList> {
+        self.root.as_ref()
+    }
+
+    #[must_use]
+    pub const fn limit(&self) -> Option<&CssScopeSelectorList> {
+        self.limit.as_ref()
+    }
+
+    #[must_use]
+    pub const fn rules(&self) -> &CssScopedRuleList {
+        &self.rules
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssScopeSelectorList {
+    selectors: Vec<CssSelector>,
+}
+
+impl CssScopeSelectorList {
+    #[must_use]
+    pub fn try_new(selectors: Vec<CssSelector>) -> Option<Self> {
+        if selectors.is_empty() {
+            None
+        } else {
+            Some(Self::new(selectors))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(selectors: Vec<CssSelector>) -> Self {
+        debug_assert!(!selectors.is_empty());
+        Self { selectors }
+    }
+
+    #[must_use]
+    pub fn selectors(&self) -> &[CssSelector] {
+        &self.selectors
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CssScopedRuleList {
+    rules: Vec<CssScopedRule>,
+}
+
+impl CssScopedRuleList {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self { rules: Vec::new() }
+    }
+
+    #[must_use]
+    #[allow(dead_code)] // Staged for @scope parser construction.
+    pub(crate) const fn from_rules(rules: Vec<CssScopedRule>) -> Self {
+        Self { rules }
+    }
+
+    #[must_use]
+    pub fn rules(&self) -> &[CssScopedRule] {
+        &self.rules
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssScopedRule {
+    Style(CssScopedStyleRule),
+    Media(CssScopedMediaRule),
+    Container(CssScopedContainerRule),
+    LayerStatement(CssScopedLayerStatementRule),
+    LayerBlock(CssScopedLayerBlockRule),
+    Scope(CssScopeRule),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssScopedStyleRule {
+    selectors: CssScopedStyleSelectorList,
+    declarations: Vec<CssDeclaration>,
+}
+
+impl CssScopedStyleRule {
+    #[must_use]
+    #[allow(dead_code)] // Staged for @scope parser construction.
+    pub(crate) fn new(
+        selectors: CssScopedStyleSelectorList,
+        declarations: Vec<CssDeclaration>,
+    ) -> Self {
+        Self {
+            selectors,
+            declarations,
+        }
+    }
+
+    #[must_use]
+    pub const fn selectors(&self) -> &CssScopedStyleSelectorList {
+        &self.selectors
+    }
+
+    #[must_use]
+    pub fn declarations(&self) -> &[CssDeclaration] {
+        &self.declarations
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssScopedStyleSelectorList {
+    selectors: Vec<CssScopedStyleSelector>,
+}
+
+impl CssScopedStyleSelectorList {
+    #[must_use]
+    pub fn try_new(selectors: Vec<CssScopedStyleSelector>) -> Option<Self> {
+        if selectors.is_empty() {
+            None
+        } else {
+            Some(Self::new(selectors))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(selectors: Vec<CssScopedStyleSelector>) -> Self {
+        debug_assert!(!selectors.is_empty());
+        Self { selectors }
+    }
+
+    #[must_use]
+    pub fn selectors(&self) -> &[CssScopedStyleSelector] {
+        &self.selectors
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssScopedStyleSelector {
+    Selector(CssSelector),
+    Relative(CssRelativeSelector),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssScopedMediaRule {
+    query: CssMediaQueryList,
+    rules: CssScopedRuleList,
+    location: CssSourceLocation,
+}
+
+impl CssScopedMediaRule {
+    #[must_use]
+    #[allow(dead_code)] // Staged for @scope parser construction.
+    pub(crate) const fn new(
+        query: CssMediaQueryList,
+        rules: CssScopedRuleList,
+        location: CssSourceLocation,
+    ) -> Self {
+        Self {
+            query,
+            rules,
+            location,
+        }
+    }
+
+    #[must_use]
+    pub const fn query(&self) -> &CssMediaQueryList {
+        &self.query
+    }
+
+    #[must_use]
+    pub const fn rules(&self) -> &CssScopedRuleList {
+        &self.rules
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssScopedContainerRule {
+    name: Option<CssContainerName>,
+    condition: CssContainerCondition,
+    rules: CssScopedRuleList,
+    location: CssSourceLocation,
+}
+
+impl CssScopedContainerRule {
+    #[must_use]
+    #[allow(dead_code)] // Staged for @scope parser construction.
+    pub(crate) const fn new(
+        name: Option<CssContainerName>,
+        condition: CssContainerCondition,
+        rules: CssScopedRuleList,
+        location: CssSourceLocation,
+    ) -> Self {
+        Self {
+            name,
+            condition,
+            rules,
+            location,
+        }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> Option<&CssContainerName> {
+        self.name.as_ref()
+    }
+
+    #[must_use]
+    pub const fn condition(&self) -> &CssContainerCondition {
+        &self.condition
+    }
+
+    #[must_use]
+    pub const fn rules(&self) -> &CssScopedRuleList {
+        &self.rules
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssScopedLayerStatementRule {
+    names: CssLayerNameList,
+    location: CssSourceLocation,
+}
+
+impl CssScopedLayerStatementRule {
+    #[must_use]
+    #[allow(dead_code)] // Staged for scoped @layer parser construction.
+    pub(crate) const fn new(names: CssLayerNameList, location: CssSourceLocation) -> Self {
+        Self { names, location }
+    }
+
+    #[must_use]
+    pub const fn names(&self) -> &CssLayerNameList {
+        &self.names
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssScopedLayerBlockRule {
+    name: Option<CssLayerName>,
+    rules: CssScopedRuleList,
+    location: CssSourceLocation,
+}
+
+impl CssScopedLayerBlockRule {
+    #[must_use]
+    #[allow(dead_code)] // Staged for scoped @layer parser construction.
+    pub(crate) const fn new(
+        name: Option<CssLayerName>,
+        rules: CssScopedRuleList,
+        location: CssSourceLocation,
+    ) -> Self {
+        Self {
+            name,
+            rules,
+            location,
+        }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> Option<&CssLayerName> {
+        self.name.as_ref()
+    }
+
+    #[must_use]
+    pub const fn rules(&self) -> &CssScopedRuleList {
         &self.rules
     }
 
@@ -6798,6 +7205,7 @@ impl CssRelativeSelectorList {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssPseudoClass {
     Root,
+    Scope,
     Hover,
     Active,
     Focus,
@@ -6896,6 +7304,7 @@ impl CssNthAnPlusB {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssCompoundSelector {
+    scope_anchor: bool,
     tag: Option<String>,
     key: Option<String>,
     classes: Vec<String>,
@@ -6912,13 +7321,31 @@ impl CssCompoundSelector {
         attributes: Vec<CssAttributeSelector>,
         pseudo_classes: Vec<CssPseudoClass>,
     ) -> Self {
+        Self::new_with_scope_anchor(false, tag, key, classes, attributes, pseudo_classes)
+    }
+
+    #[must_use]
+    pub(crate) fn new_with_scope_anchor(
+        scope_anchor: bool,
+        tag: Option<String>,
+        key: Option<String>,
+        classes: Vec<String>,
+        attributes: Vec<CssAttributeSelector>,
+        pseudo_classes: Vec<CssPseudoClass>,
+    ) -> Self {
         Self {
+            scope_anchor,
             tag,
             key,
             classes,
             attributes,
             pseudo_classes,
         }
+    }
+
+    #[must_use]
+    pub const fn has_scope_anchor(&self) -> bool {
+        self.scope_anchor
     }
 
     #[must_use]
@@ -6950,6 +7377,7 @@ impl CssCompoundSelector {
     fn append_suffix(&mut self, suffix: Self) {
         debug_assert!(suffix.tag.is_none());
         debug_assert!(suffix.key.is_none());
+        debug_assert!(!suffix.scope_anchor);
         self.classes.extend(suffix.classes);
         self.attributes.extend(suffix.attributes);
         self.pseudo_classes.extend(suffix.pseudo_classes);

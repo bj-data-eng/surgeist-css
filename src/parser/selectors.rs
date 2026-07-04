@@ -315,6 +315,10 @@ fn parse_compound_selector_model_with_has_policy<'i, 't>(
 }
 
 fn compound_selector_to_selector(selector: CssCompoundSelector) -> CssSelector {
+    if selector.has_scope_anchor() {
+        return CssSelector::Compound(selector);
+    }
+
     if let (None, None, [class], [], []) = (
         selector.tag(),
         selector.key(),

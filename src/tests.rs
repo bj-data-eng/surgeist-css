@@ -549,6 +549,185 @@ fn import_layer_name_rejects_reserved_components() {
 }
 
 #[test]
+fn layer_rule_models_preserve_authored_statement_and_block_shapes() {
+    let reset = CssLayerName::try_new(["reset"]).unwrap();
+    let components = CssLayerName::try_new(["theme", "components"]).unwrap();
+    let names = CssLayerNameList::try_new(vec![reset.clone(), components.clone()]).unwrap();
+    let statement_location = CssSourceLocation::new(2, 3);
+    let statement = CssLayerStatementRule::new(names.clone(), statement_location);
+
+    assert_eq!(CssLayerNameList::try_new(Vec::new()), None);
+    assert_eq!(statement.names().names(), names.names());
+    assert_eq!(statement.location(), statement_location);
+    assert_eq!(
+        CssRule::LayerStatement(statement.clone()),
+        CssRule::LayerStatement(statement)
+    );
+
+    let nested = CssRule::Style(CssStyleRule::new(
+        CssSelector::Class("button".to_owned()),
+        Vec::new(),
+    ));
+    let block_location = CssSourceLocation::new(4, 5);
+    let named_block = CssLayerBlockRule::new(
+        Some(components.clone()),
+        vec![nested.clone()],
+        block_location,
+    );
+    assert_eq!(named_block.name(), Some(&components));
+    assert_eq!(named_block.rules(), &[nested]);
+    assert_eq!(named_block.location(), block_location);
+
+    let anonymous_block = CssLayerBlockRule::new(None, Vec::new(), block_location);
+    assert_eq!(anonymous_block.name(), None);
+    assert!(anonymous_block.rules().is_empty());
+    assert_eq!(
+        CssRule::LayerBlock(anonymous_block.clone()),
+        CssRule::LayerBlock(anonymous_block)
+    );
+}
+
+#[test]
+fn scope_rule_model_keeps_scoped_selectors_and_rules_separate() {
+    assert_eq!(CssScopeSelectorList::try_new(Vec::new()), None);
+    assert_eq!(CssScopedStyleSelectorList::try_new(Vec::new()), None);
+
+    let root_selector = CssSelector::Class("card".to_owned());
+    let root = CssScopeSelectorList::try_new(vec![root_selector.clone()]).unwrap();
+    let limit_selector = CssSelector::Class("boundary".to_owned());
+    let limit = CssScopeSelectorList::try_new(vec![limit_selector.clone()]).unwrap();
+
+    let implicit_selector =
+        CssScopedStyleSelector::Selector(CssSelector::Class("title".to_owned()));
+    let relative = CssRelativeSelector::new(
+        CssSelectorCombinator::Child,
+        CssSelector::Class("action".to_owned()),
+    );
+    let relative_selector = CssScopedStyleSelector::Relative(relative.clone());
+    let selectors = CssScopedStyleSelectorList::try_new(vec![
+        implicit_selector.clone(),
+        relative_selector.clone(),
+    ])
+    .unwrap();
+    let declaration = CssDeclaration::new(
+        CssProperty::Color,
+        CssValue::Color(CssColor::Rgba(CssRgbaColor::try_new(0, 0, 0, 1.0).unwrap())),
+        CssSourceLocation::new(6, 7),
+    );
+    let style = CssScopedStyleRule::new(selectors.clone(), vec![declaration.clone()]);
+    let scoped_rules = CssScopedRuleList::from_rules(vec![CssScopedRule::Style(style.clone())]);
+    let location = CssSourceLocation::new(5, 1);
+    let scope = CssScopeRule::new(
+        Some(root.clone()),
+        Some(limit.clone()),
+        scoped_rules.clone(),
+        location,
+    );
+
+    assert_eq!(root.selectors(), &[root_selector]);
+    assert_eq!(limit.selectors(), &[limit_selector]);
+    assert_eq!(
+        selectors.selectors(),
+        &[implicit_selector, relative_selector]
+    );
+    assert_eq!(style.selectors(), &selectors);
+    assert_eq!(style.declarations(), &[declaration]);
+    assert_eq!(scope.root(), Some(&root));
+    assert_eq!(scope.limit(), Some(&limit));
+    assert_eq!(scope.rules(), &scoped_rules);
+    assert_eq!(scope.location(), location);
+    assert_eq!(CssRule::Scope(scope.clone()), CssRule::Scope(scope));
+
+    let empty_rules = CssScopedRuleList::new();
+    assert!(empty_rules.rules().is_empty());
+}
+
+#[test]
+fn scoped_group_rule_models_keep_scoped_children() {
+    let child_selector =
+        CssScopedStyleSelectorList::try_new(vec![CssScopedStyleSelector::Selector(
+            CssSelector::Class("label".to_owned()),
+        )])
+        .unwrap();
+    let child = CssScopedRule::Style(CssScopedStyleRule::new(child_selector, Vec::new()));
+    let scoped_children = CssScopedRuleList::from_rules(vec![child.clone()]);
+    let location = CssSourceLocation::new(8, 9);
+    let query = CssMediaQueryList::try_new(vec![CssMediaQuery::Typed(CssTypedMediaQuery::new(
+        None,
+        CssMediaType::Screen,
+        None,
+    ))])
+    .unwrap();
+    let media = CssScopedMediaRule::new(query.clone(), scoped_children.clone(), location);
+    assert_eq!(media.query(), &query);
+    assert_eq!(media.rules(), &scoped_children);
+    assert_eq!(media.location(), location);
+
+    let condition =
+        parse_container_condition_for_test("(inline-size > 30rem)").expect("condition parses");
+    let name = CssContainerName::try_new("sidebar").unwrap();
+    let container = CssScopedContainerRule::new(
+        Some(name.clone()),
+        condition.clone(),
+        scoped_children.clone(),
+        location,
+    );
+    assert_eq!(container.name(), Some(&name));
+    assert_eq!(container.condition(), &condition);
+    assert_eq!(container.rules(), &scoped_children);
+    assert_eq!(container.location(), location);
+
+    let layer_name = CssLayerName::try_new(["theme"]).unwrap();
+    let layer_names = CssLayerNameList::try_new(vec![layer_name.clone()]).unwrap();
+    let statement = CssScopedLayerStatementRule::new(layer_names.clone(), location);
+    assert_eq!(statement.names(), &layer_names);
+    assert_eq!(statement.location(), location);
+
+    let block =
+        CssScopedLayerBlockRule::new(Some(layer_name.clone()), scoped_children.clone(), location);
+    assert_eq!(block.name(), Some(&layer_name));
+    assert_eq!(block.rules(), &scoped_children);
+    assert_eq!(block.location(), location);
+
+    assert_eq!(
+        CssScopedRule::Media(media.clone()),
+        CssScopedRule::Media(media)
+    );
+    assert_eq!(
+        CssScopedRule::Container(container.clone()),
+        CssScopedRule::Container(container)
+    );
+    assert_eq!(
+        CssScopedRule::LayerStatement(statement.clone()),
+        CssScopedRule::LayerStatement(statement)
+    );
+    assert_eq!(
+        CssScopedRule::LayerBlock(block.clone()),
+        CssScopedRule::LayerBlock(block)
+    );
+}
+
+#[test]
+fn scoped_selector_model_preserves_authored_scope_anchor_marker() {
+    let anchored = CssCompoundSelector::new_with_scope_anchor(
+        true,
+        None,
+        None,
+        vec!["active".to_owned()],
+        Vec::new(),
+        vec![CssPseudoClass::Scope],
+    );
+
+    assert!(anchored.has_scope_anchor());
+    assert_eq!(anchored.classes(), &["active".to_owned()]);
+    assert_eq!(anchored.pseudo_classes(), &[CssPseudoClass::Scope]);
+
+    let selector = CssScopedStyleSelector::Selector(CssSelector::Compound(anchored.clone()));
+    let list = CssScopedStyleSelectorList::try_new(vec![selector.clone()]).unwrap();
+    assert_eq!(list.selectors(), &[selector]);
+}
+
+#[test]
 fn import_target_constructors_reject_empty_values() {
     assert_eq!(CssImportUrl::try_new(""), None);
     assert_eq!(CssImportUrl::try_new(" \t\n "), None);

@@ -123,6 +123,13 @@ const SUPPORTED_PROPERTY_NAMES: &[&str] = &[
     "border-right-color",
     "border-bottom-color",
     "border-left-color",
+    "background-image",
+    "background-position",
+    "background-size",
+    "background-repeat",
+    "background-origin",
+    "background-clip",
+    "background-attachment",
     "border-style",
     "border-top-style",
     "border-right-style",
@@ -143,17 +150,6 @@ const SUPPORTED_PROPERTY_NAMES: &[&str] = &[
     "align-tracks",
     "aspect-ratio",
     "scrollbar-width",
-];
-
-const KNOWN_UNSUPPORTED_PROPERTY_NAMES: &[&str] = &[
-    "all",
-    "background-image",
-    "background-position",
-    "background-size",
-    "background-repeat",
-    "background-origin",
-    "background-clip",
-    "background-attachment",
     "cursor",
     "pointer-events",
     "user-select",
@@ -189,6 +185,8 @@ const KNOWN_UNSUPPORTED_PROPERTY_NAMES: &[&str] = &[
     "animation-play-state",
     "animation",
 ];
+
+const KNOWN_UNSUPPORTED_PROPERTY_NAMES: &[&str] = &["all"];
 
 pub(crate) fn classify_property_name(name: &str) -> PropertyNameStatus {
     if contains_ascii_case(SUPPORTED_PROPERTY_NAMES, name) {

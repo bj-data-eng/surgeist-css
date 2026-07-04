@@ -337,6 +337,13 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             "border-right-color" => (CssProperty::BorderRightColor, CssValue::Color(parse_color(input)?)),
             "border-bottom-color" => (CssProperty::BorderBottomColor, CssValue::Color(parse_color(input)?)),
             "border-left-color" => (CssProperty::BorderLeftColor, CssValue::Color(parse_color(input)?)),
+            "background-image" => (CssProperty::BackgroundImage, CssValue::BackgroundImage(parse_image_layer_list(input)?)),
+            "background-position" => (CssProperty::BackgroundPosition, CssValue::BackgroundPosition(parse_position_list(input)?)),
+            "background-size" => (CssProperty::BackgroundSize, CssValue::BackgroundSize(parse_background_size_list(input)?)),
+            "background-repeat" => (CssProperty::BackgroundRepeat, CssValue::BackgroundRepeat(parse_background_repeat_list(input)?)),
+            "background-origin" => (CssProperty::BackgroundOrigin, CssValue::BackgroundBox(parse_background_box(input)?)),
+            "background-clip" => (CssProperty::BackgroundClip, CssValue::BackgroundBox(parse_background_box(input)?)),
+            "background-attachment" => (CssProperty::BackgroundAttachment, CssValue::BackgroundAttachment(parse_background_attachment_list(input)?)),
             "border-style" => (CssProperty::BorderStyle, CssValue::BorderStyles(parse_border_styles(input)?)),
             "border-top-style" => (CssProperty::BorderTopStyle, CssValue::BorderStyle(parse_border_style(input)?)),
             "border-right-style" => (CssProperty::BorderRightStyle, CssValue::BorderStyle(parse_border_style(input)?)),
@@ -357,6 +364,40 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             "align-tracks" => (CssProperty::AlignTracks, CssValue::Alignment(parse_content_alignment(input)?)),
             "aspect-ratio" => (CssProperty::AspectRatio, CssValue::Number(parse_number(input)?)),
             "scrollbar-width" => (CssProperty::ScrollbarWidth, CssValue::Number(parse_number(input)?)),
+            "cursor" => (CssProperty::Cursor, CssValue::Cursor(parse_cursor(input)?)),
+            "pointer-events" => (CssProperty::PointerEvents, CssValue::PointerEvents(parse_pointer_events(input)?)),
+            "user-select" => (CssProperty::UserSelect, CssValue::UserSelect(parse_user_select(input)?)),
+            "outline" => (CssProperty::Outline, CssValue::Outline(parse_outline(input)?)),
+            "outline-color" => (CssProperty::OutlineColor, CssValue::OutlineColor(parse_color(input)?)),
+            "outline-style" => (CssProperty::OutlineStyle, CssValue::OutlineStyle(parse_outline_style(input)?)),
+            "outline-width" => (CssProperty::OutlineWidth, CssValue::OutlineWidth(parse_outline_width(input)?)),
+            "transform" => (CssProperty::Transform, CssValue::Transform(parse_transform(input)?)),
+            "transform-origin" => (CssProperty::TransformOrigin, CssValue::TransformOrigin(parse_css_position(input)?)),
+            "translate" => (CssProperty::Translate, CssValue::Translate(parse_translate(input)?)),
+            "rotate" => (CssProperty::Rotate, CssValue::Rotate(parse_rotate(input)?)),
+            "scale" => (CssProperty::Scale, CssValue::Scale(parse_scale(input)?)),
+            "filter" => (CssProperty::Filter, CssValue::Filter(parse_filter(input)?)),
+            "backdrop-filter" => (CssProperty::BackdropFilter, CssValue::Filter(parse_filter(input)?)),
+            "clip-path" => (CssProperty::ClipPath, CssValue::ClipPath(parse_clip_path(input)?)),
+            "mask" => (CssProperty::Mask, CssValue::Mask(parse_mask_list(input)?)),
+            "mask-image" => (CssProperty::MaskImage, CssValue::MaskImage(parse_image_layer_list(input)?)),
+            "mask-size" => (CssProperty::MaskSize, CssValue::MaskSize(parse_background_size_list(input)?)),
+            "mask-position" => (CssProperty::MaskPosition, CssValue::MaskPosition(parse_position_list(input)?)),
+            "mask-repeat" => (CssProperty::MaskRepeat, CssValue::MaskRepeat(parse_background_repeat_list(input)?)),
+            "transition-property" => (CssProperty::TransitionProperty, CssValue::TransitionProperty(parse_transition_property_list(input)?)),
+            "transition-duration" => (CssProperty::TransitionDuration, CssValue::TimeList(parse_time_list(input)?)),
+            "transition-delay" => (CssProperty::TransitionDelay, CssValue::TimeList(parse_time_list(input)?)),
+            "transition-timing-function" => (CssProperty::TransitionTimingFunction, CssValue::EasingList(parse_easing_list(input)?)),
+            "transition" => (CssProperty::Transition, CssValue::Transition(parse_transition_list(input)?)),
+            "animation-name" => (CssProperty::AnimationName, CssValue::AnimationName(parse_animation_name_list(input)?)),
+            "animation-duration" => (CssProperty::AnimationDuration, CssValue::TimeList(parse_time_list(input)?)),
+            "animation-delay" => (CssProperty::AnimationDelay, CssValue::TimeList(parse_time_list(input)?)),
+            "animation-timing-function" => (CssProperty::AnimationTimingFunction, CssValue::EasingList(parse_easing_list(input)?)),
+            "animation-iteration-count" => (CssProperty::AnimationIterationCount, CssValue::AnimationIterationCount(parse_animation_iteration_count_list(input)?)),
+            "animation-direction" => (CssProperty::AnimationDirection, CssValue::AnimationDirection(parse_animation_direction_list(input)?)),
+            "animation-fill-mode" => (CssProperty::AnimationFillMode, CssValue::AnimationFillMode(parse_animation_fill_mode_list(input)?)),
+            "animation-play-state" => (CssProperty::AnimationPlayState, CssValue::AnimationPlayState(parse_animation_play_state_list(input)?)),
+            "animation" => (CssProperty::Animation, CssValue::Animation(parse_animation_list(input)?)),
             _ => return Err(property_name_error(input, name.as_ref())),
             })
         })()
@@ -2570,6 +2611,1609 @@ fn parse_text_transform<'i, 't>(
     }
 }
 
+fn parse_image_layer_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssImageLayerList, ParseError<'i, Error>> {
+    let mut layers = Vec::new();
+    loop {
+        layers.push(parse_image_layer(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "image layer list has an empty item",
+            ));
+        }
+    }
+    CssImageLayerList::try_new(layers)
+        .ok_or_else(|| unsupported_value(input, None, "image layer list is empty"))
+}
+
+fn parse_image_layer<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssImageLayer, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("none"))
+        .is_ok()
+    {
+        return Ok(CssImageLayer::None);
+    }
+    parse_url(input).map(CssImageLayer::Url)
+}
+
+fn parse_url<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssUrl, ParseError<'i, Error>> {
+    let value = input.expect_url().map_err(basic)?.to_string();
+    CssUrl::try_new(value).ok_or_else(|| unsupported_value(input, None, "URL is empty"))
+}
+
+fn parse_position_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssPositionList, ParseError<'i, Error>> {
+    let mut positions = Vec::new();
+    loop {
+        positions.push(parse_css_position(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "position list has an empty item",
+            ));
+        }
+    }
+    CssPositionList::try_new(positions)
+        .ok_or_else(|| unsupported_value(input, None, "position list is empty"))
+}
+
+fn parse_css_position<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssPosition, ParseError<'i, Error>> {
+    let mut components = Vec::new();
+    while !input.is_exhausted() && !next_is_comma(input) && !next_is_delim(input, '/') {
+        components.push(parse_position_component(input, &components)?);
+        if components.len() > 4 {
+            return Err(unsupported_value(
+                input,
+                None,
+                "position has too many components",
+            ));
+        }
+    }
+    CssPosition::try_new(components)
+        .ok_or_else(|| unsupported_value(input, None, "position is empty"))
+}
+
+fn parse_position_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    previous: &[CssPositionComponent],
+) -> std::result::Result<CssPositionComponent, ParseError<'i, Error>> {
+    let state = input.state();
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        return match_ignore_ascii_case! { &ident,
+            "left" => Ok(CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Left)),
+            "right" => Ok(CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Right)),
+            "top" => Ok(CssPositionComponent::Vertical(CssVerticalPositionKeyword::Top)),
+            "bottom" => Ok(CssPositionComponent::Vertical(CssVerticalPositionKeyword::Bottom)),
+            "center" => {
+                let has_horizontal = previous.iter().any(|component| matches!(component, CssPositionComponent::Horizontal(_)));
+                if has_horizontal {
+                    Ok(CssPositionComponent::Vertical(CssVerticalPositionKeyword::Center))
+                } else {
+                    Ok(CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Center))
+                }
+            },
+            _ => Err(unsupported_value(
+                input,
+                None,
+                unsupported_keyword_reason("position", ident.as_ref()),
+            )),
+        };
+    }
+    input.reset(&state);
+    parse_length_with(input, LengthOptions::position(), "position")
+        .map(CssPositionComponent::Length)
+}
+
+fn parse_background_size_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundSizeList, ParseError<'i, Error>> {
+    let mut sizes = Vec::new();
+    loop {
+        sizes.push(parse_background_size(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "background-size list has an empty item",
+            ));
+        }
+    }
+    CssBackgroundSizeList::try_new(sizes)
+        .ok_or_else(|| unsupported_value(input, None, "background-size list is empty"))
+}
+
+fn parse_background_size<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundSize, ParseError<'i, Error>> {
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        return match_ignore_ascii_case! { &ident,
+            "cover" => Ok(CssBackgroundSize::Cover),
+            "contain" => Ok(CssBackgroundSize::Contain),
+            "auto" => {
+                let height = if !input.is_exhausted() && !next_is_comma(input) {
+                    Some(parse_background_size_component(input)?)
+                } else {
+                    None
+                };
+                Ok(CssBackgroundSize::Explicit {
+                    width: CssBackgroundSizeComponent::Auto,
+                    height,
+                })
+            },
+            _ => Err(unsupported_value(
+                input,
+                None,
+                unsupported_keyword_reason("background-size", ident.as_ref()),
+            )),
+        };
+    }
+
+    let width = parse_background_size_component(input)?;
+    let height = if !input.is_exhausted() && !next_is_comma(input) {
+        Some(parse_background_size_component(input)?)
+    } else {
+        None
+    };
+    Ok(CssBackgroundSize::Explicit { width, height })
+}
+
+fn parse_background_size_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundSizeComponent, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("auto"))
+        .is_ok()
+    {
+        Ok(CssBackgroundSizeComponent::Auto)
+    } else {
+        parse_length_with(input, LengthOptions::background_size(), "background-size")
+            .map(CssBackgroundSizeComponent::Length)
+    }
+}
+
+fn parse_background_repeat_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundRepeatList, ParseError<'i, Error>> {
+    let mut repeats = Vec::new();
+    loop {
+        repeats.push(parse_background_repeat(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "background-repeat list has an empty item",
+            ));
+        }
+    }
+    CssBackgroundRepeatList::try_new(repeats)
+        .ok_or_else(|| unsupported_value(input, None, "background-repeat list is empty"))
+}
+
+fn parse_background_repeat<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundRepeat, ParseError<'i, Error>> {
+    let first = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &first,
+        "repeat-x" => Ok(CssBackgroundRepeat::RepeatX),
+        "repeat-y" => Ok(CssBackgroundRepeat::RepeatY),
+        _ => {
+            let x = parse_background_repeat_style_from_ident(input, first.as_ref())?;
+            let y = if input.is_exhausted() || next_is_comma(input) {
+                x
+            } else {
+                let second = input.expect_ident_cloned().map_err(basic)?;
+                parse_background_repeat_style_from_ident(input, second.as_ref())?
+            };
+            Ok(CssBackgroundRepeat::Axes { x, y })
+        }
+    }
+}
+
+fn parse_background_repeat_style_from_ident<'i, 't>(
+    input: &Parser<'i, 't>,
+    ident: &str,
+) -> std::result::Result<CssBackgroundRepeatStyle, ParseError<'i, Error>> {
+    match ident.to_ascii_lowercase().as_str() {
+        "repeat" => Ok(CssBackgroundRepeatStyle::Repeat),
+        "space" => Ok(CssBackgroundRepeatStyle::Space),
+        "round" => Ok(CssBackgroundRepeatStyle::Round),
+        "no-repeat" => Ok(CssBackgroundRepeatStyle::NoRepeat),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("background-repeat", ident),
+        )),
+    }
+}
+
+fn parse_background_box<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundBox, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "border-box" => Ok(CssBackgroundBox::BorderBox),
+        "padding-box" => Ok(CssBackgroundBox::PaddingBox),
+        "content-box" => Ok(CssBackgroundBox::ContentBox),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("background box", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_background_attachment_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundAttachmentList, ParseError<'i, Error>> {
+    let mut attachments = Vec::new();
+    loop {
+        attachments.push(parse_background_attachment(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "background-attachment list has an empty item",
+            ));
+        }
+    }
+    CssBackgroundAttachmentList::try_new(attachments)
+        .ok_or_else(|| unsupported_value(input, None, "background-attachment list is empty"))
+}
+
+fn parse_background_attachment<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundAttachment, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "scroll" => Ok(CssBackgroundAttachment::Scroll),
+        "fixed" => Ok(CssBackgroundAttachment::Fixed),
+        "local" => Ok(CssBackgroundAttachment::Local),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("background-attachment", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_cursor<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssCursor, ParseError<'i, Error>> {
+    let mut urls = Vec::new();
+    while let Ok(url) = input.try_parse(parse_url) {
+        urls.push(url);
+        input.expect_comma().map_err(basic)?;
+    }
+    let fallback = parse_cursor_keyword(input)?;
+    if urls.is_empty() {
+        Ok(CssCursor::Keyword(fallback))
+    } else {
+        Ok(CssCursor::urls(urls, fallback))
+    }
+}
+
+fn parse_cursor_keyword<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssCursorKeyword, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "auto" => Ok(CssCursorKeyword::Auto),
+        "default" => Ok(CssCursorKeyword::Default),
+        "none" => Ok(CssCursorKeyword::None),
+        "context-menu" => Ok(CssCursorKeyword::ContextMenu),
+        "help" => Ok(CssCursorKeyword::Help),
+        "pointer" => Ok(CssCursorKeyword::Pointer),
+        "progress" => Ok(CssCursorKeyword::Progress),
+        "wait" => Ok(CssCursorKeyword::Wait),
+        "cell" => Ok(CssCursorKeyword::Cell),
+        "crosshair" => Ok(CssCursorKeyword::Crosshair),
+        "text" => Ok(CssCursorKeyword::Text),
+        "vertical-text" => Ok(CssCursorKeyword::VerticalText),
+        "alias" => Ok(CssCursorKeyword::Alias),
+        "copy" => Ok(CssCursorKeyword::Copy),
+        "move" => Ok(CssCursorKeyword::Move),
+        "no-drop" => Ok(CssCursorKeyword::NoDrop),
+        "not-allowed" => Ok(CssCursorKeyword::NotAllowed),
+        "grab" => Ok(CssCursorKeyword::Grab),
+        "grabbing" => Ok(CssCursorKeyword::Grabbing),
+        "all-scroll" => Ok(CssCursorKeyword::AllScroll),
+        "col-resize" => Ok(CssCursorKeyword::ColResize),
+        "row-resize" => Ok(CssCursorKeyword::RowResize),
+        "n-resize" => Ok(CssCursorKeyword::NResize),
+        "e-resize" => Ok(CssCursorKeyword::EResize),
+        "s-resize" => Ok(CssCursorKeyword::SResize),
+        "w-resize" => Ok(CssCursorKeyword::WResize),
+        "ne-resize" => Ok(CssCursorKeyword::NeResize),
+        "nw-resize" => Ok(CssCursorKeyword::NwResize),
+        "se-resize" => Ok(CssCursorKeyword::SeResize),
+        "sw-resize" => Ok(CssCursorKeyword::SwResize),
+        "ew-resize" => Ok(CssCursorKeyword::EwResize),
+        "ns-resize" => Ok(CssCursorKeyword::NsResize),
+        "nesw-resize" => Ok(CssCursorKeyword::NeswResize),
+        "nwse-resize" => Ok(CssCursorKeyword::NwseResize),
+        "zoom-in" => Ok(CssCursorKeyword::ZoomIn),
+        "zoom-out" => Ok(CssCursorKeyword::ZoomOut),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("cursor", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_pointer_events<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssPointerEvents, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "auto" => Ok(CssPointerEvents::Auto),
+        "none" => Ok(CssPointerEvents::None),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("pointer-events", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_user_select<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssUserSelect, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "auto" => Ok(CssUserSelect::Auto),
+        "text" => Ok(CssUserSelect::Text),
+        "none" => Ok(CssUserSelect::None),
+        "all" => Ok(CssUserSelect::All),
+        "contain" => Ok(CssUserSelect::Contain),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("user-select", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_outline<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssOutline, ParseError<'i, Error>> {
+    let mut width = None;
+    let mut style = None;
+    let mut color = None;
+    while !input.is_exhausted() {
+        if width.is_none()
+            && let Ok(parsed_width) = input.try_parse(parse_outline_width)
+        {
+            width = Some(parsed_width);
+            continue;
+        }
+        if style.is_none()
+            && let Ok(parsed_style) = input.try_parse(parse_outline_style)
+        {
+            style = Some(parsed_style);
+            continue;
+        }
+        if color.is_none()
+            && let Ok(parsed_color) = input.try_parse(parse_color)
+        {
+            color = Some(parsed_color);
+            continue;
+        }
+        return Err(unsupported_value(
+            input,
+            None,
+            "unsupported outline component",
+        ));
+    }
+    CssOutline::try_new(width, style, color)
+        .ok_or_else(|| unsupported_value(input, None, "outline shorthand is empty"))
+}
+
+fn parse_outline_style<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssOutlineStyle, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("auto"))
+        .is_ok()
+    {
+        Ok(CssOutlineStyle::Auto)
+    } else {
+        parse_border_style(input).map(CssOutlineStyle::Border)
+    }
+}
+
+fn parse_outline_width<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssOutlineWidth, ParseError<'i, Error>> {
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        return match_ignore_ascii_case! { &ident,
+            "thin" => Ok(CssOutlineWidth::Thin),
+            "medium" => Ok(CssOutlineWidth::Medium),
+            "thick" => Ok(CssOutlineWidth::Thick),
+            _ => Err(unsupported_value(
+                input,
+                None,
+                unsupported_keyword_reason("outline-width", ident.as_ref()),
+            )),
+        };
+    }
+    parse_length_with(input, LengthOptions::border_width(), "outline-width")
+        .map(CssOutlineWidth::Length)
+}
+
+fn parse_transform<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransform, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("none"))
+        .is_ok()
+    {
+        return Ok(CssTransform::None);
+    }
+    let mut functions = Vec::new();
+    while !input.is_exhausted() {
+        functions.push(parse_transform_function(input)?);
+    }
+    CssTransformFunctionList::try_new(functions)
+        .map(CssTransform::Functions)
+        .ok_or_else(|| unsupported_value(input, None, "transform function list is empty"))
+}
+
+fn parse_transform_function<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransformFunction, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let name = match input.next().map_err(basic)? {
+        Token::Function(name) => name.clone(),
+        token => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    };
+    let kind = parse_transform_function_kind(input, name.as_ref())?;
+    let arguments =
+        input.parse_nested_block(|input| parse_transform_function_arguments(input, kind))?;
+    Ok(CssTransformFunction::new(kind, arguments))
+}
+
+fn parse_transform_function_kind<'i, 't>(
+    input: &Parser<'i, 't>,
+    name: &str,
+) -> std::result::Result<CssTransformFunctionKind, ParseError<'i, Error>> {
+    match name.to_ascii_lowercase().as_str() {
+        "matrix" => Ok(CssTransformFunctionKind::Matrix),
+        "matrix3d" => Ok(CssTransformFunctionKind::Matrix3d),
+        "perspective" => Ok(CssTransformFunctionKind::Perspective),
+        "rotate" => Ok(CssTransformFunctionKind::Rotate),
+        "rotate3d" => Ok(CssTransformFunctionKind::Rotate3d),
+        "rotatex" => Ok(CssTransformFunctionKind::RotateX),
+        "rotatey" => Ok(CssTransformFunctionKind::RotateY),
+        "rotatez" => Ok(CssTransformFunctionKind::RotateZ),
+        "scale" => Ok(CssTransformFunctionKind::Scale),
+        "scale3d" => Ok(CssTransformFunctionKind::Scale3d),
+        "scalex" => Ok(CssTransformFunctionKind::ScaleX),
+        "scaley" => Ok(CssTransformFunctionKind::ScaleY),
+        "scalez" => Ok(CssTransformFunctionKind::ScaleZ),
+        "skew" => Ok(CssTransformFunctionKind::Skew),
+        "skewx" => Ok(CssTransformFunctionKind::SkewX),
+        "skewy" => Ok(CssTransformFunctionKind::SkewY),
+        "translate" => Ok(CssTransformFunctionKind::Translate),
+        "translate3d" => Ok(CssTransformFunctionKind::Translate3d),
+        "translatex" => Ok(CssTransformFunctionKind::TranslateX),
+        "translatey" => Ok(CssTransformFunctionKind::TranslateY),
+        "translatez" => Ok(CssTransformFunctionKind::TranslateZ),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            format!("unsupported transform function `{name}`"),
+        )),
+    }
+}
+
+fn parse_transform_function_arguments<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    kind: CssTransformFunctionKind,
+) -> std::result::Result<CssFunctionArguments, ParseError<'i, Error>> {
+    parse_validated_function_arguments(input, "transform function", |input| match kind {
+        CssTransformFunctionKind::Translate => validate_length_sequence(input, 1, 2),
+        CssTransformFunctionKind::TranslateX
+        | CssTransformFunctionKind::TranslateY
+        | CssTransformFunctionKind::TranslateZ
+        | CssTransformFunctionKind::Perspective => validate_length_sequence(input, 1, 1),
+        CssTransformFunctionKind::Translate3d => validate_length_sequence(input, 3, 3),
+        CssTransformFunctionKind::Scale => validate_number_sequence(input, 1, 2),
+        CssTransformFunctionKind::ScaleX
+        | CssTransformFunctionKind::ScaleY
+        | CssTransformFunctionKind::ScaleZ => validate_number_sequence(input, 1, 1),
+        CssTransformFunctionKind::Scale3d => validate_number_sequence(input, 3, 3),
+        CssTransformFunctionKind::Rotate
+        | CssTransformFunctionKind::RotateX
+        | CssTransformFunctionKind::RotateY
+        | CssTransformFunctionKind::RotateZ
+        | CssTransformFunctionKind::SkewX
+        | CssTransformFunctionKind::SkewY => validate_angle_sequence(input, 1, 1),
+        CssTransformFunctionKind::Skew => validate_angle_sequence(input, 1, 2),
+        CssTransformFunctionKind::Rotate3d => {
+            validate_number_sequence_prefix(input, 3)
+                && consume_optional_comma(input)
+                && validate_angle(input)
+                && input.is_exhausted()
+        }
+        CssTransformFunctionKind::Matrix => validate_number_sequence(input, 6, 6),
+        CssTransformFunctionKind::Matrix3d => validate_number_sequence(input, 16, 16),
+    })
+}
+
+fn parse_filter_function_arguments<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    name: &str,
+) -> std::result::Result<CssFunctionArguments, ParseError<'i, Error>> {
+    parse_validated_function_arguments(input, "filter function", |input| {
+        match name.to_ascii_lowercase().as_str() {
+            "blur" => validate_non_negative_length(input),
+            "brightness" | "contrast" | "grayscale" | "invert" | "opacity" | "saturate"
+            | "sepia" => validate_number_or_percent(input),
+            "hue-rotate" => validate_angle(input) && input.is_exhausted(),
+            "drop-shadow" => input.try_parse(parse_shadow).is_ok() && input.is_exhausted(),
+            _ => false,
+        }
+    })
+}
+
+fn parse_basic_shape_arguments<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    name: &str,
+) -> std::result::Result<CssFunctionArguments, ParseError<'i, Error>> {
+    parse_validated_function_arguments(input, "basic shape", |input| {
+        match name.to_ascii_lowercase().as_str() {
+            "circle" => validate_circle_shape(input),
+            "ellipse" => validate_ellipse_shape(input),
+            "inset" => validate_inset_shape(input),
+            "polygon" => validate_polygon_shape(input),
+            _ => false,
+        }
+    })
+}
+
+fn parse_easing_function_arguments<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    name: &str,
+) -> std::result::Result<CssFunctionArguments, ParseError<'i, Error>> {
+    parse_validated_function_arguments(input, "easing function", |input| {
+        match name.to_ascii_lowercase().as_str() {
+            "cubic-bezier" => validate_cubic_bezier(input),
+            "steps" => validate_steps(input),
+            _ => false,
+        }
+    })
+}
+
+fn parse_validated_function_arguments<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    context: &str,
+    validate: impl for<'a, 'b> FnMut(&mut Parser<'a, 'b>) -> bool,
+) -> std::result::Result<CssFunctionArguments, ParseError<'i, Error>> {
+    let value = collect_authored_tokens(input)?;
+    if value.is_empty() {
+        return Err(unsupported_value(
+            input,
+            None,
+            "function arguments are empty",
+        ));
+    }
+    if !validate_authored_function_arguments(&value, validate) {
+        return Err(unsupported_value(
+            input,
+            None,
+            format!("invalid {context} arguments"),
+        ));
+    }
+    Ok(CssFunctionArguments::new(value))
+}
+
+fn validate_authored_function_arguments(
+    value: &str,
+    mut validate: impl for<'i, 't> FnMut(&mut Parser<'i, 't>) -> bool,
+) -> bool {
+    let mut input = ParserInput::new(value);
+    let mut parser = Parser::new(&mut input);
+    validate(&mut parser) && parser.is_exhausted()
+}
+
+fn collect_authored_tokens<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<String, ParseError<'i, Error>> {
+    let mut value = String::new();
+    while !input.is_exhausted() {
+        let token = input.next().map_err(basic)?;
+        let token_css = token.to_css_string();
+        if matches!(token, Token::Comma) {
+            if value.ends_with(' ') {
+                value.pop();
+            }
+            value.push_str(", ");
+        } else {
+            if !value.is_empty() && !value.ends_with(' ') {
+                value.push(' ');
+            }
+            value.push_str(&token_css);
+        }
+    }
+    Ok(value.trim().to_owned())
+}
+
+fn consume_optional_comma<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    input.try_parse(Parser::expect_comma).is_ok()
+}
+
+fn validate_length_sequence<'i, 't>(input: &mut Parser<'i, 't>, min: usize, max: usize) -> bool {
+    let mut count = 0;
+    while !input.is_exhausted() {
+        if count == max
+            || parse_length_with(input, LengthOptions::position(), "function length").is_err()
+        {
+            return false;
+        }
+        count += 1;
+        if !input.is_exhausted() {
+            consume_optional_comma(input);
+        }
+    }
+    count >= min
+}
+
+fn validate_non_negative_length<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    parse_length_with(input, LengthOptions::border_width(), "function length").is_ok()
+        && input.is_exhausted()
+}
+
+fn validate_number_sequence<'i, 't>(input: &mut Parser<'i, 't>, min: usize, max: usize) -> bool {
+    let mut count = 0;
+    while !input.is_exhausted() {
+        if count == max || input.expect_number().is_err() {
+            return false;
+        }
+        count += 1;
+        if !input.is_exhausted() {
+            consume_optional_comma(input);
+        }
+    }
+    count >= min
+}
+
+fn validate_number_sequence_prefix<'i, 't>(input: &mut Parser<'i, 't>, count: usize) -> bool {
+    for index in 0..count {
+        if input.expect_number().is_err() {
+            return false;
+        }
+        if index + 1 < count {
+            consume_optional_comma(input);
+        }
+    }
+    true
+}
+
+fn validate_number_or_percent<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let parsed = match input.next() {
+        Ok(Token::Number { .. } | Token::Percentage { .. }) => true,
+        Ok(_) => false,
+        Err(_) => false,
+    };
+    parsed && input.is_exhausted()
+}
+
+fn validate_angle_sequence<'i, 't>(input: &mut Parser<'i, 't>, min: usize, max: usize) -> bool {
+    let mut count = 0;
+    while !input.is_exhausted() {
+        if count == max || !validate_angle(input) {
+            return false;
+        }
+        count += 1;
+        if !input.is_exhausted() {
+            consume_optional_comma(input);
+        }
+    }
+    count >= min
+}
+
+fn validate_angle<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    match input.next() {
+        Ok(Token::Dimension { unit, .. }) => {
+            unit.eq_ignore_ascii_case("deg")
+                || unit.eq_ignore_ascii_case("rad")
+                || unit.eq_ignore_ascii_case("grad")
+                || unit.eq_ignore_ascii_case("turn")
+        }
+        Ok(Token::Number { value, .. }) => *value == 0.0,
+        _ => false,
+    }
+}
+
+fn validate_shape_radius<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    if input
+        .try_parse(|input| {
+            let ident = input.expect_ident_cloned().map_err(basic)?;
+            match_ignore_ascii_case! { &ident,
+                "closest-side" | "farthest-side" | "closest-corner" | "farthest-corner" => Ok(()),
+                _ => Err(unsupported_value(
+                    input,
+                    None,
+                    unsupported_keyword_reason("shape radius", ident.as_ref()),
+                )),
+            }
+        })
+        .is_ok()
+    {
+        true
+    } else {
+        parse_length_with(input, LengthOptions::background_size(), "shape radius").is_ok()
+    }
+}
+
+fn validate_circle_shape<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    if input
+        .try_parse(|input| input.expect_ident_matching("at"))
+        .is_ok()
+    {
+        return parse_css_position(input).is_ok() && input.is_exhausted();
+    }
+    if !validate_shape_radius(input) {
+        return false;
+    }
+    if input.is_exhausted() {
+        return true;
+    }
+    input
+        .try_parse(|input| input.expect_ident_matching("at"))
+        .is_ok()
+        && parse_css_position(input).is_ok()
+        && input.is_exhausted()
+}
+
+fn validate_ellipse_shape<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    if input
+        .try_parse(|input| input.expect_ident_matching("at"))
+        .is_ok()
+    {
+        return parse_css_position(input).is_ok() && input.is_exhausted();
+    }
+    if !validate_shape_radius(input) {
+        return false;
+    }
+    if !input.is_exhausted() && !next_is_ident(input, "at") && !validate_shape_radius(input) {
+        return false;
+    }
+    if input.is_exhausted() {
+        return true;
+    }
+    input
+        .try_parse(|input| input.expect_ident_matching("at"))
+        .is_ok()
+        && parse_css_position(input).is_ok()
+        && input.is_exhausted()
+}
+
+fn validate_inset_shape<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let mut count = 0;
+    while !input.is_exhausted() && !next_is_ident(input, "round") {
+        if count == 4
+            || parse_length_with(input, LengthOptions::background_size(), "inset shape").is_err()
+        {
+            return false;
+        }
+        count += 1;
+    }
+    if count == 0 {
+        return false;
+    }
+    if input.is_exhausted() {
+        return true;
+    }
+    input
+        .try_parse(|input| input.expect_ident_matching("round"))
+        .is_ok()
+        && validate_length_sequence(input, 1, 4)
+}
+
+fn validate_polygon_shape<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let mut points = 0;
+    loop {
+        if parse_length_with(input, LengthOptions::position(), "polygon x").is_err()
+            || parse_length_with(input, LengthOptions::position(), "polygon y").is_err()
+        {
+            return false;
+        }
+        points += 1;
+        if input.is_exhausted() {
+            return points >= 1;
+        }
+        if input.try_parse(Parser::expect_comma).is_err() {
+            return false;
+        }
+        if input.is_exhausted() {
+            return false;
+        }
+    }
+}
+
+fn validate_cubic_bezier<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    for index in 0..4 {
+        if input.expect_number().is_err() {
+            return false;
+        }
+        if index < 3 && input.expect_comma().is_err() {
+            return false;
+        }
+    }
+    input.is_exhausted()
+}
+
+fn validate_steps<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let Ok(Token::Number {
+        int_value: Some(value),
+        ..
+    }) = input.next()
+    else {
+        return false;
+    };
+    if *value <= 0 {
+        return false;
+    }
+    if input.is_exhausted() {
+        return true;
+    }
+    if input.expect_comma().is_err() {
+        return false;
+    }
+    let Ok(ident) = input.expect_ident_cloned() else {
+        return false;
+    };
+    let valid = matches!(
+        ident.to_ascii_lowercase().as_str(),
+        "jump-start" | "jump-end" | "jump-none" | "jump-both" | "start" | "end"
+    );
+    valid && input.is_exhausted()
+}
+
+fn parse_translate<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTranslate, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("none"))
+        .is_ok()
+    {
+        return Ok(CssTranslate::None);
+    }
+    let mut values = Vec::new();
+    while !input.is_exhausted() {
+        values.push(parse_length_with(
+            input,
+            LengthOptions::position(),
+            "translate",
+        )?);
+        if values.len() > 3 {
+            return Err(unsupported_value(
+                input,
+                None,
+                "translate has too many values",
+            ));
+        }
+    }
+    CssTranslateValues::try_new(values)
+        .map(CssTranslate::Values)
+        .ok_or_else(|| unsupported_value(input, None, "translate is empty"))
+}
+
+fn parse_rotate<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssRotate, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("none"))
+        .is_ok()
+    {
+        return Ok(CssRotate::None);
+    }
+    let location = input.current_source_location();
+    let token = input.next().map_err(basic)?;
+    let value = match token {
+        Token::Dimension { unit, .. }
+            if unit.eq_ignore_ascii_case("deg")
+                || unit.eq_ignore_ascii_case("rad")
+                || unit.eq_ignore_ascii_case("grad")
+                || unit.eq_ignore_ascii_case("turn") =>
+        {
+            token.to_css_string()
+        }
+        Token::Number { value, .. } if *value == 0.0 => token.to_css_string(),
+        _ => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    };
+    Ok(CssRotate::Value(value))
+}
+
+fn parse_scale<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssScale, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("none"))
+        .is_ok()
+    {
+        return Ok(CssScale::None);
+    }
+    let mut values = Vec::new();
+    while !input.is_exhausted() {
+        values.push(parse_number(input)?);
+        if values.len() > 3 {
+            return Err(unsupported_value(input, None, "scale has too many values"));
+        }
+    }
+    CssScaleValues::try_new(values)
+        .map(CssScale::Values)
+        .ok_or_else(|| unsupported_value(input, None, "scale is empty"))
+}
+
+fn parse_filter<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFilter, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("none"))
+        .is_ok()
+    {
+        return Ok(CssFilter::None);
+    }
+    let mut functions = Vec::new();
+    while !input.is_exhausted() {
+        functions.push(parse_filter_function(input)?);
+    }
+    CssFilterFunctionList::try_new(functions)
+        .map(CssFilter::Functions)
+        .ok_or_else(|| unsupported_value(input, None, "filter function list is empty"))
+}
+
+fn parse_filter_function<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFilterFunction, ParseError<'i, Error>> {
+    if let Ok(url) = input.try_parse(parse_url) {
+        return Ok(CssFilterFunction::Url(url));
+    }
+    let location = input.current_source_location();
+    let name = match input.next().map_err(basic)? {
+        Token::Function(name) => name.clone(),
+        token => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    };
+    let arguments =
+        input.parse_nested_block(|input| parse_filter_function_arguments(input, name.as_ref()))?;
+    match name.to_ascii_lowercase().as_str() {
+        "blur" => Ok(CssFilterFunction::Blur(arguments)),
+        "brightness" => Ok(CssFilterFunction::Brightness(arguments)),
+        "contrast" => Ok(CssFilterFunction::Contrast(arguments)),
+        "drop-shadow" => Ok(CssFilterFunction::DropShadow(arguments)),
+        "grayscale" => Ok(CssFilterFunction::Grayscale(arguments)),
+        "hue-rotate" => Ok(CssFilterFunction::HueRotate(arguments)),
+        "invert" => Ok(CssFilterFunction::Invert(arguments)),
+        "opacity" => Ok(CssFilterFunction::Opacity(arguments)),
+        "saturate" => Ok(CssFilterFunction::Saturate(arguments)),
+        "sepia" => Ok(CssFilterFunction::Sepia(arguments)),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            format!("unsupported filter function `{name}`"),
+        )),
+    }
+}
+
+fn parse_clip_path<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssClipPath, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("none"))
+        .is_ok()
+    {
+        return Ok(CssClipPath::None);
+    }
+    if let Ok(url) = input.try_parse(parse_url) {
+        return Ok(CssClipPath::Url(url));
+    }
+    let location = input.current_source_location();
+    let name = match input.next().map_err(basic)? {
+        Token::Function(name) => name.clone(),
+        token => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    };
+    let arguments =
+        input.parse_nested_block(|input| parse_basic_shape_arguments(input, name.as_ref()))?;
+    match name.to_ascii_lowercase().as_str() {
+        "inset" => Ok(CssClipPath::BasicShape(CssBasicShape::Inset(arguments))),
+        "circle" => Ok(CssClipPath::BasicShape(CssBasicShape::Circle(arguments))),
+        "ellipse" => Ok(CssClipPath::BasicShape(CssBasicShape::Ellipse(arguments))),
+        "polygon" => Ok(CssClipPath::BasicShape(CssBasicShape::Polygon(arguments))),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            format!("unsupported clip-path function `{name}`"),
+        )),
+    }
+}
+
+fn parse_mask_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssMaskList, ParseError<'i, Error>> {
+    let mut layers = Vec::new();
+    loop {
+        layers.push(parse_mask_layer(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "mask list has an empty item",
+            ));
+        }
+    }
+    if layers.is_empty() {
+        Err(unsupported_value(input, None, "mask list is empty"))
+    } else {
+        Ok(CssMaskList::new(layers))
+    }
+}
+
+fn parse_mask_layer<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssMaskLayer, ParseError<'i, Error>> {
+    let mut image = None;
+    let mut position = None;
+    let mut size = None;
+    let mut repeat = None;
+
+    while !input.is_exhausted() && !next_is_comma(input) {
+        if image.is_none()
+            && let Ok(parsed_image) = input.try_parse(parse_image_layer)
+        {
+            image = Some(parsed_image);
+            continue;
+        }
+        if repeat.is_none()
+            && let Ok(parsed_repeat) = input.try_parse(parse_background_repeat)
+        {
+            repeat = Some(parsed_repeat);
+            continue;
+        }
+        if position.is_none()
+            && let Ok(parsed_position) = input.try_parse(parse_css_position)
+        {
+            position = Some(parsed_position);
+            if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+                size = Some(parse_background_size(input)?);
+            }
+            continue;
+        }
+        return Err(unsupported_value(input, None, "unsupported mask component"));
+    }
+    CssMaskLayer::try_new(image, position, size, repeat)
+        .ok_or_else(|| unsupported_value(input, None, "mask layer is empty"))
+}
+
+fn parse_time_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTimeList, ParseError<'i, Error>> {
+    let mut times = Vec::new();
+    loop {
+        times.push(parse_time(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "time list has an empty item",
+            ));
+        }
+    }
+    CssTimeList::try_new(times).ok_or_else(|| unsupported_value(input, None, "time list is empty"))
+}
+
+fn parse_time<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTime, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("s") => {
+            if *value < 0.0 {
+                Err(unsupported_value_at(
+                    location,
+                    None,
+                    "CSS time must be non-negative",
+                ))
+            } else {
+                Ok(CssTime::new(*value, CssTimeUnit::Seconds))
+            }
+        }
+        Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("ms") => {
+            if *value < 0.0 {
+                Err(unsupported_value_at(
+                    location,
+                    None,
+                    "CSS time must be non-negative",
+                ))
+            } else {
+                Ok(CssTime::new(*value, CssTimeUnit::Milliseconds))
+            }
+        }
+        Token::Dimension { unit, .. } => Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported time unit `{unit}`"),
+        )),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+fn parse_easing_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssEasingList, ParseError<'i, Error>> {
+    let mut easings = Vec::new();
+    loop {
+        easings.push(parse_easing(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "easing list has an empty item",
+            ));
+        }
+    }
+    CssEasingList::try_new(easings)
+        .ok_or_else(|| unsupported_value(input, None, "easing list is empty"))
+}
+
+fn parse_easing<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssEasing, ParseError<'i, Error>> {
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        return match_ignore_ascii_case! { &ident,
+            "ease" => Ok(CssEasing::Ease),
+            "linear" => Ok(CssEasing::Linear),
+            "ease-in" => Ok(CssEasing::EaseIn),
+            "ease-out" => Ok(CssEasing::EaseOut),
+            "ease-in-out" => Ok(CssEasing::EaseInOut),
+            "step-start" => Ok(CssEasing::StepStart),
+            "step-end" => Ok(CssEasing::StepEnd),
+            _ => Err(unsupported_value(
+                input,
+                None,
+                unsupported_keyword_reason("easing", ident.as_ref()),
+            )),
+        };
+    }
+    let location = input.current_source_location();
+    let name = match input.next().map_err(basic)? {
+        Token::Function(name) => name.clone(),
+        token => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    };
+    let arguments =
+        input.parse_nested_block(|input| parse_easing_function_arguments(input, name.as_ref()))?;
+    match name.to_ascii_lowercase().as_str() {
+        "cubic-bezier" => Ok(CssEasing::CubicBezier(arguments)),
+        "steps" => Ok(CssEasing::Steps(arguments)),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            format!("unsupported easing function `{name}`"),
+        )),
+    }
+}
+
+fn parse_transition_property_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransitionPropertyList, ParseError<'i, Error>> {
+    let mut properties = Vec::new();
+    loop {
+        properties.push(parse_transition_property(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "transition-property list has an empty item",
+            ));
+        }
+    }
+    CssTransitionPropertyList::try_new(properties)
+        .ok_or_else(|| unsupported_value(input, None, "transition-property list is empty"))
+}
+
+fn parse_transition_property<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransitionProperty, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "all" => Ok(CssTransitionProperty::All),
+        "none" => Ok(CssTransitionProperty::None),
+        _ => parse_custom_ident_from_str_at("transition property", ident.as_ref(), location)
+            .map(CssTransitionProperty::Custom),
+    }
+}
+
+fn parse_transition_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransitionList, ParseError<'i, Error>> {
+    let mut items = Vec::new();
+    loop {
+        items.push(parse_transition_item(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "transition list has an empty item",
+            ));
+        }
+    }
+    CssTransitionList::try_new(items)
+        .ok_or_else(|| unsupported_value(input, None, "transition list is empty"))
+}
+
+fn parse_transition_item<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransition, ParseError<'i, Error>> {
+    let mut property = None;
+    let mut duration = None;
+    let mut delay = None;
+    let mut timing_function = None;
+    while !input.is_exhausted() && !next_is_comma(input) {
+        if let Ok(time) = input.try_parse(parse_time) {
+            if duration.is_none() {
+                duration = Some(time);
+            } else if delay.is_none() {
+                delay = Some(time);
+            } else {
+                return Err(unsupported_value(input, None, "duplicate transition time"));
+            }
+            continue;
+        }
+        if timing_function.is_none()
+            && let Ok(easing) = input.try_parse(parse_easing)
+        {
+            timing_function = Some(easing);
+            continue;
+        }
+        if property.is_none()
+            && let Ok(parsed_property) = input.try_parse(parse_transition_property)
+        {
+            property = Some(parsed_property);
+            continue;
+        }
+        return Err(unsupported_value(
+            input,
+            None,
+            "unsupported transition component",
+        ));
+    }
+    CssTransition::try_new(property, duration, delay, timing_function)
+        .ok_or_else(|| unsupported_value(input, None, "transition item is empty"))
+}
+
+fn parse_animation_name_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimationNameList, ParseError<'i, Error>> {
+    let mut names = Vec::new();
+    loop {
+        names.push(parse_animation_name(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "animation-name list has an empty item",
+            ));
+        }
+    }
+    CssAnimationNameList::try_new(names)
+        .ok_or_else(|| unsupported_value(input, None, "animation-name list is empty"))
+}
+
+fn parse_animation_name<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimationName, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    if ident.eq_ignore_ascii_case("none") {
+        Ok(CssAnimationName::None)
+    } else {
+        parse_custom_ident_from_str_at("animation name", ident.as_ref(), location)
+            .map(CssAnimationName::Custom)
+    }
+}
+
+fn parse_animation_iteration_count_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimationIterationCountList, ParseError<'i, Error>> {
+    let mut counts = Vec::new();
+    loop {
+        counts.push(parse_animation_iteration_count(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "animation-iteration-count list has an empty item",
+            ));
+        }
+    }
+    CssAnimationIterationCountList::try_new(counts)
+        .ok_or_else(|| unsupported_value(input, None, "animation-iteration-count list is empty"))
+}
+
+fn parse_animation_iteration_count<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimationIterationCount, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("infinite"))
+        .is_ok()
+    {
+        return Ok(CssAnimationIterationCount::Infinite);
+    }
+    let location = input.current_source_location();
+    let value = input.expect_number().map_err(basic)?;
+    if value < 0.0 {
+        Err(unsupported_value_at(
+            location,
+            None,
+            "animation iteration count must be non-negative",
+        ))
+    } else {
+        Ok(CssAnimationIterationCount::number(value))
+    }
+}
+
+fn parse_animation_direction_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimationDirectionList, ParseError<'i, Error>> {
+    let mut directions = Vec::new();
+    loop {
+        directions.push(parse_animation_direction(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "animation-direction list has an empty item",
+            ));
+        }
+    }
+    CssAnimationDirectionList::try_new(directions)
+        .ok_or_else(|| unsupported_value(input, None, "animation-direction list is empty"))
+}
+
+fn parse_animation_direction<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimationDirection, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "normal" => Ok(CssAnimationDirection::Normal),
+        "reverse" => Ok(CssAnimationDirection::Reverse),
+        "alternate" => Ok(CssAnimationDirection::Alternate),
+        "alternate-reverse" => Ok(CssAnimationDirection::AlternateReverse),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("animation-direction", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_animation_fill_mode_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimationFillModeList, ParseError<'i, Error>> {
+    let mut modes = Vec::new();
+    loop {
+        modes.push(parse_animation_fill_mode(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "animation-fill-mode list has an empty item",
+            ));
+        }
+    }
+    CssAnimationFillModeList::try_new(modes)
+        .ok_or_else(|| unsupported_value(input, None, "animation-fill-mode list is empty"))
+}
+
+fn parse_animation_fill_mode<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimationFillMode, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "none" => Ok(CssAnimationFillMode::None),
+        "forwards" => Ok(CssAnimationFillMode::Forwards),
+        "backwards" => Ok(CssAnimationFillMode::Backwards),
+        "both" => Ok(CssAnimationFillMode::Both),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("animation-fill-mode", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_animation_play_state_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimationPlayStateList, ParseError<'i, Error>> {
+    let mut states = Vec::new();
+    loop {
+        states.push(parse_animation_play_state(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "animation-play-state list has an empty item",
+            ));
+        }
+    }
+    CssAnimationPlayStateList::try_new(states)
+        .ok_or_else(|| unsupported_value(input, None, "animation-play-state list is empty"))
+}
+
+fn parse_animation_play_state<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimationPlayState, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "running" => Ok(CssAnimationPlayState::Running),
+        "paused" => Ok(CssAnimationPlayState::Paused),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("animation-play-state", ident.as_ref()),
+        )),
+    }
+}
+
+fn parse_animation_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimationList, ParseError<'i, Error>> {
+    let mut items = Vec::new();
+    loop {
+        items.push(parse_animation_item(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "animation list has an empty item",
+            ));
+        }
+    }
+    CssAnimationList::try_new(items)
+        .ok_or_else(|| unsupported_value(input, None, "animation list is empty"))
+}
+
+fn parse_animation_item<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAnimation, ParseError<'i, Error>> {
+    let mut name = None;
+    let mut duration = None;
+    let mut delay = None;
+    let mut timing_function = None;
+    let mut iteration_count = None;
+    let mut direction = None;
+    let mut fill_mode = None;
+    let mut play_state = None;
+
+    while !input.is_exhausted() && !next_is_comma(input) {
+        if let Ok(time) = input.try_parse(parse_time) {
+            if duration.is_none() {
+                duration = Some(time);
+            } else if delay.is_none() {
+                delay = Some(time);
+            } else {
+                return Err(unsupported_value(input, None, "duplicate animation time"));
+            }
+            continue;
+        }
+        if timing_function.is_none()
+            && let Ok(easing) = input.try_parse(parse_easing)
+        {
+            timing_function = Some(easing);
+            continue;
+        }
+        if iteration_count.is_none()
+            && let Ok(count) = input.try_parse(parse_animation_iteration_count)
+        {
+            iteration_count = Some(count);
+            continue;
+        }
+        if direction.is_none()
+            && let Ok(parsed_direction) = input.try_parse(parse_animation_direction)
+        {
+            direction = Some(parsed_direction);
+            continue;
+        }
+        if fill_mode.is_none()
+            && let Ok(parsed_fill_mode) = input.try_parse(parse_animation_fill_mode)
+        {
+            fill_mode = Some(parsed_fill_mode);
+            continue;
+        }
+        if play_state.is_none()
+            && let Ok(parsed_play_state) = input.try_parse(parse_animation_play_state)
+        {
+            play_state = Some(parsed_play_state);
+            continue;
+        }
+        if name.is_none()
+            && let Ok(parsed_name) = input.try_parse(parse_animation_name)
+        {
+            name = Some(parsed_name);
+            continue;
+        }
+        return Err(unsupported_value(
+            input,
+            None,
+            "unsupported animation component",
+        ));
+    }
+
+    CssAnimation::try_new(CssAnimationComponents {
+        name,
+        duration,
+        delay,
+        timing_function,
+        iteration_count,
+        direction,
+        fill_mode,
+        play_state,
+    })
+    .ok_or_else(|| unsupported_value(input, None, "animation item is empty"))
+}
+
 #[derive(Clone, Copy)]
 struct LengthOptions {
     percent: bool,
@@ -2736,6 +4380,28 @@ impl LengthOptions {
     }
 
     const fn grid_track() -> Self {
+        Self {
+            percent: true,
+            auto: false,
+            intrinsic: false,
+            normal: false,
+            calc_percent: true,
+            non_negative: true,
+        }
+    }
+
+    const fn position() -> Self {
+        Self {
+            percent: true,
+            auto: false,
+            intrinsic: false,
+            normal: false,
+            calc_percent: true,
+            non_negative: false,
+        }
+    }
+
+    const fn background_size() -> Self {
         Self {
             percent: true,
             auto: false,
@@ -2990,6 +4656,15 @@ fn next_is_comma<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
     let is_comma = input.try_parse(Parser::expect_comma).is_ok();
     input.reset(&state);
     is_comma
+}
+
+fn next_is_ident<'i, 't>(input: &mut Parser<'i, 't>, expected: &str) -> bool {
+    let state = input.state();
+    let is_ident = input
+        .try_parse(|input| input.expect_ident_matching(expected))
+        .is_ok();
+    input.reset(&state);
+    is_ident
 }
 
 fn parse_color<'i, 't>(
@@ -3271,6 +4946,13 @@ fn property_for_supported_name(name: &str) -> Option<CssProperty> {
         "border-right-color" => CssProperty::BorderRightColor,
         "border-bottom-color" => CssProperty::BorderBottomColor,
         "border-left-color" => CssProperty::BorderLeftColor,
+        "background-image" => CssProperty::BackgroundImage,
+        "background-position" => CssProperty::BackgroundPosition,
+        "background-size" => CssProperty::BackgroundSize,
+        "background-repeat" => CssProperty::BackgroundRepeat,
+        "background-origin" => CssProperty::BackgroundOrigin,
+        "background-clip" => CssProperty::BackgroundClip,
+        "background-attachment" => CssProperty::BackgroundAttachment,
         "border-style" => CssProperty::BorderStyle,
         "border-top-style" => CssProperty::BorderTopStyle,
         "border-right-style" => CssProperty::BorderRightStyle,
@@ -3291,6 +4973,40 @@ fn property_for_supported_name(name: &str) -> Option<CssProperty> {
         "align-tracks" => CssProperty::AlignTracks,
         "aspect-ratio" => CssProperty::AspectRatio,
         "scrollbar-width" => CssProperty::ScrollbarWidth,
+        "cursor" => CssProperty::Cursor,
+        "pointer-events" => CssProperty::PointerEvents,
+        "user-select" => CssProperty::UserSelect,
+        "outline" => CssProperty::Outline,
+        "outline-color" => CssProperty::OutlineColor,
+        "outline-style" => CssProperty::OutlineStyle,
+        "outline-width" => CssProperty::OutlineWidth,
+        "transform" => CssProperty::Transform,
+        "transform-origin" => CssProperty::TransformOrigin,
+        "translate" => CssProperty::Translate,
+        "rotate" => CssProperty::Rotate,
+        "scale" => CssProperty::Scale,
+        "filter" => CssProperty::Filter,
+        "backdrop-filter" => CssProperty::BackdropFilter,
+        "clip-path" => CssProperty::ClipPath,
+        "mask" => CssProperty::Mask,
+        "mask-image" => CssProperty::MaskImage,
+        "mask-size" => CssProperty::MaskSize,
+        "mask-position" => CssProperty::MaskPosition,
+        "mask-repeat" => CssProperty::MaskRepeat,
+        "transition-property" => CssProperty::TransitionProperty,
+        "transition-duration" => CssProperty::TransitionDuration,
+        "transition-delay" => CssProperty::TransitionDelay,
+        "transition-timing-function" => CssProperty::TransitionTimingFunction,
+        "transition" => CssProperty::Transition,
+        "animation-name" => CssProperty::AnimationName,
+        "animation-duration" => CssProperty::AnimationDuration,
+        "animation-delay" => CssProperty::AnimationDelay,
+        "animation-timing-function" => CssProperty::AnimationTimingFunction,
+        "animation-iteration-count" => CssProperty::AnimationIterationCount,
+        "animation-direction" => CssProperty::AnimationDirection,
+        "animation-fill-mode" => CssProperty::AnimationFillMode,
+        "animation-play-state" => CssProperty::AnimationPlayState,
+        "animation" => CssProperty::Animation,
         _ => return None,
     })
 }
@@ -4293,6 +6009,441 @@ mod tests {
             ".panel { text-transform: wrap; }",
             ".panel { font-feature-settings: \"abc\" on; }",
             ".panel { font-feature-settings: \"abcde\" on; }",
+        ] {
+            let error = parse_sheet(input).expect_err(input);
+            assert!(matches!(
+                error.kind(),
+                ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ));
+        }
+    }
+
+    #[test]
+    fn parses_background_properties_as_authored_syntax() {
+        assert_eq!(
+            declaration_value(
+                ".panel { background-image: url(\"hero.png\"), none; }",
+                CssProperty::BackgroundImage,
+            ),
+            CssValue::BackgroundImage(CssImageLayerList::new(vec![
+                CssImageLayer::Url(CssUrl::new("hero.png")),
+                CssImageLayer::None,
+            ]))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { background-position: left 10px top 20%; }",
+                CssProperty::BackgroundPosition,
+            ),
+            CssValue::BackgroundPosition(CssPositionList::new(vec![CssPosition::new(vec![
+                CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Left),
+                CssPositionComponent::Length(CssLength::px(10.0)),
+                CssPositionComponent::Vertical(CssVerticalPositionKeyword::Top),
+                CssPositionComponent::Length(CssLength::percent(20.0)),
+            ])]))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { background-size: cover, 10px auto; }",
+                CssProperty::BackgroundSize,
+            ),
+            CssValue::BackgroundSize(CssBackgroundSizeList::new(vec![
+                CssBackgroundSize::Cover,
+                CssBackgroundSize::Explicit {
+                    width: CssBackgroundSizeComponent::Length(CssLength::px(10.0)),
+                    height: Some(CssBackgroundSizeComponent::Auto),
+                },
+            ]))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { background-repeat: repeat-x, no-repeat round; }",
+                CssProperty::BackgroundRepeat,
+            ),
+            CssValue::BackgroundRepeat(CssBackgroundRepeatList::new(vec![
+                CssBackgroundRepeat::RepeatX,
+                CssBackgroundRepeat::Axes {
+                    x: CssBackgroundRepeatStyle::NoRepeat,
+                    y: CssBackgroundRepeatStyle::Round,
+                },
+            ]))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { background-origin: content-box; }",
+                CssProperty::BackgroundOrigin,
+            ),
+            CssValue::BackgroundBox(CssBackgroundBox::ContentBox)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { background-clip: padding-box; }",
+                CssProperty::BackgroundClip,
+            ),
+            CssValue::BackgroundBox(CssBackgroundBox::PaddingBox)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { background-attachment: fixed, local; }",
+                CssProperty::BackgroundAttachment,
+            ),
+            CssValue::BackgroundAttachment(CssBackgroundAttachmentList::new(vec![
+                CssBackgroundAttachment::Fixed,
+                CssBackgroundAttachment::Local,
+            ]))
+        );
+    }
+
+    #[test]
+    fn parses_interaction_and_outline_properties_as_authored_syntax() {
+        assert_eq!(
+            declaration_value(".panel { cursor: grab; }", CssProperty::Cursor),
+            CssValue::Cursor(CssCursor::Keyword(CssCursorKeyword::Grab))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { pointer-events: none; }",
+                CssProperty::PointerEvents
+            ),
+            CssValue::PointerEvents(CssPointerEvents::None)
+        );
+        assert_eq!(
+            declaration_value(".panel { user-select: text; }", CssProperty::UserSelect),
+            CssValue::UserSelect(CssUserSelect::Text)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { outline: thick dotted white; }",
+                CssProperty::Outline,
+            ),
+            CssValue::Outline(CssOutline::new(
+                Some(CssOutlineWidth::Thick),
+                Some(CssOutlineStyle::Border(CssBorderStyle::Dotted)),
+                Some(CssColor::WHITE),
+            ))
+        );
+        assert_eq!(
+            declaration_value(".panel { outline-width: 2px; }", CssProperty::OutlineWidth),
+            CssValue::OutlineWidth(CssOutlineWidth::Length(CssLength::px(2.0)))
+        );
+    }
+
+    #[test]
+    fn parses_transform_effect_and_mask_properties_as_authored_syntax() {
+        let transform = declaration_value(
+            ".panel { transform: translate(10px, 20px) rotate(45deg) scale(1.5); }",
+            CssProperty::Transform,
+        );
+        let CssValue::Transform(CssTransform::Functions(functions)) = transform else {
+            panic!("expected transform functions");
+        };
+        assert_eq!(functions.functions().len(), 3);
+        assert_eq!(
+            functions.functions()[0].kind(),
+            CssTransformFunctionKind::Translate
+        );
+
+        assert_eq!(
+            declaration_value(
+                ".panel { transform-origin: center top; }",
+                CssProperty::TransformOrigin
+            ),
+            CssValue::TransformOrigin(CssPosition::new(vec![
+                CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Center),
+                CssPositionComponent::Vertical(CssVerticalPositionKeyword::Top),
+            ]))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { filter: blur(4px) opacity(50%); }",
+                CssProperty::Filter
+            ),
+            CssValue::Filter(CssFilter::Functions(CssFilterFunctionList::new(vec![
+                CssFilterFunction::Blur(CssFunctionArguments::new("4px")),
+                CssFilterFunction::Opacity(CssFunctionArguments::new("50%")),
+            ])))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { backdrop-filter: none; }",
+                CssProperty::BackdropFilter
+            ),
+            CssValue::Filter(CssFilter::None)
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { clip-path: circle(50% at center); }",
+                CssProperty::ClipPath
+            ),
+            CssValue::ClipPath(CssClipPath::BasicShape(CssBasicShape::Circle(
+                CssFunctionArguments::new("50% at center"),
+            )))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { mask-image: url(mask.png), none; }",
+                CssProperty::MaskImage,
+            ),
+            CssValue::MaskImage(CssImageLayerList::new(vec![
+                CssImageLayer::Url(CssUrl::new("mask.png")),
+                CssImageLayer::None,
+            ]))
+        );
+        let CssValue::Mask(mask_layers) = declaration_value(
+            ".panel { mask: url(mask.png) center / contain no-repeat; }",
+            CssProperty::Mask,
+        ) else {
+            panic!("expected mask shorthand");
+        };
+        assert_eq!(mask_layers.layers().len(), 1);
+    }
+
+    #[test]
+    fn parses_transition_properties_and_preserves_comma_lists() {
+        assert_eq!(
+            declaration_value(
+                ".panel { transition-property: opacity, transform; }",
+                CssProperty::TransitionProperty,
+            ),
+            CssValue::TransitionProperty(CssTransitionPropertyList::new(vec![
+                CssTransitionProperty::Custom(CssCustomIdent::new("opacity")),
+                CssTransitionProperty::Custom(CssCustomIdent::new("transform")),
+            ]))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { transition-duration: 150ms, 2s; }",
+                CssProperty::TransitionDuration,
+            ),
+            CssValue::TimeList(CssTimeList::new(vec![
+                CssTime::try_milliseconds(150.0).unwrap(),
+                CssTime::try_seconds(2.0).unwrap(),
+            ]))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { transition-timing-function: ease-in, cubic-bezier(0.1, 0.2, 0.3, 1); }",
+                CssProperty::TransitionTimingFunction,
+            ),
+            CssValue::EasingList(CssEasingList::new(vec![
+                CssEasing::EaseIn,
+                CssEasing::CubicBezier(CssFunctionArguments::new("0.1, 0.2, 0.3, 1")),
+            ]))
+        );
+
+        let CssValue::Transition(transitions) = declaration_value(
+            ".panel { transition: opacity 150ms ease-in 20ms, transform 2s linear; }",
+            CssProperty::Transition,
+        ) else {
+            panic!("expected transition list");
+        };
+        assert_eq!(transitions.items().len(), 2);
+    }
+
+    #[test]
+    fn parses_animation_properties_and_preserves_comma_lists() {
+        assert_eq!(
+            declaration_value(
+                ".panel { animation-name: fade, none; }",
+                CssProperty::AnimationName,
+            ),
+            CssValue::AnimationName(CssAnimationNameList::new(vec![
+                CssAnimationName::Custom(CssCustomIdent::new("fade")),
+                CssAnimationName::None,
+            ]))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { animation-iteration-count: 2, infinite; }",
+                CssProperty::AnimationIterationCount,
+            ),
+            CssValue::AnimationIterationCount(CssAnimationIterationCountList::new(vec![
+                CssAnimationIterationCount::Number(CssAnimationIterationNumber::new(2.0)),
+                CssAnimationIterationCount::Infinite,
+            ]))
+        );
+        assert_eq!(
+            declaration_value(
+                ".panel { animation-play-state: running, paused; }",
+                CssProperty::AnimationPlayState,
+            ),
+            CssValue::AnimationPlayState(CssAnimationPlayStateList::new(vec![
+                CssAnimationPlayState::Running,
+                CssAnimationPlayState::Paused,
+            ]))
+        );
+
+        let CssValue::Animation(animations) = declaration_value(
+            ".panel { animation: fade 1s ease-in 200ms 3 alternate both running, slide 2s linear; }",
+            CssProperty::Animation,
+        ) else {
+            panic!("expected animation list");
+        };
+        assert_eq!(animations.items().len(), 2);
+    }
+
+    #[test]
+    fn checked_task_6_constructors_reject_invalid_invariants() {
+        assert_eq!(CssImageLayerList::try_new(Vec::new()), None);
+        assert_eq!(CssCursorUrlList::try_new(Vec::new()), None);
+        assert!(CssCursor::try_urls(Vec::new(), CssCursorKeyword::Pointer).is_none());
+        assert_eq!(CssTranslateValues::try_new(Vec::new()), None);
+        assert_eq!(
+            CssTranslateValues::try_new(vec![
+                CssLength::px(1.0),
+                CssLength::px(2.0),
+                CssLength::px(3.0),
+                CssLength::px(4.0),
+            ]),
+            None
+        );
+        assert_eq!(CssScaleValues::try_new(Vec::new()), None);
+        assert_eq!(CssScaleValues::try_new(vec![1.0, 2.0, 3.0, 4.0]), None);
+        assert_eq!(CssMaskList::try_new(Vec::new()), None);
+        assert_eq!(CssTransitionList::try_new(Vec::new()), None);
+        assert_eq!(CssTransition::try_new(None, None, None, None), None);
+        assert_eq!(CssAnimationList::try_new(Vec::new()), None);
+        assert_eq!(
+            CssAnimation::try_new(CssAnimationComponents::default()),
+            None
+        );
+        assert_eq!(CssTime::try_seconds(-1.0), None);
+        assert_eq!(CssAnimationIterationCount::try_number(-1.0), None);
+        assert_eq!(CssOutline::try_new(None, None, None), None);
+    }
+
+    #[test]
+    fn parses_every_task_6_supported_property_name() {
+        let sheet = parse_sheet(
+            ".panel {
+                background-image: none;
+                background-position: center;
+                background-size: contain;
+                background-repeat: no-repeat;
+                background-origin: border-box;
+                background-clip: content-box;
+                background-attachment: scroll;
+                cursor: pointer;
+                pointer-events: auto;
+                user-select: all;
+                outline: 1px solid black;
+                outline-color: white;
+                outline-style: dashed;
+                outline-width: thin;
+                transform: none;
+                transform-origin: left top;
+                translate: 10px 20px;
+                rotate: 45deg;
+                scale: 1.5 2;
+                filter: none;
+                backdrop-filter: blur(4px);
+                clip-path: none;
+                mask: none;
+                mask-image: none;
+                mask-size: auto;
+                mask-position: center;
+                mask-repeat: repeat;
+                transition-property: opacity;
+                transition-duration: 1s;
+                transition-delay: 20ms;
+                transition-timing-function: ease;
+                transition: opacity 1s ease;
+                animation-name: fade;
+                animation-duration: 1s;
+                animation-delay: 20ms;
+                animation-timing-function: ease-out;
+                animation-iteration-count: infinite;
+                animation-direction: alternate;
+                animation-fill-mode: both;
+                animation-play-state: paused;
+                animation: fade 1s ease-in-out infinite alternate both running;
+            }",
+        )
+        .unwrap();
+        let declarations = sheet.rules()[0].declarations();
+
+        for property in [
+            CssProperty::BackgroundImage,
+            CssProperty::BackgroundPosition,
+            CssProperty::BackgroundSize,
+            CssProperty::BackgroundRepeat,
+            CssProperty::BackgroundOrigin,
+            CssProperty::BackgroundClip,
+            CssProperty::BackgroundAttachment,
+            CssProperty::Cursor,
+            CssProperty::PointerEvents,
+            CssProperty::UserSelect,
+            CssProperty::Outline,
+            CssProperty::OutlineColor,
+            CssProperty::OutlineStyle,
+            CssProperty::OutlineWidth,
+            CssProperty::Transform,
+            CssProperty::TransformOrigin,
+            CssProperty::Translate,
+            CssProperty::Rotate,
+            CssProperty::Scale,
+            CssProperty::Filter,
+            CssProperty::BackdropFilter,
+            CssProperty::ClipPath,
+            CssProperty::Mask,
+            CssProperty::MaskImage,
+            CssProperty::MaskSize,
+            CssProperty::MaskPosition,
+            CssProperty::MaskRepeat,
+            CssProperty::TransitionProperty,
+            CssProperty::TransitionDuration,
+            CssProperty::TransitionDelay,
+            CssProperty::TransitionTimingFunction,
+            CssProperty::Transition,
+            CssProperty::AnimationName,
+            CssProperty::AnimationDuration,
+            CssProperty::AnimationDelay,
+            CssProperty::AnimationTimingFunction,
+            CssProperty::AnimationIterationCount,
+            CssProperty::AnimationDirection,
+            CssProperty::AnimationFillMode,
+            CssProperty::AnimationPlayState,
+            CssProperty::Animation,
+        ] {
+            assert!(
+                declarations
+                    .iter()
+                    .any(|declaration| declaration.property() == property),
+                "missing parsed declaration for {property:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_task_6_cross_family_leakage_values_and_empty_lists() {
+        for input in [
+            ".panel { background-size: solid; }",
+            ".panel { cursor: 10px; }",
+            ".panel { pointer-events: grab; }",
+            ".panel { outline-width: 10%; }",
+            ".panel { transform: red; }",
+            ".panel { filter: 10px; }",
+            ".panel { transition-duration: 10px; }",
+            ".panel { animation-iteration-count: -1; }",
+            ".panel { animation-play-state: visible; }",
+            ".panel { transition: opacity 1s, ; }",
+            ".panel { animation: fade 1s, ; }",
+        ] {
+            let error = parse_sheet(input).expect_err(input);
+            assert!(matches!(
+                error.kind(),
+                ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ));
+        }
+    }
+
+    #[test]
+    fn rejects_task_6_invalid_function_arguments() {
+        for input in [
+            ".panel { transform: translate(red); }",
+            ".panel { filter: opacity(red); }",
+            ".panel { clip-path: circle(red); }",
+            ".panel { transition-timing-function: cubic-bezier(red); }",
         ] {
             let error = parse_sheet(input).expect_err(input);
             assert!(matches!(

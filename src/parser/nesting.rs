@@ -1,14 +1,16 @@
 use cssparser::{
     AtRuleParser, BasicParseErrorKind, CowRcStr, DeclarationParser, ParseError, Parser,
     ParserState, QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, ToCss, Token,
+    match_ignore_ascii_case,
 };
 
-use super::StrictDeclarationParser;
+use super::queries::parse_media_query_list;
 use super::selectors::{
     consume_selector_whitespace, parse_complex_selector_part, parse_compound_selector_model,
     parse_rule_selector,
 };
-use crate::error::{Error, invalid_selector, selector_basic};
+use super::{CssContainerPrelude, StrictDeclarationParser, parse_container_prelude};
+use crate::error::{Error, invalid_selector, invalid_syntax, selector_basic};
 use crate::syntax::*;
 
 pub(super) fn parse_style_rule_block<'i, 't>(
@@ -72,10 +74,84 @@ enum StyleBlockItem {
     NestedRules(Vec<CssRule>),
 }
 
+enum NestedStyleAtRulePrelude {
+    Media(CssMediaQueryList),
+    Container(CssContainerPrelude),
+}
+
 impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
-    type Prelude = ();
+    type Prelude = NestedStyleAtRulePrelude;
     type AtRule = StyleBlockItem;
     type Error = Error;
+
+    fn parse_prelude<'t>(
+        &mut self,
+        name: CowRcStr<'i>,
+        input: &mut Parser<'i, 't>,
+    ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
+        match_ignore_ascii_case! { &name,
+            "media" => {
+                let query = parse_media_query_list(input)?;
+                if !input.is_exhausted() {
+                    return Err(invalid_syntax(
+                        input.current_source_location(),
+                        "unexpected token after media query list",
+                    ));
+                }
+                Ok(NestedStyleAtRulePrelude::Media(query))
+            },
+            "container" => {
+                let prelude = parse_container_prelude(input)?;
+                if !input.is_exhausted() {
+                    return Err(invalid_syntax(
+                        input.current_source_location(),
+                        "unexpected token after container condition",
+                    ));
+                }
+                Ok(NestedStyleAtRulePrelude::Container(prelude))
+            },
+            "import" => Err(invalid_syntax(
+                input.current_source_location(),
+                "@import rules are not supported inside style blocks",
+            )),
+            "font-face" => Err(invalid_syntax(
+                input.current_source_location(),
+                "@font-face rules are not supported inside style blocks",
+            )),
+            "keyframes" => Err(invalid_syntax(
+                input.current_source_location(),
+                "@keyframes rules are not supported inside style blocks",
+            )),
+            _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
+        }
+    }
+
+    fn rule_without_block(
+        &mut self,
+        _prelude: Self::Prelude,
+        _start: &ParserState,
+    ) -> std::result::Result<Self::AtRule, ()> {
+        Err(())
+    }
+
+    fn parse_block<'t>(
+        &mut self,
+        prelude: Self::Prelude,
+        start: &ParserState,
+        input: &mut Parser<'i, 't>,
+    ) -> std::result::Result<Self::AtRule, ParseError<'i, Self::Error>> {
+        let rules = parse_style_rule_block(self.parent_selectors.clone(), input)?;
+        let location = CssSourceLocation::from_cssparser(start.source_location());
+        let rule = match prelude {
+            NestedStyleAtRulePrelude::Media(query) => {
+                CssRule::Media(CssMediaRule::new(query, rules, location))
+            }
+            NestedStyleAtRulePrelude::Container(prelude) => CssRule::Container(
+                CssContainerRule::new(prelude.name, prelude.condition, rules, location),
+            ),
+        };
+        Ok(StyleBlockItem::NestedRules(vec![rule]))
+    }
 }
 
 impl<'i> QualifiedRuleParser<'i> for NestedStyleRuleParser {

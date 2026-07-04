@@ -1515,6 +1515,168 @@ fn nesting_flattens_style_rules_inside_conditional_groups() {
 }
 
 #[test]
+fn nesting_flattens_media_and_container_inside_style_rules() {
+    let sheet = parse_sheet(
+        r#".card {
+            color: black;
+            @media (min-width: 600px) {
+                background-color: white;
+                > .title { color: black; }
+            }
+            @container sidebar (inline-size > 30rem) {
+                &:hover { opacity: 0.9; }
+            }
+        }"#,
+    )
+    .unwrap();
+
+    let [base, media, container] = sheet.rules() else {
+        panic!("expected base, media, and container rules");
+    };
+    assert_eq!(
+        style_rule(base).selector(),
+        &CssSelector::Class("card".to_owned())
+    );
+    assert_eq!(
+        style_rule(base).declarations()[0].property(),
+        &CssProperty::Color
+    );
+
+    let media = media_rule(media);
+    let [media_base, media_title] = media.rules() else {
+        panic!("expected two flattened media rules");
+    };
+    assert_eq!(
+        style_rule(media_base).selector(),
+        &CssSelector::Class("card".to_owned())
+    );
+    assert_eq!(
+        style_rule(media_base).declarations()[0].property(),
+        &CssProperty::BackgroundColor
+    );
+    let CssSelector::Complex(title_selector) = style_rule(media_title).selector() else {
+        panic!("expected complex title selector");
+    };
+    assert_eq!(title_selector.first().classes(), &["card".to_owned()]);
+    assert_eq!(
+        title_selector.rest()[0].combinator(),
+        CssSelectorCombinator::Child
+    );
+    assert_eq!(
+        title_selector.rest()[0].selector().classes(),
+        &["title".to_owned()]
+    );
+
+    let container = container_rule(container);
+    let [container_hover] = container.rules() else {
+        panic!("expected one flattened container rule");
+    };
+    let CssSelector::Compound(hover_selector) = style_rule(container_hover).selector() else {
+        panic!("expected hover compound selector");
+    };
+    assert_eq!(hover_selector.classes(), &["card".to_owned()]);
+    assert_eq!(hover_selector.pseudo_classes(), &[CssPseudoClass::Hover]);
+}
+
+#[test]
+fn nesting_flattens_media_before_later_declaration_run_in_source_order() {
+    let sheet = parse_sheet(
+        r#".card {
+            color: black;
+            @media (min-width: 600px) { opacity: 0.8; }
+            background-color: white;
+        }"#,
+    )
+    .unwrap();
+
+    let [base_before, media, base_after] = sheet.rules() else {
+        panic!("expected parent declaration, media, parent declaration");
+    };
+
+    assert_eq!(
+        style_rule(base_before).selector(),
+        &CssSelector::Class("card".to_owned())
+    );
+    assert_eq!(
+        style_rule(base_before).declarations()[0].property(),
+        &CssProperty::Color
+    );
+
+    let [media_base] = media_rule(media).rules() else {
+        panic!("expected one flattened media rule");
+    };
+    assert_eq!(
+        style_rule(media_base).selector(),
+        &CssSelector::Class("card".to_owned())
+    );
+    assert_eq!(
+        style_rule(media_base).declarations()[0].property(),
+        &CssProperty::Opacity
+    );
+
+    assert_eq!(
+        style_rule(base_after).selector(),
+        &CssSelector::Class("card".to_owned())
+    );
+    assert_eq!(
+        style_rule(base_after).declarations()[0].property(),
+        &CssProperty::BackgroundColor
+    );
+}
+
+#[test]
+fn nesting_inside_media_and_container_stays_inside_group() {
+    let sheet = parse_sheet(
+        r#"@media (prefers-color-scheme: dark) {
+            .card { .title { color: white; } }
+        }
+        @container sidebar (inline-size > 30rem) {
+            .card { &:hover { opacity: 0.9; } }
+        }"#,
+    )
+    .unwrap();
+
+    let [media, container] = sheet.rules() else {
+        panic!("expected media and container");
+    };
+    assert!(matches!(media, CssRule::Media(_)));
+    assert!(matches!(container, CssRule::Container(_)));
+
+    let [media_title] = media_rule(media).rules() else {
+        panic!("expected nested media style rule");
+    };
+    let CssSelector::Complex(title_selector) = style_rule(media_title).selector() else {
+        panic!("expected descendant selector inside media");
+    };
+    assert_eq!(title_selector.first().classes(), &["card".to_owned()]);
+    assert_eq!(
+        title_selector.rest()[0].selector().classes(),
+        &["title".to_owned()]
+    );
+
+    let [container_hover] = container_rule(container).rules() else {
+        panic!("expected nested container style rule");
+    };
+    let CssSelector::Compound(hover_selector) = style_rule(container_hover).selector() else {
+        panic!("expected hover selector inside container");
+    };
+    assert_eq!(hover_selector.classes(), &["card".to_owned()]);
+    assert_eq!(hover_selector.pseudo_classes(), &[CssPseudoClass::Hover]);
+}
+
+#[test]
+fn nesting_rejects_unsupported_at_rules_inside_style_blocks() {
+    for css in [
+        r#".card { @import "x.css"; }"#,
+        r#".card { @font-face { font-family: Inter; src: url("inter.woff2"); } }"#,
+        ".card { @keyframes fade { from { opacity: 0; } } }",
+        ".card { @supports (display: flex) { color: black; } }",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
+}
+
+#[test]
 fn nesting_rejects_unsupported_nested_selector_forms() {
     for (css, expects_selector_error) in [
         (".card { .theme & { color: black; } }", true),

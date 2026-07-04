@@ -520,11 +520,35 @@ fn parse_absolute_color_with_cssparser_color<'i, 't>(
 fn parse_system_color<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssColor, ParseError<'i, Error>> {
-    Err(unsupported_value(
-        input,
-        None,
-        "system color syntax is not implemented yet",
-    ))
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    let color = match_ignore_ascii_case! { &ident,
+        "canvas" => CssSystemColor::Canvas,
+        "canvastext" => CssSystemColor::CanvasText,
+        "linktext" => CssSystemColor::LinkText,
+        "visitedtext" => CssSystemColor::VisitedText,
+        "activetext" => CssSystemColor::ActiveText,
+        "buttonface" => CssSystemColor::ButtonFace,
+        "buttontext" => CssSystemColor::ButtonText,
+        "buttonborder" => CssSystemColor::ButtonBorder,
+        "field" => CssSystemColor::Field,
+        "fieldtext" => CssSystemColor::FieldText,
+        "highlight" => CssSystemColor::Highlight,
+        "highlighttext" => CssSystemColor::HighlightText,
+        "mark" => CssSystemColor::Mark,
+        "marktext" => CssSystemColor::MarkText,
+        "graytext" => CssSystemColor::GrayText,
+        "selecteditem" => CssSystemColor::SelectedItem,
+        "selecteditemtext" => CssSystemColor::SelectedItemText,
+        "accentcolor" => CssSystemColor::AccentColor,
+        "accentcolortext" => CssSystemColor::AccentColorText,
+        _ => return Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported system color `{ident}`"),
+        )),
+    };
+    Ok(CssColor::System(color))
 }
 
 fn map_parsed_color<'i>(

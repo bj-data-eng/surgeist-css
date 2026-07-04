@@ -616,7 +616,7 @@ git commit -m "Parse absolute CSS color syntax"
 - Modify: `/Users/codex/Development/surgeist-css/src/parser/values.rs`
 - Modify: `/Users/codex/Development/surgeist-css/src/tests.rs`
 
-- [ ] **Step 1: Add system color tests**
+- [x] **Step 1: Add system color tests**
 
 Add tests:
 
@@ -661,13 +661,13 @@ fn rejects_unknown_system_color_like_identifiers() {
 }
 ```
 
-- [ ] **Step 2: Implement system color fallback**
+- [x] **Step 2: Implement system color fallback**
 
 After `cssparser-color` parsing fails, reset parser state and try a system color identifier parser.
 
 Accepted identifiers are ASCII-case-insensitive CSS system colors from the model enum. Preserve canonical enum variants; do not store raw strings.
 
-- [ ] **Step 3: Run checks**
+- [x] **Step 3: Run checks**
 
 ```sh
 cargo fmt --check
@@ -678,7 +678,7 @@ git diff --check
 
 Expected: pass.
 
-- [ ] **Step 4: Report**
+- [x] **Step 4: Report**
 
 Report changed files, checks run, and `git status --short --branch`. Workers do not commit.
 

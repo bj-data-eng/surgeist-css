@@ -105,6 +105,46 @@ fn parses_cssparser_color_absolute_forms() {
 }
 
 #[test]
+fn parses_css_system_colors_symbolically() {
+    let CssValue::Color(color) =
+        declaration_value(".panel { color: CanvasText; }", CssProperty::Color)
+    else {
+        panic!("expected color");
+    };
+    assert_eq!(color, CssColor::System(CssSystemColor::CanvasText));
+
+    let CssValue::Color(color) = declaration_value(
+        ".panel { background-color: Canvas; }",
+        CssProperty::BackgroundColor,
+    ) else {
+        panic!("expected color");
+    };
+    assert_eq!(color, CssColor::System(CssSystemColor::Canvas));
+
+    let CssValue::Color(color) = declaration_value(
+        ".panel { border-color: AccentColor; }",
+        CssProperty::BorderColor,
+    ) else {
+        panic!("expected color");
+    };
+    assert_eq!(color, CssColor::System(CssSystemColor::AccentColor));
+
+    let CssValue::OutlineColor(color) = declaration_value(
+        ".panel { outline-color: HighlightText; }",
+        CssProperty::OutlineColor,
+    ) else {
+        panic!("expected outline color");
+    };
+    assert_eq!(color, CssColor::System(CssSystemColor::HighlightText));
+}
+
+#[test]
+fn rejects_unknown_system_color_like_identifiers() {
+    assert!(parse_sheet(".panel { color: MadeUpSystemColor; }").is_err());
+    assert!(parse_sheet(".panel { color: PlatformAccent; }").is_err());
+}
+
+#[test]
 fn rgba_hex_alpha_preserves_channels() {
     let CssValue::Color(color) =
         declaration_value(".panel { color: #11223344; }", CssProperty::Color)

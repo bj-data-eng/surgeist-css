@@ -36,6 +36,7 @@ impl CssSheet {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssRule {
     Import(CssImportRule),
+    FontFace(CssFontFaceRule),
     Style(CssStyleRule),
     Media(CssMediaRule),
     Container(CssContainerRule),
@@ -154,6 +155,493 @@ impl CssImportString {
 pub enum CssImportLayer {
     Anonymous,
     Named(CssLayerName),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssFontFaceRule {
+    descriptors: CssFontFaceDescriptors,
+    location: CssSourceLocation,
+}
+
+impl CssFontFaceRule {
+    #[allow(dead_code)]
+    #[must_use]
+    pub(crate) const fn new(
+        descriptors: CssFontFaceDescriptors,
+        location: CssSourceLocation,
+    ) -> Self {
+        Self {
+            descriptors,
+            location,
+        }
+    }
+
+    #[must_use]
+    pub const fn descriptors(&self) -> &CssFontFaceDescriptors {
+        &self.descriptors
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssFontFaceDescriptors {
+    font_family: CssFontFaceFamily,
+    src: CssFontFaceSourceList,
+    font_weight: Option<CssFontFaceWeight>,
+    font_style: Option<CssFontFaceStyle>,
+    font_stretch: Option<CssFontFaceStretch>,
+    font_display: Option<CssFontDisplay>,
+    unicode_range: Option<CssUnicodeRangeList>,
+}
+
+impl CssFontFaceDescriptors {
+    #[must_use]
+    pub fn try_new(
+        font_family: Option<CssFontFaceFamily>,
+        src: Option<CssFontFaceSourceList>,
+        font_weight: Option<CssFontFaceWeight>,
+        font_style: Option<CssFontFaceStyle>,
+        font_stretch: Option<CssFontFaceStretch>,
+        font_display: Option<CssFontDisplay>,
+        unicode_range: Option<CssUnicodeRangeList>,
+    ) -> Option<Self> {
+        Some(Self {
+            font_family: font_family?,
+            src: src?,
+            font_weight,
+            font_style,
+            font_stretch,
+            font_display,
+            unicode_range,
+        })
+    }
+
+    #[must_use]
+    pub const fn font_family(&self) -> &CssFontFaceFamily {
+        &self.font_family
+    }
+
+    #[must_use]
+    pub const fn src(&self) -> &CssFontFaceSourceList {
+        &self.src
+    }
+
+    #[must_use]
+    pub const fn font_weight(&self) -> Option<&CssFontFaceWeight> {
+        self.font_weight.as_ref()
+    }
+
+    #[must_use]
+    pub const fn font_style(&self) -> Option<&CssFontFaceStyle> {
+        self.font_style.as_ref()
+    }
+
+    #[must_use]
+    pub const fn font_stretch(&self) -> Option<&CssFontFaceStretch> {
+        self.font_stretch.as_ref()
+    }
+
+    #[must_use]
+    pub const fn font_display(&self) -> Option<CssFontDisplay> {
+        self.font_display
+    }
+
+    #[must_use]
+    pub const fn unicode_range(&self) -> Option<&CssUnicodeRangeList> {
+        self.unicode_range.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssFontFaceSource {
+    Url(CssFontFaceUrlSource),
+    Local(CssFontLocalName),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssFontFaceUrlSource {
+    url: String,
+    format: Option<CssFontFormatHint>,
+    tech: Vec<CssFontTechHint>,
+}
+
+impl CssFontFaceUrlSource {
+    #[must_use]
+    pub fn try_new(
+        url: impl Into<String>,
+        format: Option<CssFontFormatHint>,
+        tech: Vec<CssFontTechHint>,
+    ) -> Option<Self> {
+        let url = url.into();
+        if url.trim().is_empty() {
+            None
+        } else {
+            Some(Self { url, format, tech })
+        }
+    }
+
+    #[must_use]
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    #[must_use]
+    pub const fn format(&self) -> Option<&CssFontFormatHint> {
+        self.format.as_ref()
+    }
+
+    #[must_use]
+    pub fn tech(&self) -> &[CssFontTechHint] {
+        &self.tech
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssFontFaceFamily {
+    name: String,
+}
+
+impl CssFontFaceFamily {
+    #[must_use]
+    pub fn try_new(name: impl Into<String>) -> Option<Self> {
+        let name = name.into();
+        if name.trim().is_empty() {
+            None
+        } else {
+            Some(Self::new(name))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(name: impl Into<String>) -> Self {
+        let name = name.into();
+        debug_assert!(!name.trim().is_empty());
+        Self { name }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.name
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssFontLocalName {
+    name: String,
+}
+
+impl CssFontLocalName {
+    #[must_use]
+    pub fn try_new(name: impl Into<String>) -> Option<Self> {
+        let name = name.into();
+        if name.trim().is_empty() {
+            None
+        } else {
+            Some(Self::new(name))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(name: impl Into<String>) -> Self {
+        let name = name.into();
+        debug_assert!(!name.trim().is_empty());
+        Self { name }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.name
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssFontFaceSourceList {
+    sources: Vec<CssFontFaceSource>,
+}
+
+impl CssFontFaceSourceList {
+    #[must_use]
+    pub fn try_new(sources: Vec<CssFontFaceSource>) -> Option<Self> {
+        if sources.is_empty() {
+            None
+        } else {
+            Some(Self::new(sources))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(sources: Vec<CssFontFaceSource>) -> Self {
+        debug_assert!(!sources.is_empty());
+        Self { sources }
+    }
+
+    #[must_use]
+    pub fn sources(&self) -> &[CssFontFaceSource] {
+        &self.sources
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssFontFaceWeight {
+    start: CssFontFaceWeightValue,
+    end: Option<CssFontFaceWeightValue>,
+}
+
+impl CssFontFaceWeight {
+    #[must_use]
+    pub fn try_single(value: f32) -> Option<Self> {
+        Some(Self {
+            start: CssFontFaceWeightValue::try_new(value)?,
+            end: None,
+        })
+    }
+
+    #[must_use]
+    pub fn try_range(start: f32, end: f32) -> Option<Self> {
+        let start = CssFontFaceWeightValue::try_new(start)?;
+        let end = CssFontFaceWeightValue::try_new(end)?;
+        if start.value().value() <= end.value().value() {
+            Some(Self {
+                start,
+                end: Some(end),
+            })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn start(self) -> CssFontFaceWeightValue {
+        self.start
+    }
+
+    #[must_use]
+    pub const fn end(self) -> Option<CssFontFaceWeightValue> {
+        self.end
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssFontFaceWeightValue {
+    value: CssFiniteNumber,
+}
+
+impl CssFontFaceWeightValue {
+    #[must_use]
+    pub fn try_new(value: f32) -> Option<Self> {
+        if (1.0..=1000.0).contains(&value) {
+            CssFiniteNumber::try_new(value).map(|value| Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> CssFiniteNumber {
+        self.value
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssFontFaceStyle {
+    Normal,
+    Italic,
+    Oblique(Option<CssFontFaceObliqueRange>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssFontFaceObliqueRange {
+    start_degrees: CssFiniteNumber,
+    end_degrees: Option<CssFiniteNumber>,
+}
+
+impl CssFontFaceObliqueRange {
+    #[must_use]
+    pub fn try_new(start_degrees: f32, end_degrees: Option<f32>) -> Option<Self> {
+        if !(-90.0..=90.0).contains(&start_degrees) {
+            return None;
+        }
+
+        let start_degrees = CssFiniteNumber::try_new(start_degrees)?;
+        let end_degrees = match end_degrees {
+            Some(end_degrees)
+                if (-90.0..=90.0).contains(&end_degrees)
+                    && start_degrees.value() <= end_degrees =>
+            {
+                Some(CssFiniteNumber::try_new(end_degrees)?)
+            }
+            Some(_) => return None,
+            None => None,
+        };
+
+        Some(Self {
+            start_degrees,
+            end_degrees,
+        })
+    }
+
+    #[must_use]
+    pub const fn start_degrees(self) -> CssFiniteNumber {
+        self.start_degrees
+    }
+
+    #[must_use]
+    pub const fn end_degrees(self) -> Option<CssFiniteNumber> {
+        self.end_degrees
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssFontFaceStretch {
+    start: CssFontFaceStretchValue,
+    end: Option<CssFontFaceStretchValue>,
+}
+
+impl CssFontFaceStretch {
+    #[must_use]
+    pub fn try_single_percent(percent: f32) -> Option<Self> {
+        Some(Self {
+            start: CssFontFaceStretchValue::try_new_percent(percent)?,
+            end: None,
+        })
+    }
+
+    #[must_use]
+    pub fn try_range_percent(start: f32, end: f32) -> Option<Self> {
+        let start = CssFontFaceStretchValue::try_new_percent(start)?;
+        let end = CssFontFaceStretchValue::try_new_percent(end)?;
+        if start.percent().value() <= end.percent().value() {
+            Some(Self {
+                start,
+                end: Some(end),
+            })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn start(self) -> CssFontFaceStretchValue {
+        self.start
+    }
+
+    #[must_use]
+    pub const fn end(self) -> Option<CssFontFaceStretchValue> {
+        self.end
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssFontFaceStretchValue {
+    percent: CssFiniteNumber,
+}
+
+impl CssFontFaceStretchValue {
+    #[must_use]
+    pub fn try_new_percent(percent: f32) -> Option<Self> {
+        if percent >= 0.0 {
+            CssFiniteNumber::try_new(percent).map(|percent| Self { percent })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn percent(self) -> CssFiniteNumber {
+        self.percent
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssFontDisplay {
+    Auto,
+    Block,
+    Swap,
+    Fallback,
+    Optional,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssUnicodeRangeList {
+    ranges: Vec<CssUnicodeRange>,
+}
+
+impl CssUnicodeRangeList {
+    #[must_use]
+    pub fn try_new(ranges: Vec<CssUnicodeRange>) -> Option<Self> {
+        if ranges.is_empty() {
+            None
+        } else {
+            Some(Self::new(ranges))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(ranges: Vec<CssUnicodeRange>) -> Self {
+        debug_assert!(!ranges.is_empty());
+        Self { ranges }
+    }
+
+    #[must_use]
+    pub fn ranges(&self) -> &[CssUnicodeRange] {
+        &self.ranges
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssUnicodeRange {
+    start: u32,
+    end: u32,
+}
+
+impl CssUnicodeRange {
+    #[must_use]
+    pub const fn try_new(start: u32, end: u32) -> Option<Self> {
+        if start <= end && end <= 0x10ffff {
+            Some(Self { start, end })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn start(self) -> u32 {
+        self.start
+    }
+
+    #[must_use]
+    pub const fn end(self) -> u32 {
+        self.end
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssFontFormatHint {
+    Woff,
+    Woff2,
+    TrueType,
+    OpenType,
+    Collection,
+    EmbeddedOpenType,
+    Svg,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssFontTechHint {
+    Variations,
+    ColorCOLRv0,
+    ColorCOLRv1,
+    ColorSVG,
+    ColorSbix,
+    ColorCBDT,
+    FeaturesOpenType,
+    FeaturesAAT,
+    FeaturesGraphite,
+    Incremental,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

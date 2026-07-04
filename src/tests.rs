@@ -2481,6 +2481,217 @@ fn container_condition_list_constructor_requires_at_least_two_conditions() {
 }
 
 #[test]
+fn font_face_descriptor_collection_requires_family_and_src() {
+    assert!(CssFontFaceDescriptors::try_new(None, None, None, None, None, None, None).is_none());
+    assert!(CssFontFaceUrlSource::try_new("", None, Vec::new()).is_none());
+    assert!(CssFontFaceUrlSource::try_new("   ", None, Vec::new()).is_none());
+
+    let family = CssFontFaceFamily::try_new("Avenir Next").unwrap();
+    let src = CssFontFaceSourceList::try_new(vec![CssFontFaceSource::Local(
+        CssFontLocalName::try_new("Avenir Next").unwrap(),
+    )])
+    .unwrap();
+
+    assert!(
+        CssFontFaceDescriptors::try_new(Some(family.clone()), None, None, None, None, None, None)
+            .is_none()
+    );
+    assert!(
+        CssFontFaceDescriptors::try_new(None, Some(src.clone()), None, None, None, None, None)
+            .is_none()
+    );
+
+    let descriptors = CssFontFaceDescriptors::try_new(
+        Some(family.clone()),
+        Some(src.clone()),
+        Some(CssFontFaceWeight::try_range(400.0, 700.0).unwrap()),
+        Some(CssFontFaceStyle::Oblique(Some(
+            CssFontFaceObliqueRange::try_new(-10.0, Some(20.0)).unwrap(),
+        ))),
+        Some(CssFontFaceStretch::try_range_percent(75.0, 125.0).unwrap()),
+        Some(CssFontDisplay::Swap),
+        Some(
+            CssUnicodeRangeList::try_new(vec![CssUnicodeRange::try_new(0, 0x7f).unwrap()]).unwrap(),
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(descriptors.font_family(), &family);
+    assert_eq!(descriptors.src(), &src);
+    assert_eq!(
+        descriptors.font_weight().unwrap().start().value().value(),
+        400.0
+    );
+    assert!(matches!(
+        descriptors.font_style(),
+        Some(CssFontFaceStyle::Oblique(Some(_)))
+    ));
+    assert_eq!(
+        descriptors
+            .font_stretch()
+            .unwrap()
+            .end()
+            .unwrap()
+            .percent()
+            .value(),
+        125.0
+    );
+    assert_eq!(descriptors.font_display(), Some(CssFontDisplay::Swap));
+    assert_eq!(
+        descriptors.unicode_range().unwrap().ranges(),
+        &[CssUnicodeRange::try_new(0, 0x7f).unwrap()]
+    );
+}
+
+#[test]
+fn font_face_string_constructors_reject_empty_values() {
+    assert_eq!(
+        CssFontFaceFamily::try_new("Avenir Next").unwrap().as_str(),
+        "Avenir Next"
+    );
+    assert_eq!(
+        CssFontLocalName::try_new("Avenir Next").unwrap().as_str(),
+        "Avenir Next"
+    );
+    assert_eq!(
+        CssFontFaceUrlSource::try_new(
+            "fonts/avenir.woff2",
+            Some(CssFontFormatHint::Woff2),
+            vec![CssFontTechHint::Variations],
+        )
+        .unwrap()
+        .url(),
+        "fonts/avenir.woff2"
+    );
+
+    for value in ["", " \t\n "] {
+        assert_eq!(CssFontFaceFamily::try_new(value), None);
+        assert_eq!(CssFontLocalName::try_new(value), None);
+        assert_eq!(CssFontFaceUrlSource::try_new(value, None, Vec::new()), None);
+    }
+}
+
+#[test]
+fn font_face_source_and_unicode_lists_reject_empty_values() {
+    assert_eq!(CssFontFaceSourceList::try_new(Vec::new()), None);
+    assert_eq!(CssUnicodeRangeList::try_new(Vec::new()), None);
+
+    let url = CssFontFaceUrlSource::try_new(
+        "fonts/avenir.woff2",
+        Some(CssFontFormatHint::Woff2),
+        vec![CssFontTechHint::ColorCOLRv1],
+    )
+    .unwrap();
+    assert_eq!(url.format(), Some(&CssFontFormatHint::Woff2));
+    assert_eq!(url.tech(), &[CssFontTechHint::ColorCOLRv1]);
+
+    let sources = CssFontFaceSourceList::try_new(vec![CssFontFaceSource::Url(url)]).unwrap();
+    assert!(matches!(sources.sources(), [CssFontFaceSource::Url(_)]));
+
+    let ranges =
+        CssUnicodeRangeList::try_new(vec![CssUnicodeRange::try_new(0x20, 0x7e).unwrap()]).unwrap();
+    assert_eq!(ranges.ranges()[0].start(), 0x20);
+    assert_eq!(ranges.ranges()[0].end(), 0x7e);
+}
+
+#[test]
+fn font_face_numeric_descriptors_enforce_invariants() {
+    assert_eq!(
+        CssFontFaceWeightValue::try_new(1.0)
+            .unwrap()
+            .value()
+            .value(),
+        1.0
+    );
+    assert_eq!(
+        CssFontFaceWeightValue::try_new(1000.0)
+            .unwrap()
+            .value()
+            .value(),
+        1000.0
+    );
+    assert_eq!(CssFontFaceWeightValue::try_new(0.999), None);
+    assert_eq!(CssFontFaceWeightValue::try_new(1000.001), None);
+    assert_eq!(CssFontFaceWeightValue::try_new(f32::NAN), None);
+    assert_eq!(CssFontFaceWeight::try_range(700.0, 400.0), None);
+    assert_eq!(
+        CssFontFaceWeight::try_single(400.0)
+            .unwrap()
+            .start()
+            .value()
+            .value(),
+        400.0
+    );
+
+    assert_eq!(
+        CssFontFaceStretchValue::try_new_percent(0.0)
+            .unwrap()
+            .percent()
+            .value(),
+        0.0
+    );
+    assert_eq!(CssFontFaceStretchValue::try_new_percent(-0.1), None);
+    assert_eq!(
+        CssFontFaceStretchValue::try_new_percent(f32::INFINITY),
+        None
+    );
+    assert_eq!(CssFontFaceStretch::try_range_percent(125.0, 75.0), None);
+    assert_eq!(
+        CssFontFaceStretch::try_single_percent(100.0)
+            .unwrap()
+            .start()
+            .percent()
+            .value(),
+        100.0
+    );
+
+    assert_eq!(
+        CssFontFaceObliqueRange::try_new(-90.0, Some(90.0))
+            .unwrap()
+            .end_degrees()
+            .unwrap()
+            .value(),
+        90.0
+    );
+    assert_eq!(CssFontFaceObliqueRange::try_new(-90.1, None), None);
+    assert_eq!(CssFontFaceObliqueRange::try_new(90.1, None), None);
+    assert_eq!(CssFontFaceObliqueRange::try_new(f32::NAN, None), None);
+    assert_eq!(CssFontFaceObliqueRange::try_new(10.0, Some(0.0)), None);
+
+    assert_eq!(
+        CssUnicodeRange::try_new(0x10ffff, 0x10ffff).unwrap().end(),
+        0x10ffff
+    );
+    assert_eq!(CssUnicodeRange::try_new(2, 1), None);
+    assert_eq!(CssUnicodeRange::try_new(0, 0x110000), None);
+}
+
+#[test]
+fn font_face_rule_accessors_expose_authored_structure() {
+    let descriptors = CssFontFaceDescriptors::try_new(
+        Some(CssFontFaceFamily::try_new("Avenir Next").unwrap()),
+        Some(
+            CssFontFaceSourceList::try_new(vec![CssFontFaceSource::Url(
+                CssFontFaceUrlSource::try_new("fonts/avenir.woff2", None, Vec::new()).unwrap(),
+            )])
+            .unwrap(),
+        ),
+        None,
+        Some(CssFontFaceStyle::Normal),
+        None,
+        Some(CssFontDisplay::Auto),
+        None,
+    )
+    .unwrap();
+    let location = CssSourceLocation::new(9, 5);
+    let rule = CssFontFaceRule::new(descriptors.clone(), location);
+
+    assert_eq!(rule.descriptors(), &descriptors);
+    assert_eq!(rule.location(), location);
+    assert_eq!(CssRule::FontFace(rule.clone()), CssRule::FontFace(rule));
+}
+
+#[test]
 fn container_condition_parser_accepts_plan_examples() {
     for css in [
         "(width > 600px)",

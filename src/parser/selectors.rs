@@ -31,6 +31,20 @@ fn parse_pseudo_compound_selector_list<'i, 't>(
     Ok(selectors)
 }
 
+fn parse_pseudo_selector_list_items<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Vec<CssSelector>, ParseError<'i, Error>> {
+    let mut selectors = Vec::new();
+    loop {
+        selectors.push(parse_rule_selector(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+    }
+    input.expect_exhausted().map_err(selector_basic)?;
+    Ok(selectors)
+}
+
 pub(super) fn parse_rule_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssSelector, ParseError<'i, Error>> {
@@ -507,7 +521,7 @@ fn parse_pseudo_class<'i, 't>(
 fn parse_pseudo_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssPseudoSelectorList, ParseError<'i, Error>> {
-    let selectors = parse_pseudo_compound_selector_list(input)?;
+    let selectors = parse_pseudo_selector_list_items(input)?;
     CssPseudoSelectorList::try_new(selectors)
         .ok_or_else(|| invalid_selector(input, "pseudo-class selector list must not be empty"))
 }

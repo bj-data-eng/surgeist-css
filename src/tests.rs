@@ -1083,6 +1083,55 @@ fn parses_compound_selector_list_functional_pseudo_classes() {
 }
 
 #[test]
+fn functional_selector_lists_accept_supported_complex_selectors() {
+    let sheet = parse_sheet(
+        ".scope:is(.card > .title, button.primary:hover, [data-state=\"open\"].active) { color: black; }",
+    )
+    .unwrap();
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
+        panic!("expected compound selector");
+    };
+    let [CssPseudoClass::Is(list)] = selector.pseudo_classes() else {
+        panic!("expected :is selector list");
+    };
+    assert_eq!(list.selectors().len(), 3);
+    assert!(matches!(list.selectors()[0], CssSelector::Complex(_)));
+    assert!(matches!(list.selectors()[1], CssSelector::Compound(_)));
+    assert!(matches!(list.selectors()[2], CssSelector::Compound(_)));
+
+    let sheet = parse_sheet(":not(.field .icon, button.primary:hover) { color: black; }").unwrap();
+    let CssSelector::PseudoClass(CssPseudoClass::Not(list)) =
+        style_rule(&sheet.rules()[0]).selector()
+    else {
+        panic!("expected :not selector list");
+    };
+    assert_eq!(list.selectors().len(), 2);
+    assert!(matches!(list.selectors()[0], CssSelector::Complex(_)));
+    assert!(matches!(list.selectors()[1], CssSelector::Compound(_)));
+
+    let sheet = parse_sheet(":where(.toolbar + .panel, .stack ~ .item) { color: black; }").unwrap();
+    let CssSelector::PseudoClass(CssPseudoClass::Where(list)) =
+        style_rule(&sheet.rules()[0]).selector()
+    else {
+        panic!("expected :where selector list");
+    };
+    assert_eq!(list.selectors().len(), 2);
+    assert!(
+        list.selectors()
+            .iter()
+            .all(|selector| matches!(selector, CssSelector::Complex(_)))
+    );
+}
+
+#[test]
+fn functional_selector_lists_reject_invalid_entries_strictly() {
+    assert!(parse_sheet(":is(.valid, .bad..selector) { color: black; }").is_err());
+    assert!(parse_sheet(":where(.valid, .col || .cell) { color: black; }").is_err());
+    assert!(parse_sheet(":not(.valid, ::before) { color: black; }").is_err());
+    assert!(parse_sheet(":is(.valid,) { color: black; }").is_err());
+}
+
+#[test]
 fn functional_pseudo_class_arguments_are_publicly_inspectable() {
     let sheet = parse_sheet(".button:not(.disabled) { color: black; }").unwrap();
     let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
@@ -1161,7 +1210,6 @@ fn rejects_function_syntax_for_runtime_state_pseudo_classes() {
 fn rejects_unsupported_relative_or_combinator_selector_forms() {
     assert!(parse_sheet(".field:has(> .icon) { color: black; }").is_err());
     assert!(parse_sheet(":has(.field > .icon) { color: black; }").is_err());
-    assert!(parse_sheet(":not(.field .icon) { color: black; }").is_err());
 }
 
 #[test]
@@ -1722,7 +1770,6 @@ fn nesting_rejects_unsupported_nested_selector_forms() {
         (".card { svg|a { color: black; } }", false),
         (".card { [svg|href] { color: black; } }", true),
         (".card { .col || .cell { color: black; } }", true),
-        (".card { &:not(.field .icon) { color: black; } }", true),
     ] {
         let error = parse_sheet(css).expect_err(css);
         if expects_selector_error {
@@ -1769,6 +1816,7 @@ fn keyframes_and_nesting_accept_practical_surface_matrix() {
         ".card { @media (min-width: 600px) { &:hover { opacity: 0.9; } } }",
         "@media screen { .card { .title { color: black; } } }",
         "@container sidebar (inline-size > 30rem) { .card { &:hover { opacity: 1; } } }",
+        ".card { &:not(.field .icon) { color: black; } }",
     ];
 
     for css in accepted {
@@ -1784,7 +1832,6 @@ fn rejects_invalid_combinator_selectors() {
     assert!(parse_sheet(".col || .cell { color: black; }").is_err());
     assert!(parse_sheet(".field:has(> .icon) { color: black; }").is_err());
     assert!(parse_sheet(".field:has(.field > .icon) { color: black; }").is_err());
-    assert!(parse_sheet(".field:not(.field .icon) { color: black; }").is_err());
 }
 
 #[test]

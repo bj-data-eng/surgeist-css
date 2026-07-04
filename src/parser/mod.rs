@@ -24,7 +24,8 @@ mod variables;
 
 use cssparser::{
     AtRuleParser, CowRcStr, DeclarationParser, ParseError, Parser, ParserInput, ParserState,
-    QualifiedRuleParser, RuleBodyItemParser, StyleSheetParser, match_ignore_ascii_case,
+    QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, StyleSheetParser,
+    match_ignore_ascii_case,
 };
 
 use background::*;
@@ -40,7 +41,9 @@ pub(crate) use queries::parse_container_condition_for_test;
 #[cfg(test)]
 pub(crate) use queries::parse_media_query_list_for_test;
 use queries::{parse_container_condition, parse_media_query_list};
-use selectors::parse_rule_selector_list;
+use selectors::{
+    parse_rule_selector_list, parse_scope_boundary_selector_list, parse_scoped_style_selector_list,
+};
 use timing::*;
 use typography::*;
 use values::*;
@@ -101,10 +104,12 @@ impl StrictRuleParser {
 
 enum StrictAtRulePrelude {
     Import(CssImportPrelude),
+    Layer(Vec<CssLayerName>),
     FontFace,
     Keyframes(CssKeyframesName),
     Media(CssMediaQueryList),
     Container(CssContainerPrelude),
+    Scope(CssScopePrelude),
 }
 
 struct CssImportPrelude {
@@ -116,6 +121,11 @@ struct CssImportPrelude {
 struct CssContainerPrelude {
     name: Option<CssContainerName>,
     condition: CssContainerCondition,
+}
+
+struct CssScopePrelude {
+    root: Option<CssScopeSelectorList>,
+    limit: Option<CssScopeSelectorList>,
 }
 
 impl<'i> AtRuleParser<'i> for StrictRuleParser {
@@ -153,6 +163,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 }
                 Ok(StrictAtRulePrelude::FontFace)
             },
+            "layer" => Ok(StrictAtRulePrelude::Layer(parse_layer_prelude(input)?)),
             "keyframes" => {
                 let name = parse_keyframes_name(input)?;
                 if !input.is_exhausted() {
@@ -183,6 +194,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 }
                 Ok(StrictAtRulePrelude::Container(prelude))
             },
+            "scope" => Ok(StrictAtRulePrelude::Scope(parse_scope_prelude(input)?)),
             _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
         }
     }
@@ -199,10 +211,19 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 prelude.media,
                 CssSourceLocation::from_cssparser(start.source_location()),
             ))]),
+            StrictAtRulePrelude::Layer(names) => {
+                let names = CssLayerNameList::try_new(names).ok_or(())?;
+                self.mark_non_import_top_level_rule();
+                Ok(vec![CssRule::LayerStatement(CssLayerStatementRule::new(
+                    names,
+                    CssSourceLocation::from_cssparser(start.source_location()),
+                ))])
+            }
             StrictAtRulePrelude::FontFace => Err(()),
             StrictAtRulePrelude::Keyframes(_) => Err(()),
             StrictAtRulePrelude::Media(_) => Err(()),
             StrictAtRulePrelude::Container(_) => Err(()),
+            StrictAtRulePrelude::Scope(_) => Err(()),
         }
     }
 
@@ -217,6 +238,22 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 start.source_location(),
                 "@import rules must not have a block",
             )),
+            StrictAtRulePrelude::Layer(names) => {
+                if names.len() > 1 {
+                    return Err(invalid_syntax(
+                        start.source_location(),
+                        "@layer block rules accept at most one layer name",
+                    ));
+                }
+                let name = names.into_iter().next();
+                let rules = parse_nested_group_rules(input)?;
+                self.mark_non_import_top_level_rule();
+                Ok(vec![CssRule::LayerBlock(CssLayerBlockRule::new(
+                    name,
+                    rules,
+                    CssSourceLocation::from_cssparser(start.source_location()),
+                ))])
+            }
             StrictAtRulePrelude::FontFace => {
                 let rule = parse_font_face_rule(input, start)?;
                 self.mark_non_import_top_level_rule();
@@ -242,6 +279,16 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 Ok(vec![CssRule::Container(CssContainerRule::new(
                     prelude.name,
                     prelude.condition,
+                    rules,
+                    CssSourceLocation::from_cssparser(start.source_location()),
+                ))])
+            }
+            StrictAtRulePrelude::Scope(prelude) => {
+                let rules = parse_scoped_rule_list(input)?;
+                self.mark_non_import_top_level_rule();
+                Ok(vec![CssRule::Scope(CssScopeRule::new(
+                    prelude.root,
+                    prelude.limit,
                     rules,
                     CssSourceLocation::from_cssparser(start.source_location()),
                 ))])
@@ -329,6 +376,17 @@ fn parse_nested_group_rules<'i, 't>(
     Ok(rules)
 }
 
+fn parse_scoped_rule_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssScopedRuleList, ParseError<'i, Error>> {
+    let mut rule_parser = ScopedRuleParser;
+    let mut rules = Vec::new();
+    for rule in StyleSheetParser::new(input, &mut rule_parser) {
+        rules.extend(rule.map_err(|(error, _)| error)?);
+    }
+    Ok(CssScopedRuleList::from_rules(rules))
+}
+
 fn parse_import_target<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssImportTarget, ParseError<'i, Error>> {
@@ -366,11 +424,47 @@ fn parse_import_layer<'i, 't>(
         .try_parse(|input| input.expect_function_matching("layer"))
         .is_ok()
     {
-        let layer_name = input.parse_nested_block(parse_layer_name)?;
+        let layer_name = input.parse_nested_block(parse_import_layer_name)?;
         return Ok(Some(CssImportLayer::Named(layer_name)));
     }
 
     Ok(None)
+}
+
+fn parse_import_layer_name<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssLayerName, ParseError<'i, Error>> {
+    let name = parse_layer_name(input)?;
+    if !input.is_exhausted() {
+        return Err(invalid_syntax(
+            input.current_source_location(),
+            "unexpected token in import layer name",
+        ));
+    }
+    Ok(name)
+}
+
+fn parse_layer_prelude<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Vec<CssLayerName>, ParseError<'i, Error>> {
+    if input.is_exhausted() {
+        return Ok(Vec::new());
+    }
+
+    let mut names = Vec::new();
+    loop {
+        names.push(parse_layer_name(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+    }
+    if !input.is_exhausted() {
+        return Err(invalid_syntax(
+            input.current_source_location(),
+            "unexpected token after layer name list",
+        ));
+    }
+    Ok(names)
 }
 
 fn parse_layer_name<'i, 't>(
@@ -383,15 +477,201 @@ fn parse_layer_name<'i, 't>(
         components.push(input.expect_ident_cloned().map_err(basic)?.to_string());
     }
 
+    CssLayerName::try_new(components).ok_or_else(|| invalid_syntax(location, "invalid layer name"))
+}
+
+fn parse_scope_prelude<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssScopePrelude, ParseError<'i, Error>> {
+    let root = if input.try_parse(Parser::expect_parenthesis_block).is_ok() {
+        Some(input.parse_nested_block(parse_scope_boundary_selector_list)?)
+    } else {
+        None
+    };
+
+    let limit = if input
+        .try_parse(|input| input.expect_ident_matching("to"))
+        .is_ok()
+    {
+        input.expect_parenthesis_block().map_err(basic)?;
+        Some(input.parse_nested_block(parse_scope_boundary_selector_list)?)
+    } else {
+        None
+    };
+
     if !input.is_exhausted() {
         return Err(invalid_syntax(
             input.current_source_location(),
-            "unexpected token in import layer name",
+            "unexpected token after scope prelude",
         ));
     }
 
-    CssLayerName::try_new(components)
-        .ok_or_else(|| invalid_syntax(location, "invalid import layer name"))
+    Ok(CssScopePrelude { root, limit })
+}
+
+struct ScopedRuleParser;
+
+enum ScopedAtRulePrelude {
+    Media(CssMediaQueryList),
+    Container(CssContainerPrelude),
+    Layer(Vec<CssLayerName>),
+    Scope(CssScopePrelude),
+}
+
+impl<'i> AtRuleParser<'i> for ScopedRuleParser {
+    type Prelude = ScopedAtRulePrelude;
+    type AtRule = Vec<CssScopedRule>;
+    type Error = Error;
+
+    fn parse_prelude<'t>(
+        &mut self,
+        name: CowRcStr<'i>,
+        input: &mut Parser<'i, 't>,
+    ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
+        match_ignore_ascii_case! { &name,
+            "media" => {
+                let query = parse_media_query_list(input)?;
+                if !input.is_exhausted() {
+                    return Err(invalid_syntax(
+                        input.current_source_location(),
+                        "unexpected token after media query list",
+                    ));
+                }
+                Ok(ScopedAtRulePrelude::Media(query))
+            },
+            "container" => {
+                let prelude = parse_container_prelude(input)?;
+                if !input.is_exhausted() {
+                    return Err(invalid_syntax(
+                        input.current_source_location(),
+                        "unexpected token after container condition",
+                    ));
+                }
+                Ok(ScopedAtRulePrelude::Container(prelude))
+            },
+            "layer" => Ok(ScopedAtRulePrelude::Layer(parse_layer_prelude(input)?)),
+            "scope" => Ok(ScopedAtRulePrelude::Scope(parse_scope_prelude(input)?)),
+            "import" => Err(invalid_syntax(
+                input.current_source_location(),
+                "@import rules are not supported inside scope blocks",
+            )),
+            "font-face" => Err(invalid_syntax(
+                input.current_source_location(),
+                "@font-face rules are not supported inside scope blocks",
+            )),
+            "keyframes" => Err(invalid_syntax(
+                input.current_source_location(),
+                "@keyframes rules are not supported inside scope blocks",
+            )),
+            _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
+        }
+    }
+
+    fn rule_without_block(
+        &mut self,
+        prelude: Self::Prelude,
+        start: &ParserState,
+    ) -> std::result::Result<Self::AtRule, ()> {
+        match prelude {
+            ScopedAtRulePrelude::Layer(names) => {
+                let names = CssLayerNameList::try_new(names).ok_or(())?;
+                Ok(vec![CssScopedRule::LayerStatement(
+                    CssScopedLayerStatementRule::new(
+                        names,
+                        CssSourceLocation::from_cssparser(start.source_location()),
+                    ),
+                )])
+            }
+            ScopedAtRulePrelude::Media(_)
+            | ScopedAtRulePrelude::Container(_)
+            | ScopedAtRulePrelude::Scope(_) => Err(()),
+        }
+    }
+
+    fn parse_block<'t>(
+        &mut self,
+        prelude: Self::Prelude,
+        start: &ParserState,
+        input: &mut Parser<'i, 't>,
+    ) -> std::result::Result<Self::AtRule, ParseError<'i, Self::Error>> {
+        let location = CssSourceLocation::from_cssparser(start.source_location());
+        match prelude {
+            ScopedAtRulePrelude::Media(query) => {
+                let rules = parse_scoped_rule_list(input)?;
+                Ok(vec![CssScopedRule::Media(CssScopedMediaRule::new(
+                    query, rules, location,
+                ))])
+            }
+            ScopedAtRulePrelude::Container(prelude) => {
+                let rules = parse_scoped_rule_list(input)?;
+                Ok(vec![CssScopedRule::Container(CssScopedContainerRule::new(
+                    prelude.name,
+                    prelude.condition,
+                    rules,
+                    location,
+                ))])
+            }
+            ScopedAtRulePrelude::Layer(names) => {
+                if names.len() > 1 {
+                    return Err(invalid_syntax(
+                        start.source_location(),
+                        "@layer block rules accept at most one layer name",
+                    ));
+                }
+                let name = names.into_iter().next();
+                let rules = parse_scoped_rule_list(input)?;
+                Ok(vec![CssScopedRule::LayerBlock(
+                    CssScopedLayerBlockRule::new(name, rules, location),
+                )])
+            }
+            ScopedAtRulePrelude::Scope(prelude) => {
+                let rules = parse_scoped_rule_list(input)?;
+                Ok(vec![CssScopedRule::Scope(CssScopeRule::new(
+                    prelude.root,
+                    prelude.limit,
+                    rules,
+                    location,
+                ))])
+            }
+        }
+    }
+}
+
+impl<'i> QualifiedRuleParser<'i> for ScopedRuleParser {
+    type Prelude = CssScopedStyleSelectorList;
+    type QualifiedRule = Vec<CssScopedRule>;
+    type Error = Error;
+
+    fn parse_prelude<'t>(
+        &mut self,
+        input: &mut Parser<'i, 't>,
+    ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
+        parse_scoped_style_selector_list(input)
+    }
+
+    fn parse_block<'t>(
+        &mut self,
+        selectors: Self::Prelude,
+        _start: &ParserState,
+        input: &mut Parser<'i, 't>,
+    ) -> std::result::Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
+        let declarations = parse_declaration_block(input)?;
+        Ok(vec![CssScopedRule::Style(CssScopedStyleRule::new(
+            selectors,
+            declarations,
+        ))])
+    }
+}
+
+fn parse_declaration_block<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Vec<CssDeclaration>, ParseError<'i, Error>> {
+    let mut declarations = Vec::new();
+    let mut declaration_parser = StrictDeclarationParser;
+    for declaration in RuleBodyParser::new(input, &mut declaration_parser) {
+        declarations.push(declaration.map_err(|(error, _)| error)?);
+    }
+    Ok(declarations)
 }
 
 struct StrictDeclarationParser;

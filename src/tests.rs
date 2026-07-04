@@ -63,6 +63,27 @@ fn import_rule(rule: &CssRule) -> &CssImportRule {
     }
 }
 
+fn layer_statement_rule(rule: &CssRule) -> &CssLayerStatementRule {
+    match rule {
+        CssRule::LayerStatement(rule) => rule,
+        unexpected => panic!("expected layer statement rule, got {unexpected:?}"),
+    }
+}
+
+fn layer_block_rule(rule: &CssRule) -> &CssLayerBlockRule {
+    match rule {
+        CssRule::LayerBlock(rule) => rule,
+        unexpected => panic!("expected layer block rule, got {unexpected:?}"),
+    }
+}
+
+fn scope_rule(rule: &CssRule) -> &CssScopeRule {
+    match rule {
+        CssRule::Scope(rule) => rule,
+        unexpected => panic!("expected scope rule, got {unexpected:?}"),
+    }
+}
+
 #[test]
 fn cssparser_color_dependency_is_available_for_color_parsing() {
     let mut input = cssparser::ParserInput::new("rgb(255 0 0 / 50%)");
@@ -876,12 +897,261 @@ fn import_rule_parser_rejects_late_nested_unsupported_and_malformed_imports() {
     for css in [
         r#".panel { color: black; } @import "late.css";"#,
         r#"@media screen { @import "nested.css"; }"#,
+        r#"@layer base; @import "late.css";"#,
+        r#"@scope { @import "nested.css"; }"#,
         r#"@import url("theme.css") supports(display: grid);"#,
         r#"@import url("theme.css") screen layer(components);"#,
         "@import;",
     ] {
         assert!(parse_sheet(css).is_err(), "{css} should reject");
     }
+}
+
+#[test]
+fn layer_rule_parser_accepts_statement_and_block_forms() {
+    let sheet = parse_sheet(
+        r#"
+            @layer reset, theme.components;
+            @layer theme { .button { color: black; } }
+            @layer { .utility { color: red; } }
+        "#,
+    )
+    .unwrap();
+
+    assert_eq!(sheet.rules().len(), 3);
+    let statement = layer_statement_rule(&sheet.rules()[0]);
+    assert_eq!(
+        statement.names().names(),
+        &[
+            CssLayerName::try_new(["reset"]).unwrap(),
+            CssLayerName::try_new(["theme", "components"]).unwrap(),
+        ]
+    );
+
+    let named = layer_block_rule(&sheet.rules()[1]);
+    assert_eq!(
+        named.name(),
+        Some(&CssLayerName::try_new(["theme"]).unwrap())
+    );
+    assert!(matches!(named.rules(), [CssRule::Style(_)]));
+
+    let anonymous = layer_block_rule(&sheet.rules()[2]);
+    assert_eq!(anonymous.name(), None);
+    assert!(matches!(anonymous.rules(), [CssRule::Style(_)]));
+}
+
+#[test]
+fn layer_rule_parser_accepts_nested_group_rule_blocks() {
+    let sheet = parse_sheet(
+        r#"
+            @media screen {
+                @layer theme.components {
+                    @container (inline-size > 30rem) {
+                        @layer utilities;
+                        .button { color: black; }
+                    }
+                }
+            }
+        "#,
+    )
+    .unwrap();
+
+    let media = media_rule(&sheet.rules()[0]);
+    let [CssRule::LayerBlock(layer)] = media.rules() else {
+        panic!("expected layer block inside media");
+    };
+    assert_eq!(
+        layer.name(),
+        Some(&CssLayerName::try_new(["theme", "components"]).unwrap())
+    );
+    let [CssRule::Container(container)] = layer.rules() else {
+        panic!("expected container inside layer");
+    };
+    assert!(matches!(
+        container.rules(),
+        [CssRule::LayerStatement(_), CssRule::Style(_)]
+    ));
+}
+
+#[test]
+fn layer_rule_parser_rejects_malformed_layer_syntax() {
+    for css in [
+        "@layer;",
+        "@layer , theme;",
+        "@layer theme,;",
+        "@layer theme..components;",
+        "@layer theme, { .x { color: black; } }",
+        "@layer theme.components extra { .x { color: black; } }",
+        "@layer initial;",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
+}
+
+#[test]
+fn scope_rule_parser_accepts_roots_limits_and_scoped_style_rules() {
+    let sheet = parse_sheet(
+        r#"
+            @scope (.card, [data-scope]) to (.stop, .boundary) {
+                .title, > .action { color: black; }
+                &:hover { color: red; }
+                :scope .note { color: blue; }
+            }
+        "#,
+    )
+    .unwrap();
+
+    let scope = scope_rule(&sheet.rules()[0]);
+    assert_eq!(scope.root().unwrap().selectors().len(), 2);
+    assert_eq!(scope.limit().unwrap().selectors().len(), 2);
+
+    let [
+        CssScopedRule::Style(first),
+        CssScopedRule::Style(anchored),
+        CssScopedRule::Style(scope_pseudo),
+    ] = scope.rules().rules()
+    else {
+        panic!("expected three scoped style rules");
+    };
+    let selectors = first.selectors().selectors();
+    assert!(matches!(selectors[0], CssScopedStyleSelector::Selector(_)));
+    assert!(matches!(selectors[1], CssScopedStyleSelector::Relative(_)));
+    let CssScopedStyleSelector::Relative(relative) = &selectors[1] else {
+        panic!("expected relative selector");
+    };
+    assert_eq!(relative.combinator(), CssSelectorCombinator::Child);
+
+    let [CssScopedStyleSelector::Selector(CssSelector::Compound(selector))] =
+        anchored.selectors().selectors()
+    else {
+        panic!("expected authored scope anchor selector");
+    };
+    assert!(selector.has_scope_anchor());
+    assert_eq!(selector.pseudo_classes(), &[CssPseudoClass::Hover]);
+
+    let [CssScopedStyleSelector::Selector(CssSelector::Complex(selector))] =
+        scope_pseudo.selectors().selectors()
+    else {
+        panic!("expected authored :scope complex selector");
+    };
+    assert_eq!(selector.first().pseudo_classes(), &[CssPseudoClass::Scope]);
+}
+
+#[test]
+fn scope_rule_parser_accepts_limit_only_and_empty_prelude_scope() {
+    let sheet = parse_sheet(
+        r#"
+            @scope to (.stop) { .title { color: black; } }
+            @scope { > .item { color: red; } }
+        "#,
+    )
+    .unwrap();
+
+    let limit_only = scope_rule(&sheet.rules()[0]);
+    assert!(limit_only.root().is_none());
+    assert_eq!(limit_only.limit().unwrap().selectors().len(), 1);
+
+    let anonymous = scope_rule(&sheet.rules()[1]);
+    assert!(anonymous.root().is_none());
+    assert!(anonymous.limit().is_none());
+    let [CssScopedRule::Style(rule)] = anonymous.rules().rules() else {
+        panic!("expected scoped style rule");
+    };
+    assert!(matches!(
+        rule.selectors().selectors(),
+        [CssScopedStyleSelector::Relative(_)]
+    ));
+}
+
+#[test]
+fn scope_rule_parser_keeps_nested_scoped_group_rules_scoped() {
+    let sheet = parse_sheet(
+        r#"
+            @scope (.card) {
+                @media screen {
+                    @container (inline-size > 30rem) {
+                        @layer theme {
+                            @scope (.inner) {
+                                > .label { color: black; }
+                            }
+                        }
+                    }
+                }
+                @layer reset;
+            }
+        "#,
+    )
+    .unwrap();
+
+    let scope = scope_rule(&sheet.rules()[0]);
+    let [
+        CssScopedRule::Media(media),
+        CssScopedRule::LayerStatement(_),
+    ] = scope.rules().rules()
+    else {
+        panic!("expected scoped media and layer statement");
+    };
+    let [CssScopedRule::Container(container)] = media.rules().rules() else {
+        panic!("expected scoped container");
+    };
+    let [CssScopedRule::LayerBlock(layer)] = container.rules().rules() else {
+        panic!("expected scoped layer block");
+    };
+    let [CssScopedRule::Scope(nested_scope)] = layer.rules().rules() else {
+        panic!("expected nested scope rule");
+    };
+    let [CssScopedRule::Style(style)] = nested_scope.rules().rules() else {
+        panic!("expected scoped relative style rule");
+    };
+    assert!(matches!(
+        style.selectors().selectors(),
+        [CssScopedStyleSelector::Relative(_)]
+    ));
+}
+
+#[test]
+fn nested_style_rule_parser_accepts_layer_and_scope_groups() {
+    let sheet = parse_sheet(
+        r#"
+            .card {
+                color: black;
+                @layer components { & > .title { color: red; } }
+                @scope (.title) { > .icon { color: blue; } }
+            }
+        "#,
+    )
+    .unwrap();
+
+    assert!(matches!(
+        sheet.rules(),
+        [CssRule::Style(_), CssRule::LayerBlock(_), CssRule::Scope(_)]
+    ));
+    let layer = layer_block_rule(&sheet.rules()[1]);
+    assert!(matches!(layer.rules(), [CssRule::Style(_)]));
+    let scope = scope_rule(&sheet.rules()[2]);
+    assert!(matches!(scope.rules().rules(), [CssScopedRule::Style(_)]));
+}
+
+#[test]
+fn scope_rule_parser_rejects_malformed_scope_syntax() {
+    for css in [
+        "@scope .card { .title { color: black; } }",
+        "@scope (.card) to { .title { color: black; } }",
+        "@scope to { .title { color: black; } }",
+        "@scope () { .title { color: black; } }",
+        "@scope (.card,) { .title { color: black; } }",
+        "@scope (.card) to (.stop) extra { .title { color: black; } }",
+        "@scope (.card::before) { .title { color: black; } }",
+        "@scope (.card) { @font-face { font-family: Test; src: local(Test); } }",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
+}
+
+#[test]
+fn relative_selectors_stay_rejected_outside_scoped_blocks() {
+    assert!(parse_sheet("> .label { color: black; }").is_err());
+    assert!(parse_sheet("@media screen { > .label { color: black; } }").is_err());
 }
 
 #[test]

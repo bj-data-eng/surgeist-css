@@ -17,24 +17,117 @@ pub(super) fn parse_rule_selector_list<'i, 't>(
     Ok(selectors)
 }
 
+pub(super) fn parse_scope_boundary_selector_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssScopeSelectorList, ParseError<'i, Error>> {
+    let selectors = parse_rule_selector_list(input)?;
+    CssScopeSelectorList::try_new(selectors)
+        .ok_or_else(|| invalid_selector(input, "scope selector list must not be empty"))
+}
+
+pub(super) fn parse_scoped_style_selector_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssScopedStyleSelectorList, ParseError<'i, Error>> {
+    let mut selectors = Vec::new();
+    loop {
+        selectors.push(parse_scoped_style_selector(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+    }
+    input.expect_exhausted().map_err(selector_basic)?;
+    CssScopedStyleSelectorList::try_new(selectors)
+        .ok_or_else(|| invalid_selector(input, "scoped selector list must not be empty"))
+}
+
+fn parse_scoped_style_selector<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssScopedStyleSelector, ParseError<'i, Error>> {
+    consume_selector_whitespace(input)?;
+    let state = input.state();
+    match input.next_including_whitespace() {
+        Ok(Token::Delim('>')) => parse_selector_after_leading_combinator_with_options(
+            input,
+            CssSelectorCombinator::Child,
+            SelectorParseOptions::scoped_style(),
+        )
+        .map(CssScopedStyleSelector::Relative),
+        Ok(Token::Delim('+')) => parse_selector_after_leading_combinator_with_options(
+            input,
+            CssSelectorCombinator::NextSibling,
+            SelectorParseOptions::scoped_style(),
+        )
+        .map(CssScopedStyleSelector::Relative),
+        Ok(Token::Delim('~')) => parse_selector_after_leading_combinator_with_options(
+            input,
+            CssSelectorCombinator::SubsequentSibling,
+            SelectorParseOptions::scoped_style(),
+        )
+        .map(CssScopedStyleSelector::Relative),
+        Ok(Token::Delim('|')) => Err(invalid_selector(
+            input,
+            "unsupported selector combinator `||`",
+        )),
+        Ok(_) => {
+            input.reset(&state);
+            parse_rule_selector_with_options(input, SelectorParseOptions::scoped_style())
+                .map(CssScopedStyleSelector::Selector)
+        }
+        Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+            input.reset(&state);
+            Err(invalid_selector(input, "scoped selector is missing"))
+        }
+        Err(error) => Err(selector_basic(error)),
+    }
+}
+
 pub(super) fn parse_rule_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssSelector, ParseError<'i, Error>> {
-    parse_rule_selector_with_has_policy(input, true)
+    parse_rule_selector_with_options(input, SelectorParseOptions::standard())
 }
 
-fn parse_rule_selector_with_has_policy<'i, 't>(
-    input: &mut Parser<'i, 't>,
+#[derive(Clone, Copy)]
+struct SelectorParseOptions {
     allow_has: bool,
+    allow_scope_anchor: bool,
+}
+
+impl SelectorParseOptions {
+    const fn standard() -> Self {
+        Self {
+            allow_has: true,
+            allow_scope_anchor: false,
+        }
+    }
+
+    const fn without_nested_has() -> Self {
+        Self {
+            allow_has: false,
+            allow_scope_anchor: false,
+        }
+    }
+
+    const fn scoped_style() -> Self {
+        Self {
+            allow_has: true,
+            allow_scope_anchor: true,
+        }
+    }
+}
+
+fn parse_rule_selector_with_options<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    options: SelectorParseOptions,
 ) -> std::result::Result<CssSelector, ParseError<'i, Error>> {
-    let first = parse_compound_selector_model_with_has_policy(input, allow_has)?;
-    parse_selector_after_first_compound(input, first, allow_has)
+    let first = parse_compound_selector_model_with_options(input, options)?;
+    parse_selector_after_first_compound(input, first, options)
 }
 
 fn parse_selector_after_first_compound<'i, 't>(
     input: &mut Parser<'i, 't>,
     first: CssCompoundSelector,
-    allow_has: bool,
+    options: SelectorParseOptions,
 ) -> std::result::Result<CssSelector, ParseError<'i, Error>> {
     let mut rest = Vec::new();
 
@@ -52,24 +145,24 @@ fn parse_selector_after_first_compound<'i, 't>(
                 break;
             }
             Ok(Token::Delim('>')) => {
-                rest.push(parse_complex_selector_part_with_has_policy(
+                rest.push(parse_complex_selector_part_with_options(
                     input,
                     CssSelectorCombinator::Child,
-                    allow_has,
+                    options,
                 )?);
             }
             Ok(Token::Delim('+')) => {
-                rest.push(parse_complex_selector_part_with_has_policy(
+                rest.push(parse_complex_selector_part_with_options(
                     input,
                     CssSelectorCombinator::NextSibling,
-                    allow_has,
+                    options,
                 )?);
             }
             Ok(Token::Delim('~')) => {
-                rest.push(parse_complex_selector_part_with_has_policy(
+                rest.push(parse_complex_selector_part_with_options(
                     input,
                     CssSelectorCombinator::SubsequentSibling,
-                    allow_has,
+                    options,
                 )?);
             }
             Ok(Token::Delim('|')) => {
@@ -80,7 +173,7 @@ fn parse_selector_after_first_compound<'i, 't>(
             }
             Ok(_) if had_whitespace => {
                 input.reset(&state);
-                let selector = parse_compound_selector_model_with_has_policy(input, allow_has)?;
+                let selector = parse_compound_selector_model_with_options(input, options)?;
                 rest.push(CssComplexSelectorPart::new(
                     CssSelectorCombinator::Descendant,
                     selector,
@@ -105,16 +198,16 @@ pub(super) fn parse_complex_selector_part<'i, 't>(
     input: &mut Parser<'i, 't>,
     combinator: CssSelectorCombinator,
 ) -> std::result::Result<CssComplexSelectorPart, ParseError<'i, Error>> {
-    parse_complex_selector_part_with_has_policy(input, combinator, true)
+    parse_complex_selector_part_with_options(input, combinator, SelectorParseOptions::standard())
 }
 
-fn parse_complex_selector_part_with_has_policy<'i, 't>(
+fn parse_complex_selector_part_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
     combinator: CssSelectorCombinator,
-    allow_has: bool,
+    options: SelectorParseOptions,
 ) -> std::result::Result<CssComplexSelectorPart, ParseError<'i, Error>> {
     consume_selector_whitespace(input)?;
-    let selector = parse_compound_selector_model_with_has_policy(input, allow_has)?;
+    let selector = parse_compound_selector_model_with_options(input, options)?;
     Ok(CssComplexSelectorPart::new(combinator, selector))
 }
 
@@ -142,12 +235,12 @@ pub(super) fn consume_selector_whitespace<'i, 't>(
 pub(super) fn parse_compound_selector_model<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssCompoundSelector, ParseError<'i, Error>> {
-    parse_compound_selector_model_with_has_policy(input, true)
+    parse_compound_selector_model_with_options(input, SelectorParseOptions::standard())
 }
 
-fn parse_compound_selector_model_with_has_policy<'i, 't>(
+fn parse_compound_selector_model_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
-    allow_has: bool,
+    options: SelectorParseOptions,
 ) -> std::result::Result<CssCompoundSelector, ParseError<'i, Error>> {
     loop {
         let state = input.state();
@@ -166,6 +259,7 @@ fn parse_compound_selector_model_with_has_policy<'i, 't>(
     }
 
     let mut tag_name = None;
+    let mut scope_anchor = false;
     let mut key_name = None;
     let mut class_names = Vec::new();
     let mut attributes = Vec::new();
@@ -188,6 +282,23 @@ fn parse_compound_selector_model_with_has_policy<'i, 't>(
             Err(error) => return Err(selector_basic(error)),
         }
 
+        if input.try_parse(|input| input.expect_delim('&')).is_ok() {
+            if !options.allow_scope_anchor {
+                return Err(invalid_selector(
+                    input,
+                    "scope anchor selector `&` is only supported inside scoped rules",
+                ));
+            }
+            if scope_anchor {
+                return Err(invalid_selector(
+                    input,
+                    "scope anchor selector `&` is only supported once per compound selector",
+                ));
+            }
+            scope_anchor = true;
+            continue;
+        }
+
         if input.try_parse(|input| input.expect_delim('.')).is_ok() {
             let class = input.expect_ident_cloned().map_err(selector_basic)?;
             let class = class.to_string();
@@ -202,7 +313,7 @@ fn parse_compound_selector_model_with_has_policy<'i, 't>(
         }
 
         if input.try_parse(Parser::expect_colon).is_ok() {
-            let pseudo_class = parse_pseudo_class_with_has_policy(input, allow_has)?;
+            let pseudo_class = parse_pseudo_class_with_options(input, options)?;
             pseudo_classes.push(pseudo_class);
             continue;
         }
@@ -220,6 +331,7 @@ fn parse_compound_selector_model_with_has_policy<'i, 't>(
                 let message = format!("unexpected selector token `{}`", token.to_css_string());
                 input.reset(&state);
                 if tag_name.is_none()
+                    && !scope_anchor
                     && key_name.is_none()
                     && class_names.is_empty()
                     && attributes.is_empty()
@@ -235,6 +347,7 @@ fn parse_compound_selector_model_with_has_policy<'i, 't>(
     }
 
     if tag_name.is_none()
+        && !scope_anchor
         && key_name.is_none()
         && class_names.is_empty()
         && attributes.is_empty()
@@ -245,8 +358,9 @@ fn parse_compound_selector_model_with_has_policy<'i, 't>(
             "selector is missing a simple selector",
         ));
     }
-    if let (None, None, [class], [], []) = (
+    if let (None, false, None, [class], [], []) = (
         tag_name.as_ref(),
+        scope_anchor,
         key_name.as_ref(),
         class_names.as_slice(),
         attributes.as_slice(),
@@ -260,8 +374,9 @@ fn parse_compound_selector_model_with_has_policy<'i, 't>(
             Vec::new(),
         ));
     }
-    if let (Some(tag), None, [], [], []) = (
+    if let (Some(tag), false, None, [], [], []) = (
         tag_name.as_ref(),
+        scope_anchor,
         key_name.as_ref(),
         class_names.as_slice(),
         attributes.as_slice(),
@@ -275,8 +390,9 @@ fn parse_compound_selector_model_with_has_policy<'i, 't>(
             Vec::new(),
         ));
     }
-    if let (None, Some(key), [], [], []) = (
+    if let (None, false, Some(key), [], [], []) = (
         tag_name.as_ref(),
+        scope_anchor,
         key_name.as_ref(),
         class_names.as_slice(),
         attributes.as_slice(),
@@ -290,8 +406,9 @@ fn parse_compound_selector_model_with_has_policy<'i, 't>(
             Vec::new(),
         ));
     }
-    if let (None, None, [], [], [pseudo_class]) = (
+    if let (None, false, None, [], [], [pseudo_class]) = (
         tag_name.as_ref(),
+        scope_anchor,
         key_name.as_ref(),
         class_names.as_slice(),
         attributes.as_slice(),
@@ -305,7 +422,8 @@ fn parse_compound_selector_model_with_has_policy<'i, 't>(
             vec![pseudo_class.clone()],
         ));
     }
-    Ok(CssCompoundSelector::new(
+    Ok(CssCompoundSelector::new_with_scope_anchor(
+        scope_anchor,
         tag_name,
         key_name,
         class_names,
@@ -441,14 +559,15 @@ fn parse_attribute_case_sensitivity<'i, 't>(
     }
 }
 
-fn parse_pseudo_class_with_has_policy<'i, 't>(
+fn parse_pseudo_class_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
-    allow_has: bool,
+    options: SelectorParseOptions,
 ) -> std::result::Result<CssPseudoClass, ParseError<'i, Error>> {
     let state = input.state();
     match input.next() {
         Ok(Token::Ident(name)) => match_ignore_ascii_case! { &name,
             "root" => Ok(CssPseudoClass::Root),
+            "scope" => Ok(CssPseudoClass::Scope),
             "hover" => Ok(CssPseudoClass::Hover),
             "active" => Ok(CssPseudoClass::Active),
             "focus" => Ok(CssPseudoClass::Focus),
@@ -488,19 +607,19 @@ fn parse_pseudo_class_with_has_policy<'i, 't>(
             input.parse_nested_block(|input| {
                 let pseudo_class = match_ignore_ascii_case! { &name,
                     "nth-child" => {
-                        CssPseudoClass::NthChild(parse_nth_child_pattern(input, allow_has)?)
+                        CssPseudoClass::NthChild(parse_nth_child_pattern(input, options)?)
                     },
                     "nth-last-child" => {
-                        CssPseudoClass::NthLastChild(parse_nth_child_pattern(input, allow_has)?)
+                        CssPseudoClass::NthLastChild(parse_nth_child_pattern(input, options)?)
                     },
                     "nth-of-type" => CssPseudoClass::NthOfType(parse_nth_pattern(input)?),
                     "nth-last-of-type" => {
                         CssPseudoClass::NthLastOfType(parse_nth_pattern(input)?)
                     },
-                    "not" => CssPseudoClass::Not(parse_pseudo_selector_list_with_has_policy(input, allow_has)?),
-                    "is" => CssPseudoClass::Is(parse_pseudo_selector_list_with_has_policy(input, allow_has)?),
-                    "where" => CssPseudoClass::Where(parse_pseudo_selector_list_with_has_policy(input, allow_has)?),
-                    "has" if allow_has => CssPseudoClass::Has(parse_has_relative_selector_list(input)?),
+                    "not" => CssPseudoClass::Not(parse_pseudo_selector_list_with_options(input, options)?),
+                    "is" => CssPseudoClass::Is(parse_pseudo_selector_list_with_options(input, options)?),
+                    "where" => CssPseudoClass::Where(parse_pseudo_selector_list_with_options(input, options)?),
+                    "has" if options.allow_has => CssPseudoClass::Has(parse_has_relative_selector_list(input)?),
                     "has" => {
                         return Err(invalid_selector(input, "nested `:has()` is unsupported"));
                     },
@@ -525,22 +644,22 @@ fn parse_pseudo_class_with_has_policy<'i, 't>(
     }
 }
 
-fn parse_pseudo_selector_list_with_has_policy<'i, 't>(
+fn parse_pseudo_selector_list_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
-    allow_has: bool,
+    options: SelectorParseOptions,
 ) -> std::result::Result<CssPseudoSelectorList, ParseError<'i, Error>> {
-    let selectors = parse_pseudo_selector_list_items_with_has_policy(input, allow_has)?;
+    let selectors = parse_pseudo_selector_list_items_with_options(input, options)?;
     CssPseudoSelectorList::try_new(selectors)
         .ok_or_else(|| invalid_selector(input, "pseudo-class selector list must not be empty"))
 }
 
-fn parse_pseudo_selector_list_items_with_has_policy<'i, 't>(
+fn parse_pseudo_selector_list_items_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
-    allow_has: bool,
+    options: SelectorParseOptions,
 ) -> std::result::Result<Vec<CssSelector>, ParseError<'i, Error>> {
     let mut selectors = Vec::new();
     loop {
-        selectors.push(parse_rule_selector_with_has_policy(input, allow_has)?);
+        selectors.push(parse_rule_selector_with_options(input, options)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -585,7 +704,10 @@ fn parse_has_relative_selector<'i, 't>(
         )),
         Ok(_) => {
             input.reset(&state);
-            let selector = parse_rule_selector_with_has_policy(input, false)?;
+            let selector = parse_rule_selector_with_options(
+                input,
+                SelectorParseOptions::without_nested_has(),
+            )?;
             Ok(CssRelativeSelector::new(
                 CssSelectorCombinator::Descendant,
                 selector,
@@ -603,21 +725,33 @@ fn parse_selector_after_leading_combinator<'i, 't>(
     input: &mut Parser<'i, 't>,
     combinator: CssSelectorCombinator,
 ) -> std::result::Result<CssRelativeSelector, ParseError<'i, Error>> {
+    parse_selector_after_leading_combinator_with_options(
+        input,
+        combinator,
+        SelectorParseOptions::without_nested_has(),
+    )
+}
+
+fn parse_selector_after_leading_combinator_with_options<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    combinator: CssSelectorCombinator,
+    options: SelectorParseOptions,
+) -> std::result::Result<CssRelativeSelector, ParseError<'i, Error>> {
     consume_selector_whitespace(input)?;
-    let first = parse_compound_selector_model_with_has_policy(input, false)?;
-    let selector = parse_selector_after_first_compound(input, first, false)?;
+    let first = parse_compound_selector_model_with_options(input, options)?;
+    let selector = parse_selector_after_first_compound(input, first, options)?;
     Ok(CssRelativeSelector::new(combinator, selector))
 }
 
 fn parse_nth_child_pattern<'i, 't>(
     input: &mut Parser<'i, 't>,
-    allow_has: bool,
+    options: SelectorParseOptions,
 ) -> std::result::Result<CssNthChildPattern, ParseError<'i, Error>> {
     let pattern = parse_nth_pattern(input)?;
     let state = input.state();
     match input.next() {
         Ok(Token::Ident(value)) if value.eq_ignore_ascii_case("of") => {
-            let selector_list = parse_pseudo_selector_list_with_has_policy(input, allow_has)?;
+            let selector_list = parse_pseudo_selector_list_with_options(input, options)?;
             Ok(CssNthChildPattern::new(pattern, Some(selector_list)))
         }
         Ok(_) => {

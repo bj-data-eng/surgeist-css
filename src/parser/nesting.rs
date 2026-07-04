@@ -9,7 +9,10 @@ use super::selectors::{
     consume_selector_whitespace, parse_complex_selector_part, parse_compound_selector_model,
     parse_rule_selector,
 };
-use super::{CssContainerPrelude, StrictDeclarationParser, parse_container_prelude};
+use super::{
+    CssContainerPrelude, CssScopePrelude, StrictDeclarationParser, parse_container_prelude,
+    parse_layer_prelude, parse_scope_prelude, parse_scoped_rule_list,
+};
 use crate::error::{Error, invalid_selector, invalid_syntax, selector_basic};
 use crate::syntax::*;
 
@@ -77,6 +80,8 @@ enum StyleBlockItem {
 enum NestedStyleAtRulePrelude {
     Media(CssMediaQueryList),
     Container(CssContainerPrelude),
+    Layer(Vec<CssLayerName>),
+    Scope(CssScopePrelude),
 }
 
 impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
@@ -110,6 +115,8 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
                 }
                 Ok(NestedStyleAtRulePrelude::Container(prelude))
             },
+            "layer" => Ok(NestedStyleAtRulePrelude::Layer(parse_layer_prelude(input)?)),
+            "scope" => Ok(NestedStyleAtRulePrelude::Scope(parse_scope_prelude(input)?)),
             "import" => Err(invalid_syntax(
                 input.current_source_location(),
                 "@import rules are not supported inside style blocks",
@@ -140,15 +147,44 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
         start: &ParserState,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::AtRule, ParseError<'i, Self::Error>> {
-        let rules = parse_style_rule_block(self.parent_selectors.clone(), input)?;
         let location = CssSourceLocation::from_cssparser(start.source_location());
         let rule = match prelude {
             NestedStyleAtRulePrelude::Media(query) => {
+                let rules = parse_style_rule_block(self.parent_selectors.clone(), input)?;
                 CssRule::Media(CssMediaRule::new(query, rules, location))
             }
-            NestedStyleAtRulePrelude::Container(prelude) => CssRule::Container(
-                CssContainerRule::new(prelude.name, prelude.condition, rules, location),
-            ),
+            NestedStyleAtRulePrelude::Container(prelude) => {
+                let rules = parse_style_rule_block(self.parent_selectors.clone(), input)?;
+                CssRule::Container(CssContainerRule::new(
+                    prelude.name,
+                    prelude.condition,
+                    rules,
+                    location,
+                ))
+            }
+            NestedStyleAtRulePrelude::Layer(names) => {
+                if names.len() > 1 {
+                    return Err(invalid_syntax(
+                        start.source_location(),
+                        "@layer block rules accept at most one layer name",
+                    ));
+                }
+                let rules = parse_style_rule_block(self.parent_selectors.clone(), input)?;
+                CssRule::LayerBlock(CssLayerBlockRule::new(
+                    names.into_iter().next(),
+                    rules,
+                    location,
+                ))
+            }
+            NestedStyleAtRulePrelude::Scope(prelude) => {
+                let rules = parse_scoped_rule_list(input)?;
+                CssRule::Scope(CssScopeRule::new(
+                    prelude.root,
+                    prelude.limit,
+                    rules,
+                    location,
+                ))
+            }
         };
         Ok(StyleBlockItem::NestedRules(vec![rule]))
     }

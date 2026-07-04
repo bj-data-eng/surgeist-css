@@ -71,6 +71,80 @@ fn font_face_rule(rule: &CssRule) -> &CssFontFaceRule {
 }
 
 #[test]
+fn keyframes_rule_accessors_expose_authored_structure() {
+    let name = CssKeyframesName::Ident(CssCustomIdent::new("fade"));
+    let selector = CssKeyframeSelectorList::try_new(vec![CssKeyframeSelector::From]).unwrap();
+    let declaration = CssDeclaration::new(
+        CssProperty::Opacity,
+        CssValue::Opacity(CssOpacity::try_new(0.0).unwrap()),
+        CssSourceLocation::new(1, 1),
+    );
+    let block = CssKeyframeBlock::try_new(
+        selector,
+        vec![declaration.clone()],
+        CssSourceLocation::new(2, 3),
+    )
+    .unwrap();
+    let rule = CssKeyframesRule::try_new(name, vec![block], CssSourceLocation::new(1, 1)).unwrap();
+
+    assert_eq!(
+        rule.name(),
+        &CssKeyframesName::Ident(CssCustomIdent::new("fade"))
+    );
+    assert_eq!(rule.location(), CssSourceLocation::new(1, 1));
+    let [block] = rule.blocks() else {
+        panic!("expected one keyframe block");
+    };
+    assert_eq!(block.location(), CssSourceLocation::new(2, 3));
+    assert_eq!(block.selectors().selectors(), &[CssKeyframeSelector::From]);
+    assert_eq!(block.declarations(), &[declaration]);
+    assert_eq!(CssKeyframeSelector::From.offset().value().value(), 0.0);
+    assert_eq!(CssKeyframeSelector::To.offset().value().value(), 100.0);
+}
+
+#[test]
+fn keyframes_constructors_reject_invalid_states() {
+    let location = CssSourceLocation::new(1, 1);
+    let name = CssKeyframesName::Ident(CssCustomIdent::new("fade"));
+    let declaration = CssDeclaration::new(
+        CssProperty::Opacity,
+        CssValue::Opacity(CssOpacity::try_new(1.0).unwrap()),
+        location,
+    );
+    let from = CssKeyframeSelectorList::try_new(vec![CssKeyframeSelector::From]).unwrap();
+
+    assert_eq!(CssKeyframesString::try_new(""), None);
+    assert_eq!(CssKeyframesString::try_new("   "), None);
+    assert_eq!(CssKeyframePercent::try_new(-0.1), None);
+    assert_eq!(CssKeyframePercent::try_new(100.1), None);
+    assert_eq!(CssKeyframePercent::try_new(f32::NAN), None);
+    assert_eq!(CssKeyframeSelectorList::try_new(Vec::new()), None);
+    assert_eq!(
+        CssKeyframeSelectorList::try_new(vec![
+            CssKeyframeSelector::From,
+            CssKeyframeSelector::Percent(CssKeyframePercent::new(0.0)),
+        ]),
+        None
+    );
+    assert_eq!(
+        CssKeyframeBlock::try_new(from.clone(), Vec::new(), location),
+        None
+    );
+    assert_eq!(
+        CssKeyframesRule::try_new(name.clone(), Vec::new(), location),
+        None
+    );
+
+    let duplicate_a =
+        CssKeyframeBlock::try_new(from.clone(), vec![declaration.clone()], location).unwrap();
+    let duplicate_b = CssKeyframeBlock::try_new(from, vec![declaration], location).unwrap();
+    assert_eq!(
+        CssKeyframesRule::try_new(name, vec![duplicate_a, duplicate_b], location),
+        None
+    );
+}
+
+#[test]
 fn import_layer_name_rejects_empty_components() {
     assert!(CssLayerName::try_new(["theme"]).is_some());
     assert!(CssLayerName::try_new(["theme", "components"]).is_some());

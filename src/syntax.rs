@@ -37,6 +37,7 @@ impl CssSheet {
 pub enum CssRule {
     Import(CssImportRule),
     FontFace(CssFontFaceRule),
+    Keyframes(CssKeyframesRule),
     Style(CssStyleRule),
     Media(CssMediaRule),
     Container(CssContainerRule),
@@ -184,6 +185,246 @@ impl CssFontFaceRule {
     pub const fn location(&self) -> CssSourceLocation {
         self.location
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssKeyframesRule {
+    name: CssKeyframesName,
+    blocks: Vec<CssKeyframeBlock>,
+    location: CssSourceLocation,
+}
+
+impl CssKeyframesRule {
+    #[must_use]
+    pub fn try_new(
+        name: CssKeyframesName,
+        blocks: Vec<CssKeyframeBlock>,
+        location: CssSourceLocation,
+    ) -> Option<Self> {
+        if blocks.is_empty() || keyframe_blocks_have_duplicate_offsets(&blocks) {
+            None
+        } else {
+            Some(Self::new(name, blocks, location))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(
+        name: CssKeyframesName,
+        blocks: Vec<CssKeyframeBlock>,
+        location: CssSourceLocation,
+    ) -> Self {
+        debug_assert!(!blocks.is_empty());
+        debug_assert!(!keyframe_blocks_have_duplicate_offsets(&blocks));
+        Self {
+            name,
+            blocks,
+            location,
+        }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> &CssKeyframesName {
+        &self.name
+    }
+
+    #[must_use]
+    pub fn blocks(&self) -> &[CssKeyframeBlock] {
+        &self.blocks
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssKeyframesName {
+    Ident(CssCustomIdent),
+    String(CssKeyframesString),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssKeyframesString {
+    value: String,
+}
+
+impl CssKeyframesString {
+    #[must_use]
+    pub fn try_new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            None
+        } else {
+            Some(Self::new(value))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(value: impl Into<String>) -> Self {
+        let value = value.into();
+        debug_assert!(!value.trim().is_empty());
+        Self { value }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssKeyframeBlock {
+    selectors: CssKeyframeSelectorList,
+    declarations: Vec<CssDeclaration>,
+    location: CssSourceLocation,
+}
+
+impl CssKeyframeBlock {
+    #[must_use]
+    pub fn try_new(
+        selectors: CssKeyframeSelectorList,
+        declarations: Vec<CssDeclaration>,
+        location: CssSourceLocation,
+    ) -> Option<Self> {
+        if declarations.is_empty() {
+            None
+        } else {
+            Some(Self::new(selectors, declarations, location))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(
+        selectors: CssKeyframeSelectorList,
+        declarations: Vec<CssDeclaration>,
+        location: CssSourceLocation,
+    ) -> Self {
+        debug_assert!(!declarations.is_empty());
+        Self {
+            selectors,
+            declarations,
+            location,
+        }
+    }
+
+    #[must_use]
+    pub const fn selectors(&self) -> &CssKeyframeSelectorList {
+        &self.selectors
+    }
+
+    #[must_use]
+    pub fn declarations(&self) -> &[CssDeclaration] {
+        &self.declarations
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssKeyframeSelectorList {
+    selectors: Vec<CssKeyframeSelector>,
+}
+
+impl CssKeyframeSelectorList {
+    #[must_use]
+    pub fn try_new(selectors: Vec<CssKeyframeSelector>) -> Option<Self> {
+        if selectors.is_empty() || keyframe_selectors_have_duplicate_offsets(&selectors) {
+            None
+        } else {
+            Some(Self::new(selectors))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(selectors: Vec<CssKeyframeSelector>) -> Self {
+        debug_assert!(!selectors.is_empty());
+        debug_assert!(!keyframe_selectors_have_duplicate_offsets(&selectors));
+        Self { selectors }
+    }
+
+    #[must_use]
+    pub fn selectors(&self) -> &[CssKeyframeSelector] {
+        &self.selectors
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CssKeyframeSelector {
+    From,
+    To,
+    Percent(CssKeyframePercent),
+}
+
+impl CssKeyframeSelector {
+    #[must_use]
+    pub fn offset(self) -> CssKeyframePercent {
+        match self {
+            Self::From => CssKeyframePercent::new(0.0),
+            Self::To => CssKeyframePercent::new(100.0),
+            Self::Percent(percent) => percent,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssKeyframePercent {
+    value: CssFiniteNumber,
+}
+
+impl CssKeyframePercent {
+    #[must_use]
+    pub fn try_new(value: f32) -> Option<Self> {
+        if (0.0..=100.0).contains(&value) {
+            CssFiniteNumber::try_new(value).map(|value| Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(value: f32) -> Self {
+        debug_assert!((0.0..=100.0).contains(&value));
+        debug_assert!(value.is_finite());
+        Self {
+            value: CssFiniteNumber::new_unchecked(value),
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> CssFiniteNumber {
+        self.value
+    }
+}
+
+fn keyframe_blocks_have_duplicate_offsets(blocks: &[CssKeyframeBlock]) -> bool {
+    let mut offsets = Vec::new();
+    for block in blocks {
+        for selector in block.selectors().selectors() {
+            let offset = selector.offset().value().value();
+            if offsets.contains(&offset) {
+                return true;
+            }
+            offsets.push(offset);
+        }
+    }
+    false
+}
+
+fn keyframe_selectors_have_duplicate_offsets(selectors: &[CssKeyframeSelector]) -> bool {
+    let mut offsets = Vec::new();
+    for selector in selectors {
+        let offset = selector.offset().value().value();
+        if offsets.contains(&offset) {
+            return true;
+        }
+        offsets.push(offset);
+    }
+    false
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -5162,6 +5403,7 @@ impl CssTransitionPropertyList {
 pub enum CssAnimationName {
     None,
     Custom(CssCustomIdent),
+    String(CssKeyframesString),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -38,6 +38,18 @@ fn single_declaration(input: &str) -> CssDeclaration {
     declaration.clone()
 }
 
+fn filter_arguments(css: &str) -> CssFilterArguments {
+    CssFilterArguments::new(CssAuthoredFunctionArguments::new(css))
+}
+
+fn basic_shape_arguments(css: &str) -> CssBasicShapeArguments {
+    CssBasicShapeArguments::new(CssAuthoredFunctionArguments::new(css))
+}
+
+fn easing_arguments(css: &str) -> CssEasingArguments {
+    CssEasingArguments::new(CssAuthoredFunctionArguments::new(css))
+}
+
 #[test]
 fn background_color_preserves_authored_property_identity() {
     let declaration = single_declaration(".panel { background-color: black; }");
@@ -3685,8 +3697,8 @@ fn parses_transform_effect_and_mask_properties_as_authored_syntax() {
             CssProperty::Filter
         ),
         CssValue::Filter(CssFilter::Functions(CssFilterFunctionList::new(vec![
-            CssFilterFunction::Blur(CssFunctionArguments::new("4px")),
-            CssFilterFunction::Opacity(CssFunctionArguments::new("50%")),
+            CssFilterFunction::Blur(filter_arguments("4px")),
+            CssFilterFunction::Opacity(filter_arguments("50%")),
         ])))
     );
     assert_eq!(
@@ -3702,7 +3714,7 @@ fn parses_transform_effect_and_mask_properties_as_authored_syntax() {
             CssProperty::ClipPath
         ),
         CssValue::ClipPath(CssClipPath::BasicShape(CssBasicShape::Circle(
-            CssFunctionArguments::new("50% at center"),
+            basic_shape_arguments("50% at center"),
         )))
     );
     assert_eq!(
@@ -3722,6 +3734,65 @@ fn parses_transform_effect_and_mask_properties_as_authored_syntax() {
         panic!("expected mask shorthand");
     };
     assert_eq!(mask_layers.layers().len(), 1);
+}
+
+#[test]
+fn authored_transform_filter_easing_and_basic_shape_arguments_preserve_css_with_family_context() {
+    fn transform_css(arguments: &CssTransformArguments) -> &str {
+        arguments.as_css()
+    }
+    fn filter_css(arguments: &CssFilterArguments) -> &str {
+        arguments.as_css()
+    }
+    fn basic_shape_css(arguments: &CssBasicShapeArguments) -> &str {
+        arguments.as_css()
+    }
+    fn easing_css(arguments: &CssEasingArguments) -> &str {
+        arguments.as_css()
+    }
+
+    let CssValue::Transform(CssTransform::Functions(functions)) = declaration_value(
+        ".panel { transform: translate(10px, 20px) rotate(45deg); }",
+        CssProperty::Transform,
+    ) else {
+        panic!("expected transform functions");
+    };
+    assert_eq!(
+        transform_css(functions.functions()[0].arguments()),
+        "10px, 20px"
+    );
+
+    let CssValue::Filter(CssFilter::Functions(functions)) = declaration_value(
+        ".panel { filter: blur(4px) opacity(50%); }",
+        CssProperty::Filter,
+    ) else {
+        panic!("expected filter functions");
+    };
+    let CssFilterFunction::Opacity(arguments) = &functions.functions()[1] else {
+        panic!("expected opacity filter");
+    };
+    assert_eq!(filter_css(arguments), "50%");
+
+    let CssValue::ClipPath(CssClipPath::BasicShape(CssBasicShape::Circle(arguments))) =
+        declaration_value(
+            ".panel { clip-path: circle(50% at center); }",
+            CssProperty::ClipPath,
+        )
+    else {
+        panic!("expected basic shape clip-path");
+    };
+    assert_eq!(basic_shape_css(&arguments), "50% at center");
+
+    let CssValue::EasingList(easings) = declaration_value(
+        ".panel { transition-timing-function: cubic-bezier(0.1, 0.2, 0.3, 1); }",
+        CssProperty::TransitionTimingFunction,
+    ) else {
+        panic!("expected easing list");
+    };
+    let CssEasing::CubicBezier(arguments) = &easings.easings()[0] else {
+        panic!("expected cubic-bezier easing");
+    };
+    assert_eq!(easing_css(arguments), "0.1, 0.2, 0.3, 1");
 }
 
 #[test]
@@ -3753,7 +3824,7 @@ fn parses_transition_properties_and_preserves_comma_lists() {
         ),
         CssValue::EasingList(CssEasingList::new(vec![
             CssEasing::EaseIn,
-            CssEasing::CubicBezier(CssFunctionArguments::new("0.1, 0.2, 0.3, 1")),
+            CssEasing::CubicBezier(easing_arguments("0.1, 0.2, 0.3, 1")),
         ]))
     );
 

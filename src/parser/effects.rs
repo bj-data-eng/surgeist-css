@@ -81,7 +81,7 @@ pub(super) fn parse_transform_function_kind<'i, 't>(
 pub(super) fn parse_transform_function_arguments<'i, 't>(
     input: &mut Parser<'i, 't>,
     kind: CssTransformFunctionKind,
-) -> std::result::Result<CssFunctionArguments, ParseError<'i, Error>> {
+) -> std::result::Result<CssTransformArguments, ParseError<'i, Error>> {
     parse_validated_function_arguments(input, "transform function", |input| match kind {
         CssTransformFunctionKind::Translate => validate_length_sequence(input, 1, 2),
         CssTransformFunctionKind::TranslateX
@@ -110,12 +110,13 @@ pub(super) fn parse_transform_function_arguments<'i, 't>(
         CssTransformFunctionKind::Matrix => validate_number_sequence(input, 6, 6),
         CssTransformFunctionKind::Matrix3d => validate_number_sequence(input, 16, 16),
     })
+    .map(CssTransformArguments::new)
 }
 
 pub(super) fn parse_filter_function_arguments<'i, 't>(
     input: &mut Parser<'i, 't>,
     name: &str,
-) -> std::result::Result<CssFunctionArguments, ParseError<'i, Error>> {
+) -> std::result::Result<CssFilterArguments, ParseError<'i, Error>> {
     parse_validated_function_arguments(input, "filter function", |input| {
         match name.to_ascii_lowercase().as_str() {
             "blur" => validate_non_negative_length(input),
@@ -126,12 +127,13 @@ pub(super) fn parse_filter_function_arguments<'i, 't>(
             _ => false,
         }
     })
+    .map(CssFilterArguments::new)
 }
 
 pub(super) fn parse_basic_shape_arguments<'i, 't>(
     input: &mut Parser<'i, 't>,
     name: &str,
-) -> std::result::Result<CssFunctionArguments, ParseError<'i, Error>> {
+) -> std::result::Result<CssBasicShapeArguments, ParseError<'i, Error>> {
     parse_validated_function_arguments(input, "basic shape", |input| {
         match name.to_ascii_lowercase().as_str() {
             "circle" => validate_circle_shape(input),
@@ -141,12 +143,13 @@ pub(super) fn parse_basic_shape_arguments<'i, 't>(
             _ => false,
         }
     })
+    .map(CssBasicShapeArguments::new)
 }
 
 pub(super) fn parse_easing_function_arguments<'i, 't>(
     input: &mut Parser<'i, 't>,
     name: &str,
-) -> std::result::Result<CssFunctionArguments, ParseError<'i, Error>> {
+) -> std::result::Result<CssEasingArguments, ParseError<'i, Error>> {
     parse_validated_function_arguments(input, "easing function", |input| {
         match name.to_ascii_lowercase().as_str() {
             "cubic-bezier" => validate_cubic_bezier(input),
@@ -154,13 +157,14 @@ pub(super) fn parse_easing_function_arguments<'i, 't>(
             _ => false,
         }
     })
+    .map(CssEasingArguments::new)
 }
 
 pub(super) fn parse_validated_function_arguments<'i, 't>(
     input: &mut Parser<'i, 't>,
     context: &str,
     validate: impl for<'a, 'b> FnMut(&mut Parser<'a, 'b>) -> bool,
-) -> std::result::Result<CssFunctionArguments, ParseError<'i, Error>> {
+) -> std::result::Result<CssAuthoredFunctionArguments, ParseError<'i, Error>> {
     let value = collect_authored_tokens(input)?;
     if value.is_empty() {
         return Err(unsupported_value(
@@ -176,7 +180,7 @@ pub(super) fn parse_validated_function_arguments<'i, 't>(
             format!("invalid {context} arguments"),
         ));
     }
-    Ok(CssFunctionArguments::new(value))
+    Ok(CssAuthoredFunctionArguments::new(value))
 }
 
 pub(super) fn validate_authored_function_arguments(

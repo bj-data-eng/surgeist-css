@@ -2785,21 +2785,87 @@ impl CssUrl {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CssFunctionArguments {
-    value: String,
+pub struct CssAuthoredFunctionArguments {
+    css: String,
 }
 
-impl CssFunctionArguments {
+impl CssAuthoredFunctionArguments {
     #[must_use]
-    pub(crate) fn new(value: impl Into<String>) -> Self {
-        Self {
-            value: value.into(),
-        }
+    pub(crate) fn new(css: impl Into<String>) -> Self {
+        Self { css: css.into() }
     }
 
     #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.value
+    pub fn as_css(&self) -> &str {
+        &self.css
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssTransformArguments {
+    authored: CssAuthoredFunctionArguments,
+}
+
+impl CssTransformArguments {
+    #[must_use]
+    pub(crate) const fn new(authored: CssAuthoredFunctionArguments) -> Self {
+        Self { authored }
+    }
+
+    #[must_use]
+    pub fn as_css(&self) -> &str {
+        self.authored.as_css()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssFilterArguments {
+    authored: CssAuthoredFunctionArguments,
+}
+
+impl CssFilterArguments {
+    #[must_use]
+    pub(crate) const fn new(authored: CssAuthoredFunctionArguments) -> Self {
+        Self { authored }
+    }
+
+    #[must_use]
+    pub fn as_css(&self) -> &str {
+        self.authored.as_css()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssBasicShapeArguments {
+    authored: CssAuthoredFunctionArguments,
+}
+
+impl CssBasicShapeArguments {
+    #[must_use]
+    pub(crate) const fn new(authored: CssAuthoredFunctionArguments) -> Self {
+        Self { authored }
+    }
+
+    #[must_use]
+    pub fn as_css(&self) -> &str {
+        self.authored.as_css()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssEasingArguments {
+    authored: CssAuthoredFunctionArguments,
+}
+
+impl CssEasingArguments {
+    #[must_use]
+    pub(crate) const fn new(authored: CssAuthoredFunctionArguments) -> Self {
+        Self { authored }
+    }
+
+    #[must_use]
+    pub fn as_css(&self) -> &str {
+        self.authored.as_css()
     }
 }
 
@@ -3285,12 +3351,12 @@ pub enum CssTransformFunctionKind {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssTransformFunction {
     kind: CssTransformFunctionKind,
-    arguments: CssFunctionArguments,
+    arguments: CssTransformArguments,
 }
 
 impl CssTransformFunction {
     #[must_use]
-    pub const fn new(kind: CssTransformFunctionKind, arguments: CssFunctionArguments) -> Self {
+    pub const fn new(kind: CssTransformFunctionKind, arguments: CssTransformArguments) -> Self {
         Self { kind, arguments }
     }
 
@@ -3300,7 +3366,7 @@ impl CssTransformFunction {
     }
 
     #[must_use]
-    pub const fn arguments(&self) -> &CssFunctionArguments {
+    pub const fn arguments(&self) -> &CssTransformArguments {
         &self.arguments
     }
 }
@@ -3409,16 +3475,16 @@ impl CssScaleValues {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CssFilterFunction {
-    Blur(CssFunctionArguments),
-    Brightness(CssFunctionArguments),
-    Contrast(CssFunctionArguments),
-    DropShadow(CssFunctionArguments),
-    Grayscale(CssFunctionArguments),
-    HueRotate(CssFunctionArguments),
-    Invert(CssFunctionArguments),
-    Opacity(CssFunctionArguments),
-    Saturate(CssFunctionArguments),
-    Sepia(CssFunctionArguments),
+    Blur(CssFilterArguments),
+    Brightness(CssFilterArguments),
+    Contrast(CssFilterArguments),
+    DropShadow(CssFilterArguments),
+    Grayscale(CssFilterArguments),
+    HueRotate(CssFilterArguments),
+    Invert(CssFilterArguments),
+    Opacity(CssFilterArguments),
+    Saturate(CssFilterArguments),
+    Sepia(CssFilterArguments),
     Url(CssUrl),
 }
 
@@ -3456,10 +3522,10 @@ pub enum CssFilter {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CssBasicShape {
-    Inset(CssFunctionArguments),
-    Circle(CssFunctionArguments),
-    Ellipse(CssFunctionArguments),
-    Polygon(CssFunctionArguments),
+    Inset(CssBasicShapeArguments),
+    Circle(CssBasicShapeArguments),
+    Ellipse(CssBasicShapeArguments),
+    Polygon(CssBasicShapeArguments),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3620,8 +3686,8 @@ pub enum CssEasing {
     EaseInOut,
     StepStart,
     StepEnd,
-    CubicBezier(CssFunctionArguments),
-    Steps(CssFunctionArguments),
+    CubicBezier(CssEasingArguments),
+    Steps(CssEasingArguments),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

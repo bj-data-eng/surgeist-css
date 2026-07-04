@@ -4410,7 +4410,13 @@ pub enum CssSelector {
     Tag(String),
     Key(String),
     Class(String),
+    PseudoClass(CssPseudoClass),
     Compound(CssCompoundSelector),
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CssPseudoClass {
+    Root,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -4418,12 +4424,23 @@ pub struct CssCompoundSelector {
     tag: Option<String>,
     key: Option<String>,
     classes: Vec<String>,
+    pseudo_classes: Vec<CssPseudoClass>,
 }
 
 impl CssCompoundSelector {
     #[must_use]
-    pub(crate) fn new(tag: Option<String>, key: Option<String>, classes: Vec<String>) -> Self {
-        Self { tag, key, classes }
+    pub(crate) fn new(
+        tag: Option<String>,
+        key: Option<String>,
+        classes: Vec<String>,
+        pseudo_classes: Vec<CssPseudoClass>,
+    ) -> Self {
+        Self {
+            tag,
+            key,
+            classes,
+            pseudo_classes,
+        }
     }
 
     #[must_use]
@@ -4439,6 +4456,11 @@ impl CssCompoundSelector {
     #[must_use]
     pub fn classes(&self) -> &[String] {
         &self.classes
+    }
+
+    #[must_use]
+    pub fn pseudo_classes(&self) -> &[CssPseudoClass] {
+        &self.pseudo_classes
     }
 }
 

@@ -23,6 +23,7 @@ pub(super) fn parse_compound_selector<'i, 't>(
     let mut tag_name = None;
     let mut key_name = None;
     let mut class_names = Vec::new();
+    let mut pseudo_classes = Vec::new();
 
     if let Ok(tag) = input.try_parse(Parser::expect_ident_cloned) {
         let tag = tag.to_string();
@@ -37,6 +38,12 @@ pub(super) fn parse_compound_selector<'i, 't>(
             continue;
         }
 
+        if input.try_parse(Parser::expect_colon).is_ok() {
+            let pseudo_class = parse_pseudo_class(input)?;
+            pseudo_classes.push(pseudo_class);
+            continue;
+        }
+
         let state = input.state();
         match input.next() {
             Ok(Token::IDHash(key)) => {
@@ -46,7 +53,11 @@ pub(super) fn parse_compound_selector<'i, 't>(
             Ok(token) => {
                 let message = format!("unexpected selector token `{}`", token.to_css_string());
                 input.reset(&state);
-                if tag_name.is_none() && key_name.is_none() && class_names.is_empty() {
+                if tag_name.is_none()
+                    && key_name.is_none()
+                    && class_names.is_empty()
+                    && pseudo_classes.is_empty()
+                {
                     return Err(invalid_selector(input, message));
                 }
                 break;
@@ -56,24 +67,70 @@ pub(super) fn parse_compound_selector<'i, 't>(
         }
     }
 
-    if tag_name.is_none() && key_name.is_none() && class_names.is_empty() {
+    if tag_name.is_none()
+        && key_name.is_none()
+        && class_names.is_empty()
+        && pseudo_classes.is_empty()
+    {
         return Err(invalid_selector(
             input,
             "selector is missing a simple selector",
         ));
     }
-    if let (None, None, [class]) = (tag_name.as_ref(), key_name.as_ref(), class_names.as_slice()) {
+    if let (None, None, [class], []) = (
+        tag_name.as_ref(),
+        key_name.as_ref(),
+        class_names.as_slice(),
+        pseudo_classes.as_slice(),
+    ) {
         return Ok(CssSelector::Class(class.clone()));
     }
-    if let (Some(tag), None, []) = (tag_name.as_ref(), key_name.as_ref(), class_names.as_slice()) {
+    if let (Some(tag), None, [], []) = (
+        tag_name.as_ref(),
+        key_name.as_ref(),
+        class_names.as_slice(),
+        pseudo_classes.as_slice(),
+    ) {
         return Ok(CssSelector::Tag(tag.clone()));
     }
-    if let (None, Some(key), []) = (tag_name.as_ref(), key_name.as_ref(), class_names.as_slice()) {
+    if let (None, Some(key), [], []) = (
+        tag_name.as_ref(),
+        key_name.as_ref(),
+        class_names.as_slice(),
+        pseudo_classes.as_slice(),
+    ) {
         return Ok(CssSelector::Key(key.clone()));
+    }
+    if let (None, None, [], [pseudo_class]) = (
+        tag_name.as_ref(),
+        key_name.as_ref(),
+        class_names.as_slice(),
+        pseudo_classes.as_slice(),
+    ) {
+        return Ok(CssSelector::PseudoClass(*pseudo_class));
     }
     Ok(CssSelector::Compound(CssCompoundSelector::new(
         tag_name,
         key_name,
         class_names,
+        pseudo_classes,
     )))
+}
+
+fn parse_pseudo_class<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssPseudoClass, ParseError<'i, Error>> {
+    let state = input.state();
+    match input.next() {
+        Ok(Token::Ident(name)) if name.eq_ignore_ascii_case("root") => Ok(CssPseudoClass::Root),
+        Ok(token) => {
+            let message = format!("unsupported pseudo-class `:{}`", token.to_css_string());
+            input.reset(&state);
+            Err(invalid_selector(input, message))
+        }
+        Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => Err(
+            invalid_selector(input, "selector pseudo-class is missing a name"),
+        ),
+        Err(error) => Err(selector_basic(error)),
+    }
 }

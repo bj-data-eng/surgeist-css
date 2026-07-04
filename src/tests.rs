@@ -235,6 +235,46 @@ fn no_var_invalid_supported_values_still_reject_strictly() {
 }
 
 #[test]
+fn parses_root_selector_for_custom_property_declarations() {
+    let sheet = parse_sheet(":root { --space: 8px; }").unwrap();
+
+    assert_eq!(sheet.rules().len(), 1);
+    assert_eq!(sheet.rules()[0].declarations().len(), 1);
+    assert_eq!(
+        sheet.rules()[0].declarations()[0].property(),
+        &CssProperty::Custom(CssCustomPropertyName::try_new("--space").unwrap())
+    );
+}
+
+#[test]
+fn root_selector_carries_root_pseudo_class_structurally() {
+    let sheet = parse_sheet(":root { --space: 8px; }").unwrap();
+
+    assert_eq!(
+        sheet.rules()[0].selector(),
+        &CssSelector::PseudoClass(CssPseudoClass::Root)
+    );
+}
+
+#[test]
+fn compound_root_selector_carries_root_pseudo_class_structurally() {
+    let sheet = parse_sheet("html:root { --space: 8px; }").unwrap();
+    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+        panic!("expected compound selector");
+    };
+
+    assert_eq!(selector.tag().map(String::as_str), Some("html"));
+    assert_eq!(selector.pseudo_classes(), &[CssPseudoClass::Root]);
+}
+
+#[test]
+fn rejects_unsupported_pseudo_classes() {
+    assert!(parse_sheet(":hover { --space: 8px; }").is_err());
+    assert!(parse_sheet(":not(.theme) { --space: 8px; }").is_err());
+    assert!(parse_sheet(":root:hover { --space: 8px; }").is_err());
+}
+
+#[test]
 fn custom_property_with_var_remains_custom_property_value() {
     let declaration = single_declaration(".theme { --gap: var(--space, 8px); }");
     assert!(matches!(

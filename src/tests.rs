@@ -3128,6 +3128,151 @@ fn media_rule_parser_rejects_unknown_features_and_invalid_bodies() {
 }
 
 #[test]
+fn advanced_css_surface_matrix_accepts_supported_forms() {
+    let accepted = [
+        ".toolbar > button[aria-expanded=true] { color: black; }",
+        ".stack .item:hover { color: black; }",
+        r#"@import url("theme.css") screen and (min-width: 600px);"#,
+        "@media (prefers-color-scheme: dark) { .panel { color: black; } }",
+        "@container sidebar (inline-size > 30rem) { .panel { color: black; } }",
+        r#"@font-face { font-family: Inter; src: url("inter.woff2") format("woff2"); }"#,
+    ];
+
+    for css in accepted {
+        assert!(parse_sheet(css).is_ok(), "{css} should parse");
+    }
+}
+
+#[test]
+fn advanced_css_surface_matrix_rejects_unsupported_forms() {
+    let rejected = [
+        "@supports (display: grid) { .panel { color: black; } }",
+        "@keyframes fade { from { opacity: 0; } to { opacity: 1; } }",
+        r#"@import url("late.css"); .panel { color: black; } @import url("later.css");"#,
+        r#"@import url("theme.css") supports(display: grid);"#,
+        "@font-face { font-family: Inter; }",
+        ".field:has(> .icon) { color: black; }",
+        "[svg|href] { color: black; }",
+        ".col || .cell { color: black; }",
+        "@container scroll-state(stuck: top) { .panel { color: black; } }",
+    ];
+
+    for css in rejected {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
+}
+
+#[test]
+fn advanced_css_rule_surface_is_structurally_accessible() {
+    let sheet = parse_sheet(
+        r#"
+            @import url("theme.css") screen and (min-width: 600px);
+            @font-face { font-family: Inter; src: url("inter.woff2") format("woff2"); }
+            @media (prefers-color-scheme: dark) { .panel { color: black; } }
+            @container sidebar (inline-size > 30rem) {
+                .toolbar > button[aria-expanded=true] { color: black; }
+            }
+        "#,
+    )
+    .unwrap();
+
+    let [
+        CssRule::Import(import),
+        CssRule::FontFace(font_face),
+        CssRule::Media(media),
+        CssRule::Container(container),
+    ] = sheet.rules()
+    else {
+        panic!("expected import, font-face, media, and container rules");
+    };
+
+    let CssImportTarget::Url(import_url) = import.target() else {
+        panic!("expected URL import target");
+    };
+    assert_eq!(import_url.as_str(), "theme.css");
+    let [CssMediaQuery::Typed(import_query)] = import.media().unwrap().queries() else {
+        panic!("expected typed import media query");
+    };
+    assert_eq!(import_query.media_type(), CssMediaType::Screen);
+    let Some(CssMediaCondition::Feature(CssMediaFeatureQuery::Width(width))) =
+        import_query.condition()
+    else {
+        panic!("expected import width condition");
+    };
+    assert_eq!(
+        width.comparison(),
+        Some(CssQueryComparison::GreaterThanOrEqual)
+    );
+    assert_eq!(width.value().value().value(), 600.0);
+    assert_eq!(width.value().unit(), CssLengthUnit::Px);
+
+    let descriptors = font_face.descriptors();
+    assert_eq!(descriptors.font_family().as_str(), "Inter");
+    let [CssFontFaceSource::Url(source)] = descriptors.src().sources() else {
+        panic!("expected one font-face URL source");
+    };
+    assert_eq!(source.url(), "inter.woff2");
+    assert_eq!(source.format(), Some(&CssFontFormatHint::Woff2));
+
+    let [
+        CssMediaQuery::Condition(CssMediaCondition::Feature(
+            CssMediaFeatureQuery::PrefersColorScheme(color_scheme),
+        )),
+    ] = media.query().queries()
+    else {
+        panic!("expected prefers-color-scheme media condition");
+    };
+    assert_eq!(color_scheme, &CssColorSchemePreference::Dark);
+    let [media_nested] = media.rules() else {
+        panic!("expected one nested media rule");
+    };
+    assert_eq!(
+        style_rule(media_nested).selector(),
+        &CssSelector::Class("panel".to_owned())
+    );
+
+    assert_eq!(
+        container.name(),
+        Some(&CssContainerName::try_new("sidebar").unwrap())
+    );
+    let CssContainerCondition::Feature(CssContainerFeatureQuery::InlineSize(inline_size)) =
+        container.condition()
+    else {
+        panic!("expected inline-size container condition");
+    };
+    assert_eq!(
+        inline_size.comparison(),
+        Some(CssQueryComparison::GreaterThan)
+    );
+    assert_eq!(inline_size.value().value().value(), 30.0);
+    assert_eq!(inline_size.value().unit(), CssLengthUnit::Rem);
+    let [container_nested] = container.rules() else {
+        panic!("expected one nested container rule");
+    };
+    let CssSelector::Complex(selector) = style_rule(container_nested).selector() else {
+        panic!("expected complex selector");
+    };
+    assert_eq!(selector.first().classes(), &["toolbar".to_owned()]);
+    let [part] = selector.rest() else {
+        panic!("expected one complex selector part");
+    };
+    assert_eq!(part.combinator(), CssSelectorCombinator::Child);
+    assert_eq!(part.selector().tag().map(String::as_str), Some("button"));
+    let [attribute] = part.selector().attributes() else {
+        panic!("expected one attribute selector");
+    };
+    assert_eq!(attribute.name().as_str(), "aria-expanded");
+    assert_eq!(
+        attribute.matcher(),
+        &CssAttributeMatcher::Equals("true".to_owned())
+    );
+    assert_eq!(
+        attribute.case_sensitivity(),
+        CssAttributeCaseSensitivity::DocumentDefault
+    );
+}
+
+#[test]
 fn checked_color_construction_rejects_invalid_channels() {
     let color = CssColor::try_rgba(0.25, 0.5, 0.75, 1.0).unwrap();
     assert_eq!(color.r(), 0.25);

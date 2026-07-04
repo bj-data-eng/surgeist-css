@@ -607,9 +607,25 @@ fn parse_selector_after_leading_combinator<'i, 't>(
 
 fn parse_nth_child_pattern<'i, 't>(
     input: &mut Parser<'i, 't>,
-    _allow_has: bool,
+    allow_has: bool,
 ) -> std::result::Result<CssNthChildPattern, ParseError<'i, Error>> {
-    Ok(CssNthChildPattern::new(parse_nth_pattern(input)?, None))
+    let pattern = parse_nth_pattern(input)?;
+    let state = input.state();
+    match input.next() {
+        Ok(Token::Ident(value)) if value.eq_ignore_ascii_case("of") => {
+            let selector_list = parse_pseudo_selector_list_with_has_policy(input, allow_has)?;
+            Ok(CssNthChildPattern::new(pattern, Some(selector_list)))
+        }
+        Ok(_) => {
+            input.reset(&state);
+            Ok(CssNthChildPattern::new(pattern, None))
+        }
+        Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+            input.reset(&state);
+            Ok(CssNthChildPattern::new(pattern, None))
+        }
+        Err(error) => Err(selector_basic(error)),
+    }
 }
 
 fn parse_nth_pattern<'i, 't>(

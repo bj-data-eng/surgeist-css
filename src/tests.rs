@@ -994,12 +994,60 @@ fn parses_all_nth_structural_pseudo_classes() {
 }
 
 #[test]
+fn nth_child_accepts_strict_of_selector_lists() {
+    let sheet =
+        parse_sheet("li:nth-child(2n+1 of li.important, .row[hidden]) { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
+        panic!("expected compound selector");
+    };
+    let [CssPseudoClass::NthChild(pattern)] = selector.pseudo_classes() else {
+        panic!("expected nth-child pseudo-class");
+    };
+    assert!(
+        matches!(pattern.pattern(), CssNthPattern::AnPlusB(value) if value.a() == 2 && value.b() == 1)
+    );
+    let selector_list = pattern.selector_list().expect("expected of selector list");
+    assert_eq!(selector_list.selectors().len(), 2);
+    assert!(matches!(
+        selector_list.selectors()[0],
+        CssSelector::Compound(_)
+    ));
+    assert!(matches!(
+        selector_list.selectors()[1],
+        CssSelector::Compound(_)
+    ));
+
+    let sheet =
+        parse_sheet(".item:nth-last-child(even of .selected ~ .tail) { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
+        panic!("expected compound selector");
+    };
+    let [CssPseudoClass::NthLastChild(pattern)] = selector.pseudo_classes() else {
+        panic!("expected nth-last-child pseudo-class");
+    };
+    assert_eq!(pattern.pattern(), CssNthPattern::Even);
+    assert!(matches!(
+        pattern.selector_list().unwrap().selectors()[0],
+        CssSelector::Complex(_)
+    ));
+}
+
+#[test]
+fn nth_child_of_selector_lists_reject_invalid_entries_strictly() {
+    assert!(parse_sheet(":nth-child(odd of) { color: black; }").is_err());
+    assert!(parse_sheet(":nth-child(odd of .valid, .bad..selector) { color: black; }").is_err());
+    assert!(parse_sheet(":nth-child(odd of ::before) { color: black; }").is_err());
+    assert!(parse_sheet(":nth-of-type(odd of .item) { color: black; }").is_err());
+    assert!(parse_sheet(":nth-last-of-type(even of .item) { color: black; }").is_err());
+}
+
+#[test]
 fn rejects_unsupported_nth_patterns_and_of_selector_forms() {
     assert!(parse_sheet(":nth-child() { color: black; }").is_err());
     assert!(parse_sheet(":nth-child(foo) { color: black; }").is_err());
     assert!(parse_sheet(":nth-child(2n +) { color: black; }").is_err());
     assert!(parse_sheet(":nth-child(2n + 1) { color: black; }").is_err());
-    assert!(parse_sheet(":nth-child(2n of .item) { color: black; }").is_err());
+    assert!(parse_sheet(":nth-of-type(2n of .item) { color: black; }").is_err());
 }
 
 #[test]
@@ -2024,6 +2072,7 @@ fn practical_pseudo_class_matrix_accepts_supported_and_rejects_unsupported_forms
         ":disabled { color: black; }",
         ":first-child { color: black; }",
         ":nth-child(2n+1) { color: black; }",
+        ":nth-child(2n of .item) { color: black; }",
         ":not(.disabled) { color: black; }",
         ":is(.primary, .secondary) { color: black; }",
         ":where(button, .link) { color: black; }",
@@ -2045,7 +2094,7 @@ fn practical_pseudo_class_matrix_accepts_supported_and_rejects_unsupported_forms
         ":state(open) { color: black; }",
         ":hover() { color: black; }",
         ":not() { color: black; }",
-        ":nth-child(2n of .item) { color: black; }",
+        ":nth-of-type(2n of .item) { color: black; }",
         ".field:has(.col || .cell) { color: black; }",
     ];
 

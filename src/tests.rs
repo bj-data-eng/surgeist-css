@@ -1242,6 +1242,184 @@ fn custom_property_name_constructor_preserves_case_and_rejects_non_custom_names(
 }
 
 #[test]
+fn list_counter_and_content_models_preserve_authored_shapes() {
+    let counter_name = CssCounterName::try_new("section").unwrap();
+    let counter_style =
+        CssCounterStyle::Named(CssCounterStyleName::try_new("chapter-style").unwrap());
+    let counter = CssCounterFunction::new(counter_name.clone(), Some(counter_style.clone()));
+    assert_eq!(counter.name(), &counter_name);
+    assert_eq!(counter.style(), Some(&counter_style));
+
+    let separator = CssContentString::try_new(".").unwrap();
+    let counters =
+        CssCountersFunction::new(counter_name.clone(), separator.clone(), Some(counter_style));
+    assert_eq!(counters.name(), &counter_name);
+    assert_eq!(counters.separator(), &separator);
+    assert!(counters.style().is_some());
+
+    let attr = CssAttributeName::try_new("data-label").unwrap();
+    let content_list = CssContentList::try_new(vec![
+        CssContentItem::String(CssContentString::try_new("Chapter ").unwrap()),
+        CssContentItem::Counter(counter),
+        CssContentItem::Counters(counters),
+        CssContentItem::Attr(attr.clone()),
+        CssContentItem::Url(CssUrl::try_new("marker.svg").unwrap()),
+        CssContentItem::OpenQuote,
+        CssContentItem::CloseQuote,
+        CssContentItem::NoOpenQuote,
+        CssContentItem::NoCloseQuote,
+    ])
+    .unwrap();
+    assert_eq!(content_list.items().len(), 9);
+    assert_eq!(
+        CssContent::Items(content_list.clone()),
+        CssContent::Items(content_list)
+    );
+
+    let list_style = CssListStyle::try_new(
+        Some(CssListStyleType::String(
+            CssContentString::try_new("*").unwrap(),
+        )),
+        Some(CssListStylePosition::Inside),
+        Some(CssListStyleImage::Url(
+            CssUrl::try_new("bullet.svg").unwrap(),
+        )),
+    )
+    .unwrap();
+    assert!(matches!(
+        list_style.style_type(),
+        Some(CssListStyleType::String(_))
+    ));
+    assert_eq!(list_style.position(), Some(CssListStylePosition::Inside));
+    assert!(matches!(
+        list_style.image(),
+        Some(CssListStyleImage::Url(_))
+    ));
+    assert_eq!(
+        CssValue::ListStyle(list_style.clone()),
+        CssValue::ListStyle(list_style)
+    );
+    assert_eq!(
+        CssValue::ListStyleType(CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
+            CssBuiltInCounterStyle::DecimalLeadingZero,
+        ))),
+        CssValue::ListStyleType(CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
+            CssBuiltInCounterStyle::DecimalLeadingZero,
+        )))
+    );
+    assert_eq!(
+        CssValue::ListStylePosition(CssListStylePosition::Outside),
+        CssValue::ListStylePosition(CssListStylePosition::Outside)
+    );
+    assert_eq!(
+        CssValue::ListStyleImage(CssListStyleImage::None),
+        CssValue::ListStyleImage(CssListStyleImage::None)
+    );
+
+    let counter_change = CssCounterChange::new(counter_name.clone(), Some(4));
+    assert_eq!(counter_change.name(), &counter_name);
+    assert_eq!(counter_change.value(), Some(4));
+    let changes = CssCounterChangeList::try_new(vec![counter_change]).unwrap();
+    assert_eq!(changes.changes().len(), 1);
+    assert!(matches!(
+        CssValue::CounterChanges(CssCounterChanges::Changes(changes)),
+        CssValue::CounterChanges(CssCounterChanges::Changes(_))
+    ));
+    assert!(matches!(
+        CssValue::CounterChanges(CssCounterChanges::None),
+        CssValue::CounterChanges(CssCounterChanges::None)
+    ));
+    assert!(matches!(
+        CssValue::Content(CssContent::Normal),
+        CssValue::Content(CssContent::Normal)
+    ));
+    assert!(matches!(
+        CssValue::Content(CssContent::None),
+        CssValue::Content(CssContent::None)
+    ));
+    assert!(matches!(
+        CssCounterChanges::Changes(
+            CssCounterChangeList::try_new(vec![CssCounterChange::new(counter_name, None),])
+                .unwrap()
+        ),
+        CssCounterChanges::Changes(_)
+    ));
+}
+
+#[test]
+fn list_counter_and_content_constructors_reject_invalid_states() {
+    assert_eq!(CssContentString::try_new("bad\0string"), None);
+    assert_eq!(CssContentList::try_new(Vec::new()), None);
+    assert_eq!(CssCounterChangeList::try_new(Vec::new()), None);
+    assert_eq!(CssCounterChanges::try_changes(Vec::new()), None);
+    assert_eq!(CssListStyle::try_new(None, None, None), None);
+
+    for name in [
+        "",
+        "inherit",
+        "initial",
+        "unset",
+        "revert",
+        "revert-layer",
+        "none",
+    ] {
+        assert_eq!(CssCounterName::try_new(name), None, "{name:?} rejected");
+    }
+    assert_eq!(
+        CssCounterName::try_new("list-item").unwrap().as_str(),
+        "list-item"
+    );
+}
+
+#[test]
+fn counter_style_name_constructor_uses_counter_style_ident_rules() {
+    assert_eq!(
+        CssCounterStyleName::try_new("chapter-style")
+            .unwrap()
+            .as_str(),
+        "chapter-style"
+    );
+    assert_eq!(
+        CssCounterStyleName::try_new("auto").unwrap().as_str(),
+        "auto"
+    );
+    assert_eq!(
+        CssCounterStyleName::try_new("span").unwrap().as_str(),
+        "span"
+    );
+
+    for name in [
+        "none",
+        "inherit",
+        "initial",
+        "unset",
+        "revert",
+        "revert-layer",
+    ] {
+        assert_eq!(
+            CssCounterStyleName::try_new(name),
+            None,
+            "{name:?} rejected"
+        );
+    }
+
+    for name in [
+        "",
+        "1chapter",
+        "-1chapter",
+        "chapter style",
+        "chapter;",
+        ".chapter",
+    ] {
+        assert_eq!(
+            CssCounterStyleName::try_new(name),
+            None,
+            "{name:?} rejected"
+        );
+    }
+}
+
+#[test]
 fn authored_declaration_value_constructor_rejects_empty_css() {
     let value = CssAuthoredDeclarationValue::try_new("  8px  ").unwrap();
     assert_eq!(value.as_css(), "  8px  ");

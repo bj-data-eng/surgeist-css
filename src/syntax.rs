@@ -2020,7 +2020,15 @@ pub enum CssProperty {
     PlaceItems,
     PlaceSelf,
     Visibility,
+    Content,
     ContentVisibility,
+    ListStyleType,
+    ListStylePosition,
+    ListStyleImage,
+    ListStyle,
+    CounterReset,
+    CounterIncrement,
+    CounterSet,
     Width,
     Height,
     MinWidth,
@@ -2391,7 +2399,13 @@ pub enum CssValue {
     AlignItems(CssAlignItems),
     PlaceAlignment(CssPlaceAlignment),
     Visibility(CssVisibility),
+    Content(CssContent),
     ContentVisibility(CssContentVisibility),
+    ListStyleType(CssListStyleType),
+    ListStylePosition(CssListStylePosition),
+    ListStyleImage(CssListStyleImage),
+    ListStyle(CssListStyle),
+    CounterChanges(CssCounterChanges),
     Length(CssLength),
     GridFlowTolerance(CssGridFlowTolerance),
     GridTrackList(CssGridTrackList),
@@ -2819,6 +2833,340 @@ pub enum CssContentVisibility {
     Visible,
     Hidden,
     Auto,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssContent {
+    Normal,
+    None,
+    Items(CssContentList),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssContentList {
+    items: Vec<CssContentItem>,
+}
+
+impl CssContentList {
+    #[must_use]
+    pub fn try_new(items: Vec<CssContentItem>) -> Option<Self> {
+        if items.is_empty() {
+            None
+        } else {
+            Some(Self { items })
+        }
+    }
+
+    #[must_use]
+    pub fn items(&self) -> &[CssContentItem] {
+        &self.items
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssContentItem {
+    String(CssContentString),
+    Url(CssUrl),
+    Counter(CssCounterFunction),
+    Counters(CssCountersFunction),
+    Attr(CssAttributeName),
+    OpenQuote,
+    CloseQuote,
+    NoOpenQuote,
+    NoCloseQuote,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssContentString {
+    value: String,
+}
+
+impl CssContentString {
+    #[must_use]
+    pub fn try_new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        if value.contains('\0') {
+            None
+        } else {
+            Some(Self { value })
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CssCounterName {
+    name: String,
+}
+
+impl CssCounterName {
+    #[must_use]
+    pub fn try_new(name: impl Into<String>) -> Option<Self> {
+        let name = name.into();
+        if is_valid_counter_name(&name) {
+            Some(Self { name })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.name
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCounterStyleName {
+    name: String,
+}
+
+impl CssCounterStyleName {
+    #[must_use]
+    pub fn try_new(name: impl Into<String>) -> Option<Self> {
+        let name = name.into();
+        if is_valid_counter_style_name(&name) {
+            Some(Self::new(name))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.name
+    }
+}
+
+fn is_valid_counter_name(name: &str) -> bool {
+    is_css_ident(name) && !is_css_wide_keyword(name) && !name.eq_ignore_ascii_case("none")
+}
+
+fn is_valid_counter_style_name(name: &str) -> bool {
+    is_css_ident(name) && !is_css_wide_keyword(name) && !name.eq_ignore_ascii_case("none")
+}
+
+fn is_css_ident(value: &str) -> bool {
+    let mut input = cssparser::ParserInput::new(value);
+    let mut parser = cssparser::Parser::new(&mut input);
+    let Ok(parsed) = parser.expect_ident_cloned() else {
+        return false;
+    };
+    parser.expect_exhausted().is_ok() && parsed.as_ref() == value
+}
+
+fn is_css_wide_keyword(value: &str) -> bool {
+    matches!(
+        value.to_ascii_lowercase().as_str(),
+        "inherit" | "initial" | "unset" | "revert" | "revert-layer"
+    )
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCounterFunction {
+    name: CssCounterName,
+    style: Option<CssCounterStyle>,
+}
+
+impl CssCounterFunction {
+    #[must_use]
+    pub const fn new(name: CssCounterName, style: Option<CssCounterStyle>) -> Self {
+        Self { name, style }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> &CssCounterName {
+        &self.name
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<&CssCounterStyle> {
+        self.style.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCountersFunction {
+    name: CssCounterName,
+    separator: CssContentString,
+    style: Option<CssCounterStyle>,
+}
+
+impl CssCountersFunction {
+    #[must_use]
+    pub const fn new(
+        name: CssCounterName,
+        separator: CssContentString,
+        style: Option<CssCounterStyle>,
+    ) -> Self {
+        Self {
+            name,
+            separator,
+            style,
+        }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> &CssCounterName {
+        &self.name
+    }
+
+    #[must_use]
+    pub const fn separator(&self) -> &CssContentString {
+        &self.separator
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<&CssCounterStyle> {
+        self.style.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssCounterStyle {
+    BuiltIn(CssBuiltInCounterStyle),
+    Named(CssCounterStyleName),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssBuiltInCounterStyle {
+    Disc,
+    Circle,
+    Square,
+    Decimal,
+    DecimalLeadingZero,
+    LowerAlpha,
+    UpperAlpha,
+    LowerLatin,
+    UpperLatin,
+    LowerRoman,
+    UpperRoman,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssListStyleType {
+    None,
+    CounterStyle(CssCounterStyle),
+    String(CssContentString),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssListStylePosition {
+    Inside,
+    Outside,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssListStyleImage {
+    None,
+    Url(CssUrl),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssListStyle {
+    style_type: Option<CssListStyleType>,
+    position: Option<CssListStylePosition>,
+    image: Option<CssListStyleImage>,
+}
+
+impl CssListStyle {
+    #[must_use]
+    pub fn try_new(
+        style_type: Option<CssListStyleType>,
+        position: Option<CssListStylePosition>,
+        image: Option<CssListStyleImage>,
+    ) -> Option<Self> {
+        if style_type.is_none() && position.is_none() && image.is_none() {
+            None
+        } else {
+            Some(Self {
+                style_type,
+                position,
+                image,
+            })
+        }
+    }
+
+    #[must_use]
+    pub const fn style_type(&self) -> Option<&CssListStyleType> {
+        self.style_type.as_ref()
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> Option<CssListStylePosition> {
+        self.position
+    }
+
+    #[must_use]
+    pub const fn image(&self) -> Option<&CssListStyleImage> {
+        self.image.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssCounterChanges {
+    None,
+    Changes(CssCounterChangeList),
+}
+
+impl CssCounterChanges {
+    #[must_use]
+    pub fn try_changes(changes: Vec<CssCounterChange>) -> Option<Self> {
+        CssCounterChangeList::try_new(changes).map(Self::Changes)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCounterChangeList {
+    changes: Vec<CssCounterChange>,
+}
+
+impl CssCounterChangeList {
+    #[must_use]
+    pub fn try_new(changes: Vec<CssCounterChange>) -> Option<Self> {
+        if changes.is_empty() {
+            None
+        } else {
+            Some(Self { changes })
+        }
+    }
+
+    #[must_use]
+    pub fn changes(&self) -> &[CssCounterChange] {
+        &self.changes
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCounterChange {
+    name: CssCounterName,
+    value: Option<i32>,
+}
+
+impl CssCounterChange {
+    #[must_use]
+    pub const fn new(name: CssCounterName, value: Option<i32>) -> Self {
+        Self { name, value }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> &CssCounterName {
+        &self.name
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> Option<i32> {
+        self.value
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

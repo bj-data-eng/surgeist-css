@@ -233,9 +233,45 @@ fn contains_ascii_case(haystack: &[&str], needle: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::accepted_declaration_cases;
+    use std::collections::HashSet;
 
     #[test]
     fn known_unsupported_property_registry_is_empty() {
         assert!(KNOWN_UNSUPPORTED_PROPERTY_NAMES.is_empty());
+    }
+
+    #[test]
+    fn coverage_supported_property_registry_has_accepted_cases() {
+        assert!(KNOWN_UNSUPPORTED_PROPERTY_NAMES.is_empty());
+
+        let mut covered = HashSet::new();
+        for case in accepted_declaration_cases() {
+            assert!(
+                covered.insert(case.property_name),
+                "duplicate accepted declaration case for `{}`",
+                case.property_name,
+            );
+            case.assert_accepts();
+        }
+
+        for property_name in SUPPORTED_PROPERTY_NAMES {
+            assert!(
+                covered.contains(property_name),
+                "missing accepted declaration case for `{property_name}`",
+            );
+
+            let Some(expected_property) = crate::property_for_supported_name(property_name) else {
+                panic!("supported property `{property_name}` has no CssProperty mapping");
+            };
+            let covered_case = accepted_declaration_cases()
+                .iter()
+                .find(|case| case.property_name == *property_name)
+                .expect("covered property has an accepted declaration case");
+            assert_eq!(
+                covered_case.expected_property, expected_property,
+                "accepted declaration case for `{property_name}` expects the wrong CssProperty",
+            );
+        }
     }
 }

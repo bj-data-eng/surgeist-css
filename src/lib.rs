@@ -16,6 +16,8 @@ use cssparser::{
 };
 
 mod syntax;
+#[cfg(test)]
+mod test_support;
 mod validation;
 
 pub use syntax::*;
@@ -5102,6 +5104,11 @@ fn error_at<'i>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{
+        AcceptedDeclarationCase, ExpectedErrorKind, RejectedDeclarationCase,
+        accepted_declaration_cases, assert_accepts_declarations, assert_rejects_declarations,
+        assert_sheet_rejected, parse_single_declaration_value,
+    };
 
     fn declaration_value(input: &str, property: CssProperty) -> CssValue {
         let sheet = parse_sheet(input).unwrap();
@@ -5122,6 +5129,53 @@ mod tests {
             .find(|declaration| declaration.property() == property)
             .unwrap()
             .clone()
+    }
+
+    #[test]
+    fn strict_declaration_case_helpers_accept_and_reject_cases() {
+        assert_accepts_declarations(&accepted_declaration_cases()[..3]);
+        assert_eq!(
+            parse_single_declaration_value("display", "inherit"),
+            CssValue::GlobalKeyword(CssGlobalKeyword::Inherit)
+        );
+
+        assert_rejects_declarations(&[
+            RejectedDeclarationCase {
+                label: "unsupported display keyword",
+                property_name: "display",
+                authored_value: "inline",
+                expected_error: ExpectedErrorKind::UnsupportedValue {
+                    property: Some("display"),
+                    reason: "unsupported display keyword `inline`",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "unknown property name",
+                property_name: "widht",
+                authored_value: "10px",
+                expected_error: ExpectedErrorKind::UnknownProperty { name: "widht" },
+                property_name_should_be_recognized: false,
+            },
+        ]);
+
+        let accepted = AcceptedDeclarationCase::global_inherit("width", CssProperty::Width);
+        accepted.assert_accepts();
+    }
+
+    #[test]
+    fn strict_whole_sheet_rejection_helper_rejects_mixed_declarations() {
+        assert_sheet_rejected(
+            ".panel { width: 10px; display: inline; }",
+            &ExpectedErrorKind::UnsupportedValue {
+                property: Some("display"),
+                reason: "unsupported display keyword `inline`",
+            },
+        );
+        assert_sheet_rejected(
+            ".panel { width: inherit 10px; height: 20px; }",
+            &ExpectedErrorKind::InvalidSyntax,
+        );
     }
 
     #[test]

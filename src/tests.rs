@@ -394,6 +394,28 @@ fn selector_list_constructor_rejects_empty_lists() {
 }
 
 #[test]
+fn pseudo_selector_list_constructor_rejects_empty_and_complex_selectors() {
+    assert_eq!(CssPseudoSelectorList::try_new(Vec::new()), None);
+
+    let first =
+        CssCompoundSelector::new(None, None, vec!["field".to_owned()], Vec::new(), Vec::new());
+    let rest = vec![CssComplexSelectorPart::new(
+        CssSelectorCombinator::Descendant,
+        CssCompoundSelector::new(None, None, vec!["icon".to_owned()], Vec::new(), Vec::new()),
+    )];
+    let complex = CssComplexSelector::new(first, rest);
+
+    assert_eq!(
+        CssPseudoSelectorList::try_new(vec![CssSelector::Complex(complex)]),
+        None
+    );
+
+    let list =
+        CssPseudoSelectorList::try_new(vec![CssSelector::Class("button".to_owned())]).unwrap();
+    assert_eq!(list.selectors(), &[CssSelector::Class("button".to_owned())]);
+}
+
+#[test]
 fn nth_pattern_model_exposes_an_plus_b_coefficients() {
     let pattern = CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 1));
     let CssNthPattern::AnPlusB(value) = pattern else {
@@ -660,6 +682,51 @@ fn rejects_unsupported_relative_or_combinator_selector_forms() {
     assert!(parse_sheet(".field:has(> .icon) { color: black; }").is_err());
     assert!(parse_sheet(":has(.field > .icon) { color: black; }").is_err());
     assert!(parse_sheet(":not(.field .icon) { color: black; }").is_err());
+}
+
+#[test]
+fn parses_combinator_selectors() {
+    for css in [
+        ".stack .item { color: black; }",
+        ".toolbar > button { color: black; }",
+        "label + input { color: black; }",
+        "h2 ~ p { color: black; }",
+        ".card[data-state=open] > .title:hover { color: black; }",
+    ] {
+        let sheet = parse_sheet(css).unwrap_or_else(|error| panic!("{css}: {error:?}"));
+        assert!(matches!(
+            style_rule(&sheet.rules()[0]).selector(),
+            CssSelector::Complex(_)
+        ));
+    }
+}
+
+#[test]
+fn combinator_selectors_are_structurally_inspectable() {
+    let sheet = parse_sheet(".toolbar > button { color: black; }").unwrap();
+    let rule = style_rule(&sheet.rules()[0]);
+    let CssSelector::Complex(selector) = rule.selector() else {
+        panic!("expected complex selector");
+    };
+    assert_eq!(
+        selector.rest()[0].combinator(),
+        CssSelectorCombinator::Child
+    );
+    assert_eq!(
+        selector.rest()[0].selector().tag().map(String::as_str),
+        Some("button")
+    );
+}
+
+#[test]
+fn rejects_invalid_combinator_selectors() {
+    assert!(parse_sheet("> .item { color: black; }").is_err());
+    assert!(parse_sheet(".a > > .b { color: black; }").is_err());
+    assert!(parse_sheet(".a > { color: black; }").is_err());
+    assert!(parse_sheet(".col || .cell { color: black; }").is_err());
+    assert!(parse_sheet(".field:has(> .icon) { color: black; }").is_err());
+    assert!(parse_sheet(".field:has(.field > .icon) { color: black; }").is_err());
+    assert!(parse_sheet(".field:not(.field .icon) { color: black; }").is_err());
 }
 
 #[test]

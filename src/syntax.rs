@@ -4417,6 +4417,77 @@ pub enum CssSelector {
     Class(String),
     PseudoClass(CssPseudoClass),
     Compound(CssCompoundSelector),
+    Complex(CssComplexSelector),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssComplexSelector {
+    first: CssCompoundSelector,
+    rest: Vec<CssComplexSelectorPart>,
+}
+
+impl CssComplexSelector {
+    #[must_use]
+    pub fn try_new(first: CssCompoundSelector, rest: Vec<CssComplexSelectorPart>) -> Option<Self> {
+        if rest.is_empty() {
+            None
+        } else {
+            Some(Self::new(first, rest))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(first: CssCompoundSelector, rest: Vec<CssComplexSelectorPart>) -> Self {
+        debug_assert!(!rest.is_empty());
+        Self { first, rest }
+    }
+
+    #[must_use]
+    pub const fn first(&self) -> &CssCompoundSelector {
+        &self.first
+    }
+
+    #[must_use]
+    pub fn rest(&self) -> &[CssComplexSelectorPart] {
+        &self.rest
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssComplexSelectorPart {
+    combinator: CssSelectorCombinator,
+    selector: CssCompoundSelector,
+}
+
+impl CssComplexSelectorPart {
+    #[must_use]
+    pub(crate) const fn new(
+        combinator: CssSelectorCombinator,
+        selector: CssCompoundSelector,
+    ) -> Self {
+        Self {
+            combinator,
+            selector,
+        }
+    }
+
+    #[must_use]
+    pub const fn combinator(&self) -> CssSelectorCombinator {
+        self.combinator
+    }
+
+    #[must_use]
+    pub const fn selector(&self) -> &CssCompoundSelector {
+        &self.selector
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssSelectorCombinator {
+    Descendant,
+    Child,
+    NextSibling,
+    SubsequentSibling,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -4447,6 +4518,38 @@ impl CssSelectorList {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct CssPseudoSelectorList {
+    selectors: Vec<CssSelector>,
+}
+
+impl CssPseudoSelectorList {
+    #[must_use]
+    pub fn try_new(selectors: Vec<CssSelector>) -> Option<Self> {
+        if selectors.is_empty() || selectors.iter().any(selector_contains_complex) {
+            None
+        } else {
+            Some(Self::new(selectors))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(selectors: Vec<CssSelector>) -> Self {
+        debug_assert!(!selectors.is_empty());
+        debug_assert!(!selectors.iter().any(selector_contains_complex));
+        Self { selectors }
+    }
+
+    #[must_use]
+    pub fn selectors(&self) -> &[CssSelector] {
+        &self.selectors
+    }
+}
+
+fn selector_contains_complex(selector: &CssSelector) -> bool {
+    matches!(selector, CssSelector::Complex(_))
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum CssPseudoClass {
     Root,
     Hover,
@@ -4473,10 +4576,10 @@ pub enum CssPseudoClass {
     OnlyOfType,
     NthOfType(CssNthPattern),
     NthLastOfType(CssNthPattern),
-    Not(CssSelectorList),
-    Is(CssSelectorList),
-    Where(CssSelectorList),
-    Has(CssSelectorList),
+    Not(CssPseudoSelectorList),
+    Is(CssPseudoSelectorList),
+    Where(CssPseudoSelectorList),
+    Has(CssPseudoSelectorList),
     Modal,
     Fullscreen,
     PopoverOpen,

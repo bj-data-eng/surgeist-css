@@ -3,7 +3,21 @@ use cssparser::{BasicParseErrorKind, ParseError, Parser, ToCss, Token, match_ign
 use crate::error::{Error, invalid_selector, selector_basic};
 use crate::syntax::*;
 
-pub(super) fn parse_selector_list<'i, 't>(
+pub(super) fn parse_rule_selector_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Vec<CssSelector>, ParseError<'i, Error>> {
+    let mut selectors = Vec::new();
+    loop {
+        selectors.push(parse_rule_selector(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+    }
+    input.expect_exhausted().map_err(selector_basic)?;
+    Ok(selectors)
+}
+
+fn parse_pseudo_compound_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<Vec<CssSelector>, ParseError<'i, Error>> {
     let mut selectors = Vec::new();
@@ -17,9 +31,111 @@ pub(super) fn parse_selector_list<'i, 't>(
     Ok(selectors)
 }
 
-pub(super) fn parse_compound_selector<'i, 't>(
+fn parse_rule_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssSelector, ParseError<'i, Error>> {
+    let first = parse_compound_selector_model(input)?;
+    let mut rest = Vec::new();
+
+    loop {
+        let had_whitespace = consume_selector_whitespace(input)?;
+        let state = input.state();
+        match input.next_including_whitespace() {
+            Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+                input.reset(&state);
+                break;
+            }
+            Err(error) => return Err(selector_basic(error)),
+            Ok(Token::Comma) => {
+                input.reset(&state);
+                break;
+            }
+            Ok(Token::Delim('>')) => {
+                rest.push(parse_complex_selector_part(
+                    input,
+                    CssSelectorCombinator::Child,
+                )?);
+            }
+            Ok(Token::Delim('+')) => {
+                rest.push(parse_complex_selector_part(
+                    input,
+                    CssSelectorCombinator::NextSibling,
+                )?);
+            }
+            Ok(Token::Delim('~')) => {
+                rest.push(parse_complex_selector_part(
+                    input,
+                    CssSelectorCombinator::SubsequentSibling,
+                )?);
+            }
+            Ok(Token::Delim('|')) => {
+                return Err(invalid_selector(
+                    input,
+                    "unsupported selector combinator `||`",
+                ));
+            }
+            Ok(_) if had_whitespace => {
+                input.reset(&state);
+                let selector = parse_compound_selector_model(input)?;
+                rest.push(CssComplexSelectorPart::new(
+                    CssSelectorCombinator::Descendant,
+                    selector,
+                ));
+            }
+            Ok(token) => {
+                let message = format!("unexpected selector token `{}`", token.to_css_string());
+                input.reset(&state);
+                return Err(invalid_selector(input, message));
+            }
+        }
+    }
+
+    if rest.is_empty() {
+        Ok(compound_selector_to_selector(first))
+    } else {
+        Ok(CssSelector::Complex(CssComplexSelector::new(first, rest)))
+    }
+}
+
+fn parse_complex_selector_part<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    combinator: CssSelectorCombinator,
+) -> std::result::Result<CssComplexSelectorPart, ParseError<'i, Error>> {
+    consume_selector_whitespace(input)?;
+    let selector = parse_compound_selector_model(input)?;
+    Ok(CssComplexSelectorPart::new(combinator, selector))
+}
+
+fn consume_selector_whitespace<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<bool, ParseError<'i, Error>> {
+    let mut consumed = false;
+    loop {
+        let state = input.state();
+        match input.next_including_whitespace() {
+            Ok(Token::WhiteSpace(_)) => consumed = true,
+            Ok(_) => {
+                input.reset(&state);
+                return Ok(consumed);
+            }
+            Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+                input.reset(&state);
+                return Ok(consumed);
+            }
+            Err(error) => return Err(selector_basic(error)),
+        }
+    }
+}
+
+fn parse_compound_selector<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssSelector, ParseError<'i, Error>> {
+    parse_compound_selector_model(input).map(compound_selector_to_selector)
+}
+
+fn parse_compound_selector_model<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssCompoundSelector, ParseError<'i, Error>> {
     loop {
         let state = input.state();
         match input.next_including_whitespace() {
@@ -120,7 +236,13 @@ pub(super) fn parse_compound_selector<'i, 't>(
         attributes.as_slice(),
         pseudo_classes.as_slice(),
     ) {
-        return Ok(CssSelector::Class(class.clone()));
+        return Ok(CssCompoundSelector::new(
+            None,
+            None,
+            vec![class.clone()],
+            Vec::new(),
+            Vec::new(),
+        ));
     }
     if let (Some(tag), None, [], [], []) = (
         tag_name.as_ref(),
@@ -129,7 +251,13 @@ pub(super) fn parse_compound_selector<'i, 't>(
         attributes.as_slice(),
         pseudo_classes.as_slice(),
     ) {
-        return Ok(CssSelector::Tag(tag.clone()));
+        return Ok(CssCompoundSelector::new(
+            Some(tag.clone()),
+            None,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ));
     }
     if let (None, Some(key), [], [], []) = (
         tag_name.as_ref(),
@@ -138,7 +266,13 @@ pub(super) fn parse_compound_selector<'i, 't>(
         attributes.as_slice(),
         pseudo_classes.as_slice(),
     ) {
-        return Ok(CssSelector::Key(key.clone()));
+        return Ok(CssCompoundSelector::new(
+            None,
+            Some(key.clone()),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ));
     }
     if let (None, None, [], [], [pseudo_class]) = (
         tag_name.as_ref(),
@@ -147,15 +281,61 @@ pub(super) fn parse_compound_selector<'i, 't>(
         attributes.as_slice(),
         pseudo_classes.as_slice(),
     ) {
-        return Ok(CssSelector::PseudoClass(pseudo_class.clone()));
+        return Ok(CssCompoundSelector::new(
+            None,
+            None,
+            Vec::new(),
+            Vec::new(),
+            vec![pseudo_class.clone()],
+        ));
     }
-    Ok(CssSelector::Compound(CssCompoundSelector::new(
+    Ok(CssCompoundSelector::new(
         tag_name,
         key_name,
         class_names,
         attributes,
         pseudo_classes,
-    )))
+    ))
+}
+
+fn compound_selector_to_selector(selector: CssCompoundSelector) -> CssSelector {
+    if let (None, None, [class], [], []) = (
+        selector.tag(),
+        selector.key(),
+        selector.classes(),
+        selector.attributes(),
+        selector.pseudo_classes(),
+    ) {
+        return CssSelector::Class(class.clone());
+    }
+    if let (Some(tag), None, [], [], []) = (
+        selector.tag(),
+        selector.key(),
+        selector.classes(),
+        selector.attributes(),
+        selector.pseudo_classes(),
+    ) {
+        return CssSelector::Tag(tag.clone());
+    }
+    if let (None, Some(key), [], [], []) = (
+        selector.tag(),
+        selector.key(),
+        selector.classes(),
+        selector.attributes(),
+        selector.pseudo_classes(),
+    ) {
+        return CssSelector::Key(key.clone());
+    }
+    if let (None, None, [], [], [pseudo_class]) = (
+        selector.tag(),
+        selector.key(),
+        selector.classes(),
+        selector.attributes(),
+        selector.pseudo_classes(),
+    ) {
+        return CssSelector::PseudoClass(pseudo_class.clone());
+    }
+    CssSelector::Compound(selector)
 }
 
 fn parse_attribute_selector<'i, 't>(
@@ -319,9 +499,9 @@ fn parse_pseudo_class<'i, 't>(
 
 fn parse_pseudo_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssSelectorList, ParseError<'i, Error>> {
-    let selectors = parse_selector_list(input)?;
-    CssSelectorList::try_new(selectors)
+) -> std::result::Result<CssPseudoSelectorList, ParseError<'i, Error>> {
+    let selectors = parse_pseudo_compound_selector_list(input)?;
+    CssPseudoSelectorList::try_new(selectors)
         .ok_or_else(|| invalid_selector(input, "pseudo-class selector list must not be empty"))
 }
 

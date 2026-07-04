@@ -29,7 +29,7 @@ use box_model::*;
 use effects::*;
 use grid::*;
 use layout::*;
-use selectors::parse_selector_list;
+use selectors::parse_rule_selector_list;
 use timing::*;
 use typography::*;
 use values::*;
@@ -78,7 +78,7 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {
         &mut self,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
-        parse_selector_list(input)
+        parse_rule_selector_list(input)
     }
 
     fn parse_block<'t>(

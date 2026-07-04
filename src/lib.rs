@@ -359,8 +359,8 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             "border-bottom-left-radius" => (CssProperty::BorderBottomLeftRadius, CssValue::CornerRadius(parse_corner_radius(input)?)),
             "box-shadow" => (CssProperty::BoxShadow, CssValue::BoxShadow(parse_box_shadow(input)?)),
             "opacity" => (CssProperty::Opacity, CssValue::Number(parse_number(input)?)),
-            "flex-grow" => (CssProperty::FlexGrow, CssValue::Number(parse_number(input)?)),
-            "flex-shrink" => (CssProperty::FlexShrink, CssValue::Number(parse_number(input)?)),
+            "flex-grow" => (CssProperty::FlexGrow, CssValue::Number(parse_non_negative_number(input, "flex-grow")?)),
+            "flex-shrink" => (CssProperty::FlexShrink, CssValue::Number(parse_non_negative_number(input, "flex-shrink")?)),
             "order" => (CssProperty::Order, CssValue::Order(parse_order(input)?)),
             "flex" => (CssProperty::Flex, CssValue::Flex(parse_flex(input)?)),
             "justify-tracks" => (CssProperty::JustifyTracks, CssValue::Alignment(parse_content_alignment(input)?)),
@@ -5535,6 +5535,132 @@ mod tests {
         };
     }
 
+    fn property_specific_rejection_probe(property_name: &str) -> &'static str {
+        match property_name {
+            "all" => "block",
+            "display" => "inline",
+            "box-sizing" => "padding-box",
+            "position" => "running",
+            "direction" => "block",
+            "overflow" | "overflow-x" | "overflow-y" => "auto",
+            "flex-direction" => "wrap",
+            "flex-wrap" => "column",
+            "float" => "center",
+            "clear" => "start",
+            "align-content" | "justify-content" | "place-content" | "justify-tracks"
+            | "align-tracks" => "auto",
+            "align-items" | "align-self" | "justify-items" | "justify-self" | "place-items"
+            | "place-self" => "space-between",
+            "visibility" => "auto",
+            "content-visibility" => "collapse",
+            "width" | "height" | "min-width" | "min-height" | "max-width" | "max-height"
+            | "flex-basis" | "inset" | "top" | "right" | "bottom" | "left" | "margin"
+            | "margin-top" | "margin-right" | "margin-bottom" | "margin-left" => "solid",
+            "gap" | "row-gap" | "column-gap" => "auto",
+            "grid-flow-tolerance" => "solid",
+            "grid-template-rows"
+            | "grid-template-columns"
+            | "grid-template"
+            | "grid-auto-rows"
+            | "grid-auto-columns" => "solid",
+            "grid-template-areas" => "\"a a\" \"a .\"",
+            "grid-auto-flow" => "left",
+            "grid-row-start" | "grid-row-end" | "grid-column-start" | "grid-column-end"
+            | "grid-row" | "grid-column" | "grid-area" => "0",
+            "grid" => "auto-flow",
+            "font-size" | "line-height" | "text-indent" | "vertical-align" => "auto",
+            "writing-mode" => "lr",
+            "text-align" => "auto",
+            "text-align-last" => "match-parent",
+            "font-family" => "sans-serif,",
+            "font" => "bold sans-serif",
+            "font-weight" => "1001",
+            "font-style" => "bold",
+            "font-stretch" => "wide",
+            "font-variant" => "italic",
+            "font-feature-settings" => "\"abc\" on",
+            "letter-spacing" => "auto",
+            "text-wrap" => "auto",
+            "white-space" => "balance",
+            "word-break" => "nowrap",
+            "overflow-wrap" => "ellipsis",
+            "text-overflow" => "wrap",
+            "text-decoration" | "text-decoration-line" => "underline underline",
+            "text-decoration-color" => "solid",
+            "text-decoration-style" => "auto",
+            "text-decoration-thickness" => "-1px",
+            "text-transform" => "wrap",
+            "z-index" => "1.5",
+            "box-decoration-break" => "auto",
+            "padding" | "padding-top" | "padding-right" | "padding-bottom" | "padding-left" => {
+                "auto"
+            }
+            "border" | "border-top" | "border-right" | "border-bottom" | "border-left" => {
+                "solid dotted"
+            }
+            "border-width"
+            | "border-top-width"
+            | "border-right-width"
+            | "border-bottom-width"
+            | "border-left-width"
+            | "outline-width" => "10%",
+            "color"
+            | "background"
+            | "background-color"
+            | "border-color"
+            | "border-top-color"
+            | "border-right-color"
+            | "border-bottom-color"
+            | "border-left-color"
+            | "outline-color" => "solid",
+            "background-image" | "mask-image" => "url(\"\")",
+            "background-position" | "mask-position" | "transform-origin" => "left right",
+            "background-size" | "mask-size" => "solid",
+            "background-repeat" | "mask-repeat" => "solid",
+            "background-origin" | "background-clip" => "margin-box",
+            "background-attachment" => "sticky",
+            "border-style"
+            | "border-top-style"
+            | "border-right-style"
+            | "border-bottom-style"
+            | "border-left-style" => "auto",
+            "outline-style" => "10px",
+            "border-radius"
+            | "border-top-left-radius"
+            | "border-top-right-radius"
+            | "border-bottom-right-radius"
+            | "border-bottom-left-radius" => "-1px",
+            "box-shadow" => "1px 2px -3px",
+            "opacity" | "flex-grow" | "flex-shrink" | "aspect-ratio" | "scrollbar-width" => "solid",
+            "flex" => "-1",
+            "order" => "1.5",
+            "cursor" => "10px",
+            "pointer-events" => "grab",
+            "user-select" => "grab",
+            "outline" => "solid dotted",
+            "transform" => "translate(red)",
+            "translate" => "red",
+            "rotate" => "45px",
+            "scale" => "solid",
+            "filter" | "backdrop-filter" => "opacity(red)",
+            "clip-path" => "circle(red)",
+            "mask" => "solid",
+            "transition-property" | "animation-name" => "auto",
+            "transition-duration"
+            | "transition-delay"
+            | "animation-duration"
+            | "animation-delay" => "10px",
+            "transition-timing-function" | "animation-timing-function" => "bounce",
+            "transition" => "opacity 1s 2s 3s",
+            "animation-iteration-count" => "-1",
+            "animation-direction" => "running",
+            "animation-fill-mode" => "running",
+            "animation-play-state" => "alternate",
+            "animation" => "fade 1s 2s 3s",
+            other => panic!("missing rejection probe for supported property `{other}`"),
+        }
+    }
+
     #[test]
     fn strict_declaration_case_helpers_accept_and_reject_cases() {
         assert_accepts_declarations(&accepted_declaration_cases()[..3]);
@@ -5580,6 +5706,260 @@ mod tests {
             ".panel { width: inherit 10px; height: 20px; }",
             &ExpectedErrorKind::InvalidSyntax,
         );
+    }
+
+    #[test]
+    fn rejection_property_specific_matrix_rejects_every_supported_property() {
+        for case in accepted_declaration_cases() {
+            let authored_value = property_specific_rejection_probe(case.property_name);
+            RejectedDeclarationCase {
+                label: case.property_name,
+                property_name: case.property_name,
+                authored_value,
+                expected_error: ExpectedErrorKind::InvalidSyntaxOrUnsupportedValueForProperty {
+                    property: case.property_name,
+                },
+                property_name_should_be_recognized: true,
+            }
+            .assert_rejects();
+        }
+    }
+
+    #[test]
+    fn leakage_wrong_keyword_and_unit_matrix_rejects_property_family_crossovers() {
+        assert_rejects_declarations(&[
+            RejectedDeclarationCase {
+                label: "display rejects unsupported inline keyword",
+                property_name: "display",
+                authored_value: "inline",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "display",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "overflow rejects auto keyword",
+                property_name: "overflow",
+                authored_value: "auto",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "overflow",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "align-items rejects content distribution keyword",
+                property_name: "align-items",
+                authored_value: "space-between",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "align-items",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "padding rejects auto keyword",
+                property_name: "padding",
+                authored_value: "auto",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "padding",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "border-width rejects percentage",
+                property_name: "border-width",
+                authored_value: "10%",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "border-width",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "border-color rejects border style keyword",
+                property_name: "border-color",
+                authored_value: "solid",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "border-color",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "font-size rejects auto keyword",
+                property_name: "font-size",
+                authored_value: "auto",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "font-size",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "grid-auto-flow rejects position keyword",
+                property_name: "grid-auto-flow",
+                authored_value: "left",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "grid-auto-flow",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "cursor rejects length",
+                property_name: "cursor",
+                authored_value: "10px",
+                expected_error: ExpectedErrorKind::InvalidSyntaxOrUnsupportedValueForProperty {
+                    property: "cursor",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "transition-duration rejects length unit",
+                property_name: "transition-duration",
+                authored_value: "10px",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "transition-duration",
+                },
+                property_name_should_be_recognized: true,
+            },
+        ]);
+    }
+
+    #[test]
+    fn rejection_malformed_functions_lists_and_shorthands_matrix() {
+        for input in [
+            ".panel { width: calc(10px + ); }",
+            ".panel { width: calc(10px * 2); }",
+            ".panel { transform: translate(red); }",
+            ".panel { filter: opacity(red); }",
+            ".panel { clip-path: polygon(0 0, ); }",
+            ".panel { transition-timing-function: cubic-bezier(0.1, red, 0.3, 1); }",
+            ".panel { font-family: sans-serif,; }",
+            ".panel { background-image: none,; }",
+            ".panel { transition-property: opacity,; }",
+            ".panel { animation-name: fade,; }",
+            ".panel { border: 1px 2px solid; }",
+            ".panel { box-shadow: inset inset 1px 2px; }",
+            ".panel { text-decoration: underline underline; }",
+            ".panel { transition: opacity 1s 2s 3s; }",
+            ".panel { animation: fade 1s 2s 3s; }",
+        ] {
+            let error = parse_sheet(input).expect_err(input);
+            assert!(
+                matches!(
+                    error.kind(),
+                    ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+                ),
+                "{input} rejected with unexpected error kind: {:?}",
+                error.kind(),
+            );
+        }
+    }
+
+    #[test]
+    fn rejection_negative_numbers_and_public_constructor_invariants_matrix() {
+        assert_rejects_declarations(&[
+            RejectedDeclarationCase {
+                label: "flex-grow rejects negative numbers",
+                property_name: "flex-grow",
+                authored_value: "-1",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "flex-grow",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "flex-shrink rejects negative numbers",
+                property_name: "flex-shrink",
+                authored_value: "-1",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "flex-shrink",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "padding rejects negative lengths",
+                property_name: "padding",
+                authored_value: "-1px",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "padding",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "border-radius rejects negative lengths",
+                property_name: "border-radius",
+                authored_value: "-1px",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "border-radius",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "animation-iteration-count rejects negative numbers",
+                property_name: "animation-iteration-count",
+                authored_value: "-1",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "animation-iteration-count",
+                },
+                property_name_should_be_recognized: true,
+            },
+        ]);
+
+        assert_eq!(CssFontFamilyList::try_new(Vec::new()), None);
+        assert_eq!(CssGridTrackList::try_new(Vec::new()), None);
+        assert_eq!(
+            CssPosition::try_new(vec![
+                CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Left),
+                CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Right),
+            ]),
+            None
+        );
+        assert_eq!(CssTransitionList::try_new(Vec::new()), None);
+        assert_eq!(
+            CssAnimation::try_new(CssAnimationComponents::default()),
+            None
+        );
+    }
+
+    #[test]
+    fn rejection_unsupported_but_syntactically_valid_css_keywords_stay_rejected() {
+        assert_rejects_declarations(&[
+            RejectedDeclarationCase {
+                label: "display inline remains unsupported",
+                property_name: "display",
+                authored_value: "inline",
+                expected_error: ExpectedErrorKind::UnsupportedValue {
+                    property: Some("display"),
+                    reason: "unsupported display keyword `inline`",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "overflow auto remains unsupported",
+                property_name: "overflow",
+                authored_value: "auto",
+                expected_error: ExpectedErrorKind::UnsupportedValue {
+                    property: Some("overflow"),
+                    reason: "unsupported overflow keyword `auto`",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "text-align-last match-parent remains unsupported",
+                property_name: "text-align-last",
+                authored_value: "match-parent",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "text-align-last",
+                },
+                property_name_should_be_recognized: true,
+            },
+            RejectedDeclarationCase {
+                label: "background-origin margin-box remains unsupported",
+                property_name: "background-origin",
+                authored_value: "margin-box",
+                expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
+                    property: "background-origin",
+                },
+                property_name_should_be_recognized: true,
+            },
+        ]);
     }
 
     #[test]

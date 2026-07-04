@@ -67,8 +67,14 @@ impl AcceptedValueCase {
 
 pub(crate) enum ExpectedErrorKind {
     InvalidSyntax,
+    InvalidSyntaxOrUnsupportedValueForProperty {
+        property: &'static str,
+    },
     UnknownProperty {
         name: &'static str,
+    },
+    UnsupportedValueForProperty {
+        property: &'static str,
     },
     UnsupportedValue {
         property: Option<&'static str>,
@@ -80,8 +86,26 @@ impl ExpectedErrorKind {
     fn assert_matches(&self, actual: &ErrorKind, label: &str) {
         match (self, actual) {
             (Self::InvalidSyntax, ErrorKind::InvalidSyntax { .. }) => {}
+            (
+                Self::InvalidSyntaxOrUnsupportedValueForProperty { property },
+                ErrorKind::UnsupportedValue {
+                    property: actual_property,
+                    ..
+                },
+            ) if Some(*property) == actual_property.as_deref() => {}
+            (
+                Self::InvalidSyntaxOrUnsupportedValueForProperty { .. },
+                ErrorKind::InvalidSyntax { .. },
+            ) => {}
             (Self::UnknownProperty { name }, ErrorKind::UnknownProperty { name: actual })
                 if name == actual => {}
+            (
+                Self::UnsupportedValueForProperty { property },
+                ErrorKind::UnsupportedValue {
+                    property: actual_property,
+                    ..
+                },
+            ) if Some(*property) == actual_property.as_deref() => {}
             (
                 Self::UnsupportedValue { property, reason },
                 ErrorKind::UnsupportedValue {

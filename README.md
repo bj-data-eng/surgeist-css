@@ -18,6 +18,14 @@ Container queries are parsed as authored conditions on `@container` group rules.
 
 Imports are parsed as authored `@import` contracts only. `surgeist-css` preserves import targets, layer clauses, and media conditions, but does not resolve paths, load files, or merge imported sheets; root/style-owned Surgeist integration performs loading and composition.
 
+Cascade layers are parsed as authored `@layer` statements and blocks, including named and anonymous layer blocks. `surgeist-css` records layer names and layer-contained rules, but does not compute cascade order, declaration precedence, or runtime cascade effects.
+
+Scoped styles are parsed as authored `@scope` rules with optional roots, limits, scoped style selectors, and scoped nested group rules. Relative scoped selectors remain structurally distinct from ordinary selectors. `surgeist-css` does not perform scope matching, selector matching, or scoping proximity calculations.
+
+Pseudo-elements are parsed as terminal authored selector syntax for the supported `::before`, `::after`, `::marker`, `::selection`, and `::backdrop` forms. The parser records them on selector compounds, but does not filter declarations by pseudo-element or perform generated box/layout behavior.
+
+Generated content, list markers, and counters are parsed as typed authored property values for `content`, list-style longhands and shorthand, and counter change properties. Strings, URLs, attribute references, quote keywords, counter functions, list-style slots, and counter change lists remain symbolic. `surgeist-css` does not lay out generated content or list markers, resolve marker images, or evaluate/reset/increment counters.
+
 Font faces are parsed as authored `@font-face` descriptor blocks only. `surgeist-css` validates supported descriptors and preserves font source hints, unicode ranges, and variation ranges, but does not perform font lookup, loading, matching, or resource validation; downstream Surgeist layers own those steps.
 
 Keyframes are parsed as authored `@keyframes` rules. `surgeist-css` validates keyframe names, selector offsets, and declarations, but does not evaluate animations, match animation names to rules, interpolate values, or run animation timelines.

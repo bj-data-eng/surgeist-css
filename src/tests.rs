@@ -1130,6 +1130,121 @@ fn scope_rule_parser_keeps_nested_scoped_group_rules_scoped() {
 }
 
 #[test]
+fn public_api_exposes_layer_scope_and_scoped_rule_structure() {
+    let sheet = parse_sheet(
+        r#"
+            @layer reset, theme.components;
+            @layer theme {
+                .button:hover::before { content: "x"; }
+                .panel > dialog::backdrop { color: black; }
+            }
+            @scope (.card, [data-scope]) to (.stop) {
+                .title, > .action { color: black; }
+                @media screen {
+                    @layer components {
+                        > .icon::after { content: counter(section); }
+                    }
+                }
+                @layer scoped.order;
+            }
+        "#,
+    )
+    .unwrap();
+
+    let [
+        CssRule::LayerStatement(statement),
+        CssRule::LayerBlock(layer),
+        CssRule::Scope(scope),
+    ] = sheet.rules()
+    else {
+        panic!("expected layer statement, layer block, and scope rule");
+    };
+
+    let layer_names = statement.names().names();
+    assert_eq!(layer_names.len(), 2);
+    assert_eq!(layer_names[0].components(), &["reset".to_owned()]);
+    assert_eq!(
+        layer_names[1].components(),
+        &["theme".to_owned(), "components".to_owned()]
+    );
+    assert_eq!(layer.name().unwrap().components(), &["theme".to_owned()]);
+
+    let [CssRule::Style(before_rule), CssRule::Style(backdrop_rule)] = layer.rules() else {
+        panic!("expected ordinary style rules inside layer block");
+    };
+    let CssSelector::Compound(before_selector) = before_rule.selector() else {
+        panic!("expected compound pseudo-element selector");
+    };
+    assert_eq!(before_selector.pseudo_classes(), &[CssPseudoClass::Hover]);
+    assert_eq!(
+        before_selector.pseudo_elements().unwrap().pseudo_elements(),
+        &[CssPseudoElement::Before]
+    );
+
+    let CssSelector::Complex(backdrop_selector) = backdrop_rule.selector() else {
+        panic!("expected complex pseudo-element selector");
+    };
+    let [backdrop_part] = backdrop_selector.rest() else {
+        panic!("expected one complex selector part");
+    };
+    assert_eq!(backdrop_part.combinator(), CssSelectorCombinator::Child);
+    assert_eq!(
+        backdrop_part
+            .selector()
+            .pseudo_elements()
+            .unwrap()
+            .pseudo_elements(),
+        &[CssPseudoElement::Backdrop]
+    );
+
+    assert_eq!(scope.root().unwrap().selectors().len(), 2);
+    assert_eq!(scope.limit().unwrap().selectors().len(), 1);
+    let [
+        CssScopedRule::Style(scoped_style),
+        CssScopedRule::Media(scoped_media),
+        CssScopedRule::LayerStatement(scoped_layer_statement),
+    ] = scope.rules().rules()
+    else {
+        panic!("expected scoped style, scoped media, and scoped layer statement");
+    };
+
+    let scoped_selectors = scoped_style.selectors().selectors();
+    assert!(matches!(
+        scoped_selectors[0],
+        CssScopedStyleSelector::Selector(_)
+    ));
+    let CssScopedStyleSelector::Relative(relative_action) = &scoped_selectors[1] else {
+        panic!("expected relative scoped selector");
+    };
+    assert_eq!(relative_action.combinator(), CssSelectorCombinator::Child);
+
+    assert_eq!(
+        scoped_layer_statement.names().names()[0].components(),
+        &["scoped".to_owned(), "order".to_owned()]
+    );
+    let [CssScopedRule::LayerBlock(scoped_layer)] = scoped_media.rules().rules() else {
+        panic!("expected scoped layer nested inside scoped media");
+    };
+    let [CssScopedRule::Style(nested_scoped_style)] = scoped_layer.rules().rules() else {
+        panic!("expected scoped style rule inside scoped layer");
+    };
+    let [CssScopedStyleSelector::Relative(relative_icon)] =
+        nested_scoped_style.selectors().selectors()
+    else {
+        panic!("expected nested scoped-only relative selector");
+    };
+    assert_eq!(relative_icon.combinator(), CssSelectorCombinator::Child);
+    let CssSelector::Compound(icon_selector) = relative_icon.selector() else {
+        panic!("expected compound selector after relative combinator");
+    };
+    assert_eq!(icon_selector.classes(), &["icon".to_owned()]);
+    assert_eq!(
+        icon_selector.pseudo_elements().unwrap().pseudo_elements(),
+        &[CssPseudoElement::After]
+    );
+}
+
+#[test]
 fn nested_style_rule_parser_accepts_layer_and_scope_groups() {
     let sheet = parse_sheet(
         r#"
@@ -1656,6 +1771,100 @@ fn parses_counter_change_values_symbolically() {
         assert_eq!(changes.changes()[2].name().as_str(), "item");
         assert_eq!(changes.changes()[2].value(), None);
     }
+}
+
+#[test]
+fn public_api_exposes_generated_content_list_style_and_counter_values() {
+    let sheet = parse_sheet(
+        r#"
+            .chapter::before {
+                content: "Chapter " counter(section, upper-roman) counters(item, ".", lower-alpha) attr(data-label) open-quote;
+                list-style: url(marker.svg) inside square;
+                counter-reset: section 1 page -1 item;
+            }
+        "#,
+    )
+    .unwrap();
+
+    let style = style_rule(&sheet.rules()[0]);
+    let content = style
+        .declarations()
+        .iter()
+        .find(|declaration| declaration.property() == &CssProperty::Content)
+        .unwrap();
+    let CssValue::Content(CssContent::Items(content_list)) = content.value() else {
+        panic!("expected content item list");
+    };
+    let [
+        CssContentItem::String(prefix),
+        CssContentItem::Counter(counter),
+        CssContentItem::Counters(counters),
+        CssContentItem::Attr(attribute),
+        CssContentItem::OpenQuote,
+    ] = content_list.items()
+    else {
+        panic!("expected inspectable generated content items");
+    };
+    assert_eq!(prefix.as_str(), "Chapter ");
+    assert_eq!(counter.name().as_str(), "section");
+    assert!(matches!(
+        counter.style(),
+        Some(CssCounterStyle::BuiltIn(CssBuiltInCounterStyle::UpperRoman))
+    ));
+    assert_eq!(counters.name().as_str(), "item");
+    assert_eq!(counters.separator().as_str(), ".");
+    assert!(matches!(
+        counters.style(),
+        Some(CssCounterStyle::BuiltIn(CssBuiltInCounterStyle::LowerAlpha))
+    ));
+    assert_eq!(attribute.as_str(), "data-label");
+
+    let CssSelector::Compound(selector) = style.selector() else {
+        panic!("expected compound pseudo-element selector");
+    };
+    assert_eq!(
+        selector.pseudo_elements().unwrap().pseudo_elements(),
+        &[CssPseudoElement::Before]
+    );
+
+    let list_style = style
+        .declarations()
+        .iter()
+        .find(|declaration| declaration.property() == &CssProperty::ListStyle)
+        .unwrap();
+    let CssValue::ListStyle(list_style) = list_style.value() else {
+        panic!("expected list-style shorthand");
+    };
+    assert_eq!(
+        list_style.style_type(),
+        Some(&CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
+            CssBuiltInCounterStyle::Square,
+        )))
+    );
+    assert_eq!(list_style.position(), Some(CssListStylePosition::Inside));
+    let Some(CssListStyleImage::Url(marker)) = list_style.image() else {
+        panic!("expected marker URL slot");
+    };
+    assert_eq!(marker.as_str(), "marker.svg");
+
+    let counter_reset = style
+        .declarations()
+        .iter()
+        .find(|declaration| declaration.property() == &CssProperty::CounterReset)
+        .unwrap();
+    let CssValue::CounterChanges(CssCounterChanges::Changes(changes)) = counter_reset.value()
+    else {
+        panic!("expected counter change list");
+    };
+    let [section, page, item] = changes.changes() else {
+        panic!("expected three counter changes");
+    };
+    assert_eq!(section.name().as_str(), "section");
+    assert_eq!(section.value(), Some(1));
+    assert_eq!(page.name().as_str(), "page");
+    assert_eq!(page.value(), Some(-1));
+    assert_eq!(item.name().as_str(), "item");
+    assert_eq!(item.value(), None);
 }
 
 #[test]
@@ -4230,6 +4439,19 @@ fn strict_no_recovery_whole_sheet_rejects_every_invalid_surface() {
             },
         },
     ]);
+}
+
+#[test]
+fn new_authored_surfaces_reject_whole_sheet_without_recovery() {
+    for css in [
+        "@layer reset; @layer , theme; .ok { color: black; }",
+        "@scope (.card) { .ok { color: black; } @font-face { font-family: Test; src: local(Test); } } .after { color: blue; }",
+        ".ok { color: black; } .bad::before .later { color: red; } .after { color: blue; }",
+        ".ok { content: \"good\"; content: normal \"bad\"; color: red; }",
+        ".ok { list-style: square inside; counter-reset: none item; color: red; }",
+    ] {
+        assert!(parse_sheet(css).is_err(), "{css} should reject");
+    }
 }
 
 #[test]

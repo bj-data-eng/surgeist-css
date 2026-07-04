@@ -145,13 +145,72 @@ fn parses_custom_property_declarations_as_authored_syntax() {
 }
 
 #[test]
-fn custom_property_values_preserve_authored_var_syntax_without_structural_parsing() {
+fn parses_variable_references_with_nested_fallbacks() {
+    let declaration =
+        single_declaration(".theme { --gap: var(--space, calc(1px + var(--fallback))); }");
+    let CssValue::CustomProperty(value) = declaration.value() else {
+        panic!("expected custom property value");
+    };
+    assert_eq!(value.as_css(), "var(--space, calc(1px + var(--fallback)))");
+    assert_eq!(value.references()[0].name().as_str(), "--space");
+    let fallback = value.references()[0].fallback().unwrap();
+    assert_eq!(fallback.as_css(), "calc(1px + var(--fallback))");
+    assert_eq!(fallback.references()[0].name().as_str(), "--fallback");
+}
+
+#[test]
+fn variable_references_preserve_authored_fallback_css() {
+    let declaration = single_declaration(".theme { --gap: var(--space, 8px); }");
+    let CssValue::CustomProperty(value) = declaration.value() else {
+        panic!("expected custom property value");
+    };
+    assert_eq!(value.as_css(), "var(--space, 8px)");
+    assert_eq!(value.references()[0].name().as_str(), "--space");
+    let fallback = value.references()[0].fallback().unwrap();
+    assert_eq!(fallback.as_css(), "8px");
+    assert!(fallback.references().is_empty());
+}
+
+#[test]
+fn variable_references_accept_plain_and_empty_fallback_forms() {
+    let declaration = single_declaration(".theme { --gap: var(--space); }");
+    let CssValue::CustomProperty(value) = declaration.value() else {
+        panic!("expected custom property value");
+    };
+    assert_eq!(value.references()[0].name().as_str(), "--space");
+    assert!(value.references()[0].fallback().is_none());
+
+    let declaration = single_declaration(".theme { --gap: var(--empty,); }");
+    let CssValue::CustomProperty(value) = declaration.value() else {
+        panic!("expected custom property value");
+    };
+    let fallback = value.references()[0].fallback().unwrap();
+    assert_eq!(fallback.as_css(), "");
+    assert!(fallback.references().is_empty());
+}
+
+#[test]
+fn variable_references_in_standard_properties_still_reject_before_task_4() {
+    assert!(parse_sheet(".panel { gap: var(--space); }").is_err());
+}
+
+#[test]
+fn custom_property_values_collect_variable_references_inside_authored_syntax() {
     let declaration = single_declaration(".theme { --gap: calc(1px + var(--space)); }");
     let CssValue::CustomProperty(value) = declaration.value() else {
         panic!("expected custom property value");
     };
     assert_eq!(value.as_css(), "calc(1px + var(--space))");
-    assert!(value.references().is_empty());
+    assert_eq!(value.references()[0].name().as_str(), "--space");
+    assert!(value.references()[0].fallback().is_none());
+}
+
+#[test]
+fn rejects_malformed_variable_references() {
+    assert!(parse_sheet(".theme { --gap: var(); }").is_err());
+    assert!(parse_sheet(".theme { --gap: var(color); }").is_err());
+    assert!(parse_sheet(".theme { --gap: var(--gap --other); }").is_err());
+    assert!(parse_sheet(".theme { --gap: var(--gap, }").is_err());
 }
 
 #[test]

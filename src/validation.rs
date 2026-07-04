@@ -246,16 +246,24 @@ mod tests {
         assert!(KNOWN_UNSUPPORTED_PROPERTY_NAMES.is_empty());
 
         let mut covered = HashSet::new();
+        let mut covered_properties = HashSet::new();
         for case in accepted_declaration_cases() {
             assert!(
                 covered.insert(case.property_name),
                 "duplicate accepted declaration case for `{}`",
                 case.property_name,
             );
+            covered_properties.insert(case.expected_property);
             case.assert_accepts();
         }
 
+        let mut supported_names = HashSet::new();
+        let mut supported_properties = HashSet::new();
         for property_name in SUPPORTED_PROPERTY_NAMES {
+            assert!(
+                supported_names.insert(property_name.to_ascii_lowercase()),
+                "duplicate supported property name `{property_name}`",
+            );
             assert!(
                 covered.contains(property_name),
                 "missing accepted declaration case for `{property_name}`",
@@ -272,6 +280,16 @@ mod tests {
                 covered_case.expected_property, expected_property,
                 "accepted declaration case for `{property_name}` expects the wrong CssProperty",
             );
+            supported_properties.insert(expected_property);
         }
+        assert_eq!(
+            covered.len(),
+            supported_names.len(),
+            "accepted declaration case names must exactly match SUPPORTED_PROPERTY_NAMES",
+        );
+        assert_eq!(
+            covered_properties, supported_properties,
+            "accepted declaration case properties must match supported parser mappings",
+        );
     }
 }

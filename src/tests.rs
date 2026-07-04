@@ -11,7 +11,7 @@ fn declaration_value(input: &str, property: CssProperty) -> CssValue {
     sheet.rules()[0]
         .declarations()
         .iter()
-        .find(|declaration| declaration.property() == property)
+        .find(|declaration| declaration.property() == &property)
         .unwrap()
         .value()
         .clone()
@@ -22,7 +22,7 @@ fn declaration(input: &str, property: CssProperty) -> CssDeclaration {
     sheet.rules()[0]
         .declarations()
         .iter()
-        .find(|declaration| declaration.property() == property)
+        .find(|declaration| declaration.property() == &property)
         .unwrap()
         .clone()
 }
@@ -53,8 +53,81 @@ fn easing_arguments(css: &str) -> CssEasingArguments {
 #[test]
 fn background_color_preserves_authored_property_identity() {
     let declaration = single_declaration(".panel { background-color: black; }");
-    assert_eq!(declaration.property(), CssProperty::BackgroundColor);
+    assert_eq!(declaration.property(), &CssProperty::BackgroundColor);
     assert_eq!(declaration.value(), &CssValue::Color(CssColor::BLACK));
+}
+
+#[test]
+fn custom_property_name_constructor_preserves_case_and_rejects_non_custom_names() {
+    let name = CssCustomPropertyName::try_new("--BrandColor").unwrap();
+    assert_eq!(name.as_str(), "--BrandColor");
+    assert_eq!(
+        CssCustomPropertyName::try_new("--brand_color-1")
+            .unwrap()
+            .as_str(),
+        "--brand_color-1",
+    );
+    assert_eq!(CssCustomPropertyName::try_new("color"), None);
+    assert_eq!(CssCustomPropertyName::try_new("-gap"), None);
+    assert_eq!(CssCustomPropertyName::try_new("--"), None);
+    assert_eq!(CssCustomPropertyName::try_new("-- bad"), None);
+    assert_eq!(CssCustomPropertyName::try_new("--;"), None);
+    assert_eq!(CssCustomPropertyName::try_new("--gap;"), None);
+    assert_eq!(CssCustomPropertyName::try_new("--gap\n"), None);
+    assert_eq!(CssCustomPropertyName::try_new("--gap\u{7f}"), None);
+}
+
+#[test]
+fn authored_declaration_value_constructor_rejects_empty_css() {
+    let value = CssAuthoredDeclarationValue::try_new("  8px  ").unwrap();
+    assert_eq!(value.as_css(), "  8px  ");
+    assert_eq!(CssAuthoredDeclarationValue::try_new(""), None);
+    assert_eq!(CssAuthoredDeclarationValue::try_new(" \t\n "), None);
+}
+
+#[test]
+fn variable_reference_and_fallback_accessors_preserve_authored_css() {
+    let fallback_reference =
+        CssVariableReference::new(CssCustomPropertyName::try_new("--fallback").unwrap(), None);
+    let fallback = CssVariableFallback::new(
+        CssAuthoredDeclarationValue::try_new("calc(1px + var(--fallback))").unwrap(),
+        vec![fallback_reference.clone()],
+    );
+    let reference = CssVariableReference::new(
+        CssCustomPropertyName::try_new("--space").unwrap(),
+        Some(fallback),
+    );
+    assert_eq!(reference.name().as_str(), "--space");
+    let fallback = reference.fallback().unwrap();
+    assert_eq!(fallback.as_css(), "calc(1px + var(--fallback))");
+    assert_eq!(fallback.references(), &[fallback_reference]);
+}
+
+#[test]
+fn custom_property_value_accessors_preserve_authored_css() {
+    let reference =
+        CssVariableReference::new(CssCustomPropertyName::try_new("--space").unwrap(), None);
+    let value = CssCustomPropertyValue::new(
+        CssAuthoredDeclarationValue::try_new("calc(var(--space) * 2)").unwrap(),
+        vec![reference.clone()],
+    );
+    assert_eq!(value.as_css(), "calc(var(--space) * 2)");
+    assert_eq!(value.references(), &[reference]);
+}
+
+#[test]
+fn variable_dependent_value_constructor_requires_references() {
+    let authored = CssAuthoredDeclarationValue::try_new("var(--space)").unwrap();
+    let reference =
+        CssVariableReference::new(CssCustomPropertyName::try_new("--space").unwrap(), None);
+    let value =
+        CssVariableDependentValue::try_new(authored.clone(), vec![reference.clone()]).unwrap();
+    assert_eq!(value.as_css(), "var(--space)");
+    assert_eq!(value.references(), &[reference]);
+    assert_eq!(
+        CssVariableDependentValue::try_new(authored, Vec::new()),
+        None
+    );
 }
 
 fn assert_global_value(value: &CssValue) {
@@ -2677,7 +2750,7 @@ fn unit_matrix_accepts_every_supported_length_unit_in_ordinary_length_contexts()
         let authored = format!("1{}", unit.as_css_str());
         let declaration = parse_single_declaration("width", &authored);
 
-        assert_eq!(declaration.property(), CssProperty::Width);
+        assert_eq!(declaration.property(), &CssProperty::Width);
         assert_eq!(
             declaration.value(),
             &CssValue::Length(CssLength::dimension(1.0, unit)),
@@ -2692,7 +2765,7 @@ fn unit_matrix_accepts_every_supported_length_unit_in_calc_contexts() {
         let authored = format!("calc(1{} + 2px)", unit.as_css_str());
         let declaration = parse_single_declaration("width", &authored);
 
-        assert_eq!(declaration.property(), CssProperty::Width);
+        assert_eq!(declaration.property(), &CssProperty::Width);
         let CssValue::Length(CssLength::Calc(CssCalcLength::Sum(terms))) = declaration.value()
         else {
             panic!("{authored} should parse as a calc length");
@@ -3541,7 +3614,7 @@ fn parses_every_task_5_supported_property_name() {
         assert!(
             declarations
                 .iter()
-                .any(|declaration| declaration.property() == property),
+                .any(|declaration| declaration.property() == &property),
             "missing parsed declaration for {property:?}",
         );
     }
@@ -4031,7 +4104,7 @@ fn parses_every_task_6_supported_property_name() {
         assert!(
             declarations
                 .iter()
-                .any(|declaration| declaration.property() == property),
+                .any(|declaration| declaration.property() == &property),
             "missing parsed declaration for {property:?}",
         );
     }
@@ -4506,7 +4579,7 @@ fn parses_every_task_2_supported_property_name() {
         assert!(
             declarations
                 .iter()
-                .any(|declaration| declaration.property() == property),
+                .any(|declaration| declaration.property() == &property),
             "missing parsed declaration for {property:?}",
         );
     }
@@ -4777,7 +4850,7 @@ fn parses_every_task_4_supported_property_name() {
         assert!(
             declarations
                 .iter()
-                .any(|declaration| declaration.property() == property),
+                .any(|declaration| declaration.property() == &property),
             "missing parsed declaration for {property:?}",
         );
     }

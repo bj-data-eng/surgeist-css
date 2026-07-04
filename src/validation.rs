@@ -13,7 +13,7 @@ pub(crate) enum PropertyNameStatus {
     Unknown,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SupportedProperty {
     pub(crate) name: &'static str,
     pub(crate) property: CssProperty,
@@ -212,7 +212,7 @@ pub(crate) fn property_for_supported_name(name: &str) -> Option<CssProperty> {
     supported_properties()
         .iter()
         .find(|property| property.name.eq_ignore_ascii_case(name))
-        .map(|property| property.property)
+        .map(|property| property.property.clone())
 }
 
 pub(crate) fn classify_property_name(name: &str) -> PropertyNameStatus {
@@ -279,7 +279,7 @@ mod tests {
                 "duplicate accepted declaration case for `{}`",
                 case.property_name,
             );
-            covered_properties.insert(case.expected_property);
+            covered_properties.insert(case.expected_property.clone());
             case.assert_accepts();
         }
 
@@ -307,7 +307,7 @@ mod tests {
                 "accepted declaration case for `{}` expects the wrong CssProperty",
                 supported_property.name,
             );
-            supported_property_set.insert(supported_property.property);
+            supported_property_set.insert(supported_property.property.clone());
         }
         assert_eq!(
             covered.len(),

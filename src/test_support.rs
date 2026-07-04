@@ -13,11 +13,11 @@ pub(crate) struct AcceptedDeclarationCase {
 }
 
 impl AcceptedDeclarationCase {
-    pub(crate) const fn supported_global_inherit(supported_property: SupportedProperty) -> Self {
-        Self::global_inherit(supported_property.name, supported_property.property)
+    pub(crate) fn supported_global_inherit(supported_property: &SupportedProperty) -> Self {
+        Self::global_inherit(supported_property.name, supported_property.property.clone())
     }
 
-    pub(crate) const fn global_inherit(
+    pub(crate) fn global_inherit(
         property_name: &'static str,
         expected_property: CssProperty,
     ) -> Self {
@@ -34,7 +34,7 @@ impl AcceptedDeclarationCase {
         let declaration = parse_single_declaration(self.property_name, self.authored_value);
         assert_eq!(
             declaration.property(),
-            self.expected_property,
+            &self.expected_property,
             "{} parsed to the wrong property",
             self.label,
         );
@@ -61,7 +61,7 @@ impl AcceptedValueCase {
         let declaration = parse_single_declaration(self.property_name, self.authored_value);
         assert_eq!(
             declaration.property(),
-            self.expected_property,
+            &self.expected_property,
             "{} parsed to the wrong property",
             self.label,
         );
@@ -220,7 +220,6 @@ pub(crate) fn assert_sheet_rejected(input: &str, expected_error: &ExpectedErrorK
 pub(crate) fn accepted_declaration_cases() -> Vec<AcceptedDeclarationCase> {
     supported_properties()
         .iter()
-        .copied()
         .map(AcceptedDeclarationCase::supported_global_inherit)
         .collect()
 }

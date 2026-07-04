@@ -81,8 +81,8 @@ impl CssDeclaration {
     }
 
     #[must_use]
-    pub const fn property(&self) -> CssProperty {
-        self.property
+    pub const fn property(&self) -> &CssProperty {
+        &self.property
     }
 
     #[must_use]
@@ -133,7 +133,7 @@ impl CssSourceLocation {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum CssProperty {
     All,
     Display,
@@ -306,6 +306,198 @@ pub enum CssProperty {
     AnimationFillMode,
     AnimationPlayState,
     Animation,
+    Custom(CssCustomPropertyName),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CssCustomPropertyName {
+    name: String,
+}
+
+impl CssCustomPropertyName {
+    #[must_use]
+    pub fn try_new(name: impl Into<String>) -> Option<Self> {
+        let name = name.into();
+        if is_valid_custom_property_name(&name) {
+            Some(Self::new(name))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.name
+    }
+}
+
+fn is_valid_custom_property_name(name: &str) -> bool {
+    name.strip_prefix("--").is_some_and(|suffix| {
+        !suffix.is_empty()
+            && suffix.chars().all(|character| {
+                character == '-' || character == '_' || character.is_alphanumeric()
+            })
+    })
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssAuthoredDeclarationValue {
+    css: String,
+}
+
+impl CssAuthoredDeclarationValue {
+    #[must_use]
+    pub fn try_new(css: impl Into<String>) -> Option<Self> {
+        let css = css.into();
+        if css.trim().is_empty() {
+            None
+        } else {
+            Some(Self::new(css))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(css: impl Into<String>) -> Self {
+        Self { css: css.into() }
+    }
+
+    #[must_use]
+    pub fn as_css(&self) -> &str {
+        &self.css
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssVariableReference {
+    name: CssCustomPropertyName,
+    fallback: Option<CssVariableFallback>,
+}
+
+impl CssVariableReference {
+    #[allow(dead_code)]
+    #[must_use]
+    pub(crate) fn new(name: CssCustomPropertyName, fallback: Option<CssVariableFallback>) -> Self {
+        Self { name, fallback }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> &CssCustomPropertyName {
+        &self.name
+    }
+
+    #[must_use]
+    pub const fn fallback(&self) -> Option<&CssVariableFallback> {
+        self.fallback.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssVariableFallback {
+    authored: CssAuthoredDeclarationValue,
+    references: Vec<CssVariableReference>,
+}
+
+impl CssVariableFallback {
+    #[allow(dead_code)]
+    #[must_use]
+    pub(crate) fn new(
+        authored: CssAuthoredDeclarationValue,
+        references: Vec<CssVariableReference>,
+    ) -> Self {
+        Self {
+            authored,
+            references,
+        }
+    }
+
+    #[must_use]
+    pub fn as_css(&self) -> &str {
+        self.authored.as_css()
+    }
+
+    #[must_use]
+    pub fn references(&self) -> &[CssVariableReference] {
+        &self.references
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCustomPropertyValue {
+    authored: CssAuthoredDeclarationValue,
+    references: Vec<CssVariableReference>,
+}
+
+impl CssCustomPropertyValue {
+    #[allow(dead_code)]
+    #[must_use]
+    pub(crate) fn new(
+        authored: CssAuthoredDeclarationValue,
+        references: Vec<CssVariableReference>,
+    ) -> Self {
+        Self {
+            authored,
+            references,
+        }
+    }
+
+    #[must_use]
+    pub fn as_css(&self) -> &str {
+        self.authored.as_css()
+    }
+
+    #[must_use]
+    pub fn references(&self) -> &[CssVariableReference] {
+        &self.references
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssVariableDependentValue {
+    authored: CssAuthoredDeclarationValue,
+    references: Vec<CssVariableReference>,
+}
+
+impl CssVariableDependentValue {
+    #[allow(dead_code)]
+    #[must_use]
+    pub(crate) fn try_new(
+        authored: CssAuthoredDeclarationValue,
+        references: Vec<CssVariableReference>,
+    ) -> Option<Self> {
+        if references.is_empty() {
+            None
+        } else {
+            Some(Self::new(authored, references))
+        }
+    }
+
+    #[allow(dead_code)]
+    #[must_use]
+    pub(crate) fn new(
+        authored: CssAuthoredDeclarationValue,
+        references: Vec<CssVariableReference>,
+    ) -> Self {
+        debug_assert!(!references.is_empty());
+        Self {
+            authored,
+            references,
+        }
+    }
+
+    #[must_use]
+    pub fn as_css(&self) -> &str {
+        self.authored.as_css()
+    }
+
+    #[must_use]
+    pub fn references(&self) -> &[CssVariableReference] {
+        &self.references
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -320,6 +512,8 @@ pub enum CssGlobalKeyword {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssValue {
     GlobalKeyword(CssGlobalKeyword),
+    CustomProperty(CssCustomPropertyValue),
+    VariableDependent(CssVariableDependentValue),
     Display(CssDisplay),
     BoxSizing(CssBoxSizing),
     Position(CssLayoutPosition),

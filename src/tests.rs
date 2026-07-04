@@ -268,6 +268,23 @@ fn compound_root_selector_carries_root_pseudo_class_structurally() {
 }
 
 #[test]
+fn selector_list_constructor_rejects_empty_lists() {
+    assert_eq!(CssSelectorList::try_new(Vec::new()), None);
+    let list = CssSelectorList::try_new(vec![CssSelector::Class("button".to_owned())]).unwrap();
+    assert_eq!(list.selectors(), &[CssSelector::Class("button".to_owned())]);
+}
+
+#[test]
+fn nth_pattern_model_exposes_an_plus_b_coefficients() {
+    let pattern = CssNthPattern::AnPlusB(CssNthAnPlusB::new(2, 1));
+    let CssNthPattern::AnPlusB(value) = pattern else {
+        panic!("expected an+b pattern");
+    };
+    assert_eq!(value.a(), 2);
+    assert_eq!(value.b(), 1);
+}
+
+#[test]
 fn rejects_unsupported_pseudo_classes() {
     assert!(parse_sheet(":hover { --space: 8px; }").is_err());
     assert!(parse_sheet(":not(.theme) { --space: 8px; }").is_err());

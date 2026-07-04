@@ -4414,9 +4414,104 @@ pub enum CssSelector {
     Compound(CssCompoundSelector),
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssSelectorList {
+    selectors: Vec<CssSelector>,
+}
+
+impl CssSelectorList {
+    #[must_use]
+    pub fn try_new(selectors: Vec<CssSelector>) -> Option<Self> {
+        if selectors.is_empty() {
+            None
+        } else {
+            Some(Self::new(selectors))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(selectors: Vec<CssSelector>) -> Self {
+        debug_assert!(!selectors.is_empty());
+        Self { selectors }
+    }
+
+    #[must_use]
+    pub fn selectors(&self) -> &[CssSelector] {
+        &self.selectors
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum CssPseudoClass {
     Root,
+    Hover,
+    Active,
+    Focus,
+    FocusVisible,
+    FocusWithin,
+    Disabled,
+    Enabled,
+    Checked,
+    Required,
+    Optional,
+    Valid,
+    Invalid,
+    PlaceholderShown,
+    FirstChild,
+    LastChild,
+    OnlyChild,
+    Empty,
+    NthChild(CssNthPattern),
+    NthLastChild(CssNthPattern),
+    FirstOfType,
+    LastOfType,
+    OnlyOfType,
+    NthOfType(CssNthPattern),
+    NthLastOfType(CssNthPattern),
+    Not(CssSelectorList),
+    Is(CssSelectorList),
+    Where(CssSelectorList),
+    Has(CssSelectorList),
+    Modal,
+    Fullscreen,
+    PopoverOpen,
+    Default,
+    Indeterminate,
+    ReadOnly,
+    ReadWrite,
+    InRange,
+    OutOfRange,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssNthPattern {
+    Odd,
+    Even,
+    Integer(i32),
+    AnPlusB(CssNthAnPlusB),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssNthAnPlusB {
+    a: i32,
+    b: i32,
+}
+
+impl CssNthAnPlusB {
+    #[must_use]
+    pub const fn new(a: i32, b: i32) -> Self {
+        Self { a, b }
+    }
+
+    #[must_use]
+    pub const fn a(self) -> i32 {
+        self.a
+    }
+
+    #[must_use]
+    pub const fn b(self) -> i32 {
+        self.b
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

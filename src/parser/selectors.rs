@@ -107,7 +107,7 @@ pub(super) fn parse_compound_selector<'i, 't>(
         class_names.as_slice(),
         pseudo_classes.as_slice(),
     ) {
-        return Ok(CssSelector::PseudoClass(*pseudo_class));
+        return Ok(CssSelector::PseudoClass(pseudo_class.clone()));
     }
     Ok(CssSelector::Compound(CssCompoundSelector::new(
         tag_name,

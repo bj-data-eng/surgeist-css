@@ -664,6 +664,46 @@ fn scope_rule_model_keeps_scoped_selectors_and_rules_separate() {
 }
 
 #[test]
+fn scope_selector_list_constructor_rejects_pseudo_elements() {
+    let ordinary = CssSelector::Class("card".to_owned());
+    let ordinary_list = CssScopeSelectorList::try_new(vec![ordinary.clone()]).unwrap();
+    assert_eq!(ordinary_list.selectors(), &[ordinary]);
+
+    let pseudo_element = CssPseudoElementSequence::try_new(vec![CssPseudoElement::Before]).unwrap();
+    let selector = CssSelector::Compound(
+        CssCompoundSelector::new_with_scope_anchor_and_pseudo_elements(
+            false,
+            None,
+            None,
+            vec!["card".to_owned()],
+            Vec::new(),
+            Vec::new(),
+            Some(pseudo_element),
+        ),
+    );
+
+    assert_eq!(CssScopeSelectorList::try_new(vec![selector]), None);
+
+    let first =
+        CssCompoundSelector::new(None, None, vec!["card".to_owned()], Vec::new(), Vec::new());
+    let part = CssComplexSelectorPart::new(
+        CssSelectorCombinator::Child,
+        CssCompoundSelector::new_with_scope_anchor_and_pseudo_elements(
+            false,
+            None,
+            None,
+            vec!["badge".to_owned()],
+            Vec::new(),
+            Vec::new(),
+            Some(CssPseudoElementSequence::try_new(vec![CssPseudoElement::Before]).unwrap()),
+        ),
+    );
+    let selector = CssSelector::Complex(CssComplexSelector::try_new(first, vec![part]).unwrap());
+
+    assert_eq!(CssScopeSelectorList::try_new(vec![selector]), None);
+}
+
+#[test]
 fn scoped_group_rule_models_keep_scoped_children() {
     let child_selector =
         CssScopedStyleSelectorList::try_new(vec![CssScopedStyleSelector::Selector(

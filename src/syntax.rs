@@ -1169,7 +1169,7 @@ pub struct CssScopeSelectorList {
 impl CssScopeSelectorList {
     #[must_use]
     pub fn try_new(selectors: Vec<CssSelector>) -> Option<Self> {
-        if selectors.is_empty() {
+        if selectors.is_empty() || selectors.iter().any(CssSelector::has_pseudo_elements) {
             None
         } else {
             Some(Self::new(selectors))
@@ -1179,6 +1179,7 @@ impl CssScopeSelectorList {
     #[must_use]
     pub(crate) fn new(selectors: Vec<CssSelector>) -> Self {
         debug_assert!(!selectors.is_empty());
+        debug_assert!(!selectors.iter().any(CssSelector::has_pseudo_elements));
         Self { selectors }
     }
 
@@ -7293,6 +7294,16 @@ pub enum CssSelector {
 #[allow(dead_code)] // Staged for native nesting flattening in the parser.
 impl CssSelector {
     #[must_use]
+    pub fn has_pseudo_elements(&self) -> bool {
+        match self {
+            Self::Tag(_) | Self::Key(_) | Self::Class(_) => false,
+            Self::PseudoClass(pseudo_class) => pseudo_class.has_pseudo_elements(),
+            Self::Compound(selector) => selector.has_pseudo_elements(),
+            Self::Complex(selector) => selector.has_pseudo_elements(),
+        }
+    }
+
+    #[must_use]
     pub(crate) fn combine_descendant(parent: Self, child: Self) -> Option<Self> {
         let (child_first, child_rest) = child.into_complex_parts();
         let combined =
@@ -7394,6 +7405,15 @@ impl CssComplexSelector {
     #[must_use]
     pub fn rest(&self) -> &[CssComplexSelectorPart] {
         &self.rest
+    }
+
+    #[must_use]
+    pub fn has_pseudo_elements(&self) -> bool {
+        self.first.has_pseudo_elements()
+            || self
+                .rest
+                .iter()
+                .any(|part| part.selector().has_pseudo_elements())
     }
 
     #[allow(dead_code)] // Used by staged selector composition helpers.
@@ -7508,6 +7528,11 @@ impl CssPseudoSelectorList {
     pub fn selectors(&self) -> &[CssSelector] {
         &self.selectors
     }
+
+    #[must_use]
+    pub fn has_pseudo_elements(&self) -> bool {
+        self.selectors.iter().any(CssSelector::has_pseudo_elements)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -7561,6 +7586,13 @@ impl CssRelativeSelectorList {
     pub fn selectors(&self) -> &[CssRelativeSelector] {
         &self.selectors
     }
+
+    #[must_use]
+    pub fn has_pseudo_elements(&self) -> bool {
+        self.selectors
+            .iter()
+            .any(|selector| selector.selector().has_pseudo_elements())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -7604,6 +7636,52 @@ pub enum CssPseudoClass {
     ReadWrite,
     InRange,
     OutOfRange,
+}
+
+impl CssPseudoClass {
+    #[must_use]
+    pub fn has_pseudo_elements(&self) -> bool {
+        match self {
+            Self::NthChild(pattern) | Self::NthLastChild(pattern) => pattern.has_pseudo_elements(),
+            Self::Not(selectors) | Self::Is(selectors) | Self::Where(selectors) => {
+                selectors.has_pseudo_elements()
+            }
+            Self::Has(selectors) => selectors.has_pseudo_elements(),
+            Self::Root
+            | Self::Scope
+            | Self::Hover
+            | Self::Active
+            | Self::Focus
+            | Self::FocusVisible
+            | Self::FocusWithin
+            | Self::Disabled
+            | Self::Enabled
+            | Self::Checked
+            | Self::Required
+            | Self::Optional
+            | Self::Valid
+            | Self::Invalid
+            | Self::PlaceholderShown
+            | Self::FirstChild
+            | Self::LastChild
+            | Self::OnlyChild
+            | Self::Empty
+            | Self::FirstOfType
+            | Self::LastOfType
+            | Self::OnlyOfType
+            | Self::NthOfType(_)
+            | Self::NthLastOfType(_)
+            | Self::Modal
+            | Self::Fullscreen
+            | Self::PopoverOpen
+            | Self::Default
+            | Self::Indeterminate
+            | Self::ReadOnly
+            | Self::ReadWrite
+            | Self::InRange
+            | Self::OutOfRange => false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -7678,6 +7756,13 @@ impl CssNthChildPattern {
     #[must_use]
     pub const fn selector_list(&self) -> Option<&CssPseudoSelectorList> {
         self.selector_list.as_ref()
+    }
+
+    #[must_use]
+    pub fn has_pseudo_elements(&self) -> bool {
+        self.selector_list
+            .as_ref()
+            .is_some_and(CssPseudoSelectorList::has_pseudo_elements)
     }
 }
 

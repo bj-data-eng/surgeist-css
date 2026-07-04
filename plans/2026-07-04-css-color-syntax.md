@@ -214,7 +214,7 @@ git commit -m "Audit and pin cssparser-color"
 - Modify: `/Users/codex/Development/surgeist-css/src/syntax.rs`
 - Modify: `/Users/codex/Development/surgeist-css/src/tests.rs`
 
-- [ ] **Step 1: Add model tests**
+- [x] **Step 1: Add model tests**
 
 Add tests for the new owned model:
 
@@ -261,7 +261,7 @@ cargo test -p surgeist-css color_function_model_preserves_color_space_and_compon
 
 Expected before implementation: compile failures for new types/accessors.
 
-- [ ] **Step 2: Replace `CssColor` model**
+- [x] **Step 2: Replace `CssColor` model**
 
 In `src/syntax.rs`, replace the RGBA-only struct with:
 
@@ -351,7 +351,7 @@ pub const fn color(&self) -> Option<&CssColor>
 
 Apply this to border, outline, shadow, text-decoration, and any other model that stores `Option<CssColor>`. Update tests and callers to compare by reference or use `.cloned()` only where ownership is actually needed.
 
-- [ ] **Step 3: Add symbolic color models**
+- [x] **Step 3: Add symbolic color models**
 
 Add:
 
@@ -432,11 +432,11 @@ pub enum CssRelativeColorFunction {
 
 For `rgba` and `hsla`, use the `Rgb` and `Hsl` variants respectively; those spellings are aliases for the same relative color function families.
 
-- [ ] **Step 4: Update existing tests for RGBA model changes**
+- [x] **Step 4: Update existing tests for RGBA model changes**
 
 Update direct channel assertions to `as_rgba()` or the new RGBA accessor type. Existing comparisons like `CssColor::BLACK` and `CssColor::WHITE` should still work.
 
-- [ ] **Step 5: Run checks**
+- [x] **Step 5: Run checks**
 
 ```sh
 cargo fmt --check
@@ -448,7 +448,7 @@ git diff --check
 
 Expected: pass.
 
-- [ ] **Step 6: Report**
+- [x] **Step 6: Report**
 
 Report changed files, tests run, and `git status --short --branch`. Workers do not commit.
 

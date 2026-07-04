@@ -3618,8 +3618,8 @@ impl CssTextDecoration {
     }
 
     #[must_use]
-    pub const fn color(&self) -> Option<CssColor> {
-        self.color
+    pub const fn color(&self) -> Option<&CssColor> {
+        self.color.as_ref()
     }
 
     #[must_use]
@@ -4091,8 +4091,8 @@ impl CssBorder {
     }
 
     #[must_use]
-    pub const fn color(&self) -> Option<CssColor> {
-        self.color
+    pub const fn color(&self) -> Option<&CssColor> {
+        self.color.as_ref()
     }
 }
 
@@ -4334,8 +4334,8 @@ impl CssShadow {
     }
 
     #[must_use]
-    pub const fn color(&self) -> Option<CssColor> {
-        self.color
+    pub const fn color(&self) -> Option<&CssColor> {
+        self.color.as_ref()
     }
 }
 
@@ -4968,8 +4968,8 @@ impl CssOutline {
     }
 
     #[must_use]
-    pub const fn color(&self) -> Option<CssColor> {
-        self.color
+    pub const fn color(&self) -> Option<&CssColor> {
+        self.color.as_ref()
     }
 }
 
@@ -5811,37 +5811,76 @@ pub(crate) fn calc_has_negative_component(calc: &CssCalcLength) -> bool {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct CssColor {
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssColor {
+    CurrentColor,
+    Rgba(CssRgbaColor),
+    Hsl(CssHslColor),
+    Hwb(CssHwbColor),
+    Lab(CssLabColor),
+    Lch(CssLchColor),
+    Oklab(CssLabColor),
+    Oklch(CssLchColor),
+    ColorFunction(CssColorFunction),
+    System(CssSystemColor),
+    ColorMix(CssColorMix),
+    Relative(CssRelativeColor),
 }
 
 impl CssColor {
-    pub const TRANSPARENT: Self = Self::rgba_unchecked(0.0, 0.0, 0.0, 0.0);
-    pub const BLACK: Self = Self::rgba_unchecked(0.0, 0.0, 0.0, 1.0);
-    pub const WHITE: Self = Self::rgba_unchecked(1.0, 1.0, 1.0, 1.0);
+    pub const TRANSPARENT: Self = Self::Rgba(CssRgbaColor {
+        red: 0,
+        green: 0,
+        blue: 0,
+        alpha: 0.0,
+    });
+    pub const BLACK: Self = Self::Rgba(CssRgbaColor {
+        red: 0,
+        green: 0,
+        blue: 0,
+        alpha: 1.0,
+    });
+    pub const WHITE: Self = Self::Rgba(CssRgbaColor {
+        red: 255,
+        green: 255,
+        blue: 255,
+        alpha: 1.0,
+    });
 
     #[must_use]
-    pub const fn r(self) -> f32 {
-        self.r
+    pub const fn as_rgba(&self) -> Option<&CssRgbaColor> {
+        match self {
+            Self::Rgba(color) => Some(color),
+            Self::CurrentColor
+            | Self::Hsl(_)
+            | Self::Hwb(_)
+            | Self::Lab(_)
+            | Self::Lch(_)
+            | Self::Oklab(_)
+            | Self::Oklch(_)
+            | Self::ColorFunction(_)
+            | Self::System(_)
+            | Self::ColorMix(_)
+            | Self::Relative(_) => None,
+        }
     }
 
     #[must_use]
-    pub const fn g(self) -> f32 {
-        self.g
-    }
-
-    #[must_use]
-    pub const fn b(self) -> f32 {
-        self.b
-    }
-
-    #[must_use]
-    pub const fn a(self) -> f32 {
-        self.a
+    pub const fn kind_name(&self) -> &'static str {
+        match self {
+            Self::CurrentColor => "currentcolor",
+            Self::Rgba(_) => "rgba",
+            Self::Hsl(_) => "hsl",
+            Self::Hwb(_) => "hwb",
+            Self::Lab(_) => "lab",
+            Self::Lch(_) => "lch",
+            Self::Oklab(_) => "oklab",
+            Self::Oklch(_) => "oklch",
+            Self::ColorFunction(_) => "color",
+            Self::System(_) => "system",
+            Self::ColorMix(_) => "color-mix",
+            Self::Relative(_) => "relative",
+        }
     }
 
     #[must_use]
@@ -5857,8 +5896,632 @@ impl CssColor {
     }
 
     #[must_use]
-    pub(crate) const fn rgba_unchecked(r: f32, g: f32, b: f32, a: f32) -> Self {
-        Self { r, g, b, a }
+    pub(crate) fn rgba_unchecked(r: f32, g: f32, b: f32, a: f32) -> Self {
+        Self::Rgba(CssRgbaColor {
+            red: normalized_color_channel_to_byte(r),
+            green: normalized_color_channel_to_byte(g),
+            blue: normalized_color_channel_to_byte(b),
+            alpha: a,
+        })
+    }
+}
+
+fn normalized_color_channel_to_byte(channel: f32) -> u8 {
+    (channel * 255.0).round() as u8
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssRgbaColor {
+    red: u8,
+    green: u8,
+    blue: u8,
+    alpha: f32,
+}
+
+impl CssRgbaColor {
+    #[must_use]
+    pub fn try_new(red: u8, green: u8, blue: u8, alpha: f32) -> Option<Self> {
+        if alpha.is_finite() && (0.0..=1.0).contains(&alpha) {
+            Some(Self {
+                red,
+                green,
+                blue,
+                alpha,
+            })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn red(&self) -> u8 {
+        self.red
+    }
+
+    #[must_use]
+    pub const fn green(&self) -> u8 {
+        self.green
+    }
+
+    #[must_use]
+    pub const fn blue(&self) -> u8 {
+        self.blue
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> f32 {
+        self.alpha
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssHslColor {
+    hue: Option<f32>,
+    saturation: Option<f32>,
+    lightness: Option<f32>,
+    alpha: Option<f32>,
+}
+
+impl CssHslColor {
+    #[must_use]
+    pub fn try_new(
+        hue: Option<f32>,
+        saturation: Option<f32>,
+        lightness: Option<f32>,
+        alpha: Option<f32>,
+    ) -> Option<Self> {
+        if color_components_are_finite([hue, saturation, lightness]) && color_alpha_is_valid(alpha)
+        {
+            Some(Self::new(hue, saturation, lightness, alpha))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(
+        hue: Option<f32>,
+        saturation: Option<f32>,
+        lightness: Option<f32>,
+        alpha: Option<f32>,
+    ) -> Self {
+        Self {
+            hue,
+            saturation,
+            lightness,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn hue(&self) -> Option<f32> {
+        self.hue
+    }
+
+    #[must_use]
+    pub const fn saturation(&self) -> Option<f32> {
+        self.saturation
+    }
+
+    #[must_use]
+    pub const fn lightness(&self) -> Option<f32> {
+        self.lightness
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<f32> {
+        self.alpha
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssHwbColor {
+    hue: Option<f32>,
+    whiteness: Option<f32>,
+    blackness: Option<f32>,
+    alpha: Option<f32>,
+}
+
+impl CssHwbColor {
+    #[must_use]
+    pub fn try_new(
+        hue: Option<f32>,
+        whiteness: Option<f32>,
+        blackness: Option<f32>,
+        alpha: Option<f32>,
+    ) -> Option<Self> {
+        if color_components_are_finite([hue, whiteness, blackness]) && color_alpha_is_valid(alpha) {
+            Some(Self::new(hue, whiteness, blackness, alpha))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(
+        hue: Option<f32>,
+        whiteness: Option<f32>,
+        blackness: Option<f32>,
+        alpha: Option<f32>,
+    ) -> Self {
+        Self {
+            hue,
+            whiteness,
+            blackness,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn hue(&self) -> Option<f32> {
+        self.hue
+    }
+
+    #[must_use]
+    pub const fn whiteness(&self) -> Option<f32> {
+        self.whiteness
+    }
+
+    #[must_use]
+    pub const fn blackness(&self) -> Option<f32> {
+        self.blackness
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<f32> {
+        self.alpha
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssLabColor {
+    lightness: Option<f32>,
+    a: Option<f32>,
+    b: Option<f32>,
+    alpha: Option<f32>,
+}
+
+impl CssLabColor {
+    #[must_use]
+    pub fn try_new(
+        lightness: Option<f32>,
+        a: Option<f32>,
+        b: Option<f32>,
+        alpha: Option<f32>,
+    ) -> Option<Self> {
+        if color_components_are_finite([lightness, a, b]) && color_alpha_is_valid(alpha) {
+            Some(Self::new(lightness, a, b, alpha))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(
+        lightness: Option<f32>,
+        a: Option<f32>,
+        b: Option<f32>,
+        alpha: Option<f32>,
+    ) -> Self {
+        Self {
+            lightness,
+            a,
+            b,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn lightness(&self) -> Option<f32> {
+        self.lightness
+    }
+
+    #[must_use]
+    pub const fn a(&self) -> Option<f32> {
+        self.a
+    }
+
+    #[must_use]
+    pub const fn b(&self) -> Option<f32> {
+        self.b
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<f32> {
+        self.alpha
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssLchColor {
+    lightness: Option<f32>,
+    chroma: Option<f32>,
+    hue: Option<f32>,
+    alpha: Option<f32>,
+}
+
+impl CssLchColor {
+    #[must_use]
+    pub fn try_new(
+        lightness: Option<f32>,
+        chroma: Option<f32>,
+        hue: Option<f32>,
+        alpha: Option<f32>,
+    ) -> Option<Self> {
+        if color_components_are_finite([lightness, chroma, hue]) && color_alpha_is_valid(alpha) {
+            Some(Self::new(lightness, chroma, hue, alpha))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(
+        lightness: Option<f32>,
+        chroma: Option<f32>,
+        hue: Option<f32>,
+        alpha: Option<f32>,
+    ) -> Self {
+        Self {
+            lightness,
+            chroma,
+            hue,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn lightness(&self) -> Option<f32> {
+        self.lightness
+    }
+
+    #[must_use]
+    pub const fn chroma(&self) -> Option<f32> {
+        self.chroma
+    }
+
+    #[must_use]
+    pub const fn hue(&self) -> Option<f32> {
+        self.hue
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<f32> {
+        self.alpha
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssPredefinedColorSpace {
+    Srgb,
+    SrgbLinear,
+    DisplayP3,
+    DisplayP3Linear,
+    A98Rgb,
+    ProphotoRgb,
+    Rec2020,
+    XyzD50,
+    XyzD65,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssColorFunction {
+    color_space: CssPredefinedColorSpace,
+    components: [Option<f32>; 3],
+    alpha: Option<f32>,
+}
+
+impl CssColorFunction {
+    #[must_use]
+    pub fn try_new(
+        color_space: CssPredefinedColorSpace,
+        components: [Option<f32>; 3],
+        alpha: Option<f32>,
+    ) -> Option<Self> {
+        if color_components_are_finite(components) && color_alpha_is_valid(alpha) {
+            Some(Self::new(color_space, components, alpha))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn new(
+        color_space: CssPredefinedColorSpace,
+        components: [Option<f32>; 3],
+        alpha: Option<f32>,
+    ) -> Self {
+        Self {
+            color_space,
+            components,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn color_space(&self) -> CssPredefinedColorSpace {
+        self.color_space
+    }
+
+    #[must_use]
+    pub const fn components(&self) -> &[Option<f32>; 3] {
+        &self.components
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<f32> {
+        self.alpha
+    }
+}
+
+fn color_components_are_finite(components: [Option<f32>; 3]) -> bool {
+    components
+        .into_iter()
+        .all(|component| component.is_none_or(f32::is_finite))
+}
+
+fn color_alpha_is_valid(alpha: Option<f32>) -> bool {
+    alpha.is_none_or(|alpha| alpha.is_finite() && (0.0..=1.0).contains(&alpha))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssSystemColor {
+    Canvas,
+    CanvasText,
+    LinkText,
+    VisitedText,
+    ActiveText,
+    ButtonFace,
+    ButtonText,
+    ButtonBorder,
+    Field,
+    FieldText,
+    Highlight,
+    HighlightText,
+    Mark,
+    MarkText,
+    GrayText,
+    SelectedItem,
+    SelectedItemText,
+    AccentColor,
+    AccentColorText,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssColorMix {
+    interpolation: CssColorInterpolationMethod,
+    left: CssColorMixComponent,
+    right: CssColorMixComponent,
+}
+
+impl CssColorMix {
+    #[must_use]
+    pub const fn new(
+        interpolation: CssColorInterpolationMethod,
+        left: CssColorMixComponent,
+        right: CssColorMixComponent,
+    ) -> Self {
+        Self {
+            interpolation,
+            left,
+            right,
+        }
+    }
+
+    #[must_use]
+    pub const fn interpolation(&self) -> &CssColorInterpolationMethod {
+        &self.interpolation
+    }
+
+    #[must_use]
+    pub const fn left(&self) -> &CssColorMixComponent {
+        &self.left
+    }
+
+    #[must_use]
+    pub const fn right(&self) -> &CssColorMixComponent {
+        &self.right
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssColorMixComponent {
+    color: Box<CssColor>,
+    percentage: Option<f32>,
+}
+
+impl CssColorMixComponent {
+    #[must_use]
+    pub fn try_new(color: CssColor, percentage: Option<f32>) -> Option<Self> {
+        if color_percentage_is_valid(percentage) {
+            Some(Self::new(color, percentage))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(color: CssColor, percentage: Option<f32>) -> Self {
+        Self {
+            color: Box::new(color),
+            percentage,
+        }
+    }
+
+    #[must_use]
+    pub const fn color(&self) -> &CssColor {
+        &self.color
+    }
+
+    #[must_use]
+    pub const fn percentage(&self) -> Option<f32> {
+        self.percentage
+    }
+}
+
+fn color_percentage_is_valid(percentage: Option<f32>) -> bool {
+    percentage
+        .is_none_or(|percentage| percentage.is_finite() && (0.0..=100.0).contains(&percentage))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssColorInterpolationMethod {
+    space: CssColorInterpolationSpace,
+    hue: Option<CssHueInterpolationMethod>,
+}
+
+impl CssColorInterpolationMethod {
+    #[must_use]
+    pub const fn new(
+        space: CssColorInterpolationSpace,
+        hue: Option<CssHueInterpolationMethod>,
+    ) -> Self {
+        Self { space, hue }
+    }
+
+    #[must_use]
+    pub const fn space(&self) -> CssColorInterpolationSpace {
+        self.space
+    }
+
+    #[must_use]
+    pub const fn hue(&self) -> Option<CssHueInterpolationMethod> {
+        self.hue
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssColorInterpolationSpace {
+    Predefined(CssPredefinedColorSpace),
+    Hsl,
+    Hwb,
+    Lab,
+    Lch,
+    Oklab,
+    Oklch,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssHueInterpolationMethod {
+    Shorter,
+    Longer,
+    Increasing,
+    Decreasing,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssRelativeColor {
+    function: CssRelativeColorFunction,
+    source: Box<CssColor>,
+    components: Vec<CssColorComponentExpression>,
+    alpha: Option<CssColorComponentExpression>,
+}
+
+impl CssRelativeColor {
+    #[must_use]
+    pub fn try_new(
+        function: CssRelativeColorFunction,
+        source: CssColor,
+        components: Vec<CssColorComponentExpression>,
+        alpha: Option<CssColorComponentExpression>,
+    ) -> Option<Self> {
+        if components.len() == function.component_count() {
+            Some(Self::new(function, source, components, alpha))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(
+        function: CssRelativeColorFunction,
+        source: CssColor,
+        components: Vec<CssColorComponentExpression>,
+        alpha: Option<CssColorComponentExpression>,
+    ) -> Self {
+        Self {
+            function,
+            source: Box::new(source),
+            components,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn function(&self) -> &CssRelativeColorFunction {
+        &self.function
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> &CssColor {
+        &self.source
+    }
+
+    #[must_use]
+    pub fn components(&self) -> &[CssColorComponentExpression] {
+        &self.components
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<&CssColorComponentExpression> {
+        self.alpha.as_ref()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssRelativeColorFunction {
+    Rgb,
+    Hsl,
+    Hwb,
+    Lab,
+    Lch,
+    Oklab,
+    Oklch,
+    Color(CssPredefinedColorSpace),
+}
+
+impl CssRelativeColorFunction {
+    #[must_use]
+    pub const fn component_count(self) -> usize {
+        match self {
+            Self::Rgb
+            | Self::Hsl
+            | Self::Hwb
+            | Self::Lab
+            | Self::Lch
+            | Self::Oklab
+            | Self::Oklch
+            | Self::Color(_) => 3,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssColorComponentExpression {
+    authored: CssAuthoredDeclarationValue,
+    references: Vec<CssVariableReference>,
+}
+
+impl CssColorComponentExpression {
+    #[must_use]
+    pub fn new(
+        authored: CssAuthoredDeclarationValue,
+        references: Vec<CssVariableReference>,
+    ) -> Self {
+        Self {
+            authored,
+            references,
+        }
+    }
+
+    #[must_use]
+    pub const fn authored(&self) -> &CssAuthoredDeclarationValue {
+        &self.authored
+    }
+
+    #[must_use]
+    pub fn references(&self) -> &[CssVariableReference] {
+        &self.references
     }
 }
 

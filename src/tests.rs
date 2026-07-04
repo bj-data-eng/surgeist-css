@@ -4385,20 +4385,113 @@ fn keyframes_and_flattened_nesting_are_structurally_accessible() {
 }
 
 #[test]
-fn checked_color_construction_rejects_invalid_channels() {
-    let color = CssColor::try_rgba(0.25, 0.5, 0.75, 1.0).unwrap();
-    assert_eq!(color.r(), 0.25);
-    assert_eq!(color.g(), 0.5);
-    assert_eq!(color.b(), 0.75);
-    assert_eq!(color.a(), 1.0);
+fn color_model_preserves_rgba_and_currentcolor() {
+    let rgba = CssRgbaColor::try_new(255, 128, 0, 0.5).unwrap();
+    assert_eq!(rgba.red(), 255);
+    assert_eq!(rgba.green(), 128);
+    assert_eq!(rgba.blue(), 0);
+    assert_eq!(rgba.alpha(), 0.5);
+    assert_eq!(CssColor::BLACK.as_rgba().unwrap().red(), 0);
+    assert!(matches!(CssColor::CurrentColor, CssColor::CurrentColor));
+}
 
-    assert_eq!(CssColor::try_rgba(f32::NAN, 0.0, 0.0, 1.0), None);
-    assert_eq!(CssColor::try_rgba(0.0, f32::INFINITY, 0.0, 1.0), None);
-    assert_eq!(CssColor::try_rgba(-0.1, 0.0, 0.0, 1.0), None);
-    assert_eq!(CssColor::try_rgba(0.0, 0.0, 0.0, 1.1), None);
-    assert_eq!(CssColor::BLACK.a(), 1.0);
-    assert_eq!(CssColor::WHITE.r(), 1.0);
-    assert_eq!(CssColor::TRANSPARENT.a(), 0.0);
+#[test]
+fn color_model_rejects_invalid_rgba_alpha() {
+    assert_eq!(CssRgbaColor::try_new(0, 0, 0, -0.1), None);
+    assert_eq!(CssRgbaColor::try_new(0, 0, 0, 1.1), None);
+    assert_eq!(CssRgbaColor::try_new(0, 0, 0, f32::NAN), None);
+}
+
+#[test]
+fn color_function_model_preserves_color_space_and_components() {
+    let color = CssColorFunction::try_new(
+        CssPredefinedColorSpace::DisplayP3,
+        [Some(0.8), Some(0.2), Some(0.1)],
+        Some(0.9),
+    )
+    .unwrap();
+
+    assert_eq!(color.color_space(), CssPredefinedColorSpace::DisplayP3);
+    assert_eq!(color.components(), &[Some(0.8), Some(0.2), Some(0.1)]);
+    assert_eq!(color.alpha(), Some(0.9));
+}
+
+#[test]
+fn color_model_rejects_non_finite_components_and_invalid_alpha() {
+    assert_eq!(
+        CssHslColor::try_new(Some(f32::NAN), Some(1.0), Some(0.5), Some(1.0)),
+        None
+    );
+    assert_eq!(
+        CssHwbColor::try_new(Some(30.0), Some(f32::INFINITY), Some(0.2), Some(1.0)),
+        None
+    );
+    assert_eq!(
+        CssLabColor::try_new(Some(0.5), Some(0.1), Some(f32::NEG_INFINITY), Some(1.0)),
+        None
+    );
+    assert_eq!(
+        CssLchColor::try_new(Some(0.5), Some(0.1), Some(30.0), Some(1.1)),
+        None
+    );
+    assert_eq!(
+        CssColorFunction::try_new(
+            CssPredefinedColorSpace::DisplayP3,
+            [Some(0.8), Some(f32::NAN), Some(0.1)],
+            Some(0.9),
+        ),
+        None
+    );
+    assert_eq!(
+        CssColorFunction::try_new(
+            CssPredefinedColorSpace::DisplayP3,
+            [Some(0.8), Some(0.2), Some(0.1)],
+            Some(-0.1),
+        ),
+        None
+    );
+}
+
+#[test]
+fn symbolic_color_model_rejects_invalid_percentages_and_component_counts() {
+    assert_eq!(
+        CssColorMixComponent::try_new(CssColor::BLACK, Some(-0.1)),
+        None
+    );
+    assert_eq!(
+        CssColorMixComponent::try_new(CssColor::BLACK, Some(100.1)),
+        None
+    );
+    assert_eq!(
+        CssColorMixComponent::try_new(CssColor::BLACK, Some(f32::NAN)),
+        None
+    );
+
+    let component = || {
+        CssColorComponentExpression::new(
+            CssAuthoredDeclarationValue::try_new("r").unwrap(),
+            Vec::new(),
+        )
+    };
+
+    assert_eq!(
+        CssRelativeColor::try_new(
+            CssRelativeColorFunction::Rgb,
+            CssColor::BLACK,
+            vec![component(), component()],
+            None,
+        ),
+        None
+    );
+    assert_eq!(
+        CssRelativeColor::try_new(
+            CssRelativeColorFunction::Color(CssPredefinedColorSpace::Srgb),
+            CssColor::BLACK,
+            vec![component(), component(), component(), component()],
+            None,
+        ),
+        None
+    );
 }
 
 #[test]

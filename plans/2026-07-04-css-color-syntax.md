@@ -126,7 +126,7 @@ color: MadeUpSystemColor;
 - Modify: `/Users/codex/Development/surgeist-css/Cargo.lock`
 - Modify: `/Users/codex/Development/surgeist-css/src/tests.rs`
 
-- [ ] **Step 1: Check starting status**
+- [x] **Step 1: Check starting status**
 
 Run:
 
@@ -142,7 +142,7 @@ Expected:
 - `cssparser` license is `MPL-2.0`.
 - `cssparser-color` version is `0.5.0`, license is `MPL-2.0`, repository is Servo `rust-cssparser`, and dependency is `cssparser ^0.37`.
 
-- [ ] **Step 2: Pin dependency**
+- [x] **Step 2: Pin dependency**
 
 In `Cargo.toml`, add:
 
@@ -152,7 +152,7 @@ cssparser-color = "=0.5.0"
 
 Do not enable optional features.
 
-- [ ] **Step 3: Generate lockfile**
+- [x] **Step 3: Generate lockfile**
 
 Run:
 
@@ -162,7 +162,7 @@ cargo check -p surgeist-css
 
 Expected: pass and generate/update `Cargo.lock`.
 
-- [ ] **Step 4: Add dependency audit test**
+- [x] **Step 4: Add dependency audit test**
 
 Add a small test that keeps the dependency visible in the crate checks without reaching into internals:
 
@@ -182,7 +182,7 @@ fn cssparser_color_dependency_is_available_for_color_parsing() {
 
 `DefaultColorParser` is a unit struct in `cssparser-color-0.5.0`, so `&cssparser_color::DefaultColorParser` is the expected construction form.
 
-- [ ] **Step 5: Run checks**
+- [x] **Step 5: Run checks**
 
 ```sh
 cargo fmt --check
@@ -193,7 +193,7 @@ git diff --check
 
 Expected: pass.
 
-- [ ] **Step 6: Report**
+- [x] **Step 6: Report**
 
 Report changed files, audit findings, checks run, and `git status --short --branch`. Workers do not commit.
 

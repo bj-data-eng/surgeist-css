@@ -13,3 +13,4 @@ path = "src/lib.rs"
 
 [dependencies]
 cssparser = "=0.37.0"
+cssparser-color = "=0.5.0"

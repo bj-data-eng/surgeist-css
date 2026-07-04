@@ -63,6 +63,16 @@ fn import_rule(rule: &CssRule) -> &CssImportRule {
     }
 }
 
+#[test]
+fn cssparser_color_dependency_is_available_for_color_parsing() {
+    let mut input = cssparser::ParserInput::new("rgb(255 0 0 / 50%)");
+    let mut parser = cssparser::Parser::new(&mut input);
+    let parsed =
+        cssparser_color::parse_color_with(&cssparser_color::DefaultColorParser, &mut parser);
+
+    assert!(parsed.is_ok());
+}
+
 fn font_face_rule(rule: &CssRule) -> &CssFontFaceRule {
     match rule {
         CssRule::FontFace(rule) => rule,

@@ -32,9 +32,9 @@ use grid::*;
 use layout::*;
 #[cfg(test)]
 pub(crate) use queries::parse_container_condition_for_test;
-use queries::parse_media_query_list;
 #[cfg(test)]
 pub(crate) use queries::parse_media_query_list_for_test;
+use queries::{parse_container_condition, parse_media_query_list};
 use selectors::parse_rule_selector_list;
 use timing::*;
 use typography::*;
@@ -97,12 +97,18 @@ impl StrictRuleParser {
 enum StrictAtRulePrelude {
     Import(CssImportPrelude),
     Media(CssMediaQueryList),
+    Container(CssContainerPrelude),
 }
 
 struct CssImportPrelude {
     target: CssImportTarget,
     layer: Option<CssImportLayer>,
     media: Option<CssMediaQueryList>,
+}
+
+struct CssContainerPrelude {
+    name: Option<CssContainerName>,
+    condition: CssContainerCondition,
 }
 
 impl<'i> AtRuleParser<'i> for StrictRuleParser {
@@ -141,6 +147,16 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 }
                 Ok(StrictAtRulePrelude::Media(query))
             },
+            "container" => {
+                let prelude = parse_container_prelude(input)?;
+                if !input.is_exhausted() {
+                    return Err(invalid_syntax(
+                        input.current_source_location(),
+                        "unexpected token after container condition",
+                    ));
+                }
+                Ok(StrictAtRulePrelude::Container(prelude))
+            },
             _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
         }
     }
@@ -158,6 +174,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 CssSourceLocation::from_cssparser(start.source_location()),
             ))]),
             StrictAtRulePrelude::Media(_) => Err(()),
+            StrictAtRulePrelude::Container(_) => Err(()),
         }
     }
 
@@ -173,14 +190,20 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 "@import rules must not have a block",
             )),
             StrictAtRulePrelude::Media(query) => {
-                let mut rule_parser = StrictRuleParser::nested();
-                let mut rules = Vec::new();
-                for rule in StyleSheetParser::new(input, &mut rule_parser) {
-                    rules.extend(rule.map_err(|(error, _)| error)?);
-                }
+                let rules = parse_nested_group_rules(input)?;
                 self.mark_non_import_top_level_rule();
                 Ok(vec![CssRule::Media(CssMediaRule::new(
                     query,
+                    rules,
+                    CssSourceLocation::from_cssparser(start.source_location()),
+                ))])
+            }
+            StrictAtRulePrelude::Container(prelude) => {
+                let rules = parse_nested_group_rules(input)?;
+                self.mark_non_import_top_level_rule();
+                Ok(vec![CssRule::Container(CssContainerRule::new(
+                    prelude.name,
+                    prelude.condition,
                     rules,
                     CssSourceLocation::from_cssparser(start.source_location()),
                 ))])
@@ -245,6 +268,36 @@ fn parse_import_prelude<'i, 't>(
         layer,
         media,
     })
+}
+
+fn parse_container_prelude<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssContainerPrelude, ParseError<'i, Error>> {
+    let state = input.state();
+    let name = if let Ok(name) = input.try_parse(Parser::expect_ident_cloned) {
+        if let Some(name) = CssContainerName::try_new(name.to_string()) {
+            Some(name)
+        } else {
+            input.reset(&state);
+            None
+        }
+    } else {
+        None
+    };
+    let condition = parse_container_condition(input)?;
+
+    Ok(CssContainerPrelude { name, condition })
+}
+
+fn parse_nested_group_rules<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Vec<CssRule>, ParseError<'i, Error>> {
+    let mut rule_parser = StrictRuleParser::nested();
+    let mut rules = Vec::new();
+    for rule in StyleSheetParser::new(input, &mut rule_parser) {
+        rules.extend(rule.map_err(|(error, _)| error)?);
+    }
+    Ok(rules)
 }
 
 fn parse_import_target<'i, 't>(

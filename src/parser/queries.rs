@@ -34,7 +34,6 @@ pub(crate) fn parse_media_query_list_for_test(input: &str) -> CrateResult<CssMed
     Ok(list)
 }
 
-#[allow(dead_code)]
 pub(crate) fn parse_container_condition<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssContainerCondition, ParseError<'i, Error>> {
@@ -91,7 +90,6 @@ pub(crate) fn parse_container_condition_for_test(
     Ok(condition)
 }
 
-#[allow(dead_code)]
 fn parse_container_condition_atom<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssContainerCondition, ParseError<'i, Error>> {
@@ -122,7 +120,6 @@ fn parse_container_condition_atom<'i, 't>(
     Ok(CssContainerCondition::Feature(feature))
 }
 
-#[allow(dead_code)]
 fn parse_container_feature_query<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssContainerFeatureQuery, ParseError<'i, Error>> {
@@ -179,7 +176,6 @@ fn parse_container_feature_query<'i, 't>(
     }
 }
 
-#[allow(dead_code)]
 fn parse_container_style_query<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssContainerStyleQuery, ParseError<'i, Error>> {
@@ -460,7 +456,6 @@ enum MediaFeatureName {
     DisplayMode,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Copy)]
 enum ContainerFeatureName {
     Width(Option<RangePrefix>),
@@ -471,7 +466,6 @@ enum ContainerFeatureName {
     Orientation,
 }
 
-#[allow(dead_code)]
 impl ContainerFeatureName {
     fn parse(name: &str) -> Option<Self> {
         Some(match name.to_ascii_lowercase().as_str() {
@@ -606,7 +600,6 @@ fn parse_query_length<'i, 't>(
     }
 }
 
-#[allow(dead_code)]
 fn parse_ratio<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssRatio, ParseError<'i, Error>> {

@@ -38,6 +38,7 @@ pub enum CssRule {
     Import(CssImportRule),
     Style(CssStyleRule),
     Media(CssMediaRule),
+    Container(CssContainerRule),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -236,6 +237,51 @@ impl CssMediaRule {
     #[must_use]
     pub const fn query(&self) -> &CssMediaQueryList {
         &self.query
+    }
+
+    #[must_use]
+    pub fn rules(&self) -> &[CssRule] {
+        &self.rules
+    }
+
+    #[must_use]
+    pub const fn location(&self) -> CssSourceLocation {
+        self.location
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssContainerRule {
+    name: Option<CssContainerName>,
+    condition: CssContainerCondition,
+    rules: Vec<CssRule>,
+    location: CssSourceLocation,
+}
+
+impl CssContainerRule {
+    #[must_use]
+    pub(crate) const fn new(
+        name: Option<CssContainerName>,
+        condition: CssContainerCondition,
+        rules: Vec<CssRule>,
+        location: CssSourceLocation,
+    ) -> Self {
+        Self {
+            name,
+            condition,
+            rules,
+            location,
+        }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> Option<&CssContainerName> {
+        self.name.as_ref()
+    }
+
+    #[must_use]
+    pub const fn condition(&self) -> &CssContainerCondition {
+        &self.condition
     }
 
     #[must_use]
@@ -531,7 +577,6 @@ pub struct CssRangeFeature<T> {
 }
 
 impl<T> CssRangeFeature<T> {
-    #[allow(dead_code)]
     #[must_use]
     pub(crate) fn new(comparison: Option<CssQueryComparison>, value: T) -> Self {
         Self { comparison, value }

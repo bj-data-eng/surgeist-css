@@ -49,6 +49,13 @@ fn media_rule(rule: &CssRule) -> &CssMediaRule {
     }
 }
 
+fn container_rule(rule: &CssRule) -> &CssContainerRule {
+    match rule {
+        CssRule::Container(rule) => rule,
+        unexpected => panic!("expected container rule, got {unexpected:?}"),
+    }
+}
+
 fn import_rule(rule: &CssRule) -> &CssImportRule {
     match rule {
         CssRule::Import(rule) => rule,
@@ -2579,6 +2586,131 @@ fn container_style_query_preserves_custom_property_authored_value() {
 }
 
 #[test]
+fn container_rule_accessors_expose_authored_structure() {
+    let name = CssContainerName::try_new("sidebar").unwrap();
+    let condition =
+        parse_container_condition_for_test("(inline-size > 30rem)").expect("condition parses");
+    let nested = CssRule::Style(CssStyleRule::new(
+        CssSelector::Class("card".to_owned()),
+        Vec::new(),
+    ));
+    let location = CssSourceLocation::new(4, 9);
+    let rule = CssContainerRule::new(
+        Some(name.clone()),
+        condition.clone(),
+        vec![nested.clone()],
+        location,
+    );
+
+    assert_eq!(rule.name(), Some(&name));
+    assert_eq!(rule.condition(), &condition);
+    assert_eq!(rule.rules(), &[nested]);
+    assert_eq!(rule.location(), location);
+    assert_eq!(CssRule::Container(rule.clone()), CssRule::Container(rule));
+}
+
+#[test]
+fn container_rule_parser_accepts_unnamed_named_and_style_conditions() {
+    let sheet = parse_sheet("@container (inline-size > 30rem) { .card { color: black; } }")
+        .expect("unnamed container rule parses");
+    let [rule] = sheet.rules() else {
+        panic!("expected one container rule");
+    };
+    let rule = container_rule(rule);
+    assert_eq!(rule.name(), None);
+    assert_eq!(rule.location(), CssSourceLocation::new(0, 1));
+    assert!(matches!(
+        rule.condition(),
+        CssContainerCondition::Feature(CssContainerFeatureQuery::InlineSize(_))
+    ));
+    let [nested] = rule.rules() else {
+        panic!("expected one nested style rule");
+    };
+    assert_eq!(
+        style_rule(nested).selector(),
+        &CssSelector::Class("card".to_owned())
+    );
+
+    let sheet = parse_sheet("@container sidebar (width >= 300px) { .title { color: black; } }")
+        .expect("named container rule parses");
+    let [rule] = sheet.rules() else {
+        panic!("expected one container rule");
+    };
+    let rule = container_rule(rule);
+    assert_eq!(
+        rule.name(),
+        Some(&CssContainerName::try_new("sidebar").unwrap())
+    );
+    assert!(matches!(
+        rule.condition(),
+        CssContainerCondition::Feature(CssContainerFeatureQuery::Width(_))
+    ));
+
+    let sheet = parse_sheet("@container style(--theme: dark) { .title { color: black; } }")
+        .expect("style query container rule parses");
+    let [rule] = sheet.rules() else {
+        panic!("expected one container rule");
+    };
+    let rule = container_rule(rule);
+    assert_eq!(rule.name(), None);
+    assert_eq!(
+        rule.condition(),
+        &CssContainerCondition::Style(CssContainerStyleQuery::CustomPropertyValue {
+            name: CssCustomPropertyName::try_new("--theme").unwrap(),
+            value: CssAuthoredDeclarationValue::try_new("dark").unwrap(),
+        })
+    );
+}
+
+#[test]
+fn nested_conditional_rules_allow_media_and_container_in_either_direction() {
+    let sheet =
+        parse_sheet("@media screen { @container (width > 300px) { .panel { color: black; } } }")
+            .expect("media rule can contain a container rule");
+    let [media] = sheet.rules() else {
+        panic!("expected one media rule");
+    };
+    let media = media_rule(media);
+    let [container] = media.rules() else {
+        panic!("expected one nested container rule");
+    };
+    let container = container_rule(container);
+    let [style] = container.rules() else {
+        panic!("expected one nested style rule");
+    };
+    assert_eq!(
+        style_rule(style).selector(),
+        &CssSelector::Class("panel".to_owned())
+    );
+
+    let sheet =
+        parse_sheet("@container (width > 300px) { @media screen { .panel { color: black; } } }")
+            .expect("container rule can contain a media rule");
+    let [container] = sheet.rules() else {
+        panic!("expected one container rule");
+    };
+    let container = container_rule(container);
+    let [media] = container.rules() else {
+        panic!("expected one nested media rule");
+    };
+    let media = media_rule(media);
+    let [style] = media.rules() else {
+        panic!("expected one nested style rule");
+    };
+    assert_eq!(
+        style_rule(style).selector(),
+        &CssSelector::Class("panel".to_owned())
+    );
+}
+
+#[test]
+fn container_rule_parser_rejects_unknown_features_imports_and_invalid_declarations() {
+    assert!(parse_sheet("@container (unknown > 1px) { .card { color: black; } }").is_err());
+    assert!(parse_sheet("@container (width > 300px) { @import \"x.css\"; }").is_err());
+    assert!(parse_sheet("@container (width > 300px) { .card { made-up: 1; } }").is_err());
+}
+
+#[test]
 fn media_rule_parser_accepts_style_rule_body() {
     let sheet =
         parse_sheet("@media screen and (min-width: 600px) { .panel { color: black; } }").unwrap();
@@ -2630,10 +2762,6 @@ fn media_rule_parser_accepts_nested_media_rule() {
 fn media_rule_parser_rejects_unknown_features_and_invalid_bodies() {
     assert!(parse_sheet("@media (unknown: yes) { .panel { color: black; } }").is_err());
     assert!(parse_sheet("@media screen { .panel { made-up: value; } }").is_err());
-    assert!(
-        parse_sheet("@media screen { @container (width > 300px) { .panel { color: black; } } }")
-            .is_err()
-    );
 }
 
 #[test]

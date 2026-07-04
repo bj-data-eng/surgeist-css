@@ -268,6 +268,58 @@ fn compound_root_selector_carries_root_pseudo_class_structurally() {
 }
 
 #[test]
+fn parses_tier_1_state_pseudo_classes_as_authored_selectors() {
+    let cases = [
+        (":hover { color: black; }", CssPseudoClass::Hover),
+        (":active { color: black; }", CssPseudoClass::Active),
+        (":focus { color: black; }", CssPseudoClass::Focus),
+        (
+            ":focus-visible { color: black; }",
+            CssPseudoClass::FocusVisible,
+        ),
+        (
+            ":focus-within { color: black; }",
+            CssPseudoClass::FocusWithin,
+        ),
+        (":disabled { color: black; }", CssPseudoClass::Disabled),
+        (":enabled { color: black; }", CssPseudoClass::Enabled),
+        (":checked { color: black; }", CssPseudoClass::Checked),
+        (":required { color: black; }", CssPseudoClass::Required),
+        (":optional { color: black; }", CssPseudoClass::Optional),
+        (":valid { color: black; }", CssPseudoClass::Valid),
+        (":invalid { color: black; }", CssPseudoClass::Invalid),
+        (
+            ":placeholder-shown { color: black; }",
+            CssPseudoClass::PlaceholderShown,
+        ),
+    ];
+
+    for (css, expected) in cases {
+        let sheet = parse_sheet(css).unwrap();
+        assert_eq!(
+            sheet.rules()[0].selector(),
+            &CssSelector::PseudoClass(expected)
+        );
+    }
+}
+
+#[test]
+fn parses_compound_tier_1_state_pseudo_classes() {
+    let sheet = parse_sheet(".button:hover { color: black; }").unwrap();
+    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+        panic!("expected compound selector");
+    };
+    assert_eq!(selector.classes(), &["button".to_owned()]);
+    assert_eq!(selector.pseudo_classes(), &[CssPseudoClass::Hover]);
+}
+
+#[test]
+fn rejects_function_syntax_for_simple_state_pseudo_classes() {
+    assert!(parse_sheet(":hover() { color: black; }").is_err());
+    assert!(parse_sheet(":focus() { color: black; }").is_err());
+}
+
+#[test]
 fn selector_list_constructor_rejects_empty_lists() {
     assert_eq!(CssSelectorList::try_new(Vec::new()), None);
     let list = CssSelectorList::try_new(vec![CssSelector::Class("button".to_owned())]).unwrap();
@@ -286,9 +338,8 @@ fn nth_pattern_model_exposes_an_plus_b_coefficients() {
 
 #[test]
 fn rejects_unsupported_pseudo_classes() {
-    assert!(parse_sheet(":hover { --space: 8px; }").is_err());
     assert!(parse_sheet(":not(.theme) { --space: 8px; }").is_err());
-    assert!(parse_sheet(":root:hover { --space: 8px; }").is_err());
+    assert!(parse_sheet(":first-child { --space: 8px; }").is_err());
 }
 
 #[test]

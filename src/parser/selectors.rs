@@ -1,4 +1,4 @@
-use cssparser::{BasicParseErrorKind, ParseError, Parser, ToCss, Token};
+use cssparser::{BasicParseErrorKind, ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
 
 use crate::error::{Error, invalid_selector, selector_basic};
 use crate::syntax::*;
@@ -122,7 +122,26 @@ fn parse_pseudo_class<'i, 't>(
 ) -> std::result::Result<CssPseudoClass, ParseError<'i, Error>> {
     let state = input.state();
     match input.next() {
-        Ok(Token::Ident(name)) if name.eq_ignore_ascii_case("root") => Ok(CssPseudoClass::Root),
+        Ok(Token::Ident(name)) => match_ignore_ascii_case! { &name,
+            "root" => Ok(CssPseudoClass::Root),
+            "hover" => Ok(CssPseudoClass::Hover),
+            "active" => Ok(CssPseudoClass::Active),
+            "focus" => Ok(CssPseudoClass::Focus),
+            "focus-visible" => Ok(CssPseudoClass::FocusVisible),
+            "focus-within" => Ok(CssPseudoClass::FocusWithin),
+            "disabled" => Ok(CssPseudoClass::Disabled),
+            "enabled" => Ok(CssPseudoClass::Enabled),
+            "checked" => Ok(CssPseudoClass::Checked),
+            "required" => Ok(CssPseudoClass::Required),
+            "optional" => Ok(CssPseudoClass::Optional),
+            "valid" => Ok(CssPseudoClass::Valid),
+            "invalid" => Ok(CssPseudoClass::Invalid),
+            "placeholder-shown" => Ok(CssPseudoClass::PlaceholderShown),
+            _ => {
+                let message = format!("unsupported pseudo-class `:{name}`");
+                Err(invalid_selector(input, message))
+            }
+        },
         Ok(token) => {
             let message = format!("unsupported pseudo-class `:{}`", token.to_css_string());
             input.reset(&state);

@@ -6,9 +6,14 @@ use crate::test_support::{
     assert_sheet_rejected, parse_single_declaration, parse_single_declaration_value,
 };
 
+fn style_rule(rule: &CssRule) -> &CssStyleRule {
+    let CssRule::Style(rule) = rule;
+    rule
+}
+
 fn declaration_value(input: &str, property: CssProperty) -> CssValue {
     let sheet = parse_sheet(input).unwrap();
-    sheet.rules()[0]
+    style_rule(&sheet.rules()[0])
         .declarations()
         .iter()
         .find(|declaration| declaration.property() == &property)
@@ -19,7 +24,7 @@ fn declaration_value(input: &str, property: CssProperty) -> CssValue {
 
 fn declaration(input: &str, property: CssProperty) -> CssDeclaration {
     let sheet = parse_sheet(input).unwrap();
-    sheet.rules()[0]
+    style_rule(&sheet.rules()[0])
         .declarations()
         .iter()
         .find(|declaration| declaration.property() == &property)
@@ -27,11 +32,27 @@ fn declaration(input: &str, property: CssProperty) -> CssDeclaration {
         .clone()
 }
 
+#[test]
+fn parsed_style_rule_is_explicit_rule_variant() {
+    let sheet = parse_sheet(".panel { width: 10px; }").unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("style sheet should parse exactly one rule");
+    };
+    let CssRule::Style(style_rule) = rule;
+
+    assert_eq!(
+        style_rule.selector(),
+        &CssSelector::Class("panel".to_owned())
+    );
+    assert_eq!(style_rule.declarations().len(), 1);
+}
+
 fn single_declaration(input: &str) -> CssDeclaration {
     let sheet = parse_sheet(input).unwrap();
     let [rule] = sheet.rules() else {
         panic!("{input} should parse exactly one rule");
     };
+    let rule = style_rule(rule);
     let [declaration] = rule.declarations() else {
         panic!("{input} should parse exactly one declaration");
     };
@@ -239,9 +260,9 @@ fn parses_root_selector_for_custom_property_declarations() {
     let sheet = parse_sheet(":root { --space: 8px; }").unwrap();
 
     assert_eq!(sheet.rules().len(), 1);
-    assert_eq!(sheet.rules()[0].declarations().len(), 1);
+    assert_eq!(style_rule(&sheet.rules()[0]).declarations().len(), 1);
     assert_eq!(
-        sheet.rules()[0].declarations()[0].property(),
+        style_rule(&sheet.rules()[0]).declarations()[0].property(),
         &CssProperty::Custom(CssCustomPropertyName::try_new("--space").unwrap())
     );
 }
@@ -251,7 +272,7 @@ fn root_selector_carries_root_pseudo_class_structurally() {
     let sheet = parse_sheet(":root { --space: 8px; }").unwrap();
 
     assert_eq!(
-        sheet.rules()[0].selector(),
+        style_rule(&sheet.rules()[0]).selector(),
         &CssSelector::PseudoClass(CssPseudoClass::Root)
     );
 }
@@ -259,7 +280,7 @@ fn root_selector_carries_root_pseudo_class_structurally() {
 #[test]
 fn compound_root_selector_carries_root_pseudo_class_structurally() {
     let sheet = parse_sheet("html:root { --space: 8px; }").unwrap();
-    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
         panic!("expected compound selector");
     };
 
@@ -297,7 +318,7 @@ fn parses_tier_1_state_pseudo_classes_as_authored_selectors() {
     for (css, expected) in cases {
         let sheet = parse_sheet(css).unwrap();
         assert_eq!(
-            sheet.rules()[0].selector(),
+            style_rule(&sheet.rules()[0]).selector(),
             &CssSelector::PseudoClass(expected)
         );
     }
@@ -306,7 +327,7 @@ fn parses_tier_1_state_pseudo_classes_as_authored_selectors() {
 #[test]
 fn parses_compound_tier_1_state_pseudo_classes() {
     let sheet = parse_sheet(".button:hover { color: black; }").unwrap();
-    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
         panic!("expected compound selector");
     };
     assert_eq!(selector.classes(), &["button".to_owned()]);
@@ -343,7 +364,7 @@ fn parses_tier_2_structural_simple_pseudo_classes() {
     for (css, expected) in cases {
         let sheet = parse_sheet(css).unwrap();
         assert_eq!(
-            sheet.rules()[0].selector(),
+            style_rule(&sheet.rules()[0]).selector(),
             &CssSelector::PseudoClass(expected)
         );
     }
@@ -352,7 +373,7 @@ fn parses_tier_2_structural_simple_pseudo_classes() {
 #[test]
 fn parses_compound_structural_simple_pseudo_classes() {
     let sheet = parse_sheet("button:first-child { color: black; }").unwrap();
-    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
         panic!("expected compound selector");
     };
     assert_eq!(selector.tag().map(String::as_str), Some("button"));
@@ -438,7 +459,7 @@ fn parses_nth_child_patterns() {
     for (css, expected) in cases {
         let sheet = parse_sheet(css).unwrap_or_else(|error| panic!("{css}: {error:?}"));
         assert_eq!(
-            sheet.rules()[0].selector(),
+            style_rule(&sheet.rules()[0]).selector(),
             &CssSelector::PseudoClass(expected)
         );
     }
@@ -468,7 +489,7 @@ fn parses_all_nth_structural_pseudo_classes() {
     for (css, expected) in cases {
         let sheet = parse_sheet(css).unwrap();
         assert_eq!(
-            sheet.rules()[0].selector(),
+            style_rule(&sheet.rules()[0]).selector(),
             &CssSelector::PseudoClass(expected)
         );
     }
@@ -494,7 +515,7 @@ fn rejects_trailing_tokens_in_nth_functions() {
 fn nth_pseudo_class_arguments_are_publicly_inspectable() {
     let sheet = parse_sheet(":nth-child(2n+1) { color: black; }").unwrap();
     let CssSelector::PseudoClass(CssPseudoClass::NthChild(CssNthPattern::AnPlusB(value))) =
-        sheet.rules()[0].selector()
+        style_rule(&sheet.rules()[0]).selector()
     else {
         panic!("expected nth-child an+b selector");
     };
@@ -505,7 +526,7 @@ fn nth_pseudo_class_arguments_are_publicly_inspectable() {
 #[test]
 fn parses_selector_list_functional_pseudo_classes() {
     let sheet = parse_sheet(".button:not(.disabled, .loading) { color: black; }").unwrap();
-    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
         panic!("expected compound selector");
     };
     let [CssPseudoClass::Not(list)] = selector.pseudo_classes() else {
@@ -521,18 +542,18 @@ fn parses_selector_list_functional_pseudo_classes() {
 
     let sheet = parse_sheet(":is(.primary, .secondary) { color: black; }").unwrap();
     assert!(matches!(
-        sheet.rules()[0].selector(),
+        style_rule(&sheet.rules()[0]).selector(),
         CssSelector::PseudoClass(CssPseudoClass::Is(_))
     ));
 
     let sheet = parse_sheet(":where(button, .link) { color: black; }").unwrap();
     assert!(matches!(
-        sheet.rules()[0].selector(),
+        style_rule(&sheet.rules()[0]).selector(),
         CssSelector::PseudoClass(CssPseudoClass::Where(_))
     ));
 
     let sheet = parse_sheet(".field:has(.error) { color: black; }").unwrap();
-    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
         panic!("expected compound selector");
     };
     assert!(matches!(
@@ -544,7 +565,7 @@ fn parses_selector_list_functional_pseudo_classes() {
 #[test]
 fn parses_compound_selector_list_functional_pseudo_classes() {
     let sheet = parse_sheet(".field:not(:disabled, :focus) { color: black; }").unwrap();
-    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
         panic!("expected compound selector");
     };
     let [CssPseudoClass::Not(list)] = selector.pseudo_classes() else {
@@ -562,7 +583,7 @@ fn parses_compound_selector_list_functional_pseudo_classes() {
 #[test]
 fn functional_pseudo_class_arguments_are_publicly_inspectable() {
     let sheet = parse_sheet(".button:not(.disabled) { color: black; }").unwrap();
-    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
         panic!("expected compound selector");
     };
     let [CssPseudoClass::Not(list)] = selector.pseudo_classes() else {
@@ -608,7 +629,7 @@ fn parses_tier_4_runtime_state_pseudo_classes() {
     for (css, expected) in cases {
         let sheet = parse_sheet(css).unwrap();
         assert_eq!(
-            sheet.rules()[0].selector(),
+            style_rule(&sheet.rules()[0]).selector(),
             &CssSelector::PseudoClass(expected)
         );
     }
@@ -617,7 +638,7 @@ fn parses_tier_4_runtime_state_pseudo_classes() {
 #[test]
 fn parses_compound_runtime_state_pseudo_classes() {
     let sheet = parse_sheet(".dialog:modal:fullscreen { color: black; }").unwrap();
-    let CssSelector::Compound(selector) = sheet.rules()[0].selector() else {
+    let CssSelector::Compound(selector) = style_rule(&sheet.rules()[0]).selector() else {
         panic!("expected compound selector");
     };
     assert_eq!(selector.classes(), &["dialog".to_owned()]);
@@ -3838,7 +3859,7 @@ fn parses_calc_in_edge_shorthands() {
     }
     assert_eq!(edges.left, CssLength::px(2.0));
 
-    assert_eq!(sheet.rules()[0].declarations().len(), 1);
+    assert_eq!(style_rule(&sheet.rules()[0]).declarations().len(), 1);
 }
 
 #[test]
@@ -4205,7 +4226,7 @@ fn parses_every_task_5_supported_property_name() {
         }",
     )
     .unwrap();
-    let declarations = sheet.rules()[0].declarations();
+    let declarations = style_rule(&sheet.rules()[0]).declarations();
 
     for property in [
         CssProperty::WritingMode,
@@ -4678,7 +4699,7 @@ fn parses_every_task_6_supported_property_name() {
         }",
     )
     .unwrap();
-    let declarations = sheet.rules()[0].declarations();
+    let declarations = style_rule(&sheet.rules()[0]).declarations();
 
     for property in [
         CssProperty::BackgroundImage,
@@ -5155,7 +5176,7 @@ fn parses_every_task_2_supported_property_name() {
         }",
     )
     .unwrap();
-    let declarations = sheet.rules()[0].declarations();
+    let declarations = style_rule(&sheet.rules()[0]).declarations();
 
     for property in [
         CssProperty::Inset,
@@ -5446,7 +5467,7 @@ fn parses_every_task_4_supported_property_name() {
         }",
     )
     .unwrap();
-    let declarations = sheet.rules()[0].declarations();
+    let declarations = style_rule(&sheet.rules()[0]).declarations();
 
     for property in [
         CssProperty::GridTemplateRows,

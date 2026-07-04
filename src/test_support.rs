@@ -1,7 +1,7 @@
 use crate::validation::{SupportedProperty, supported_properties};
 use crate::{
-    CssDeclaration, CssGlobalKeyword, CssProperty, CssSheet, CssValue, Error, ErrorKind,
-    parse_sheet,
+    CssDeclaration, CssGlobalKeyword, CssProperty, CssRule, CssSheet, CssStyleRule, CssValue,
+    Error, ErrorKind, parse_sheet,
 };
 
 pub(crate) struct AcceptedDeclarationCase {
@@ -232,8 +232,14 @@ fn only_declaration(sheet: &CssSheet, input: &str) -> CssDeclaration {
     let [rule] = sheet.rules() else {
         panic!("{input} should parse exactly one rule");
     };
+    let rule = style_rule(rule);
     let [declaration] = rule.declarations() else {
         panic!("{input} should parse exactly one declaration");
     };
     declaration.clone()
+}
+
+fn style_rule(rule: &CssRule) -> &CssStyleRule {
+    let CssRule::Style(rule) = rule;
+    rule
 }

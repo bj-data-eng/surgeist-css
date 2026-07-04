@@ -34,12 +34,17 @@ impl CssSheet {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct CssRule {
+pub enum CssRule {
+    Style(CssStyleRule),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssStyleRule {
     selector: CssSelector,
     declarations: Vec<CssDeclaration>,
 }
 
-impl CssRule {
+impl CssStyleRule {
     #[must_use]
     pub(crate) fn new(selector: CssSelector, declarations: Vec<CssDeclaration>) -> Self {
         Self {

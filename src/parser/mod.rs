@@ -96,7 +96,7 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {
 
         Ok(selectors
             .into_iter()
-            .map(|selector| CssRule::new(selector, declarations.clone()))
+            .map(|selector| CssRule::Style(CssStyleRule::new(selector, declarations.clone())))
             .collect())
     }
 }

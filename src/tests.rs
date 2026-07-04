@@ -145,6 +145,51 @@ fn rejects_unknown_system_color_like_identifiers() {
 }
 
 #[test]
+fn parses_color_mix_symbolically() {
+    let CssValue::Color(CssColor::ColorMix(mix)) = declaration_value(
+        ".panel { color: color-mix(in oklch, red 40%, blue); }",
+        CssProperty::Color,
+    ) else {
+        panic!("expected color-mix");
+    };
+
+    assert_eq!(
+        mix.interpolation().space(),
+        CssColorInterpolationSpace::Oklch
+    );
+    assert_eq!(mix.interpolation().hue(), None);
+    assert_eq!(mix.left().percentage(), Some(40.0));
+    assert!(matches!(mix.left().color(), CssColor::Rgba(_)));
+    assert_eq!(mix.right().percentage(), None);
+    assert!(matches!(mix.right().color(), CssColor::Rgba(_)));
+}
+
+#[test]
+fn parses_color_mix_with_hue_interpolation() {
+    let CssValue::Color(CssColor::ColorMix(mix)) = declaration_value(
+        ".panel { color: color-mix(in lch longer hue, red, blue 25%); }",
+        CssProperty::Color,
+    ) else {
+        panic!("expected color-mix");
+    };
+
+    assert_eq!(mix.interpolation().space(), CssColorInterpolationSpace::Lch);
+    assert_eq!(
+        mix.interpolation().hue(),
+        Some(CssHueInterpolationMethod::Longer)
+    );
+    assert_eq!(mix.right().percentage(), Some(25.0));
+}
+
+#[test]
+fn rejects_invalid_color_mix_forms_strictly() {
+    assert!(parse_sheet(".panel { color: color-mix(); }").is_err());
+    assert!(parse_sheet(".panel { color: color-mix(in oklch, red); }").is_err());
+    assert!(parse_sheet(".panel { color: color-mix(in unknown, red, blue); }").is_err());
+    assert!(parse_sheet(".panel { color: color-mix(in oklch, red 10% 20%, blue); }").is_err());
+}
+
+#[test]
 fn rgba_hex_alpha_preserves_channels() {
     let CssValue::Color(color) =
         declaration_value(".panel { color: #11223344; }", CssProperty::Color)

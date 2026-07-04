@@ -698,7 +698,7 @@ git commit -m "Parse symbolic CSS system colors"
 - Modify: `/Users/codex/Development/surgeist-css/src/parser/values.rs`
 - Modify: `/Users/codex/Development/surgeist-css/src/tests.rs`
 
-- [ ] **Step 1: Add `color-mix()` structural tests**
+- [x] **Step 1: Add `color-mix()` structural tests**
 
 Add tests:
 
@@ -745,7 +745,7 @@ fn rejects_invalid_color_mix_forms_strictly() {
 }
 ```
 
-- [ ] **Step 2: Implement parser**
+- [x] **Step 2: Implement parser**
 
 Implement `parse_color_mix(input)` as a fallback when the next token is `Function("color-mix")`.
 
@@ -782,7 +782,7 @@ Use recursive `parse_color` for each color component so named/absolute/system co
 
 Do not evaluate the mix.
 
-- [ ] **Step 3: Run checks**
+- [x] **Step 3: Run checks**
 
 ```sh
 cargo fmt --check
@@ -794,7 +794,7 @@ git diff --check
 
 Expected: pass.
 
-- [ ] **Step 4: Report**
+- [x] **Step 4: Report**
 
 Report changed files, checks run, and `git status --short --branch`. Workers do not commit.
 

@@ -496,11 +496,110 @@ fn parse_relative_color<'i, 't>(
 fn parse_color_mix<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssColor, ParseError<'i, Error>> {
-    Err(unsupported_value(
-        input,
-        None,
-        "color-mix syntax is not implemented yet",
-    ))
+    let state = input.state();
+    let location = input.current_source_location();
+    let token = input.next().map_err(basic)?.clone();
+    match token {
+        Token::Function(name) if name.eq_ignore_ascii_case("color-mix") => input
+            .parse_nested_block(parse_color_mix_arguments)
+            .map(CssColor::ColorMix),
+        token => {
+            input.reset(&state);
+            Err(location.new_unexpected_token_error::<Error>(token))
+        }
+    }
+}
+
+fn parse_color_mix_arguments<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColorMix, ParseError<'i, Error>> {
+    input.expect_ident_matching("in").map_err(basic)?;
+    let interpolation = parse_color_mix_interpolation_method(input)?;
+    input.expect_comma().map_err(basic)?;
+    let left = parse_color_mix_component(input)?;
+    input.expect_comma().map_err(basic)?;
+    let right = parse_color_mix_component(input)?;
+
+    Ok(CssColorMix::new(interpolation, left, right))
+}
+
+fn parse_color_mix_interpolation_method<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColorInterpolationMethod, ParseError<'i, Error>> {
+    let space = parse_color_mix_interpolation_space(input)?;
+    let hue = input.try_parse(parse_color_mix_hue_interpolation).ok();
+    Ok(CssColorInterpolationMethod::new(space, hue))
+}
+
+fn parse_color_mix_interpolation_space<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColorInterpolationSpace, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    let space = match_ignore_ascii_case! { &ident,
+        "srgb" => CssColorInterpolationSpace::Predefined(CssPredefinedColorSpace::Srgb),
+        "srgb-linear" => CssColorInterpolationSpace::Predefined(CssPredefinedColorSpace::SrgbLinear),
+        "display-p3" => CssColorInterpolationSpace::Predefined(CssPredefinedColorSpace::DisplayP3),
+        "display-p3-linear" => CssColorInterpolationSpace::Predefined(CssPredefinedColorSpace::DisplayP3Linear),
+        "a98-rgb" => CssColorInterpolationSpace::Predefined(CssPredefinedColorSpace::A98Rgb),
+        "prophoto-rgb" => CssColorInterpolationSpace::Predefined(CssPredefinedColorSpace::ProphotoRgb),
+        "rec2020" => CssColorInterpolationSpace::Predefined(CssPredefinedColorSpace::Rec2020),
+        "xyz" => CssColorInterpolationSpace::Predefined(CssPredefinedColorSpace::XyzD65),
+        "xyz-d50" => CssColorInterpolationSpace::Predefined(CssPredefinedColorSpace::XyzD50),
+        "xyz-d65" => CssColorInterpolationSpace::Predefined(CssPredefinedColorSpace::XyzD65),
+        "hsl" => CssColorInterpolationSpace::Hsl,
+        "hwb" => CssColorInterpolationSpace::Hwb,
+        "lab" => CssColorInterpolationSpace::Lab,
+        "lch" => CssColorInterpolationSpace::Lch,
+        "oklab" => CssColorInterpolationSpace::Oklab,
+        "oklch" => CssColorInterpolationSpace::Oklch,
+        _ => return Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported color-mix interpolation space `{ident}`"),
+        )),
+    };
+    Ok(space)
+}
+
+fn parse_color_mix_hue_interpolation<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssHueInterpolationMethod, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    let hue = match_ignore_ascii_case! { &ident,
+        "shorter" => CssHueInterpolationMethod::Shorter,
+        "longer" => CssHueInterpolationMethod::Longer,
+        "increasing" => CssHueInterpolationMethod::Increasing,
+        "decreasing" => CssHueInterpolationMethod::Decreasing,
+        _ => return Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported color-mix hue interpolation method `{ident}`"),
+        )),
+    };
+    input.expect_ident_matching("hue").map_err(basic)?;
+    Ok(hue)
+}
+
+fn parse_color_mix_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColorMixComponent, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let color = parse_color_inner(input)?;
+    let percentage = input.try_parse(parse_color_mix_percentage).ok();
+    CssColorMixComponent::try_new(color, percentage).ok_or_else(|| {
+        unsupported_value_at(location, None, "unsupported color-mix component percentage")
+    })
+}
+
+fn parse_color_mix_percentage<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<f32, ParseError<'i, Error>> {
+    input
+        .expect_percentage()
+        .map(|percentage| percentage * 100.0)
+        .map_err(basic)
 }
 
 fn parse_absolute_color_with_cssparser_color<'i, 't>(

@@ -4,9 +4,9 @@ SCOPE: `surgeist-css` at `318864d1074d8d723a3a925528343c8a3d8c7253` (`main`), re
 
 EVIDENCE CHECKED: `AGENTS.md`, `Cargo.toml`, `README.md`, the public front door in `src/lib.rs`, all owned Rust source and tracked tests under `src/`, the local Cargo target/feature inventory, and the official W3C specifications linked below. Three independent zero-history review passes covered standards completeness, strict-parser defects, and API/test quality; the coordinator reproduced and consolidated their actionable findings.
 
-# CSS Snapshot 2026 compatibility review
+# P01 CSS Snapshot 2026 Compatibility Review
 
-## Compatibility interpretation
+## 1 Compatibility Interpretation
 
 The minimum compatibility baseline used here is the set of specifications that the [CSS Snapshot 2026 §2.1](https://www.w3.org/TR/css-2026/#css-official) defines as CSS in 2026, restricted to this crate's documented ownership of authored CSS syntax. Cascade application, variable substitution, value resolution, selector matching, and resource loading remain outside this crate. Syntax owned by those specifications—including declarations, rule structure, selectors, media queries, and authored values—remains in scope even when its later semantic processing belongs elsewhere.
 
@@ -14,9 +14,9 @@ Modules listed as substantially interoperable or as safe-to-use pre-CR exception
 
 The crate does not meet even the §2.1 minimum baseline today. The compatibility gaps are therefore not limited to draft or aspirational CSS.
 
-## Findings
+## 2 Findings
 
-### [Important] Snapshot-defined at-rule families are absent
+### 2.1 [Important] Snapshot-defined at-rule families are absent
 
 Location: `src/parser/mod.rs:107-200`, `src/syntax.rs:37-47`, and the rejection expectations in `src/tests.rs`.
 
@@ -28,7 +28,7 @@ Required remediation: add typed rule models and strict parsers for every in-boun
 
 References: [Conditional Rules 3 `@supports`](https://www.w3.org/TR/css-conditional-3/#at-ruledef-supports), [Namespaces 3](https://www.w3.org/TR/css3-namespace/#declaration), [Counter Styles 3](https://www.w3.org/TR/css-counter-styles-3/#the-counter-style-rule).
 
-### [Important] The declaration surface is far short of Snapshot 2026 and overstates support for several listed properties
+### 2.2 [Important] The declaration surface is far short of Snapshot 2026 and overstates support for several listed properties
 
 Location: `src/validation.rs:31-213`, the property dispatch beginning at `src/parser/mod.rs:770`, and property grammars including `src/parser/layout.rs:8-91` and `src/parser/background.rs`.
 
@@ -40,7 +40,7 @@ Required remediation: derive a property-by-property Snapshot matrix from the own
 
 References: [CSS2 `display`](https://www.w3.org/TR/CSS2/visuren.html#display-prop), [CSS2 `overflow`](https://www.w3.org/TR/CSS2/visufx.html#overflow-clipping), [Backgrounds and Borders 3](https://www.w3.org/TR/css-backgrounds-3/).
 
-### [Important] The selector parser is not Selectors Level 3 complete
+### 2.3 [Important] The selector parser is not Selectors Level 3 complete
 
 Location: `src/parser/selectors.rs:299-419`, `src/parser/selectors.rs:567-759`, and rejection cases around `src/tests.rs:3685-3749`.
 
@@ -52,7 +52,7 @@ Required remediation: implement the complete Selectors 3 syntax and authored AST
 
 Reference: [Selectors Level 3](https://www.w3.org/TR/selectors-3/).
 
-### [Important] Media Queries Level 3 syntax is incomplete
+### 2.4 [Important] Media Queries Level 3 syntax is incomplete
 
 Location: `src/parser/queries.rs:253-268`, `src/parser/queries.rs:336-456`, `src/parser/queries.rs:493-524`, and tests around `src/tests.rs:4980-5014`.
 
@@ -64,7 +64,7 @@ Required remediation: implement the complete Media Queries 3 type and feature gr
 
 Reference: [Media Queries Level 3](https://www.w3.org/TR/mediaqueries-3/#media1).
 
-### [Important] There is no style-attribute declaration-list entry point
+### 2.5 [Important] There is no style-attribute declaration-list entry point
 
 Location: `src/lib.rs:17-19` and `src/parser/mod.rs`.
 
@@ -76,7 +76,7 @@ Required remediation: expose a strict, typed declaration-list/style-attribute pa
 
 Reference: [CSS Style Attributes](https://www.w3.org/TR/css-style-attr/#syntax).
 
-### [Important] Ordinary declarations lose or reject `!important`
+### 2.6 [Important] Ordinary declarations lose or reject `!important`
 
 Location: `src/syntax.rs:1927-1971`, `src/parser/mod.rs:703-740`, `src/parser/mod.rs:956-958`, and `src/parser/variables.rs:42-52`.
 
@@ -88,7 +88,7 @@ Required remediation: parse `!important` at the declaration boundary, store it a
 
 Reference: [Cascade 4 importance](https://www.w3.org/TR/css-cascade-4/#importance).
 
-### [Important] Layer statements incorrectly make following imports invalid, and import conditions are incomplete
+### 2.7 [Important] Layer statements incorrectly make following imports invalid, and import conditions are incomplete
 
 Location: `src/parser/mod.rs:100-103`, `src/parser/mod.rs:216-218`, and `src/tests.rs:936-947`.
 
@@ -100,7 +100,7 @@ Required remediation: model the specification's import-order state precisely—d
 
 Reference: [CSS Cascading and Inheritance Level 5](https://www.w3.org/TR/css-cascade-5/).
 
-### [Important] Repeated ID selectors are silently overwritten
+### 2.8 [Important] Repeated ID selectors are silently overwritten
 
 Location: `src/parser/selectors.rs:378-383`.
 
@@ -110,7 +110,7 @@ Impact: successful parsing changes authored meaning and downstream specificity/m
 
 Required remediation: preserve ID selectors as an ordered collection, or reject them only if the adopted selector grammar actually forbids the form (Selectors does not). Add AST and specificity-facing regression tests for repeated identical and distinct IDs.
 
-### [Important] Shared position parsing accepts invalid arities and keyword combinations
+### 2.9 [Important] Shared position parsing accepts invalid arities and keyword combinations
 
 Location: `src/parser/background.rs:73-88` and `src/syntax.rs:5336-5346`.
 
@@ -120,7 +120,7 @@ Impact: strict parsing certifies invalid authored values, and reuse across backg
 
 Required remediation: replace the generic component-count validator with property-specific grammar states for `<position>`, background-position layers, mask-position layers, and transform-origin, including valid edge-offset pairings and z-offset constraints.
 
-### [Important] Generic function validators accept invalid transform, easing, shape, and filter syntax
+### 2.10 [Important] Generic function validators accept invalid transform, easing, shape, and filter syntax
 
 Location: `src/parser/effects.rs:85-127`, `src/parser/effects.rs:221-337`, and `src/parser/effects.rs:427-463`.
 
@@ -132,7 +132,7 @@ Required remediation: give every function a dedicated grammar parser with exact 
 
 References: [Easing Functions](https://www.w3.org/TR/css-easing-1/), [Transforms](https://www.w3.org/TR/css-transforms-1/).
 
-### [Important] Time values conflate durations with delays and admit non-finite numbers
+### 2.11 [Important] Time values conflate durations with delays and admit non-finite numbers
 
 Location: `src/parser/timing.rs:29-55`, `src/parser/timing.rs:178`, `src/parser/timing.rs:279-298`, `src/parser/timing.rs:434`, `src/parser/mod.rs:939`, and `src/syntax.rs:6016-6036`.
 
@@ -144,7 +144,7 @@ Required remediation: split duration and delay grammar/domain types, reject ever
 
 References: [CSS Transitions 1](https://www.w3.org/TR/css-transitions-1/), [CSS Animations 1](https://www.w3.org/TR/css-animations-1/).
 
-### [Important] `calc()` and range handling contradict Values and Units Level 3
+### 2.12 [Important] `calc()` and range handling contradict Values and Units Level 3
 
 Location: `src/parser/values.rs:149-160`, `src/parser/values.rs:193-213`, `src/parser/values.rs:257-266`, and the explicit multiplication rejection near `src/tests.rs:4625`.
 
@@ -156,7 +156,7 @@ Required remediation: represent math expressions with their typed grammar, suppo
 
 Reference: [CSS Values and Units Level 3](https://www.w3.org/TR/css-values-3/).
 
-### [Important] Relative-color components are effectively untyped
+### 2.13 [Important] Relative-color components are effectively untyped
 
 Location: `src/parser/values.rs:598-629` and `src/parser/values.rs:661-683`.
 
@@ -168,7 +168,7 @@ Required remediation: parameterize relative-color parsing by color space and cha
 
 Reference: [CSS Color Level 5 relative colors](https://drafts.csswg.org/css-color-5/#relative-colors).
 
-### [Important] Grid `repeat()` validation permits forbidden nesting and flexible auto-repeat tracks
+### 2.14 [Important] Grid `repeat()` validation permits forbidden nesting and flexible auto-repeat tracks
 
 Location: `src/parser/grid.rs:62-80`, `src/parser/grid.rs:103-157`, `src/syntax.rs:3297-3405`, and tests around `src/tests.rs:9662-9677`.
 
@@ -180,7 +180,7 @@ Required remediation: use distinct AST/parser states for fixed repeat, auto repe
 
 Reference: [CSS Grid Layout](https://drafts.csswg.org/css-grid/).
 
-### [Important] A malformed leading `@charset` bypasses strict rule parsing
+### 2.15 [Important] A malformed leading `@charset` bypasses strict rule parsing
 
 Location: `src/parser/mod.rs:65-72` together with `cssparser 0.37.0`'s `StyleSheetParser` handling in `rules_and_declarations.rs:375-382`.
 
@@ -190,7 +190,7 @@ Impact: the public whole-sheet parser can report success after discarding invali
 
 Required remediation: validate the optional leading encoding declaration before constructing the dependency iterator, or use a parser path that exposes it. Test valid legacy spelling, malformed preludes, missing semicolons, comments/BOM interactions, and non-leading occurrences.
 
-### [Important] Typography parsers accept invalid feature tags, indices, and global-keyword list members
+### 2.16 [Important] Typography parsers accept invalid feature tags, indices, and global-keyword list members
 
 Location: `src/parser/typography.rs:156-183`, `src/parser/typography.rs:396-422`, and `src/syntax.rs:4113-4152`.
 
@@ -202,7 +202,7 @@ Required remediation: validate feature tags against the four-ASCII-character gra
 
 Reference: [CSS Fonts Level 3](https://drafts.csswg.org/css-fonts-3/).
 
-### [Important] Keyframe validation rejects valid duplicate and empty structures
+### 2.17 [Important] Keyframe validation rejects valid duplicate and empty structures
 
 Location: `src/syntax.rs:200-221`, `src/syntax.rs:407-418`, `src/parser/keyframes.rs:34-90`, and the duplicate-offset rejection in `src/tests.rs:3530-3548`.
 
@@ -214,7 +214,7 @@ Required remediation: preserve duplicate blocks and source order, permit specifi
 
 Reference: [CSS Animations Level 1 keyframes](https://www.w3.org/TR/css-animations-1/#keyframes).
 
-### [Minor] The compatibility oracle is circular and currently classifies no standard property as known-unsupported
+### 2.18 [Minor] The compatibility oracle is circular and currently classifies no standard property as known-unsupported
 
 Location: `src/validation.rs:267-328`, especially `KNOWN_UNSUPPORTED_PROPERTY_NAMES`, and the support-list tests using the same local tables.
 
@@ -224,7 +224,7 @@ Impact: tests can remain green while large, stable portions of CSS are absent, a
 
 Required remediation: create a versioned, source-linked Snapshot manifest independent of parser dispatch, record complete/partial/unsupported status and module level, and make coverage tests prove that every in-scope grammar item is deliberately classified.
 
-### [Minor] Several public syntax types can represent values the parser would never accept
+### 2.19 [Minor] Several public syntax types can represent values the parser would never accept
 
 Location: public constructors/variants around `src/syntax.rs:3173`, `src/syntax.rs:3186`, `src/syntax.rs:7284`, and `src/syntax.rs:7920`.
 
@@ -234,7 +234,7 @@ Impact: downstream code must defensively revalidate allegedly typed syntax, and 
 
 Required remediation: use opaque validated wrappers and checked constructors, keep parser-only construction crate-private, and represent identifiers/tokens with types that establish their lexical invariants.
 
-### [Minor] The declaration/value architecture has become a manually synchronized cross-product
+### 2.20 [Minor] The declaration/value architecture has become a manually synchronized cross-product
 
 Location: the design statement at `src/syntax.rs:1-7`, `CssDeclaration` at `src/syntax.rs:1927-1971`, the large `CssProperty`/`CssValue` enums beginning near `src/syntax.rs:2001` and `src/syntax.rs:2384`, and the manual dispatch beginning at `src/parser/mod.rs:770`.
 
@@ -244,7 +244,7 @@ Impact: additions are easy to make inconsistently, partial support is hard to de
 
 Required remediation: choose one authoritative property schema that generates or centrally declares name, typed value kind, completeness status, and parse function. Preserve property-specific types rather than growing an unchecked property/value cross-product.
 
-### [Minor] The public API lacks item-level guidance and consumer-facing tests
+### 2.21 [Minor] The public API lacks item-level guidance and consumer-facing tests
 
 Location: glob exports in `src/lib.rs:17-19`, the public types beginning at `src/syntax.rs:16`, `src/error.rs`, `src/parser/mod.rs`, `README.md`, and `src/tests.rs:1`.
 
@@ -254,7 +254,7 @@ Impact: intended invariants, unsupported-vs-invalid behavior, source coordinate 
 
 Required remediation: document the front door and public semantic types, add a minimal README/doctest example, and add external tests that use only public API for success, strict failure, authored preservation, and diagnostic inspection.
 
-### [Minor] Source-location coordinates mix conventions without documenting them
+### 2.22 [Minor] Source-location coordinates mix conventions without documenting them
 
 Location: `src/error.rs:50-81`, `src/syntax.rs:1981-1989`, and the expectation near `src/tests.rs:5640`.
 
@@ -264,7 +264,7 @@ Impact: editors and diagnostic consumers can highlight the wrong row/column, par
 
 Required remediation: document the exact coordinate basis and encoding or normalize both axes to one deliberate public convention. Add multiline and non-BMP regression tests.
 
-### [Minor] Many negative tests permit diagnostic regressions
+### 2.23 [Minor] Many negative tests permit diagnostic regressions
 
 Location: shared rejection helpers around `src/test_support.rs:73-95` and broad alternative matches such as those around `src/tests.rs:4498`.
 
@@ -274,7 +274,7 @@ Impact: the suite does not reliably protect the crate's error taxonomy or prove 
 
 Required remediation: make focused negative vectors assert exact error kind, stable reason category, and location; reserve broad failure-only helpers for fuzz/property tests where the cause is intentionally unconstrained.
 
-### [Minor] The configured Clippy gate is currently red
+### 2.24 [Minor] The configured Clippy gate is currently red
 
 Location: `src/syntax.rs:3636`.
 
@@ -284,7 +284,7 @@ Impact: the repository does not satisfy its own documented verification inventor
 
 Required remediation: address the lint without suppressing the warning globally, then keep the exact configured command green.
 
-### [Minor] Unsafe prohibition is not encoded at the crate root
+### 2.25 [Minor] Unsafe prohibition is not encoded at the crate root
 
 Location: `src/lib.rs:1-22`.
 
@@ -294,7 +294,7 @@ Impact: a future unsafe block can enter through a path that does not run the spe
 
 Required remediation: add `#![forbid(unsafe_code)]` at the crate root and retain the repository-wide token scan and Clippy gate.
 
-## Positive observations
+## 3 Positive Observations
 
 - The documented crate boundary is coherent: authored syntax is kept separate from cascade application, substitution, resolution, selector matching, and resource loading.
 - The parser consistently attempts whole-input exhaustion in many property-specific paths, and the test suite is already large enough to host focused conformance vectors.
@@ -303,7 +303,7 @@ Required remediation: add `#![forbid(unsafe_code)]` at the crate root and retain
 
 These observations do not offset the compatibility and strictness findings above, but they provide a useful base for remediation.
 
-## Verification record
+## 4 Verification Record
 
 All commands were run from `/Users/codex/Development/surgeist-css` without network access or dependency acquisition.
 
@@ -318,7 +318,7 @@ All commands were run from `/Users/codex/Development/surgeist-css` without netwo
 
 The worktree was clean before this review. The only intended review write is this report.
 
-## Required next transition
+## 5 Required Next Transition
 
 Remediation is a multi-cycle, public-API-affecting effort and must enter the Surgeist canonical planning pipeline before product code changes. The first plan should establish an independent, versioned Snapshot 2026 conformance manifest and then sequence work in dependency order: shared lexical/numeric invariants; declaration importance and style-attribute parsing; Snapshot at-rules/selectors/media queries; property grammar completion; claimed post-Snapshot modules; public API hardening; and conformance/test-oracle enforcement.
 

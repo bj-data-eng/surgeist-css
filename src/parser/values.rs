@@ -285,9 +285,12 @@ pub(super) fn parse_length_with_context<'i, 't>(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(
-    dead_code,
-    reason = "T2 root kinds are consumed by the staged T3 property integration"
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "T2 root kinds are consumed by the staged T3 property integration"
+    )
 )]
 pub(super) enum CalculationRoot {
     Number,
@@ -301,9 +304,12 @@ pub(super) enum CalculationRoot {
 
 const CALCULATION_NESTING_LIMIT: u16 = 256;
 
-#[allow(
-    dead_code,
-    reason = "T2 parser foundation is consumed by the staged T3 property integration"
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "T2 parser foundation is consumed by the staged T3 property integration"
+    )
 )]
 pub(super) fn parse_typed_calculation<'i, 't>(
     input: &mut Parser<'i, 't>,

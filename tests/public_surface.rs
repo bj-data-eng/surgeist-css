@@ -296,6 +296,7 @@ fn readme_describes_recovery_and_rejects_the_obsolete_strict_only_contract() {
     for stale in [
         "does not recover from invalid application CSS",
         "reject the whole sheet",
+        "rejects the whole sheet",
     ] {
         assert!(
             !normalized.contains(stale),

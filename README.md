@@ -47,7 +47,7 @@ Colors are parsed as authored CSS color syntax. `surgeist-css` accepts named col
 
 Pseudo-classes for UI interaction, form state, structure, selector-list filtering, and overlay state are parsed as authored selector syntax. This crate does not evaluate pseudo-class matches; runtime matching belongs to downstream Surgeist layers with node and interaction state.
 
-Selector-list pseudo-class arguments are parsed as strict authored selector syntax. `:is`, `:where`, and `:not` preserve supported complex selector lists; `:has` preserves supported relative selector lists including leading child and sibling combinators; and `:nth-child` / `:nth-last-child` preserve optional `of` selector filters. Unlike browser forgiving selector lists, any unsupported or malformed selector argument rejects the whole sheet.
+Selector-list pseudo-class arguments are parsed as authored selector syntax with bounded recovery. In recognized `:is()` and `:where()` lists, an invalid member is dropped with `DropSelectorListItem` while the other members remain in authored order. Other selector lists are unforgiving: `:not()` preserves supported complex selector lists, `:has()` preserves supported relative selector lists including leading child and sibling combinators, and `:nth-child()` / `:nth-last-child()` preserve optional `of` selector filters, but an invalid member causes the containing qualified rule to be dropped with `DropQualifiedRule`. Later sibling rules remain eligible for parsing.
 
 Media queries are parsed as authored conditions on `@media` group rules. `surgeist-css` does not evaluate media query matches; environment-dependent matching belongs to downstream Surgeist layers.
 

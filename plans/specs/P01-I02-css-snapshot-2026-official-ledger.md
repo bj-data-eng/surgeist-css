@@ -176,10 +176,13 @@ aliases are part of the named row rather than another row.
 
 Conditional 3's imported `general-enclosed` grammar is frozen to
 `X-VALUES4` at <https://www.w3.org/TR/2024/WD-css-values-4-20240312/> as the
-atomic `ext.supports.general-enclosed` delta. Conditional 3 `@media` binds to
-`O-MEDIA3`, not its moving Media Queries reference. Color 4 does not own
-`color-mix()` or relative colors; those retain `I-COLOR5`. Fonts 3 does not own
-`font-display` or `@font-feature-values`; those retain `I-FONTS4`.
+atomic `ext.supports.general-enclosed` delta. The Conditional 3 `@media` shell
+and `baseline.rule.media` record bind to `O-CONDITIONAL3`. Their imported
+`<media-query-list>` grammar binds to the selected `O-MEDIA3` core plus the
+separately catalogued `R-MEDIA4` deltas, not a moving Media Queries reference.
+Color 4 does not own `color-mix()` or relative colors; those retain `I-COLOR5`.
+Fonts 3 does not own `font-display` or `@font-feature-values`; those retain
+`I-FONTS4`.
 `@import layer` and `@import supports()` are separate `R-CASCADE5` atomic
 deltas, never part of the `O-CASCADE4` row.
 

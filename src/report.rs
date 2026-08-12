@@ -171,9 +171,12 @@ impl CssRecoveryDiagnostic {
 
     /// Returns the authored-source recovery-unit span.
     ///
-    /// This diagnostic-phase metadata is ordered and contains the error position
-    /// by construction. It does not imply that any invalid authored node was
-    /// retained and does not perform source loading or syntax resolution.
+    /// This diagnostic-phase metadata is ordered. By construction, the error
+    /// position lies at or after the inclusive start and at or before the
+    /// exclusive end. Equality at the end is permitted for missing-token, EOF,
+    /// and zero-width provenance; it does not imply slice containment. The span
+    /// does not imply that any invalid authored node was retained and does not
+    /// perform source loading or syntax resolution.
     #[must_use]
     pub const fn span(&self) -> CssSourceSpan {
         self.span
@@ -326,6 +329,22 @@ mod tests {
         assert_eq!(diagnostic.error(), &error);
         assert_eq!(diagnostic.span(), span);
         assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    }
+
+    #[test]
+    fn report_diagnostic_accepts_zero_width_missing_token_span_at_exclusive_end() {
+        const SOURCE: &str = "@media screen;";
+
+        let error = parse_sheet(SOURCE).expect_err("media requires a missing block at EOF");
+        let end = CssSourcePosition::from_byte_offset_in(SOURCE, SOURCE.len());
+        assert_eq!(error.position(), end);
+        let span = CssSourceSpan::new(end, end).expect("zero-width missing-token span");
+
+        let diagnostic = CssRecoveryDiagnostic::new(error, span, CssRecoveryAction::DropAtRule)
+            .expect("error position may equal the exclusive span end");
+
+        assert_eq!(diagnostic.span().start(), diagnostic.span().end());
+        assert_eq!(diagnostic.error().position(), diagnostic.span().end());
     }
 
     #[test]

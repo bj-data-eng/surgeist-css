@@ -9,9 +9,9 @@
 | Status | `in_progress` |
 | Cycle base | `606ae77156d3085b6a8a551bc1f8d50c3ab885df` |
 | Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `e290a7fef9bf6b6e9bde764140e5f7fac34156bb8f644d999e6bba58dc92ca2b`, especially P01.9 |
-| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `cd6f00a46ab4c5eeccf1a0c2e312eb329d1c365fdb30b4fd99cae0cdd3ddaec8`, sections 4, 10, and 12.2-12.3 |
+| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `36a007fe2099fe6442fe940558c61e102a8dbd871de32e59838d003fce3aaa76`, sections 4, 10, and 12.2-12.3 |
 | Reviewed ledger | `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256 `02955c03b5cc404aeb6e6a1724402d570d1736d06ccef74dc631084540188116`, sections 1-5 |
-| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `1e1750cc0d21b9b08bee0f084c5b28c943c0a15949c2618bcce387c73c57ef7b`, entry `I02-C02` |
+| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `1933abba1e5291a47a4b2075b675341ab4f0034eb2216a9409089bb7d77fe18f`, entry `I02-C02` |
 | Bounded outcome | Publish the immutable source registry, atomic baseline catalog, official coverage/exclusion slots, and one-owner implementation inventories required for later additive grammar cycles without changing accepted or recovered CSS. |
 
 ## 2. Boundary, Impacts, And Resolved Architecture

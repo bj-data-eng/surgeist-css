@@ -236,6 +236,7 @@ extension.
 | Source ID | Tier | Exact dated source |
 | --- | --- | --- |
 | `R-MEDIA4` | Reliable | <https://www.w3.org/TR/2026/CRD-mediaqueries-4-20260219/> |
+| `R-SCROLLBARS1` | Reliable | <https://www.w3.org/TR/2021/CR-css-scrollbars-1-20211209/> |
 | `R-GRID1` | Reliable | <https://www.w3.org/TR/2025/CRD-css-grid-1-20250326/> |
 | `R-GRID2` | Reliable | <https://www.w3.org/TR/2025/CRD-css-grid-2-20250326/> |
 | `R-CASCADE5` | Reliable | <https://www.w3.org/TR/2022/CR-css-cascade-5-20220113/> |
@@ -260,6 +261,7 @@ extension.
 | `I-SELECTORS4` | Interop | <https://www.w3.org/TR/2026/WD-selectors-4-20260122/> |
 | `I-CONTAIN2` | Interop | <https://www.w3.org/TR/2022/WD-css-contain-2-20220917/> |
 | `I-NESTING1` | Interop | <https://www.w3.org/TR/2026/WD-css-nesting-1-20260122/> |
+| `X-CONTAIN3` | Surgeist extension | <https://www.w3.org/TR/2022/WD-css-contain-3-20220818/> |
 | `X-CONDITIONAL5` | Surgeist extension | <https://www.w3.org/TR/2025/WD-css-conditional-5-20251030/> |
 | `X-CASCADE6` | Surgeist extension | <https://www.w3.org/TR/2024/WD-css-cascade-6-20240906/> |
 | `X-PSEUDO4` | Surgeist extension | <https://www.w3.org/TR/2025/WD-css-pseudo-4-20250627/> |
@@ -275,6 +277,17 @@ extension.
 | `X-FILTER2-BASE` | Surgeist extension | `bc5394f:src/parser/effects.rs` |
 | `X-DISPLAY-MODE-BASE` | Surgeist extension | `bc5394f:src/parser/queries.rs` |
 | `X-GRID-TOLERANCE-BASE` | Surgeist extension | `bc5394f:src/parser/grid.rs` |
+
+`R-SCROLLBARS1` has module `CSS Scrollbars Styling`, level `1`, and owns only
+the preserved `baseline.property.scrollbar-width` record. CSS Snapshot 2026
+section 2.2 classifies that source as Reliable. `X-CONTAIN3` has module
+`CSS Containment`, level `3`, and owns only the preserved
+`baseline.rule.container`, `baseline.container.condition`, and
+`baseline.container.size-feature` query productions. CSS Snapshot 2026 does
+not classify Containment 3; its exact 18 August 2022 Working Draft is therefore
+a Surgeist extension source rather than an Interop source. `I-CONTAIN2` remains
+the owner only of preserved Level 2 productions and must not be used as
+provenance for container-query or style-query syntax.
 
 ### 4.4 Independent Inventory And Status Rules
 

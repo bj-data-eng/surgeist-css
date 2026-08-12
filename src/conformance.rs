@@ -1,4 +1,4 @@
-use crate::{CssErrorCode, CssFeatureId};
+use crate::{CssErrorCode, CssFeatureId, CssKnownProperty};
 
 /// The grammar-family role of one support-catalog feature.
 ///
@@ -15,6 +15,8 @@ pub enum CssFeatureKind {
     Descriptor,
     /// A shared authored-value production.
     Value,
+    /// A recognized non-custom authored property production.
+    Property,
     /// A selector production or finite selector spelling group.
     Selector,
     /// A media-query production or finite media-query spelling group.
@@ -107,6 +109,8 @@ pub struct CssFeatureMetadata {
     supported_subset: Option<&'static str>,
     unsupported_remainder: Option<&'static str>,
     recognized_unsupported_code: Option<CssErrorCode>,
+    property: Option<CssKnownProperty>,
+    property_aliases: &'static [&'static str],
 }
 
 impl CssFeatureMetadata {
@@ -127,6 +131,8 @@ impl CssFeatureMetadata {
             supported_subset: None,
             unsupported_remainder: None,
             recognized_unsupported_code: None,
+            property: None,
+            property_aliases: &[],
         }
     }
 
@@ -149,6 +155,8 @@ impl CssFeatureMetadata {
             supported_subset: Some(supported_subset),
             unsupported_remainder: Some(unsupported_remainder),
             recognized_unsupported_code: None,
+            property: None,
+            property_aliases: &[],
         }
     }
 
@@ -170,6 +178,29 @@ impl CssFeatureMetadata {
             supported_subset: None,
             unsupported_remainder: None,
             recognized_unsupported_code: Some(code),
+            property: None,
+            property_aliases: &[],
+        }
+    }
+
+    const fn partial_property(
+        id: &'static str,
+        property: CssKnownProperty,
+        canonical_name: &'static str,
+        aliases: &'static [&'static str],
+    ) -> Self {
+        Self {
+            id: CssFeatureId::new(id),
+            kind: CssFeatureKind::Property,
+            spelling: canonical_name,
+            source: BASELINE_PARSER,
+            production: canonical_name,
+            status: CssSupportStatus::Partial,
+            supported_subset: Some(PROPERTY_SUBSET),
+            unsupported_remainder: Some(PROPERTY_REMAINDER),
+            recognized_unsupported_code: None,
+            property: Some(property),
+            property_aliases: aliases,
         }
     }
 
@@ -230,6 +261,44 @@ impl CssFeatureMetadata {
     }
 }
 
+/// Immutable catalog metadata for one recognized non-custom authored CSS property.
+///
+/// The metadata reports parser support; it does not apply cascade, substitute
+/// variables, resolve values, or dispatch property parsing. Construction is
+/// catalog-owned so callers cannot forge a property-to-feature association.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CssPropertyMetadata {
+    feature: &'static CssFeatureMetadata,
+}
+
+impl CssPropertyMetadata {
+    /// Returns the underlying support-catalog record.
+    #[must_use]
+    pub const fn feature(&self) -> &'static CssFeatureMetadata {
+        self.feature
+    }
+
+    /// Returns the canonical authored property identity.
+    #[must_use]
+    pub fn property(&self) -> CssKnownProperty {
+        self.feature
+            .property
+            .expect("property metadata always wraps a property catalog record")
+    }
+
+    /// Returns the canonical lowercase authored property spelling.
+    #[must_use]
+    pub const fn canonical_name(&self) -> &'static str {
+        self.feature.spelling
+    }
+
+    /// Returns reviewed authored aliases that normalize to this property.
+    #[must_use]
+    pub const fn aliases(&self) -> &'static [&'static str] {
+        self.feature.property_aliases
+    }
+}
+
 const CSS_SYNTAX_3: CssSpecificationSource =
     CssSpecificationSource::from_url("https://www.w3.org/TR/2021/CRD-css-syntax-3-20211224/");
 const CSS_STYLE_ATTRIBUTES: CssSpecificationSource =
@@ -274,8 +343,17 @@ const SELECTOR_REMAINDER: &str =
     "Other valid forms of the cited Selectors production are outside the I01 subset.";
 const QUERY_REMAINDER: &str =
     "Other valid forms of the cited query production are outside the I01 subset.";
+const PROPERTY_SUBSET: &str = "The property-specific parser behavior at 4b288d6:src/parser/mod.rs, plus whole-value CSS-wide keywords and syntactically admissible substitution-dependent authored values, is supported.";
+const PROPERTY_REMAINDER: &str =
+    "Other valid forms of the cited property production are outside the I01 subset.";
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 40] = [
+macro_rules! property_feature {
+    ($property:path, $canonical_name:literal, $stable_id:literal) => {
+        CssFeatureMetadata::partial_property($stable_id, $property, $canonical_name, &[])
+    };
+}
+
+static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
     CssFeatureMetadata::partial(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -625,12 +703,840 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 40] = [
         "The exact baseline-recognized container size-feature spelling group is supported.",
         QUERY_REMAINDER,
     ),
+    property_feature!(CssKnownProperty::All, "all", "baseline.property.all"),
+    property_feature!(
+        CssKnownProperty::Display,
+        "display",
+        "baseline.property.display"
+    ),
+    property_feature!(
+        CssKnownProperty::BoxSizing,
+        "box-sizing",
+        "baseline.property.box-sizing"
+    ),
+    property_feature!(
+        CssKnownProperty::Position,
+        "position",
+        "baseline.property.position"
+    ),
+    property_feature!(
+        CssKnownProperty::Direction,
+        "direction",
+        "baseline.property.direction"
+    ),
+    property_feature!(
+        CssKnownProperty::Overflow,
+        "overflow",
+        "baseline.property.overflow"
+    ),
+    property_feature!(
+        CssKnownProperty::OverflowX,
+        "overflow-x",
+        "baseline.property.overflow-x"
+    ),
+    property_feature!(
+        CssKnownProperty::OverflowY,
+        "overflow-y",
+        "baseline.property.overflow-y"
+    ),
+    property_feature!(
+        CssKnownProperty::FlexDirection,
+        "flex-direction",
+        "baseline.property.flex-direction"
+    ),
+    property_feature!(
+        CssKnownProperty::FlexWrap,
+        "flex-wrap",
+        "baseline.property.flex-wrap"
+    ),
+    property_feature!(CssKnownProperty::Float, "float", "baseline.property.float"),
+    property_feature!(CssKnownProperty::Clear, "clear", "baseline.property.clear"),
+    property_feature!(
+        CssKnownProperty::AlignContent,
+        "align-content",
+        "baseline.property.align-content"
+    ),
+    property_feature!(
+        CssKnownProperty::JustifyContent,
+        "justify-content",
+        "baseline.property.justify-content"
+    ),
+    property_feature!(
+        CssKnownProperty::AlignItems,
+        "align-items",
+        "baseline.property.align-items"
+    ),
+    property_feature!(
+        CssKnownProperty::AlignSelf,
+        "align-self",
+        "baseline.property.align-self"
+    ),
+    property_feature!(
+        CssKnownProperty::JustifyItems,
+        "justify-items",
+        "baseline.property.justify-items"
+    ),
+    property_feature!(
+        CssKnownProperty::JustifySelf,
+        "justify-self",
+        "baseline.property.justify-self"
+    ),
+    property_feature!(
+        CssKnownProperty::PlaceContent,
+        "place-content",
+        "baseline.property.place-content"
+    ),
+    property_feature!(
+        CssKnownProperty::PlaceItems,
+        "place-items",
+        "baseline.property.place-items"
+    ),
+    property_feature!(
+        CssKnownProperty::PlaceSelf,
+        "place-self",
+        "baseline.property.place-self"
+    ),
+    property_feature!(
+        CssKnownProperty::Visibility,
+        "visibility",
+        "baseline.property.visibility"
+    ),
+    property_feature!(
+        CssKnownProperty::Content,
+        "content",
+        "baseline.property.content"
+    ),
+    property_feature!(
+        CssKnownProperty::ContentVisibility,
+        "content-visibility",
+        "baseline.property.content-visibility"
+    ),
+    property_feature!(
+        CssKnownProperty::ListStyleType,
+        "list-style-type",
+        "baseline.property.list-style-type"
+    ),
+    property_feature!(
+        CssKnownProperty::ListStylePosition,
+        "list-style-position",
+        "baseline.property.list-style-position"
+    ),
+    property_feature!(
+        CssKnownProperty::ListStyleImage,
+        "list-style-image",
+        "baseline.property.list-style-image"
+    ),
+    property_feature!(
+        CssKnownProperty::ListStyle,
+        "list-style",
+        "baseline.property.list-style"
+    ),
+    property_feature!(
+        CssKnownProperty::CounterReset,
+        "counter-reset",
+        "baseline.property.counter-reset"
+    ),
+    property_feature!(
+        CssKnownProperty::CounterIncrement,
+        "counter-increment",
+        "baseline.property.counter-increment"
+    ),
+    property_feature!(
+        CssKnownProperty::CounterSet,
+        "counter-set",
+        "baseline.property.counter-set"
+    ),
+    property_feature!(CssKnownProperty::Width, "width", "baseline.property.width"),
+    property_feature!(
+        CssKnownProperty::Height,
+        "height",
+        "baseline.property.height"
+    ),
+    property_feature!(
+        CssKnownProperty::MinWidth,
+        "min-width",
+        "baseline.property.min-width"
+    ),
+    property_feature!(
+        CssKnownProperty::MinHeight,
+        "min-height",
+        "baseline.property.min-height"
+    ),
+    property_feature!(
+        CssKnownProperty::MaxWidth,
+        "max-width",
+        "baseline.property.max-width"
+    ),
+    property_feature!(
+        CssKnownProperty::MaxHeight,
+        "max-height",
+        "baseline.property.max-height"
+    ),
+    property_feature!(
+        CssKnownProperty::FlexBasis,
+        "flex-basis",
+        "baseline.property.flex-basis"
+    ),
+    property_feature!(CssKnownProperty::Gap, "gap", "baseline.property.gap"),
+    property_feature!(
+        CssKnownProperty::RowGap,
+        "row-gap",
+        "baseline.property.row-gap"
+    ),
+    property_feature!(
+        CssKnownProperty::ColumnGap,
+        "column-gap",
+        "baseline.property.column-gap"
+    ),
+    property_feature!(
+        CssKnownProperty::GridFlowTolerance,
+        "grid-flow-tolerance",
+        "baseline.property.grid-flow-tolerance"
+    ),
+    property_feature!(
+        CssKnownProperty::GridTemplateRows,
+        "grid-template-rows",
+        "baseline.property.grid-template-rows"
+    ),
+    property_feature!(
+        CssKnownProperty::GridTemplateColumns,
+        "grid-template-columns",
+        "baseline.property.grid-template-columns"
+    ),
+    property_feature!(
+        CssKnownProperty::GridTemplateAreas,
+        "grid-template-areas",
+        "baseline.property.grid-template-areas"
+    ),
+    property_feature!(
+        CssKnownProperty::GridTemplate,
+        "grid-template",
+        "baseline.property.grid-template"
+    ),
+    property_feature!(
+        CssKnownProperty::GridAutoRows,
+        "grid-auto-rows",
+        "baseline.property.grid-auto-rows"
+    ),
+    property_feature!(
+        CssKnownProperty::GridAutoColumns,
+        "grid-auto-columns",
+        "baseline.property.grid-auto-columns"
+    ),
+    property_feature!(
+        CssKnownProperty::GridAutoFlow,
+        "grid-auto-flow",
+        "baseline.property.grid-auto-flow"
+    ),
+    property_feature!(
+        CssKnownProperty::GridRowStart,
+        "grid-row-start",
+        "baseline.property.grid-row-start"
+    ),
+    property_feature!(
+        CssKnownProperty::GridRowEnd,
+        "grid-row-end",
+        "baseline.property.grid-row-end"
+    ),
+    property_feature!(
+        CssKnownProperty::GridColumnStart,
+        "grid-column-start",
+        "baseline.property.grid-column-start"
+    ),
+    property_feature!(
+        CssKnownProperty::GridColumnEnd,
+        "grid-column-end",
+        "baseline.property.grid-column-end"
+    ),
+    property_feature!(
+        CssKnownProperty::GridRow,
+        "grid-row",
+        "baseline.property.grid-row"
+    ),
+    property_feature!(
+        CssKnownProperty::GridColumn,
+        "grid-column",
+        "baseline.property.grid-column"
+    ),
+    property_feature!(
+        CssKnownProperty::GridArea,
+        "grid-area",
+        "baseline.property.grid-area"
+    ),
+    property_feature!(CssKnownProperty::Grid, "grid", "baseline.property.grid"),
+    property_feature!(
+        CssKnownProperty::FontSize,
+        "font-size",
+        "baseline.property.font-size"
+    ),
+    property_feature!(
+        CssKnownProperty::LineHeight,
+        "line-height",
+        "baseline.property.line-height"
+    ),
+    property_feature!(
+        CssKnownProperty::WritingMode,
+        "writing-mode",
+        "baseline.property.writing-mode"
+    ),
+    property_feature!(
+        CssKnownProperty::TextAlign,
+        "text-align",
+        "baseline.property.text-align"
+    ),
+    property_feature!(
+        CssKnownProperty::TextAlignLast,
+        "text-align-last",
+        "baseline.property.text-align-last"
+    ),
+    property_feature!(
+        CssKnownProperty::TextIndent,
+        "text-indent",
+        "baseline.property.text-indent"
+    ),
+    property_feature!(
+        CssKnownProperty::VerticalAlign,
+        "vertical-align",
+        "baseline.property.vertical-align"
+    ),
+    property_feature!(
+        CssKnownProperty::FontFamily,
+        "font-family",
+        "baseline.property.font-family"
+    ),
+    property_feature!(CssKnownProperty::Font, "font", "baseline.property.font"),
+    property_feature!(
+        CssKnownProperty::FontWeight,
+        "font-weight",
+        "baseline.property.font-weight"
+    ),
+    property_feature!(
+        CssKnownProperty::FontStyle,
+        "font-style",
+        "baseline.property.font-style"
+    ),
+    property_feature!(
+        CssKnownProperty::FontStretch,
+        "font-stretch",
+        "baseline.property.font-stretch"
+    ),
+    property_feature!(
+        CssKnownProperty::FontVariant,
+        "font-variant",
+        "baseline.property.font-variant"
+    ),
+    property_feature!(
+        CssKnownProperty::FontFeatureSettings,
+        "font-feature-settings",
+        "baseline.property.font-feature-settings"
+    ),
+    property_feature!(
+        CssKnownProperty::LetterSpacing,
+        "letter-spacing",
+        "baseline.property.letter-spacing"
+    ),
+    property_feature!(
+        CssKnownProperty::TextWrap,
+        "text-wrap",
+        "baseline.property.text-wrap"
+    ),
+    property_feature!(
+        CssKnownProperty::WhiteSpace,
+        "white-space",
+        "baseline.property.white-space"
+    ),
+    property_feature!(
+        CssKnownProperty::WordBreak,
+        "word-break",
+        "baseline.property.word-break"
+    ),
+    property_feature!(
+        CssKnownProperty::OverflowWrap,
+        "overflow-wrap",
+        "baseline.property.overflow-wrap"
+    ),
+    property_feature!(
+        CssKnownProperty::TextOverflow,
+        "text-overflow",
+        "baseline.property.text-overflow"
+    ),
+    property_feature!(
+        CssKnownProperty::TextDecoration,
+        "text-decoration",
+        "baseline.property.text-decoration"
+    ),
+    property_feature!(
+        CssKnownProperty::TextDecorationLine,
+        "text-decoration-line",
+        "baseline.property.text-decoration-line"
+    ),
+    property_feature!(
+        CssKnownProperty::TextDecorationColor,
+        "text-decoration-color",
+        "baseline.property.text-decoration-color"
+    ),
+    property_feature!(
+        CssKnownProperty::TextDecorationStyle,
+        "text-decoration-style",
+        "baseline.property.text-decoration-style"
+    ),
+    property_feature!(
+        CssKnownProperty::TextDecorationThickness,
+        "text-decoration-thickness",
+        "baseline.property.text-decoration-thickness"
+    ),
+    property_feature!(
+        CssKnownProperty::TextTransform,
+        "text-transform",
+        "baseline.property.text-transform"
+    ),
+    property_feature!(CssKnownProperty::Inset, "inset", "baseline.property.inset"),
+    property_feature!(CssKnownProperty::Top, "top", "baseline.property.top"),
+    property_feature!(CssKnownProperty::Right, "right", "baseline.property.right"),
+    property_feature!(
+        CssKnownProperty::Bottom,
+        "bottom",
+        "baseline.property.bottom"
+    ),
+    property_feature!(CssKnownProperty::Left, "left", "baseline.property.left"),
+    property_feature!(
+        CssKnownProperty::ZIndex,
+        "z-index",
+        "baseline.property.z-index"
+    ),
+    property_feature!(
+        CssKnownProperty::BoxDecorationBreak,
+        "box-decoration-break",
+        "baseline.property.box-decoration-break"
+    ),
+    property_feature!(
+        CssKnownProperty::Margin,
+        "margin",
+        "baseline.property.margin"
+    ),
+    property_feature!(
+        CssKnownProperty::MarginTop,
+        "margin-top",
+        "baseline.property.margin-top"
+    ),
+    property_feature!(
+        CssKnownProperty::MarginRight,
+        "margin-right",
+        "baseline.property.margin-right"
+    ),
+    property_feature!(
+        CssKnownProperty::MarginBottom,
+        "margin-bottom",
+        "baseline.property.margin-bottom"
+    ),
+    property_feature!(
+        CssKnownProperty::MarginLeft,
+        "margin-left",
+        "baseline.property.margin-left"
+    ),
+    property_feature!(
+        CssKnownProperty::Padding,
+        "padding",
+        "baseline.property.padding"
+    ),
+    property_feature!(
+        CssKnownProperty::PaddingTop,
+        "padding-top",
+        "baseline.property.padding-top"
+    ),
+    property_feature!(
+        CssKnownProperty::PaddingRight,
+        "padding-right",
+        "baseline.property.padding-right"
+    ),
+    property_feature!(
+        CssKnownProperty::PaddingBottom,
+        "padding-bottom",
+        "baseline.property.padding-bottom"
+    ),
+    property_feature!(
+        CssKnownProperty::PaddingLeft,
+        "padding-left",
+        "baseline.property.padding-left"
+    ),
+    property_feature!(
+        CssKnownProperty::Border,
+        "border",
+        "baseline.property.border"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderTop,
+        "border-top",
+        "baseline.property.border-top"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderRight,
+        "border-right",
+        "baseline.property.border-right"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderBottom,
+        "border-bottom",
+        "baseline.property.border-bottom"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderLeft,
+        "border-left",
+        "baseline.property.border-left"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderWidth,
+        "border-width",
+        "baseline.property.border-width"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderTopWidth,
+        "border-top-width",
+        "baseline.property.border-top-width"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderRightWidth,
+        "border-right-width",
+        "baseline.property.border-right-width"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderBottomWidth,
+        "border-bottom-width",
+        "baseline.property.border-bottom-width"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderLeftWidth,
+        "border-left-width",
+        "baseline.property.border-left-width"
+    ),
+    property_feature!(CssKnownProperty::Color, "color", "baseline.property.color"),
+    property_feature!(
+        CssKnownProperty::Background,
+        "background",
+        "baseline.property.background"
+    ),
+    property_feature!(
+        CssKnownProperty::BackgroundColor,
+        "background-color",
+        "baseline.property.background-color"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderColor,
+        "border-color",
+        "baseline.property.border-color"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderTopColor,
+        "border-top-color",
+        "baseline.property.border-top-color"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderRightColor,
+        "border-right-color",
+        "baseline.property.border-right-color"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderBottomColor,
+        "border-bottom-color",
+        "baseline.property.border-bottom-color"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderLeftColor,
+        "border-left-color",
+        "baseline.property.border-left-color"
+    ),
+    property_feature!(
+        CssKnownProperty::BackgroundImage,
+        "background-image",
+        "baseline.property.background-image"
+    ),
+    property_feature!(
+        CssKnownProperty::BackgroundPosition,
+        "background-position",
+        "baseline.property.background-position"
+    ),
+    property_feature!(
+        CssKnownProperty::BackgroundSize,
+        "background-size",
+        "baseline.property.background-size"
+    ),
+    property_feature!(
+        CssKnownProperty::BackgroundRepeat,
+        "background-repeat",
+        "baseline.property.background-repeat"
+    ),
+    property_feature!(
+        CssKnownProperty::BackgroundOrigin,
+        "background-origin",
+        "baseline.property.background-origin"
+    ),
+    property_feature!(
+        CssKnownProperty::BackgroundClip,
+        "background-clip",
+        "baseline.property.background-clip"
+    ),
+    property_feature!(
+        CssKnownProperty::BackgroundAttachment,
+        "background-attachment",
+        "baseline.property.background-attachment"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderStyle,
+        "border-style",
+        "baseline.property.border-style"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderTopStyle,
+        "border-top-style",
+        "baseline.property.border-top-style"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderRightStyle,
+        "border-right-style",
+        "baseline.property.border-right-style"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderBottomStyle,
+        "border-bottom-style",
+        "baseline.property.border-bottom-style"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderLeftStyle,
+        "border-left-style",
+        "baseline.property.border-left-style"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderRadius,
+        "border-radius",
+        "baseline.property.border-radius"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderTopLeftRadius,
+        "border-top-left-radius",
+        "baseline.property.border-top-left-radius"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderTopRightRadius,
+        "border-top-right-radius",
+        "baseline.property.border-top-right-radius"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderBottomRightRadius,
+        "border-bottom-right-radius",
+        "baseline.property.border-bottom-right-radius"
+    ),
+    property_feature!(
+        CssKnownProperty::BorderBottomLeftRadius,
+        "border-bottom-left-radius",
+        "baseline.property.border-bottom-left-radius"
+    ),
+    property_feature!(
+        CssKnownProperty::BoxShadow,
+        "box-shadow",
+        "baseline.property.box-shadow"
+    ),
+    property_feature!(
+        CssKnownProperty::Opacity,
+        "opacity",
+        "baseline.property.opacity"
+    ),
+    property_feature!(
+        CssKnownProperty::FlexGrow,
+        "flex-grow",
+        "baseline.property.flex-grow"
+    ),
+    property_feature!(
+        CssKnownProperty::FlexShrink,
+        "flex-shrink",
+        "baseline.property.flex-shrink"
+    ),
+    property_feature!(CssKnownProperty::Order, "order", "baseline.property.order"),
+    property_feature!(CssKnownProperty::Flex, "flex", "baseline.property.flex"),
+    property_feature!(
+        CssKnownProperty::JustifyTracks,
+        "justify-tracks",
+        "baseline.property.justify-tracks"
+    ),
+    property_feature!(
+        CssKnownProperty::AlignTracks,
+        "align-tracks",
+        "baseline.property.align-tracks"
+    ),
+    property_feature!(
+        CssKnownProperty::AspectRatio,
+        "aspect-ratio",
+        "baseline.property.aspect-ratio"
+    ),
+    property_feature!(
+        CssKnownProperty::ScrollbarWidth,
+        "scrollbar-width",
+        "baseline.property.scrollbar-width"
+    ),
+    property_feature!(
+        CssKnownProperty::Cursor,
+        "cursor",
+        "baseline.property.cursor"
+    ),
+    property_feature!(
+        CssKnownProperty::PointerEvents,
+        "pointer-events",
+        "baseline.property.pointer-events"
+    ),
+    property_feature!(
+        CssKnownProperty::UserSelect,
+        "user-select",
+        "baseline.property.user-select"
+    ),
+    property_feature!(
+        CssKnownProperty::Outline,
+        "outline",
+        "baseline.property.outline"
+    ),
+    property_feature!(
+        CssKnownProperty::OutlineColor,
+        "outline-color",
+        "baseline.property.outline-color"
+    ),
+    property_feature!(
+        CssKnownProperty::OutlineStyle,
+        "outline-style",
+        "baseline.property.outline-style"
+    ),
+    property_feature!(
+        CssKnownProperty::OutlineWidth,
+        "outline-width",
+        "baseline.property.outline-width"
+    ),
+    property_feature!(
+        CssKnownProperty::Transform,
+        "transform",
+        "baseline.property.transform"
+    ),
+    property_feature!(
+        CssKnownProperty::TransformOrigin,
+        "transform-origin",
+        "baseline.property.transform-origin"
+    ),
+    property_feature!(
+        CssKnownProperty::Translate,
+        "translate",
+        "baseline.property.translate"
+    ),
+    property_feature!(
+        CssKnownProperty::Rotate,
+        "rotate",
+        "baseline.property.rotate"
+    ),
+    property_feature!(CssKnownProperty::Scale, "scale", "baseline.property.scale"),
+    property_feature!(
+        CssKnownProperty::Filter,
+        "filter",
+        "baseline.property.filter"
+    ),
+    property_feature!(
+        CssKnownProperty::BackdropFilter,
+        "backdrop-filter",
+        "baseline.property.backdrop-filter"
+    ),
+    property_feature!(
+        CssKnownProperty::ClipPath,
+        "clip-path",
+        "baseline.property.clip-path"
+    ),
+    property_feature!(CssKnownProperty::Mask, "mask", "baseline.property.mask"),
+    property_feature!(
+        CssKnownProperty::MaskImage,
+        "mask-image",
+        "baseline.property.mask-image"
+    ),
+    property_feature!(
+        CssKnownProperty::MaskSize,
+        "mask-size",
+        "baseline.property.mask-size"
+    ),
+    property_feature!(
+        CssKnownProperty::MaskPosition,
+        "mask-position",
+        "baseline.property.mask-position"
+    ),
+    property_feature!(
+        CssKnownProperty::MaskRepeat,
+        "mask-repeat",
+        "baseline.property.mask-repeat"
+    ),
+    property_feature!(
+        CssKnownProperty::TransitionProperty,
+        "transition-property",
+        "baseline.property.transition-property"
+    ),
+    property_feature!(
+        CssKnownProperty::TransitionDuration,
+        "transition-duration",
+        "baseline.property.transition-duration"
+    ),
+    property_feature!(
+        CssKnownProperty::TransitionDelay,
+        "transition-delay",
+        "baseline.property.transition-delay"
+    ),
+    property_feature!(
+        CssKnownProperty::TransitionTimingFunction,
+        "transition-timing-function",
+        "baseline.property.transition-timing-function"
+    ),
+    property_feature!(
+        CssKnownProperty::Transition,
+        "transition",
+        "baseline.property.transition"
+    ),
+    property_feature!(
+        CssKnownProperty::AnimationName,
+        "animation-name",
+        "baseline.property.animation-name"
+    ),
+    property_feature!(
+        CssKnownProperty::AnimationDuration,
+        "animation-duration",
+        "baseline.property.animation-duration"
+    ),
+    property_feature!(
+        CssKnownProperty::AnimationDelay,
+        "animation-delay",
+        "baseline.property.animation-delay"
+    ),
+    property_feature!(
+        CssKnownProperty::AnimationTimingFunction,
+        "animation-timing-function",
+        "baseline.property.animation-timing-function"
+    ),
+    property_feature!(
+        CssKnownProperty::AnimationIterationCount,
+        "animation-iteration-count",
+        "baseline.property.animation-iteration-count"
+    ),
+    property_feature!(
+        CssKnownProperty::AnimationDirection,
+        "animation-direction",
+        "baseline.property.animation-direction"
+    ),
+    property_feature!(
+        CssKnownProperty::AnimationFillMode,
+        "animation-fill-mode",
+        "baseline.property.animation-fill-mode"
+    ),
+    property_feature!(
+        CssKnownProperty::AnimationPlayState,
+        "animation-play-state",
+        "baseline.property.animation-play-state"
+    ),
+    property_feature!(
+        CssKnownProperty::Animation,
+        "animation",
+        "baseline.property.animation"
+    ),
 ];
 
 /// Returns the immutable I01 support-catalog records in stable inventory order.
-///
-/// This T1 surface contains the 40 non-property records. Property records are a
-/// separate catalog-extension task.
 #[must_use]
 pub fn feature_catalog() -> &'static [CssFeatureMetadata] {
     &FEATURE_CATALOG
@@ -647,11 +1553,67 @@ pub fn feature_metadata(id: &str) -> Option<&'static CssFeatureMetadata> {
         .find(|feature| feature.id.as_str() == id)
 }
 
+/// Returns metadata for a recognized non-custom authored property name.
+///
+/// Canonical names and reviewed aliases use ASCII-case-insensitive matching.
+/// Custom-property names and unknown spellings return `None`; this lookup does
+/// not parse a declaration or classify its diagnostics.
+#[must_use]
+pub fn property_metadata(name: &str) -> Option<CssPropertyMetadata> {
+    FEATURE_CATALOG
+        .iter()
+        .filter(|feature| feature.kind == CssFeatureKind::Property)
+        .find(|feature| {
+            feature.spelling.eq_ignore_ascii_case(name)
+                || feature
+                    .property_aliases
+                    .iter()
+                    .any(|alias| alias.eq_ignore_ascii_case(name))
+        })
+        .map(|feature| CssPropertyMetadata { feature })
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
     use super::*;
+    use crate::properties::property_implementation_inventory;
+
+    mod catalog_inventory_vectors {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/catalog_inventory/vectors.rs"
+        ));
+    }
+
+    use catalog_inventory_vectors::{PROPERTY_NEGATIVE_VECTORS, PROPERTY_POSITIVE_VECTORS};
+
+    fn unique_owner_ids<'a>(
+        ids: impl IntoIterator<Item = &'a str>,
+    ) -> Result<HashSet<&'a str>, &'static str> {
+        let mut unique = HashSet::new();
+        for id in ids {
+            if !unique.insert(id) {
+                return Err("duplicate");
+            }
+        }
+        Ok(unique)
+    }
+
+    fn compare_owner_ids<'a>(
+        catalog: &HashSet<&'a str>,
+        ids: impl IntoIterator<Item = &'a str>,
+    ) -> Result<(), &'static str> {
+        let owner = unique_owner_ids(ids)?;
+        if !owner.is_subset(catalog) {
+            return Err("extra");
+        }
+        if !catalog.is_subset(&owner) {
+            return Err("omission");
+        }
+        Ok(())
+    }
 
     #[test]
     fn conformance_catalog_internal_status_and_source_invariants_hold() {
@@ -677,6 +1639,76 @@ mod tests {
                 feature.status() == CssSupportStatus::RecognizedUnsupported
             );
         }
-        assert_eq!(ids.len(), 40);
+        assert_eq!(ids.len(), 219);
+    }
+
+    #[test]
+    fn catalog_inventory_three_independent_property_owners_close_bidirectionally() {
+        let catalog: HashSet<_> = feature_catalog()
+            .iter()
+            .filter(|feature| feature.kind() == CssFeatureKind::Property)
+            .map(|feature| {
+                assert_eq!(feature.status(), CssSupportStatus::Partial);
+                feature.id().as_str()
+            })
+            .collect();
+        assert_eq!(catalog.len(), 179);
+
+        compare_owner_ids(
+            &catalog,
+            property_implementation_inventory()
+                .iter()
+                .map(|row| row.stable_id),
+        )
+        .expect("property implementation inventory must match the catalog");
+        compare_owner_ids(&catalog, PROPERTY_POSITIVE_VECTORS.iter().map(|row| row.id))
+            .expect("positive vector manifest must match the catalog");
+        compare_owner_ids(&catalog, PROPERTY_NEGATIVE_VECTORS.iter().map(|row| row.id))
+            .expect("negative vector manifest must match the catalog");
+
+        for vector in PROPERTY_POSITIVE_VECTORS {
+            let metadata = property_metadata(vector.canonical_name)
+                .unwrap_or_else(|| panic!("missing positive metadata for `{}`", vector.id));
+            assert_eq!(metadata.feature().id().as_str(), vector.id);
+            assert!(!vector.authored_value.is_empty());
+        }
+        for vector in PROPERTY_NEGATIVE_VECTORS {
+            let metadata = property_metadata(vector.canonical_name)
+                .unwrap_or_else(|| panic!("missing negative metadata for `{}`", vector.id));
+            assert_eq!(metadata.feature().id().as_str(), vector.id);
+            assert!(!vector.authored_value.is_empty());
+        }
+
+        for implementation in property_implementation_inventory() {
+            let metadata = property_metadata(implementation.name)
+                .unwrap_or_else(|| panic!("missing `{}` metadata", implementation.name));
+            assert_eq!(metadata.property(), implementation.known_property);
+            assert_eq!(metadata.canonical_name(), implementation.name);
+            assert_eq!(metadata.aliases(), implementation.aliases);
+            assert_eq!(metadata.feature().id().as_str(), implementation.stable_id);
+        }
+    }
+
+    #[test]
+    fn catalog_inventory_mutation_guards_reject_omission_extra_and_duplicate() {
+        let catalog: HashSet<_> = feature_catalog()
+            .iter()
+            .filter(|feature| feature.kind() == CssFeatureKind::Property)
+            .map(|feature| feature.id().as_str())
+            .collect();
+        let ids: Vec<_> = PROPERTY_POSITIVE_VECTORS.iter().map(|row| row.id).collect();
+
+        assert_eq!(
+            compare_owner_ids(&catalog, ids[1..].iter().copied()),
+            Err("omission")
+        );
+
+        let mut extra = ids.clone();
+        extra.push("baseline.property.not-in-the-catalog");
+        assert_eq!(compare_owner_ids(&catalog, extra), Err("extra"));
+
+        let mut duplicate = ids;
+        duplicate.push(duplicate[0]);
+        assert_eq!(compare_owner_ids(&catalog, duplicate), Err("duplicate"));
     }
 }

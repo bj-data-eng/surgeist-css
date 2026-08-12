@@ -754,11 +754,12 @@ const EXPECTED: &[ExpectedFeature] = &[
 
 #[test]
 fn conformance_catalog_has_the_exact_independent_non_property_table() {
-    assert_eq!(feature_catalog().len(), 40);
+    assert_eq!(feature_catalog().len(), 219);
     assert_eq!(EXPECTED.len(), 40);
 
     let actual_ids: HashSet<_> = feature_catalog()
         .iter()
+        .filter(|feature| feature.kind() != CssFeatureKind::Property)
         .map(|feature| feature.id().as_str())
         .collect();
     let expected_ids: HashSet<_> = EXPECTED.iter().map(|feature| feature.id).collect();
@@ -858,10 +859,7 @@ fn conformance_catalog_has_the_exact_independent_non_property_table() {
         feature_metadata("baseline.rule.import ").is_none(),
         "lookup does not trim"
     );
-    assert!(
-        feature_metadata("baseline.property.display").is_none(),
-        "T1 has no property rows"
-    );
+    assert!(feature_metadata("baseline.property.display").is_some());
     assert!(feature_metadata("").is_none());
 }
 

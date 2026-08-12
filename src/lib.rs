@@ -31,6 +31,7 @@ let _ = validate_style_attribute("color: red");
 //! and diagnostic provenance in one report. They do not run cascade,
 //! substitution, selector matching, contextual resolution, or resource loading.
 
+mod conformance;
 mod error;
 mod parser;
 mod properties;
@@ -41,6 +42,7 @@ mod syntax;
 mod test_support;
 mod validation;
 
+pub use conformance::*;
 pub use error::*;
 pub use parser::{parse_sheet, parse_style_attribute};
 pub use properties::{CssKnownDeclaration, CssKnownProperty, CssOverflowPropertyValue};

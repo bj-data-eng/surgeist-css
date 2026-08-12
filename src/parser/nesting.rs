@@ -17,10 +17,13 @@ use super::{
     structural_recovery_action, structural_recovery_production, structural_rule_diagnostic,
 };
 use crate::error::{
-    Error, invalid_at_rule_block, invalid_at_rule_placement, invalid_selector, invalid_syntax,
-    selector_basic, with_at_rule_prelude_context, with_media_query_context,
+    CssFeatureId, Error, invalid_at_rule_block, invalid_at_rule_placement, invalid_selector,
+    invalid_syntax, selector_basic, with_at_rule_prelude_context, with_media_query_context,
 };
 use crate::syntax::*;
+
+pub(super) static IMPLEMENTED_SELECTORS: &[CssFeatureId] =
+    &[CssFeatureId::new("baseline.selector.nesting")];
 
 pub(super) fn parse_style_rule_block<'i, 't>(
     source: &'i str,

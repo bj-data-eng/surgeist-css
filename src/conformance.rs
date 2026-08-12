@@ -1,5 +1,25 @@
 use crate::{CssErrorCode, CssFeatureId, CssKnownProperty};
 
+#[expect(
+    dead_code,
+    reason = "private atomic implementation reconciliation view"
+)]
+#[derive(Clone, Copy, Debug)]
+struct CssAtomicImplementationInventoryView {
+    properties: &'static [crate::properties::PropertyImplementation],
+    parser_owners: &'static [crate::parser::CssAtomicImplementationInventory],
+}
+
+#[expect(
+    dead_code,
+    reason = "reviewed directly against active atomic parser paths"
+)]
+static ATOMIC_IMPLEMENTATION_INVENTORY: CssAtomicImplementationInventoryView =
+    CssAtomicImplementationInventoryView {
+        properties: crate::properties::property_implementation_inventory(),
+        parser_owners: crate::parser::atomic_implementation_inventories(),
+    };
+
 /// The grammar-family role of one support-catalog feature.
 ///
 /// This classification identifies authored syntax; it does not enable parsing,

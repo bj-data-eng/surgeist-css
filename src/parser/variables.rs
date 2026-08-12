@@ -1,11 +1,17 @@
 use cssparser::{BasicParseErrorKind, ParseError, Parser, Token};
 
-use crate::error::{Error, basic, invalid_syntax};
+use crate::error::{CssFeatureId, Error, basic, invalid_syntax};
 use crate::syntax::{
     CssAuthoredDeclarationValue, CssCustomPropertyDeclaredValue, CssCustomPropertyName,
     CssCustomPropertyValue,
 };
 use crate::validation::parse_global_keyword;
+
+pub(super) static IMPLEMENTED_DECLARATIONS: &[CssFeatureId] =
+    &[CssFeatureId::new("baseline.declaration.custom-property")];
+
+pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] =
+    &[CssFeatureId::new("baseline.value.substitution-dependent")];
 
 pub(crate) fn parse_custom_property_name(name: &str) -> Option<CssCustomPropertyName> {
     CssCustomPropertyName::from_ident_token(name)

@@ -11,10 +11,13 @@ use super::{
     structural_rule_diagnostic,
 };
 use crate::error::{
-    Error, basic, invalid_at_rule_body, invalid_at_rule_placement, invalid_qualified_rule,
-    unsupported_value, unsupported_value_at,
+    CssFeatureId, Error, basic, invalid_at_rule_body, invalid_at_rule_placement,
+    invalid_qualified_rule, unsupported_value, unsupported_value_at,
 };
 use crate::syntax::*;
+
+pub(super) static IMPLEMENTED_RULES: &[CssFeatureId] =
+    &[CssFeatureId::new("baseline.rule.keyframes")];
 
 pub(super) fn parse_keyframes_name<'i, 't>(
     input: &mut Parser<'i, 't>,

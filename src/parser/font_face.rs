@@ -11,11 +11,25 @@ use super::{
     parse_descriptor_boundary,
 };
 use crate::error::{
-    Error, basic, descriptor_name_error, invalid_at_rule_body, invalid_descriptor_combination,
-    unsupported_value, unsupported_value_at, with_descriptor_context,
+    CssFeatureId, Error, basic, descriptor_name_error, invalid_at_rule_body,
+    invalid_descriptor_combination, unsupported_value, unsupported_value_at,
+    with_descriptor_context,
 };
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
+
+pub(super) static IMPLEMENTED_RULES: &[CssFeatureId] =
+    &[CssFeatureId::new("baseline.rule.font-face")];
+
+pub(super) static IMPLEMENTED_DESCRIPTORS: &[CssFeatureId] = &[
+    CssFeatureId::new("baseline.descriptor.font-family"),
+    CssFeatureId::new("baseline.descriptor.src"),
+    CssFeatureId::new("baseline.descriptor.font-weight"),
+    CssFeatureId::new("baseline.descriptor.font-style"),
+    CssFeatureId::new("baseline.descriptor.font-stretch"),
+    CssFeatureId::new("baseline.descriptor.font-display"),
+    CssFeatureId::new("baseline.descriptor.unicode-range"),
+];
 
 pub(super) fn parse_font_face_rule<'i, 't>(
     source: &'i str,

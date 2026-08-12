@@ -11,9 +11,43 @@ use super::recovery::{
 };
 use super::variables::collect_authored_declaration_value;
 use crate::error::{
-    Error, basic, from_parse_error, invalid_syntax, unsupported_value_at, with_media_query_context,
+    CssFeatureId, Error, basic, from_parse_error, invalid_syntax, unsupported_value_at,
+    with_media_query_context,
 };
 use crate::syntax::*;
+
+pub(super) static IMPLEMENTED_MEDIA: &[CssFeatureId] = &[
+    CssFeatureId::new("baseline.media.type"),
+    CssFeatureId::new("official.media.query-list-core"),
+    CssFeatureId::new("ext.media.condition-syntax"),
+    CssFeatureId::new("ext.media.malformed-member-never"),
+    CssFeatureId::new("official.media.feature.width"),
+    CssFeatureId::new("official.media.feature.height"),
+    CssFeatureId::new("official.media.feature.resolution"),
+    CssFeatureId::new("official.media.feature.color"),
+    CssFeatureId::new("official.media.feature.monochrome"),
+    CssFeatureId::new("ext.media.range.width"),
+    CssFeatureId::new("ext.media.range.height"),
+    CssFeatureId::new("ext.media.range.resolution"),
+    CssFeatureId::new("ext.media.range.color"),
+    CssFeatureId::new("ext.media.range.monochrome"),
+    CssFeatureId::new("official.media.feature.orientation"),
+    CssFeatureId::new("ext.media.hover"),
+    CssFeatureId::new("ext.media.any-hover"),
+    CssFeatureId::new("ext.media.pointer"),
+    CssFeatureId::new("ext.media.any-pointer"),
+    CssFeatureId::new("ext.media.prefers-color-scheme"),
+    CssFeatureId::new("ext.media.prefers-reduced-motion"),
+    CssFeatureId::new("ext.media.prefers-reduced-transparency"),
+    CssFeatureId::new("ext.media.prefers-contrast"),
+    CssFeatureId::new("ext.media.forced-colors"),
+    CssFeatureId::new("ext.media.display-mode"),
+];
+
+pub(super) static IMPLEMENTED_CONTAINER_EXTENSIONS: &[CssFeatureId] = &[
+    CssFeatureId::new("baseline.container.condition"),
+    CssFeatureId::new("baseline.container.size-feature"),
+];
 
 pub(crate) fn parse_media_query_list<'i, 't>(
     source: &str,

@@ -3,8 +3,22 @@ use cssparser::{
 };
 
 use super::recovery::{RecoveryState, comma_member_span, recovery_action_for_error};
-use crate::error::{Error, from_parse_error, invalid_selector, selector_basic};
+use crate::error::{CssFeatureId, Error, from_parse_error, invalid_selector, selector_basic};
 use crate::syntax::*;
+
+pub(super) static IMPLEMENTED_SELECTORS: &[CssFeatureId] = &[
+    CssFeatureId::new("baseline.selector.complex"),
+    CssFeatureId::new("baseline.selector.pseudo-class"),
+    CssFeatureId::new("baseline.selector.functional"),
+    CssFeatureId::new("baseline.selector.extension-state"),
+    CssFeatureId::new("baseline.selector.extension-functional"),
+    CssFeatureId::new("baseline.selector.attribute-case"),
+    CssFeatureId::new("official.selector.generated"),
+    CssFeatureId::new("ext.pseudo-element.marker"),
+    CssFeatureId::new("ext.pseudo-element.selection"),
+    CssFeatureId::new("ext.pseudo-element.backdrop"),
+    CssFeatureId::new("ext.pseudo-element.generated-marker"),
+];
 
 pub(super) struct SelectorRecovery<'a> {
     source: &'a str,

@@ -61,7 +61,7 @@ use variables::{
 };
 
 use crate::error::{
-    Error, basic, from_parse_error, from_rule_parse_error, invalid_at_rule_block,
+    CssFeatureId, Error, basic, from_parse_error, from_rule_parse_error, invalid_at_rule_block,
     invalid_at_rule_placement, invalid_custom_declaration_annotation,
     invalid_descriptor_annotation, invalid_encoding_declaration,
     invalid_known_declaration_annotation, invalid_root_syntax, invalid_syntax,
@@ -71,6 +71,130 @@ use crate::error::{
 use crate::properties::*;
 use crate::syntax::*;
 use crate::validation::parse_global_keyword;
+
+#[expect(
+    dead_code,
+    reason = "private atomic implementation reconciliation metadata"
+)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum CssAtomicImplementationKind {
+    Rule,
+    QualifiedRule,
+    Declaration,
+    Descriptor,
+    Selector,
+    Media,
+    SharedValue,
+    ContainerExtension,
+}
+
+#[expect(
+    dead_code,
+    reason = "private atomic implementation reconciliation metadata"
+)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CssAtomicImplementationInventory {
+    pub(crate) module: &'static str,
+    pub(crate) kind: CssAtomicImplementationKind,
+    pub(crate) stable_ids: &'static [CssFeatureId],
+}
+
+static IMPLEMENTED_RULES: &[CssFeatureId] = &[
+    CssFeatureId::new("baseline.rule.import"),
+    CssFeatureId::new("baseline.rule.layer-statement"),
+    CssFeatureId::new("baseline.rule.layer-block"),
+    CssFeatureId::new("baseline.rule.media"),
+    CssFeatureId::new("baseline.rule.scope"),
+    CssFeatureId::new("foundation.encoding.charset"),
+    CssFeatureId::new("later.rule.namespace"),
+    CssFeatureId::new("later.rule.supports"),
+    CssFeatureId::new("later.rule.counter-style"),
+    CssFeatureId::new("later.rule.page"),
+    CssFeatureId::new("later.rule.font-feature-values"),
+];
+
+static IMPLEMENTED_QUALIFIED_RULES: &[CssFeatureId] = &[CssFeatureId::new("baseline.rule.style")];
+
+static IMPLEMENTED_DECLARATIONS: &[CssFeatureId] = &[
+    CssFeatureId::new("foundation.declaration-list.style-attribute"),
+    CssFeatureId::new("foundation.declaration.importance"),
+];
+
+static IMPLEMENTED_CONTAINER_EXTENSIONS: &[CssFeatureId] =
+    &[CssFeatureId::new("baseline.rule.container")];
+
+static ATOMIC_IMPLEMENTATION_INVENTORIES: &[CssAtomicImplementationInventory] = &[
+    CssAtomicImplementationInventory {
+        module: "crate::parser",
+        kind: CssAtomicImplementationKind::Rule,
+        stable_ids: IMPLEMENTED_RULES,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser",
+        kind: CssAtomicImplementationKind::QualifiedRule,
+        stable_ids: IMPLEMENTED_QUALIFIED_RULES,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser",
+        kind: CssAtomicImplementationKind::Declaration,
+        stable_ids: IMPLEMENTED_DECLARATIONS,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser",
+        kind: CssAtomicImplementationKind::ContainerExtension,
+        stable_ids: IMPLEMENTED_CONTAINER_EXTENSIONS,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::font_face",
+        kind: CssAtomicImplementationKind::Rule,
+        stable_ids: font_face::IMPLEMENTED_RULES,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::font_face",
+        kind: CssAtomicImplementationKind::Descriptor,
+        stable_ids: font_face::IMPLEMENTED_DESCRIPTORS,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::keyframes",
+        kind: CssAtomicImplementationKind::Rule,
+        stable_ids: keyframes::IMPLEMENTED_RULES,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::nesting",
+        kind: CssAtomicImplementationKind::Selector,
+        stable_ids: nesting::IMPLEMENTED_SELECTORS,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::queries",
+        kind: CssAtomicImplementationKind::Media,
+        stable_ids: queries::IMPLEMENTED_MEDIA,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::queries",
+        kind: CssAtomicImplementationKind::ContainerExtension,
+        stable_ids: queries::IMPLEMENTED_CONTAINER_EXTENSIONS,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::selectors",
+        kind: CssAtomicImplementationKind::Selector,
+        stable_ids: selectors::IMPLEMENTED_SELECTORS,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::variables",
+        kind: CssAtomicImplementationKind::Declaration,
+        stable_ids: variables::IMPLEMENTED_DECLARATIONS,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::variables",
+        kind: CssAtomicImplementationKind::SharedValue,
+        stable_ids: variables::IMPLEMENTED_SHARED_VALUES,
+    },
+];
+
+pub(crate) const fn atomic_implementation_inventories()
+-> &'static [CssAtomicImplementationInventory] {
+    ATOMIC_IMPLEMENTATION_INVENTORIES
+}
 
 macro_rules! define_property_dispatch {
     ($input:ident;

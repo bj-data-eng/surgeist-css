@@ -8714,7 +8714,7 @@ fn parses_animation_properties_and_preserves_comma_lists() {
             AnimationIterationCount
         ),
         CssAnimationIterationCountList::new(vec![
-            CssAnimationIterationCount::Number(CssAnimationIterationNumber::new(2.0)),
+            CssAnimationIterationCount::try_number(2.0).unwrap(),
             CssAnimationIterationCount::Infinite,
         ])
     );

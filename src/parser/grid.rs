@@ -26,7 +26,7 @@ pub(super) fn parse_grid_flow_tolerance<'i, 't>(
     }
 
     match parse_box_size_value(input)? {
-        CssLength::Percent(value) => Ok(CssGridFlowTolerance::Percent(value.value())),
+        CssLength::Percent(value) => Ok(CssGridFlowTolerance::Percent(value)),
         length => Ok(CssGridFlowTolerance::Length(length)),
     }
 }

@@ -32,26 +32,14 @@ pub(super) fn parse_time<'i, 't>(
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
         Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("s") => {
-            if *value < 0.0 {
-                Err(unsupported_value_at(
-                    location,
-                    None,
-                    "CSS time must be non-negative",
-                ))
-            } else {
-                Ok(CssTime::new(*value, CssTimeUnit::Seconds))
-            }
+            CssTime::try_new(*value, CssTimeUnit::Seconds).ok_or_else(|| {
+                unsupported_value_at(location, None, "CSS time must be finite and non-negative")
+            })
         }
         Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("ms") => {
-            if *value < 0.0 {
-                Err(unsupported_value_at(
-                    location,
-                    None,
-                    "CSS time must be non-negative",
-                ))
-            } else {
-                Ok(CssTime::new(*value, CssTimeUnit::Milliseconds))
-            }
+            CssTime::try_new(*value, CssTimeUnit::Milliseconds).ok_or_else(|| {
+                unsupported_value_at(location, None, "CSS time must be finite and non-negative")
+            })
         }
         Token::Dimension { unit, .. } => Err(unsupported_value_at(
             location,
@@ -287,15 +275,13 @@ pub(super) fn parse_animation_iteration_count<'i, 't>(
     }
     let location = input.current_source_location();
     let value = input.expect_number().map_err(basic)?;
-    if value < 0.0 {
-        Err(unsupported_value_at(
+    CssAnimationIterationCount::try_number(value).ok_or_else(|| {
+        unsupported_value_at(
             location,
             None,
-            "animation iteration count must be non-negative",
-        ))
-    } else {
-        Ok(CssAnimationIterationCount::number(value))
-    }
+            "animation iteration count must be finite and non-negative",
+        )
+    })
 }
 
 pub(super) fn parse_animation_direction_list<'i, 't>(

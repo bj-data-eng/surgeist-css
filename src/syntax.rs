@@ -2916,7 +2916,7 @@ pub struct CssFiniteNumber {
 
 impl CssFiniteNumber {
     #[must_use]
-    pub fn try_new(value: f32) -> Option<Self> {
+    pub const fn try_new(value: f32) -> Option<Self> {
         if value.is_finite() {
             Some(Self { value })
         } else {
@@ -3607,13 +3607,27 @@ impl CssCounterChange {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 #[non_exhaustive]
 pub enum CssGridFlowTolerance {
     Normal,
     Infinite,
     Length(CssLength),
-    Percent(f32),
+    Percent(CssFiniteNumber),
+}
+
+impl std::fmt::Debug for CssGridFlowTolerance {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Normal => formatter.write_str("Normal"),
+            Self::Infinite => formatter.write_str("Infinite"),
+            Self::Length(value) => formatter.debug_tuple("Length").field(value).finish(),
+            Self::Percent(value) => formatter
+                .debug_tuple("Percent")
+                .field(&value.value())
+                .finish(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -6512,27 +6526,28 @@ pub enum CssTimeUnit {
     Milliseconds,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct CssTime {
-    value: f32,
+    value: CssFiniteNumber,
     unit: CssTimeUnit,
+}
+
+impl std::fmt::Debug for CssTime {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CssTime")
+            .field("value", &self.value.value())
+            .field("unit", &self.unit)
+            .finish()
+    }
 }
 
 impl CssTime {
     #[must_use]
     pub const fn try_new(value: f32, unit: CssTimeUnit) -> Option<Self> {
-        if value >= 0.0 {
-            Some(Self { value, unit })
-        } else {
-            None
-        }
-    }
-
-    #[must_use]
-    pub(crate) const fn new(value: f32, unit: CssTimeUnit) -> Self {
-        match Self::try_new(value, unit) {
-            Some(value) => value,
-            None => panic!("CSS time must be non-negative"),
+        match CssFiniteNumber::try_new(value) {
+            Some(value) if value.value() >= 0.0 => Some(Self { value, unit }),
+            Some(_) | None => None,
         }
     }
 
@@ -6548,7 +6563,7 @@ impl CssTime {
 
     #[must_use]
     pub const fn value(self) -> f32 {
-        self.value
+        self.value.value()
     }
 
     #[must_use]
@@ -6706,39 +6721,34 @@ impl CssAnimationIterationCount {
             None => None,
         }
     }
-
-    #[must_use]
-    pub(crate) const fn number(value: f32) -> Self {
-        Self::Number(CssAnimationIterationNumber::new(value))
-    }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct CssAnimationIterationNumber {
-    value: f32,
+    value: CssFiniteNumber,
+}
+
+impl std::fmt::Debug for CssAnimationIterationNumber {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CssAnimationIterationNumber")
+            .field("value", &self.value.value())
+            .finish()
+    }
 }
 
 impl CssAnimationIterationNumber {
     #[must_use]
     pub const fn try_new(value: f32) -> Option<Self> {
-        if value >= 0.0 {
-            Some(Self { value })
-        } else {
-            None
-        }
-    }
-
-    #[must_use]
-    pub(crate) const fn new(value: f32) -> Self {
-        match Self::try_new(value) {
-            Some(value) => value,
-            None => panic!("animation iteration count must be non-negative"),
+        match CssFiniteNumber::try_new(value) {
+            Some(value) if value.value() >= 0.0 => Some(Self { value }),
+            Some(_) | None => None,
         }
     }
 
     #[must_use]
     pub const fn value(self) -> f32 {
-        self.value
+        self.value.value()
     }
 }
 

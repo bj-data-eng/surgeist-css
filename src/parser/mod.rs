@@ -211,14 +211,20 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 prelude.target,
                 prelude.layer,
                 prelude.media,
-                CssSourceLocation::from_cssparser(start.source_location()),
+                crate::source::CssSourcePosition::from_cssparser(
+                    start.position(),
+                    start.source_location(),
+                ),
             ))]),
             StrictAtRulePrelude::Layer(names) => {
                 let names = CssLayerNameList::try_new(names).ok_or(())?;
                 self.mark_non_import_top_level_rule();
                 Ok(vec![CssRule::LayerStatement(CssLayerStatementRule::new(
                     names,
-                    CssSourceLocation::from_cssparser(start.source_location()),
+                    crate::source::CssSourcePosition::from_cssparser(
+                        start.position(),
+                        start.source_location(),
+                    ),
                 ))])
             }
             StrictAtRulePrelude::FontFace => Err(()),
@@ -253,7 +259,10 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 Ok(vec![CssRule::LayerBlock(CssLayerBlockRule::new(
                     name,
                     rules,
-                    CssSourceLocation::from_cssparser(start.source_location()),
+                    crate::source::CssSourcePosition::from_cssparser(
+                        start.position(),
+                        start.source_location(),
+                    ),
                 ))])
             }
             StrictAtRulePrelude::FontFace => {
@@ -272,7 +281,10 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 Ok(vec![CssRule::Media(CssMediaRule::new(
                     query,
                     rules,
-                    CssSourceLocation::from_cssparser(start.source_location()),
+                    crate::source::CssSourcePosition::from_cssparser(
+                        start.position(),
+                        start.source_location(),
+                    ),
                 ))])
             }
             StrictAtRulePrelude::Container(prelude) => {
@@ -282,7 +294,10 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                     prelude.name,
                     prelude.condition,
                     rules,
-                    CssSourceLocation::from_cssparser(start.source_location()),
+                    crate::source::CssSourcePosition::from_cssparser(
+                        start.position(),
+                        start.source_location(),
+                    ),
                 ))])
             }
             StrictAtRulePrelude::Scope(prelude) => {
@@ -292,7 +307,10 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                     prelude.root,
                     prelude.limit,
                     rules,
-                    CssSourceLocation::from_cssparser(start.source_location()),
+                    crate::source::CssSourcePosition::from_cssparser(
+                        start.position(),
+                        start.source_location(),
+                    ),
                 ))])
             }
         }
@@ -580,7 +598,10 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser {
                 Ok(vec![CssScopedRule::LayerStatement(
                     CssScopedLayerStatementRule::new(
                         names,
-                        CssSourceLocation::from_cssparser(start.source_location()),
+                        crate::source::CssSourcePosition::from_cssparser(
+                            start.position(),
+                            start.source_location(),
+                        ),
                     ),
                 )])
             }
@@ -596,12 +617,15 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser {
         start: &ParserState,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::AtRule, ParseError<'i, Self::Error>> {
-        let location = CssSourceLocation::from_cssparser(start.source_location());
+        let position = crate::source::CssSourcePosition::from_cssparser(
+            start.position(),
+            start.source_location(),
+        );
         match prelude {
             ScopedAtRulePrelude::Media(query) => {
                 let rules = parse_scoped_rule_list(input)?;
                 Ok(vec![CssScopedRule::Media(CssScopedMediaRule::new(
-                    query, rules, location,
+                    query, rules, position,
                 ))])
             }
             ScopedAtRulePrelude::Container(prelude) => {
@@ -610,7 +634,7 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser {
                     prelude.name,
                     prelude.condition,
                     rules,
-                    location,
+                    position,
                 ))])
             }
             ScopedAtRulePrelude::Layer(names) => {
@@ -623,7 +647,7 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser {
                 let name = names.into_iter().next();
                 let rules = parse_scoped_rule_list(input)?;
                 Ok(vec![CssScopedRule::LayerBlock(
-                    CssScopedLayerBlockRule::new(name, rules, location),
+                    CssScopedLayerBlockRule::new(name, rules, position),
                 )])
             }
             ScopedAtRulePrelude::Scope(prelude) => {
@@ -632,7 +656,7 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser {
                     prelude.root,
                     prelude.limit,
                     rules,
-                    location,
+                    position,
                 ))])
             }
         }
@@ -710,7 +734,10 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
         input: &mut Parser<'i, 't>,
         declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
-        let location = CssSourceLocation::from_cssparser(declaration_start.source_location());
+        let position = crate::source::CssSourcePosition::from_cssparser(
+            declaration_start.position(),
+            declaration_start.source_location(),
+        );
         if name.starts_with("--") {
             let Some(custom_name) = parse_custom_property_name(name.as_ref()) else {
                 return Err(property_name_error(input, name.as_ref()));
@@ -720,7 +747,7 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             return Ok(CssDeclaration::new(
                 CssProperty::Custom(custom_name),
                 value,
-                location,
+                position,
             ));
         }
 
@@ -734,7 +761,7 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
                     CssValue::VariableDependent(CssVariableDependentValue::new(
                         authored, references,
                     )),
-                    location,
+                    position,
                 ));
             }
             input.reset(&state);
@@ -755,7 +782,7 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
                             property_for_supported_name(name.as_ref())
                                 .expect("supported property has CssProperty"),
                             CssValue::GlobalKeyword(keyword),
-                            location,
+                            position,
                         ));
                     }
                     PropertyNameStatus::KnownUnsupported | PropertyNameStatus::Unknown => {
@@ -955,6 +982,6 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
         .map_err(|error| with_property_context(error, name.as_ref()))?;
         input.expect_exhausted().map_err(basic)?;
         let (property, value) = result;
-        Ok(CssDeclaration::new(property, value, location))
+        Ok(CssDeclaration::new(property, value, position))
     }
 }

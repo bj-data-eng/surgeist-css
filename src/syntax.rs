@@ -12,6 +12,8 @@
 
 use std::collections::HashMap;
 
+use crate::source::CssSourcePosition;
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CssSheet {
     rules: Vec<CssRule>,
@@ -51,7 +53,7 @@ pub struct CssImportRule {
     target: CssImportTarget,
     layer: Option<CssImportLayer>,
     media: Option<CssMediaQueryList>,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssImportRule {
@@ -60,13 +62,13 @@ impl CssImportRule {
         target: CssImportTarget,
         layer: Option<CssImportLayer>,
         media: Option<CssMediaQueryList>,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             target,
             layer,
             media,
-            location,
+            position,
         }
     }
 
@@ -86,8 +88,8 @@ impl CssImportRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -164,18 +166,18 @@ pub enum CssImportLayer {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssFontFaceRule {
     descriptors: CssFontFaceDescriptors,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssFontFaceRule {
     #[must_use]
     pub(crate) const fn new(
         descriptors: CssFontFaceDescriptors,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             descriptors,
-            location,
+            position,
         }
     }
 
@@ -185,8 +187,8 @@ impl CssFontFaceRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -194,20 +196,20 @@ impl CssFontFaceRule {
 pub struct CssKeyframesRule {
     name: CssKeyframesName,
     blocks: Vec<CssKeyframeBlock>,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssKeyframesRule {
     #[must_use]
-    pub fn try_new(
+    pub(crate) fn try_new(
         name: CssKeyframesName,
         blocks: Vec<CssKeyframeBlock>,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Option<Self> {
         if blocks.is_empty() || keyframe_blocks_have_duplicate_offsets(&blocks) {
             None
         } else {
-            Some(Self::new(name, blocks, location))
+            Some(Self::new(name, blocks, position))
         }
     }
 
@@ -215,14 +217,14 @@ impl CssKeyframesRule {
     pub(crate) fn new(
         name: CssKeyframesName,
         blocks: Vec<CssKeyframeBlock>,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         debug_assert!(!blocks.is_empty());
         debug_assert!(!keyframe_blocks_have_duplicate_offsets(&blocks));
         Self {
             name,
             blocks,
-            location,
+            position,
         }
     }
 
@@ -237,8 +239,8 @@ impl CssKeyframesRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -281,20 +283,20 @@ impl CssKeyframesString {
 pub struct CssKeyframeBlock {
     selectors: CssKeyframeSelectorList,
     declarations: Vec<CssDeclaration>,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssKeyframeBlock {
     #[must_use]
-    pub fn try_new(
+    pub(crate) fn try_new(
         selectors: CssKeyframeSelectorList,
         declarations: Vec<CssDeclaration>,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Option<Self> {
         if declarations.is_empty() {
             None
         } else {
-            Some(Self::new(selectors, declarations, location))
+            Some(Self::new(selectors, declarations, position))
         }
     }
 
@@ -302,13 +304,13 @@ impl CssKeyframeBlock {
     pub(crate) fn new(
         selectors: CssKeyframeSelectorList,
         declarations: Vec<CssDeclaration>,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         debug_assert!(!declarations.is_empty());
         Self {
             selectors,
             declarations,
-            location,
+            position,
         }
     }
 
@@ -323,8 +325,8 @@ impl CssKeyframeBlock {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -954,14 +956,14 @@ impl CssLayerNameList {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssLayerStatementRule {
     names: CssLayerNameList,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssLayerStatementRule {
     #[must_use]
     #[allow(dead_code)] // Staged for @layer parser construction.
-    pub(crate) const fn new(names: CssLayerNameList, location: CssSourceLocation) -> Self {
-        Self { names, location }
+    pub(crate) const fn new(names: CssLayerNameList, position: CssSourcePosition) -> Self {
+        Self { names, position }
     }
 
     #[must_use]
@@ -970,8 +972,8 @@ impl CssLayerStatementRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -979,7 +981,7 @@ impl CssLayerStatementRule {
 pub struct CssLayerBlockRule {
     name: Option<CssLayerName>,
     rules: Vec<CssRule>,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssLayerBlockRule {
@@ -988,12 +990,12 @@ impl CssLayerBlockRule {
     pub(crate) const fn new(
         name: Option<CssLayerName>,
         rules: Vec<CssRule>,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             name,
             rules,
-            location,
+            position,
         }
     }
 
@@ -1008,8 +1010,8 @@ impl CssLayerBlockRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -1037,7 +1039,7 @@ fn is_exact_css_identifier(value: &str) -> bool {
 pub struct CssMediaRule {
     query: CssMediaQueryList,
     rules: Vec<CssRule>,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssMediaRule {
@@ -1045,12 +1047,12 @@ impl CssMediaRule {
     pub(crate) const fn new(
         query: CssMediaQueryList,
         rules: Vec<CssRule>,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             query,
             rules,
-            location,
+            position,
         }
     }
 
@@ -1065,8 +1067,8 @@ impl CssMediaRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -1075,7 +1077,7 @@ pub struct CssContainerRule {
     name: Option<CssContainerName>,
     condition: CssContainerCondition,
     rules: Vec<CssRule>,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssContainerRule {
@@ -1084,13 +1086,13 @@ impl CssContainerRule {
         name: Option<CssContainerName>,
         condition: CssContainerCondition,
         rules: Vec<CssRule>,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             name,
             condition,
             rules,
-            location,
+            position,
         }
     }
 
@@ -1110,8 +1112,8 @@ impl CssContainerRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -1120,7 +1122,7 @@ pub struct CssScopeRule {
     root: Option<CssScopeSelectorList>,
     limit: Option<CssScopeSelectorList>,
     rules: CssScopedRuleList,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssScopeRule {
@@ -1130,13 +1132,13 @@ impl CssScopeRule {
         root: Option<CssScopeSelectorList>,
         limit: Option<CssScopeSelectorList>,
         rules: CssScopedRuleList,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             root,
             limit,
             rules,
-            location,
+            position,
         }
     }
 
@@ -1156,8 +1158,8 @@ impl CssScopeRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -1289,7 +1291,7 @@ pub enum CssScopedStyleSelector {
 pub struct CssScopedMediaRule {
     query: CssMediaQueryList,
     rules: CssScopedRuleList,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssScopedMediaRule {
@@ -1298,12 +1300,12 @@ impl CssScopedMediaRule {
     pub(crate) const fn new(
         query: CssMediaQueryList,
         rules: CssScopedRuleList,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             query,
             rules,
-            location,
+            position,
         }
     }
 
@@ -1318,8 +1320,8 @@ impl CssScopedMediaRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -1328,7 +1330,7 @@ pub struct CssScopedContainerRule {
     name: Option<CssContainerName>,
     condition: CssContainerCondition,
     rules: CssScopedRuleList,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssScopedContainerRule {
@@ -1338,13 +1340,13 @@ impl CssScopedContainerRule {
         name: Option<CssContainerName>,
         condition: CssContainerCondition,
         rules: CssScopedRuleList,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             name,
             condition,
             rules,
-            location,
+            position,
         }
     }
 
@@ -1364,22 +1366,22 @@ impl CssScopedContainerRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssScopedLayerStatementRule {
     names: CssLayerNameList,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssScopedLayerStatementRule {
     #[must_use]
     #[allow(dead_code)] // Staged for scoped @layer parser construction.
-    pub(crate) const fn new(names: CssLayerNameList, location: CssSourceLocation) -> Self {
-        Self { names, location }
+    pub(crate) const fn new(names: CssLayerNameList, position: CssSourcePosition) -> Self {
+        Self { names, position }
     }
 
     #[must_use]
@@ -1388,8 +1390,8 @@ impl CssScopedLayerStatementRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -1397,7 +1399,7 @@ impl CssScopedLayerStatementRule {
 pub struct CssScopedLayerBlockRule {
     name: Option<CssLayerName>,
     rules: CssScopedRuleList,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssScopedLayerBlockRule {
@@ -1406,12 +1408,12 @@ impl CssScopedLayerBlockRule {
     pub(crate) const fn new(
         name: Option<CssLayerName>,
         rules: CssScopedRuleList,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             name,
             rules,
-            location,
+            position,
         }
     }
 
@@ -1426,8 +1428,8 @@ impl CssScopedLayerBlockRule {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -1927,7 +1929,7 @@ impl CssStyleRule {
 pub struct CssDeclaration {
     property: CssProperty,
     value: CssValue,
-    location: CssSourceLocation,
+    position: CssSourcePosition,
 }
 
 impl CssDeclaration {
@@ -1935,12 +1937,12 @@ impl CssDeclaration {
     pub(crate) const fn new(
         property: CssProperty,
         value: CssValue,
-        location: CssSourceLocation,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             property,
             value,
-            location,
+            position,
         }
     }
 
@@ -1955,45 +1957,8 @@ impl CssDeclaration {
     }
 
     #[must_use]
-    pub const fn location(&self) -> CssSourceLocation {
-        self.location
-    }
-
-    #[must_use]
-    pub const fn line(&self) -> u32 {
-        self.location.line()
-    }
-
-    #[must_use]
-    pub const fn column(&self) -> u32 {
-        self.location.column()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct CssSourceLocation {
-    line: u32,
-    column: u32,
-}
-
-impl CssSourceLocation {
-    #[must_use]
-    pub const fn new(line: u32, column: u32) -> Self {
-        Self { line, column }
-    }
-
-    pub(crate) const fn from_cssparser(location: cssparser::SourceLocation) -> Self {
-        Self::new(location.line, location.column)
-    }
-
-    #[must_use]
-    pub const fn line(self) -> u32 {
-        self.line
-    }
-
-    #[must_use]
-    pub const fn column(self) -> u32 {
-        self.column
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -3633,10 +3598,7 @@ impl CssGridLineSpan {
     #[must_use]
     pub fn try_new(integer: Option<i32>, name: Option<CssCustomIdent>) -> Option<Self> {
         let integer = match integer {
-            Some(value) => match CssGridSpanInteger::try_new(value) {
-                Some(value) => Some(value),
-                None => return None,
-            },
+            Some(value) => Some(CssGridSpanInteger::try_new(value)?),
             None => None,
         };
         if integer.is_none() && name.is_none() {

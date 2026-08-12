@@ -41,7 +41,7 @@ pub(super) fn parse_font_face_rule<'i, 't>(
 
     Ok(CssFontFaceRule::new(
         descriptors,
-        CssSourceLocation::from_cssparser(start.source_location()),
+        crate::source::CssSourcePosition::from_cssparser(start.position(), start.source_location()),
     ))
 }
 

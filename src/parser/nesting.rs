@@ -29,7 +29,7 @@ pub(super) fn parse_style_rule_block<'i, 't>(
     for item in RuleBodyParser::new(input, &mut body_parser) {
         saw_item = true;
         match item.map_err(|(error, _)| error)? {
-            StyleBlockItem::Declaration(declaration) => declaration_buffer.push(declaration),
+            StyleBlockItem::Declaration(declaration) => declaration_buffer.push(*declaration),
             StyleBlockItem::NestedRules(nested_rules) => {
                 flush_declarations(&parent_selectors, &mut declaration_buffer, &mut rules);
                 rules.extend(nested_rules);
@@ -73,7 +73,7 @@ struct NestedStyleRuleParser {
 }
 
 enum StyleBlockItem {
-    Declaration(CssDeclaration),
+    Declaration(Box<CssDeclaration>),
     NestedRules(Vec<CssRule>),
 }
 
@@ -147,11 +147,14 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
         start: &ParserState,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::AtRule, ParseError<'i, Self::Error>> {
-        let location = CssSourceLocation::from_cssparser(start.source_location());
+        let position = crate::source::CssSourcePosition::from_cssparser(
+            start.position(),
+            start.source_location(),
+        );
         let rule = match prelude {
             NestedStyleAtRulePrelude::Media(query) => {
                 let rules = parse_style_rule_block(self.parent_selectors.clone(), input)?;
-                CssRule::Media(CssMediaRule::new(query, rules, location))
+                CssRule::Media(CssMediaRule::new(query, rules, position))
             }
             NestedStyleAtRulePrelude::Container(prelude) => {
                 let rules = parse_style_rule_block(self.parent_selectors.clone(), input)?;
@@ -159,7 +162,7 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
                     prelude.name,
                     prelude.condition,
                     rules,
-                    location,
+                    position,
                 ))
             }
             NestedStyleAtRulePrelude::Layer(names) => {
@@ -173,7 +176,7 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
                 CssRule::LayerBlock(CssLayerBlockRule::new(
                     names.into_iter().next(),
                     rules,
-                    location,
+                    position,
                 ))
             }
             NestedStyleAtRulePrelude::Scope(prelude) => {
@@ -182,7 +185,7 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
                     prelude.root,
                     prelude.limit,
                     rules,
-                    location,
+                    position,
                 ))
             }
         };
@@ -242,6 +245,7 @@ impl<'i> DeclarationParser<'i> for NestedStyleRuleParser {
         let mut declaration_parser = StrictDeclarationParser;
         declaration_parser
             .parse_value(name, input, declaration_start)
+            .map(Box::new)
             .map(StyleBlockItem::Declaration)
     }
 }

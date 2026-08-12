@@ -9,6 +9,7 @@
 
 mod error;
 mod parser;
+mod source;
 mod syntax;
 #[cfg(test)]
 mod test_support;
@@ -16,6 +17,7 @@ mod validation;
 
 pub use error::{Error, ErrorKind, Result};
 pub use parser::parse_sheet;
+pub use source::*;
 pub use syntax::*;
 
 #[cfg(test)]

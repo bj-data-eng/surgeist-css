@@ -6,6 +6,18 @@ use crate::test_support::{
     assert_sheet_rejected, parse_single_declaration, parse_single_declaration_value,
 };
 
+fn source_position(line: u32, column: u32) -> CssSourcePosition {
+    let source = format!(
+        "{}{}",
+        "\n".repeat(line as usize),
+        " ".repeat(column as usize)
+    );
+    let mut input = cssparser::ParserInput::new(&source);
+    let mut parser = cssparser::Parser::new(&mut input);
+    while parser.next().is_ok() {}
+    CssSourcePosition::from_cssparser(parser.position(), parser.current_source_location())
+}
+
 fn style_rule(rule: &CssRule) -> &CssStyleRule {
     match rule {
         CssRule::Style(rule) => rule,
@@ -334,25 +346,22 @@ fn keyframes_rule_accessors_expose_authored_structure() {
     let declaration = CssDeclaration::new(
         CssProperty::Opacity,
         CssValue::Opacity(CssOpacity::try_new(0.0).unwrap()),
-        CssSourceLocation::new(1, 1),
+        source_position(1, 1),
     );
-    let block = CssKeyframeBlock::try_new(
-        selector,
-        vec![declaration.clone()],
-        CssSourceLocation::new(2, 3),
-    )
-    .unwrap();
-    let rule = CssKeyframesRule::try_new(name, vec![block], CssSourceLocation::new(1, 1)).unwrap();
+    let block =
+        CssKeyframeBlock::try_new(selector, vec![declaration.clone()], source_position(2, 3))
+            .unwrap();
+    let rule = CssKeyframesRule::try_new(name, vec![block], source_position(1, 1)).unwrap();
 
     assert_eq!(
         rule.name(),
         &CssKeyframesName::Ident(CssCustomIdent::new("fade"))
     );
-    assert_eq!(rule.location(), CssSourceLocation::new(1, 1));
+    assert_eq!(rule.position(), source_position(1, 1));
     let [block] = rule.blocks() else {
         panic!("expected one keyframe block");
     };
-    assert_eq!(block.location(), CssSourceLocation::new(2, 3));
+    assert_eq!(block.position(), source_position(2, 3));
     assert_eq!(block.selectors().selectors(), &[CssKeyframeSelector::From]);
     assert_eq!(block.declarations(), &[declaration]);
     assert_eq!(CssKeyframeSelector::From.offset().value().value(), 0.0);
@@ -503,7 +512,7 @@ fn keyframes_rule_parser_rejects_invalid_blocks() {
 
 #[test]
 fn keyframes_constructors_reject_invalid_states() {
-    let location = CssSourceLocation::new(1, 1);
+    let location = source_position(1, 1);
     let name = CssKeyframesName::Ident(CssCustomIdent::new("fade"));
     let declaration = CssDeclaration::new(
         CssProperty::Opacity,
@@ -574,12 +583,12 @@ fn layer_rule_models_preserve_authored_statement_and_block_shapes() {
     let reset = CssLayerName::try_new(["reset"]).unwrap();
     let components = CssLayerName::try_new(["theme", "components"]).unwrap();
     let names = CssLayerNameList::try_new(vec![reset.clone(), components.clone()]).unwrap();
-    let statement_location = CssSourceLocation::new(2, 3);
+    let statement_location = source_position(2, 3);
     let statement = CssLayerStatementRule::new(names.clone(), statement_location);
 
     assert_eq!(CssLayerNameList::try_new(Vec::new()), None);
     assert_eq!(statement.names().names(), names.names());
-    assert_eq!(statement.location(), statement_location);
+    assert_eq!(statement.position(), statement_location);
     assert_eq!(
         CssRule::LayerStatement(statement.clone()),
         CssRule::LayerStatement(statement)
@@ -589,7 +598,7 @@ fn layer_rule_models_preserve_authored_statement_and_block_shapes() {
         CssSelector::Class("button".to_owned()),
         Vec::new(),
     ));
-    let block_location = CssSourceLocation::new(4, 5);
+    let block_location = source_position(4, 5);
     let named_block = CssLayerBlockRule::new(
         Some(components.clone()),
         vec![nested.clone()],
@@ -597,7 +606,7 @@ fn layer_rule_models_preserve_authored_statement_and_block_shapes() {
     );
     assert_eq!(named_block.name(), Some(&components));
     assert_eq!(named_block.rules(), &[nested]);
-    assert_eq!(named_block.location(), block_location);
+    assert_eq!(named_block.position(), block_location);
 
     let anonymous_block = CssLayerBlockRule::new(None, Vec::new(), block_location);
     assert_eq!(anonymous_block.name(), None);
@@ -633,11 +642,11 @@ fn scope_rule_model_keeps_scoped_selectors_and_rules_separate() {
     let declaration = CssDeclaration::new(
         CssProperty::Color,
         CssValue::Color(CssColor::Rgba(CssRgbaColor::try_new(0, 0, 0, 1.0).unwrap())),
-        CssSourceLocation::new(6, 7),
+        source_position(6, 7),
     );
     let style = CssScopedStyleRule::new(selectors.clone(), vec![declaration.clone()]);
     let scoped_rules = CssScopedRuleList::from_rules(vec![CssScopedRule::Style(style.clone())]);
-    let location = CssSourceLocation::new(5, 1);
+    let location = source_position(5, 1);
     let scope = CssScopeRule::new(
         Some(root.clone()),
         Some(limit.clone()),
@@ -656,7 +665,7 @@ fn scope_rule_model_keeps_scoped_selectors_and_rules_separate() {
     assert_eq!(scope.root(), Some(&root));
     assert_eq!(scope.limit(), Some(&limit));
     assert_eq!(scope.rules(), &scoped_rules);
-    assert_eq!(scope.location(), location);
+    assert_eq!(scope.position(), location);
     assert_eq!(CssRule::Scope(scope.clone()), CssRule::Scope(scope));
 
     let empty_rules = CssScopedRuleList::new();
@@ -712,7 +721,7 @@ fn scoped_group_rule_models_keep_scoped_children() {
         .unwrap();
     let child = CssScopedRule::Style(CssScopedStyleRule::new(child_selector, Vec::new()));
     let scoped_children = CssScopedRuleList::from_rules(vec![child.clone()]);
-    let location = CssSourceLocation::new(8, 9);
+    let location = source_position(8, 9);
     let query = CssMediaQueryList::try_new(vec![CssMediaQuery::Typed(CssTypedMediaQuery::new(
         None,
         CssMediaType::Screen,
@@ -722,7 +731,7 @@ fn scoped_group_rule_models_keep_scoped_children() {
     let media = CssScopedMediaRule::new(query.clone(), scoped_children.clone(), location);
     assert_eq!(media.query(), &query);
     assert_eq!(media.rules(), &scoped_children);
-    assert_eq!(media.location(), location);
+    assert_eq!(media.position(), location);
 
     let condition =
         parse_container_condition_for_test("(inline-size > 30rem)").expect("condition parses");
@@ -736,19 +745,19 @@ fn scoped_group_rule_models_keep_scoped_children() {
     assert_eq!(container.name(), Some(&name));
     assert_eq!(container.condition(), &condition);
     assert_eq!(container.rules(), &scoped_children);
-    assert_eq!(container.location(), location);
+    assert_eq!(container.position(), location);
 
     let layer_name = CssLayerName::try_new(["theme"]).unwrap();
     let layer_names = CssLayerNameList::try_new(vec![layer_name.clone()]).unwrap();
     let statement = CssScopedLayerStatementRule::new(layer_names.clone(), location);
     assert_eq!(statement.names(), &layer_names);
-    assert_eq!(statement.location(), location);
+    assert_eq!(statement.position(), location);
 
     let block =
         CssScopedLayerBlockRule::new(Some(layer_name.clone()), scoped_children.clone(), location);
     assert_eq!(block.name(), Some(&layer_name));
     assert_eq!(block.rules(), &scoped_children);
-    assert_eq!(block.location(), location);
+    assert_eq!(block.position(), location);
 
     assert_eq!(
         CssScopedRule::Media(media.clone()),
@@ -814,7 +823,7 @@ fn import_rule_accessors_expose_authored_structure() {
         None,
     ))])
     .unwrap();
-    let location = CssSourceLocation::new(3, 7);
+    let location = source_position(3, 7);
     let rule = CssImportRule::new(
         target.clone(),
         Some(layer.clone()),
@@ -825,7 +834,7 @@ fn import_rule_accessors_expose_authored_structure() {
     assert_eq!(rule.target(), &target);
     assert_eq!(rule.layer(), Some(&layer));
     assert_eq!(rule.media(), Some(&media));
-    assert_eq!(rule.location(), location);
+    assert_eq!(rule.position(), location);
     assert_eq!(CssRule::Import(rule.clone()), CssRule::Import(rule));
 }
 
@@ -5346,11 +5355,11 @@ fn font_face_rule_accessors_expose_authored_structure() {
         None,
     )
     .unwrap();
-    let location = CssSourceLocation::new(9, 5);
+    let location = source_position(9, 5);
     let rule = CssFontFaceRule::new(descriptors.clone(), location);
 
     assert_eq!(rule.descriptors(), &descriptors);
-    assert_eq!(rule.location(), location);
+    assert_eq!(rule.position(), location);
     assert_eq!(CssRule::FontFace(rule.clone()), CssRule::FontFace(rule));
 }
 
@@ -5613,7 +5622,7 @@ fn container_rule_accessors_expose_authored_structure() {
         CssSelector::Class("card".to_owned()),
         Vec::new(),
     ));
-    let location = CssSourceLocation::new(4, 9);
+    let location = source_position(4, 9);
     let rule = CssContainerRule::new(
         Some(name.clone()),
         condition.clone(),
@@ -5624,7 +5633,7 @@ fn container_rule_accessors_expose_authored_structure() {
     assert_eq!(rule.name(), Some(&name));
     assert_eq!(rule.condition(), &condition);
     assert_eq!(rule.rules(), &[nested]);
-    assert_eq!(rule.location(), location);
+    assert_eq!(rule.position(), location);
     assert_eq!(CssRule::Container(rule.clone()), CssRule::Container(rule));
 }
 
@@ -5637,7 +5646,9 @@ fn container_rule_parser_accepts_unnamed_named_and_style_conditions() {
     };
     let rule = container_rule(rule);
     assert_eq!(rule.name(), None);
-    assert_eq!(rule.location(), CssSourceLocation::new(0, 1));
+    assert_eq!(rule.position().byte_offset().value(), 0);
+    assert_eq!(rule.position().line().value(), 0);
+    assert_eq!(rule.position().column().value(), 0);
     assert!(matches!(
         rule.condition(),
         CssContainerCondition::Feature(CssContainerFeatureQuery::InlineSize(_))
@@ -5743,7 +5754,9 @@ fn media_rule_parser_accepts_style_rule_body() {
     };
     assert_eq!(query.media_type(), CssMediaType::Screen);
     assert!(query.condition().is_some());
-    assert_eq!(rule.location(), CssSourceLocation::new(0, 1));
+    assert_eq!(rule.position().byte_offset().value(), 0);
+    assert_eq!(rule.position().line().value(), 0);
+    assert_eq!(rule.position().column().value(), 0);
 
     let [nested] = rule.rules() else {
         panic!("expected one nested style rule");
@@ -7584,15 +7597,17 @@ fn exposes_nested_calc_terms_structurally() {
 }
 
 #[test]
-fn successful_declarations_expose_authored_source_location() {
+fn successful_declarations_expose_authored_source_position() {
     let input = ".panel {\n  height: 20px;\n  width: calc(100% - 4px);\n}\n";
     let height = declaration(input, CssProperty::Height);
     let width = declaration(input, CssProperty::Width);
 
-    assert_eq!(height.location(), CssSourceLocation::new(1, 3));
-    assert_eq!(width.location(), CssSourceLocation::new(2, 3));
-    assert_eq!(width.line(), 2);
-    assert_eq!(width.column(), 3);
+    assert_eq!(height.position().byte_offset().value(), 11);
+    assert_eq!(height.position().line().value(), 1);
+    assert_eq!(height.position().column().value(), 2);
+    assert_eq!(width.position().byte_offset().value(), 27);
+    assert_eq!(width.position().line().value(), 2);
+    assert_eq!(width.position().column().value(), 2);
 }
 
 #[test]

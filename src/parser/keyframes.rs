@@ -45,7 +45,7 @@ pub(super) fn parse_keyframes_rule<'i, 't>(
     CssKeyframesRule::try_new(
         name,
         blocks,
-        CssSourceLocation::from_cssparser(start.source_location()),
+        crate::source::CssSourcePosition::from_cssparser(start.position(), start.source_location()),
     )
     .ok_or_else(|| invalid_syntax(start.source_location(), "invalid @keyframes block list"))
 }
@@ -85,7 +85,10 @@ impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser {
         CssKeyframeBlock::try_new(
             selectors,
             declarations,
-            CssSourceLocation::from_cssparser(start.source_location()),
+            crate::source::CssSourcePosition::from_cssparser(
+                start.position(),
+                start.source_location(),
+            ),
         )
         .ok_or_else(|| invalid_syntax(start.source_location(), "keyframe block is empty"))
     }

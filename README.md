@@ -1,8 +1,45 @@
 # surgeist-css
 
-Strict CSS ingestion for Surgeist. This crate parses CSS-facing input into CSS-owned syntax contracts. Root-owned Surgeist adapters lower parsed CSS syntax into typed style data.
+Browser-recovering CSS ingestion for Surgeist. This crate parses CSS-facing input into CSS-owned authored syntax contracts. Root-owned Surgeist adapters lower parsed CSS syntax into typed style data.
 
-Unlike a browser CSS parser, this crate does not recover from invalid application CSS or silently drop bad declarations. Unsupported selectors, at-rules, properties, values, malformed lists, and invalid rule bodies reject the whole sheet.
+The ordinary `parse_sheet` and `parse_style_attribute` entry points use browser recovery: each returns a report containing valid retained syntax and every structured recovery diagnostic in source order. Unsupported or malformed source units are dropped, replaced, retained with an implicit closure, ignored, or stopped at the documented boundary; valid siblings remain eligible. A clean report means that no recovery diagnostic was produced. An empty retained tree alone does not establish that the source was clean, so consumers should inspect `is_clean()` or `diagnostics()` rather than infer validity from syntax length.
+
+```rust
+use surgeist_css::{CssRecoveryAction, CssRule, parse_sheet};
+
+let report = parse_sheet(
+    ".before { color: red; } @unknown value; .after { color: blue; }",
+);
+assert_eq!(report.syntax().rules().len(), 2);
+assert!(matches!(report.syntax().rules()[0], CssRule::Style(_)));
+assert_eq!(
+    report.diagnostics()[0].action(),
+    CssRecoveryAction::DropAtRule,
+);
+```
+
+Style attributes use the same ordinary declaration parser as style-rule blocks. Declarations retain their authored order, source position, coupled property/value type, and terminal `!important` state.
+
+```rust
+use surgeist_css::{CssImportance, CssPropertyNameRef, parse_style_attribute};
+
+let report = parse_style_attribute("color: red; mystery: 1; width: 2px !important");
+assert_eq!(report.syntax().len(), 2);
+assert_eq!(report.diagnostics().len(), 1);
+let width = &report.syntax()[1];
+assert_eq!(width.importance(), CssImportance::Important);
+assert!(matches!(width.property_name(), CssPropertyNameRef::Known(_)));
+```
+
+Each diagnostic exposes a typed error and stable root code, the first responsible source position, the complete recovery-unit span, and one `CssRecoveryAction`. Source byte offsets index the original UTF-8 input; line and column indices are zero-based, and columns count UTF-16 code units. Display text is for people, not control flow—match typed variants with a wildcard for future non-exhaustive cases.
+
+CSS custom properties preserve case-sensitive names and authored value text, including interior trivia. Known-property values whose grammar depends on `var(...)` remain substitution-dependent authored values. The crate recognizes terminal `!important` but does not apply cascade or perform custom-property substitution or post-substitution validation.
+
+The independent support catalog reports an exact support status for each bounded I01 production: `Complete`, `Partial`, or `RecognizedUnsupported`. Partial records document both the accepted subset and valid-but-unsupported remainder. A clean use of a partial production's supported subset is accepted; status is metadata about the whole named production, not a parse-result validity flag.
+
+Enable the additive `app-strict` feature to expose `validate_sheet` and `validate_style_attribute`. Each validator runs the ordinary parser once, returns retained syntax only for a clean report, and otherwise returns the complete non-empty diagnostic sequence. Enabling the feature does not change ordinary parsing or recovery.
+
+This crate owns authored CSS syntax, intrinsic grammar validation, recovery boundaries, diagnostics, and support metadata. It does not apply cascade or inheritance, substitute or resolve variables, evaluate queries, match selectors, resolve URLs or resources, perform layout or painting, serialize a CSSOM, or lower CSS into sibling Surgeist types. Root-owned integration owns cross-crate lowering and generated API audit artifacts.
 
 CSS custom properties are parsed as authored syntax. Custom property names are case-sensitive, `var(...)` references and fallback token text remain symbolic, and supported properties containing `var(...)` parse as variable-dependent authored values. This crate does not resolve variables, run cascade substitution, or validate post-substitution values.
 

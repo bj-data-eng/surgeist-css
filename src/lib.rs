@@ -18,18 +18,107 @@ let _ = validate_style_attribute("color: red");
 ```
 "#
 )]
-//! Recovering CSS ingestion for Surgeist style sheets.
+//! Browser-recovering CSS ingestion for Surgeist.
 //!
-//! This crate parses CSS syntax into CSS-owned authored syntax values. It is
-//! strict about retained values: unsupported or malformed top-level rules are
-//! discarded with structured recovery diagnostics rather than represented as
-//! invalid syntax.
+//! [`parse_sheet`] and [`parse_style_attribute`] parse UTF-8 input into CSS-owned
+//! authored syntax plus every structured recovery diagnostic in source order.
+//! Retained nodes are valid by construction. Unsupported or malformed source
+//! units are recovered at their grammar boundary so later valid siblings remain
+//! eligible; invalid authored nodes are never retained.
 //!
-//! Parse failures expose typed [`ErrorKind`] values, stable [`CssErrorCode`]
-//! roots, and semantic source positions so callers do not parse display text.
-//! [`parse_sheet`] and [`parse_style_attribute`] return retained authored syntax
-//! and diagnostic provenance in one report. They do not run cascade,
-//! substitution, selector matching, contextual resolution, or resource loading.
+//! A [`CssParseReport::is_clean`] result means exactly that the diagnostic slice
+//! is empty. It is not a separate syntax-validity predicate, and callers must not
+//! infer cleanliness from an empty retained sheet or declaration list.
+//!
+//! # Stylesheets and recovery
+//!
+//! ```
+//! use surgeist_css::{CssErrorCode, CssRecoveryAction, CssRule, parse_sheet};
+//!
+//! let report = parse_sheet(
+//!     ".before { color: red; } @unknown value; .after { color: blue; }",
+//! );
+//! assert_eq!(report.syntax().rules().len(), 2);
+//! assert!(matches!(report.syntax().rules()[0], CssRule::Style(_)));
+//! let diagnostic = &report.diagnostics()[0];
+//! assert_eq!(diagnostic.error().code(), CssErrorCode::UnknownAtRule);
+//! assert_eq!(diagnostic.action(), CssRecoveryAction::DropAtRule);
+//! ```
+//!
+//! # Style attributes and declarations
+//!
+//! Style attributes share the ordinary declaration grammar used by style-rule
+//! blocks. Declarations retain authored order, semantic source positions,
+//! property/value coupling, custom-property text, substitution-dependent text,
+//! and terminal [`CssImportance`].
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssImportance, CssKnownDeclaration, CssPropertyNameRef, parse_style_attribute,
+//! };
+//!
+//! let report = parse_style_attribute(
+//!     "--Theme: RGB(1, 2, var(--fallback)); mystery: 1; width: var(--size, 2px) !important",
+//! );
+//! assert_eq!(report.syntax().len(), 2);
+//! assert_eq!(report.diagnostics().len(), 1);
+//! assert_eq!(
+//!     report.syntax()[0]
+//!         .custom()
+//!         .expect("custom declaration")
+//!         .value()
+//!         .value()
+//!         .expect("authored custom value")
+//!         .as_css(),
+//!     "RGB(1, 2, var(--fallback))",
+//! );
+//! let width = &report.syntax()[1];
+//! assert_eq!(width.importance(), CssImportance::Important);
+//! assert!(matches!(width.property_name(), CssPropertyNameRef::Known(_)));
+//! let Some(CssKnownDeclaration::Width(value)) = width.known() else {
+//!     panic!("expected coupled width declaration");
+//! };
+//! assert_eq!(
+//!     value
+//!         .substitution_dependent()
+//!         .expect("symbolic authored value")
+//!         .as_css(),
+//!     "var(--size, 2px)",
+//! );
+//! ```
+//!
+//! # Diagnostics and coordinates
+//!
+//! Each [`CssRecoveryDiagnostic`] exposes a typed [`ErrorKind`] and stable
+//! [`CssErrorCode`], the first responsible [`CssSourcePosition`], the complete
+//! [`CssSourceSpan`] of the recovery unit, and the [`CssRecoveryAction`] taken.
+//! Byte offsets index the original UTF-8 input. Lines and columns are zero-based,
+//! and columns count UTF-16 code units. Display and debug prose are for people;
+//! control flow should match typed variants and include a wildcard for every
+//! non-exhaustive enum.
+//!
+//! # Support metadata and application policy
+//!
+//! [`feature_catalog`] describes each bounded I01 production as
+//! [`CssSupportStatus::Complete`], [`CssSupportStatus::Partial`], or
+//! [`CssSupportStatus::RecognizedUnsupported`]. Partial records state both their
+//! accepted subset and valid-but-unsupported remainder. A diagnostic-free use of
+//! a partial production's accepted subset is still a clean parse.
+//!
+//! The optional `app-strict` feature adds `validate_sheet` and
+//! `validate_style_attribute`. Each validator invokes its ordinary parser once,
+//! accepts exactly a clean report, and otherwise preserves the complete non-empty
+//! diagnostic sequence in [`CssValidationFailure`]. The feature does not select a
+//! second grammar or change ordinary parsing.
+//!
+//! # Boundary
+//!
+//! This crate owns authored CSS syntax, intrinsic grammar validation, recovery
+//! boundaries, diagnostic provenance, and support metadata. It does not apply
+//! cascade or inheritance; substitute custom properties; validate computed
+//! post-substitution values; evaluate queries; match selectors; resolve URLs,
+//! resources, units, or colors; perform layout, painting, or animation; expose a
+//! mutable CSSOM; or lower CSS into sibling Surgeist types.
 
 mod conformance;
 mod error;

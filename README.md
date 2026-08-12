@@ -31,13 +31,73 @@ assert_eq!(width.importance(), CssImportance::Important);
 assert!(matches!(width.property_name(), CssPropertyNameRef::Known(_)));
 ```
 
+## Declaration inspection and API evolution
+
+`CssKnownDeclaration` is a parser-owned, private-field value. Its `property()`
+identity is derived from the active coupled value, so callers cannot construct or
+mutate a property/value mismatch. `declared_value()` returns exactly one
+`CssKnownDeclaredValueRef` branch: `Property`, `Global`, or
+`SubstitutionDependent`. The convenience accessors `property_value()`,
+`global()`, and `substitution_dependent()` are mutually exclusive views of those
+same three branches.
+
+Ordinary property values are borrowed through the non-exhaustive
+`CssKnownPropertyValueRef`. Match the concrete property wrapper and retain a
+wildcard for future variants:
+
+```rust
+use surgeist_css::{
+    CssImportance, CssKnownDeclaredValueRef, CssKnownPropertyValueRef,
+    parse_style_attribute,
+};
+
+let report = parse_style_attribute("width: calc(100% - 12px) !important");
+let declaration = &report.syntax()[0];
+assert_eq!(declaration.importance(), CssImportance::Important);
+let known = declaration.known().expect("known declaration");
+
+match known.declared_value() {
+    CssKnownDeclaredValueRef::Property(property) => match property {
+        CssKnownPropertyValueRef::Width(width) => {
+            assert_eq!(width.as_css(), "calc(100% - 12px)");
+            assert!(width.i01_subset().is_some());
+        }
+        _ => panic!("expected width"),
+    },
+    CssKnownDeclaredValueRef::Global(_)
+    | CssKnownDeclaredValueRef::SubstitutionDependent(_) => {
+        panic!("expected an ordinary property value")
+    }
+    _ => panic!("future declared-value branch"),
+}
+```
+
+Every one of the 179 schema rows has a generated
+`Css<SchemaVariant>PropertyValue` wrapper. `as_css()` returns the exact authored
+ordinary value, preserving its interior spelling and trivia while excluding
+parser-owned boundary trivia and the terminal importance annotation.
+`i01_subset()` exposes the compatibility payload only when the value belongs to
+the frozen I01 representation. It returns `Some` for every value parsed by the
+current grammar; a later property grammar may return `None` only for syntax that
+the I01 payload cannot represent.
+
+The `overflow` row illustrates the wrapper/payload distinction. The generated
+`CssOverflowPropertyValue` is the authored property wrapper, while
+`CssOverflowI01PropertyValue` is the renamed I01 payload containing the
+`Single` and `Pair` shapes.
+
+`CssImportance` and `CssSupportStatus` are deliberately closed and may be
+matched exhaustively. Every other public enum is non-exhaustive and requires a
+wildcard in downstream matches. This declaration inspection migration changes
+neither accepted input nor parsing, recovery, or diagnostic behavior.
+
 Each diagnostic exposes a typed error and stable root code, the first responsible source position, the complete recovery-unit span, and one `CssRecoveryAction`. Source byte offsets index the original UTF-8 input; line and column indices are zero-based, and columns count UTF-16 code units. Display text is for people, not control flow—match typed variants with a wildcard for future non-exhaustive cases.
 
 CSS custom properties preserve case-sensitive names and authored value text, including interior trivia. Known-property values whose grammar depends on `var(...)` remain substitution-dependent authored values. The crate recognizes terminal `!important` but does not apply cascade or perform custom-property substitution or post-substitution validation.
 
 The independent support catalog reports an exact support status for each bounded I01 production: `Complete`, `Partial`, or `RecognizedUnsupported`. Partial records document both the accepted subset and valid-but-unsupported remainder. A clean use of a partial production's supported subset is accepted; status is metadata about the whole named production, not a parse-result validity flag.
 
-Enable the additive `app-strict` feature to expose `validate_sheet` and `validate_style_attribute`. Each validator runs the ordinary parser once, returns retained syntax only for a clean report, and otherwise returns the complete non-empty diagnostic sequence. Enabling the feature does not change ordinary parsing or recovery.
+Enable the additive `app-strict` feature to expose `validate_sheet` and `validate_style_attribute`. Each validator consumes ordinary parsing semantics and its report, returns retained syntax only for a clean report, and otherwise returns the complete non-empty diagnostic sequence. The validators do not select a second grammar, and enabling the feature does not change ordinary parsing or recovery.
 
 This crate owns authored CSS syntax, intrinsic grammar validation, recovery boundaries, diagnostics, and support metadata. It does not apply cascade or inheritance, substitute or resolve variables, evaluate queries, match selectors, resolve URLs or resources, perform layout or painting, serialize a CSSOM, or lower CSS into sibling Surgeist types. Root-owned integration owns cross-crate lowering and generated API audit artifacts.
 

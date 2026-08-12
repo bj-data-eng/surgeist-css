@@ -1,5 +1,10 @@
 # P01-I01 CSS Migration Record
 
+> The declaration-inspection and public-enum evolution portions of this record
+> are superseded by `plans/handoffs/P01-I02-C01-css-evolution-migration.md`,
+> which is the current authority for those subjects. The remaining I01 migration
+> history below is unchanged.
+
 This is the static, revision-independent migration record for the final I01 CSS
 candidate. It is complete before task and holistic review so publication does
 not require editing it. The canonical candidate handoff supplies all immutable

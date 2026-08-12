@@ -86,6 +86,66 @@ let _ = validate_style_attribute("color: red");
 //! );
 //! ```
 //!
+//! # Declaration inspection and API evolution
+//!
+//! [`CssKnownDeclaration`] is parser-owned and has private fields. Its
+//! [`CssKnownDeclaration::property`] identity is derived from the active coupled
+//! value, so callers cannot create a property/value mismatch.
+//! [`CssKnownDeclaration::declared_value`] returns exactly one of the
+//! [`CssKnownDeclaredValueRef::Property`], [`CssKnownDeclaredValueRef::Global`],
+//! or [`CssKnownDeclaredValueRef::SubstitutionDependent`] branches. The
+//! [`CssKnownDeclaration::property_value`], [`CssKnownDeclaration::global`], and
+//! [`CssKnownDeclaration::substitution_dependent`] convenience accessors are
+//! mutually exclusive views of those same branches.
+//!
+//! The property branch borrows a non-exhaustive [`CssKnownPropertyValueRef`].
+//! Match its concrete generated wrapper and retain a wildcard for future
+//! variants:
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssImportance, CssKnownDeclaredValueRef, CssKnownPropertyValueRef,
+//!     parse_style_attribute,
+//! };
+//!
+//! let report = parse_style_attribute("width: calc(100% - 12px) !important");
+//! let declaration = &report.syntax()[0];
+//! assert_eq!(declaration.importance(), CssImportance::Important);
+//! let known = declaration.known().expect("known declaration");
+//!
+//! match known.declared_value() {
+//!     CssKnownDeclaredValueRef::Property(property) => match property {
+//!         CssKnownPropertyValueRef::Width(width) => {
+//!             assert_eq!(width.as_css(), "calc(100% - 12px)");
+//!             assert!(width.i01_subset().is_some());
+//!         }
+//!         _ => panic!("expected width"),
+//!     },
+//!     CssKnownDeclaredValueRef::Global(_)
+//!     | CssKnownDeclaredValueRef::SubstitutionDependent(_) => {
+//!         panic!("expected an ordinary property value")
+//!     }
+//!     _ => panic!("future declared-value branch"),
+//! }
+//! ```
+//!
+//! Each of the 179 property-schema rows generates one private-field
+//! `Css<SchemaVariant>PropertyValue` wrapper. Its `as_css()` method returns the
+//! exact authored ordinary value, preserving interior spelling and trivia while
+//! excluding parser-owned boundary trivia and the terminal importance annotation.
+//! Its `i01_subset()` method is a compatibility view: every value parsed by the
+//! current grammar returns `Some`, while a later grammar may return `None` only
+//! for syntax outside the frozen I01 representation.
+//!
+//! The generated [`CssOverflowPropertyValue`] is the authored wrapper for the
+//! `overflow` row. [`CssOverflowI01PropertyValue`] is its renamed I01 payload and
+//! retains the `Single` and `Pair` value shapes.
+//!
+//! [`CssImportance`] and [`CssSupportStatus`] are exactly the two closed public
+//! enums. All other public enums are non-exhaustive and downstream matches must
+//! include a wildcard. This inspection model does not change parsing, recovery,
+//! or diagnostics.
+//!
 //! # Diagnostics and coordinates
 //!
 //! Each [`CssRecoveryDiagnostic`] exposes a typed [`ErrorKind`] and stable
@@ -186,10 +246,10 @@ let _ = validate_style_attribute("color: red");
 //! a partial production's accepted subset is still a clean parse.
 //!
 //! The optional `app-strict` feature adds `validate_sheet` and
-//! `validate_style_attribute`. Each validator invokes its ordinary parser once,
-//! accepts exactly a clean report, and otherwise preserves the complete non-empty
-//! diagnostic sequence in [`CssValidationFailure`]. The feature does not select a
-//! second grammar or change ordinary parsing.
+//! `validate_style_attribute`. Each validator consumes ordinary parsing semantics
+//! and its report, accepts exactly a clean report, and otherwise preserves the
+//! complete non-empty diagnostic sequence in [`CssValidationFailure`]. The
+//! feature does not select a second grammar or change ordinary parsing.
 //!
 //! # Boundary
 //!
@@ -223,10 +283,10 @@ pub(crate) use test_support::{CssParseReportTestExt, CssProperty};
 
 /// Validates a stylesheet by accepting only a clean ordinary parse report.
 ///
-/// This application-strict wrapper invokes [`parse_sheet`] once. A clean report
-/// yields its retained authored syntax; a recovered report yields every
-/// parser-produced diagnostic in unchanged order. Validation does not select a
-/// different grammar, reparse input, or perform cascade, substitution,
+/// This application-strict wrapper consumes the ordinary [`parse_sheet`] report.
+/// A clean report yields its retained authored syntax; a recovered report yields
+/// every parser-produced diagnostic in unchanged order. Validation does not
+/// select a different grammar or perform cascade, substitution,
 /// contextual resolution, selector matching, or resource loading.
 ///
 /// ```
@@ -242,10 +302,11 @@ pub fn validate_sheet(input: &str) -> Result<CssSheet, CssValidationFailure> {
 
 /// Validates a style attribute by accepting only a clean ordinary parse report.
 ///
-/// This application-strict wrapper invokes [`parse_style_attribute`] once. A
-/// clean report yields its retained authored declarations; a recovered report
-/// yields the complete parser-produced diagnostic sequence unchanged. It does
-/// not select a different declaration grammar, reparse input, or apply cascade,
+/// This application-strict wrapper consumes the ordinary
+/// [`parse_style_attribute`] report. A clean report yields its retained authored
+/// declarations; a recovered report yields the complete parser-produced
+/// diagnostic sequence unchanged. It does not select a different declaration
+/// grammar or apply cascade,
 /// substitution, contextual resolution, selector matching, or resource loading.
 ///
 /// ```

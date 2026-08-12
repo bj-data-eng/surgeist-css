@@ -284,14 +284,482 @@ pub(super) fn parse_length_with_context<'i, 't>(
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(
+    dead_code,
+    reason = "T2 root kinds are consumed by the staged T3 property integration"
+)]
+pub(super) enum CalculationRoot {
+    Number,
+    Integer,
+    Percentage,
+    Length,
+    Angle,
+    Time,
+    Frequency,
+}
+
+const CALCULATION_NESTING_LIMIT: u16 = 256;
+
+#[allow(
+    dead_code,
+    reason = "T2 parser foundation is consumed by the staged T3 property integration"
+)]
+pub(super) fn parse_typed_calculation<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    root: CalculationRoot,
+) -> std::result::Result<CssCalculationExpression, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let expression = parse_calculation_sum(input, 0)?;
+    input.expect_exhausted().map_err(basic)?;
+    if calculation_root_accepts(root, expression.result_type()) {
+        Ok(expression)
+    } else {
+        Err(calculation_error(location))
+    }
+}
+
+fn parse_calculation_sum<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    depth: u16,
+) -> std::result::Result<CssCalculationExpression, ParseError<'i, Error>> {
+    let first = parse_calculation_product(input, depth)?;
+    let mut result_type = first.result_type();
+    let mut terms = vec![CssCalculationSumTerm {
+        operator: None,
+        expression: first,
+    }];
+
+    loop {
+        let state = input.state();
+        let location = input.current_source_location();
+        let operator = match input.next() {
+            Ok(Token::Delim('+')) => Some(CssCalculationSumOperator::Add),
+            Ok(Token::Delim('-')) => Some(CssCalculationSumOperator::Subtract),
+            Ok(_) | Err(_) => None,
+        };
+        let Some(operator) = operator else {
+            input.reset(&state);
+            break;
+        };
+        let expression = parse_calculation_product(input, depth)?;
+        result_type = calculation_sum_type(result_type, expression.result_type())
+            .ok_or_else(|| calculation_error(location))?;
+        terms.push(CssCalculationSumTerm {
+            operator: Some(operator),
+            expression,
+        });
+    }
+
+    if terms.len() == 1 {
+        return match terms.pop() {
+            Some(term) => Ok(term.expression),
+            None => Err(calculation_error(input.current_source_location())),
+        };
+    }
+    let expression = CssCalculationExpression::Sum { terms, result_type };
+    validate_calculation_arithmetic(&expression, input.current_source_location())?;
+    Ok(expression)
+}
+
+fn parse_calculation_product<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    depth: u16,
+) -> std::result::Result<CssCalculationExpression, ParseError<'i, Error>> {
+    let first = parse_calculation_unary(input, depth)?;
+    let mut result_type = first.result_type();
+    let mut factors = vec![CssCalculationProductFactor {
+        operator: None,
+        expression: first,
+    }];
+
+    loop {
+        let state = input.state();
+        let location = input.current_source_location();
+        let operator = match input.next() {
+            Ok(Token::Delim('*')) => Some(CssCalculationProductOperator::Multiply),
+            Ok(Token::Delim('/')) => Some(CssCalculationProductOperator::Divide),
+            Ok(_) | Err(_) => None,
+        };
+        let Some(operator) = operator else {
+            input.reset(&state);
+            break;
+        };
+        let expression = parse_calculation_unary(input, depth)?;
+        result_type = match operator {
+            CssCalculationProductOperator::Multiply => {
+                calculation_product_type(result_type, expression.result_type())
+            }
+            CssCalculationProductOperator::Divide => {
+                if !calculation_type_is_number(expression.result_type())
+                    || matches!(calculation_numeric_value(&expression), Ok(Some(value)) if value == 0.0)
+                {
+                    None
+                } else {
+                    calculation_quotient_type(result_type, expression.result_type())
+                }
+            }
+        }
+        .ok_or_else(|| calculation_error(location))?;
+        factors.push(CssCalculationProductFactor {
+            operator: Some(operator),
+            expression,
+        });
+    }
+
+    if factors.len() == 1 {
+        return match factors.pop() {
+            Some(factor) => Ok(factor.expression),
+            None => Err(calculation_error(input.current_source_location())),
+        };
+    }
+    let expression = CssCalculationExpression::Product {
+        factors,
+        result_type,
+    };
+    validate_calculation_arithmetic(&expression, input.current_source_location())?;
+    Ok(expression)
+}
+
+fn parse_calculation_unary<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    depth: u16,
+) -> std::result::Result<CssCalculationExpression, ParseError<'i, Error>> {
+    let state = input.state();
+    let location = input.current_source_location();
+    if matches!(input.next(), Ok(Token::Delim('-'))) {
+        let operand = parse_calculation_unary(input, depth)?;
+        let expression = CssCalculationExpression::Negate(Box::new(operand));
+        validate_calculation_arithmetic(&expression, location)?;
+        return Ok(expression);
+    }
+    input.reset(&state);
+    parse_calculation_value(input, depth)
+}
+
+fn parse_calculation_value<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    depth: u16,
+) -> std::result::Result<CssCalculationExpression, ParseError<'i, Error>> {
+    input.skip_whitespace();
+    let location = input.current_source_location();
+    let token_start = input.position();
+    let token = input.next().map_err(basic)?.clone();
+    let authored_token = input.slice_from(token_start);
+    match token {
+        Token::Number { value, .. } if !value.is_finite() => Err(calculation_error(location)),
+        Token::Number {
+            value: _,
+            int_value: Some(integer),
+            ..
+        } if authored_token.parse::<i32>() == Ok(integer) => Ok(CssCalculationExpression::Value(
+            CssCalculationValue::Integer(integer),
+        )),
+        Token::Number {
+            int_value: Some(_), ..
+        } => Err(calculation_error(location)),
+        Token::Number { value, .. } => CssFiniteNumber::try_new(value)
+            .map(CssCalculationValue::Number)
+            .map(CssCalculationExpression::Value)
+            .ok_or_else(|| calculation_error(location)),
+        Token::Percentage { unit_value, .. } => {
+            let value = checked_percentage_value(
+                location,
+                unit_value,
+                "unsupported non-finite calculation percentage",
+            )?;
+            CssFiniteNumber::try_new(value)
+                .map(CssCalculationValue::Percentage)
+                .map(CssCalculationExpression::Value)
+                .ok_or_else(|| calculation_error(location))
+        }
+        Token::Dimension { value, .. } if !value.is_finite() => Err(calculation_error(location)),
+        Token::Dimension { value, unit, .. } => parse_calculation_dimension(value, &unit, location),
+        Token::ParenthesisBlock => {
+            let nested_depth = checked_calculation_depth(depth, location)?;
+            let operand =
+                input.parse_nested_block(|input| parse_calculation_sum(input, nested_depth))?;
+            Ok(CssCalculationExpression::Group(Box::new(operand)))
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            let nested_depth = checked_calculation_depth(depth, location)?;
+            let operand =
+                input.parse_nested_block(|input| parse_calculation_sum(input, nested_depth))?;
+            Ok(CssCalculationExpression::NestedCalc(Box::new(operand)))
+        }
+        _ => Err(calculation_error(location)),
+    }
+}
+
+fn parse_calculation_dimension<'i>(
+    value: f32,
+    unit: &str,
+    location: cssparser::SourceLocation,
+) -> std::result::Result<CssCalculationExpression, ParseError<'i, Error>> {
+    let parsed = match classify_length_unit(unit) {
+        LengthUnitStatus::Supported(unit) => {
+            CssLengthDimension::try_new(value, unit).map(CssCalculationValue::Length)
+        }
+        LengthUnitStatus::Unknown if unit.eq_ignore_ascii_case("deg") => {
+            CssAngleLiteral::try_new(value, CssAngleUnit::Degrees).map(CssCalculationValue::Angle)
+        }
+        LengthUnitStatus::Unknown if unit.eq_ignore_ascii_case("grad") => {
+            CssAngleLiteral::try_new(value, CssAngleUnit::Gradians).map(CssCalculationValue::Angle)
+        }
+        LengthUnitStatus::Unknown if unit.eq_ignore_ascii_case("rad") => {
+            CssAngleLiteral::try_new(value, CssAngleUnit::Radians).map(CssCalculationValue::Angle)
+        }
+        LengthUnitStatus::Unknown if unit.eq_ignore_ascii_case("turn") => {
+            CssAngleLiteral::try_new(value, CssAngleUnit::Turns).map(CssCalculationValue::Angle)
+        }
+        LengthUnitStatus::Unknown if unit.eq_ignore_ascii_case("s") => {
+            CssDelayLiteral::try_new(value, CssTimeUnit::Seconds).map(CssCalculationValue::Time)
+        }
+        LengthUnitStatus::Unknown if unit.eq_ignore_ascii_case("ms") => {
+            CssDelayLiteral::try_new(value, CssTimeUnit::Milliseconds)
+                .map(CssCalculationValue::Time)
+        }
+        LengthUnitStatus::Unknown if unit.eq_ignore_ascii_case("hz") => {
+            CssFrequencyLiteral::try_new(value, CssFrequencyUnit::Hertz)
+                .map(CssCalculationValue::Frequency)
+        }
+        LengthUnitStatus::Unknown if unit.eq_ignore_ascii_case("khz") => {
+            CssFrequencyLiteral::try_new(value, CssFrequencyUnit::Kilohertz)
+                .map(CssCalculationValue::Frequency)
+        }
+        LengthUnitStatus::Unknown => None,
+    };
+    parsed
+        .map(CssCalculationExpression::Value)
+        .ok_or_else(|| calculation_error(location))
+}
+
+fn checked_calculation_depth<'i>(
+    depth: u16,
+    location: cssparser::SourceLocation,
+) -> std::result::Result<u16, ParseError<'i, Error>> {
+    if depth >= CALCULATION_NESTING_LIMIT {
+        Err(calculation_error(location))
+    } else {
+        Ok(depth + 1)
+    }
+}
+
+const fn calculation_root_accepts(root: CalculationRoot, result_type: CssCalculationType) -> bool {
+    match root {
+        CalculationRoot::Number => matches!(
+            result_type,
+            CssCalculationType::Integer | CssCalculationType::Number
+        ),
+        CalculationRoot::Integer => matches!(result_type, CssCalculationType::Integer),
+        CalculationRoot::Percentage => matches!(result_type, CssCalculationType::Percentage),
+        CalculationRoot::Length => matches!(
+            result_type,
+            CssCalculationType::Length
+                | CssCalculationType::Percentage
+                | CssCalculationType::LengthPercentage
+        ),
+        CalculationRoot::Angle => matches!(
+            result_type,
+            CssCalculationType::Angle
+                | CssCalculationType::Percentage
+                | CssCalculationType::AnglePercentage
+        ),
+        CalculationRoot::Time => matches!(
+            result_type,
+            CssCalculationType::Time
+                | CssCalculationType::Percentage
+                | CssCalculationType::TimePercentage
+        ),
+        CalculationRoot::Frequency => matches!(
+            result_type,
+            CssCalculationType::Frequency
+                | CssCalculationType::Percentage
+                | CssCalculationType::FrequencyPercentage
+        ),
+    }
+}
+
+const fn calculation_type_is_number(result_type: CssCalculationType) -> bool {
+    matches!(
+        result_type,
+        CssCalculationType::Integer | CssCalculationType::Number
+    )
+}
+
+fn calculation_sum_type(
+    left: CssCalculationType,
+    right: CssCalculationType,
+) -> Option<CssCalculationType> {
+    if left == right {
+        return Some(left);
+    }
+    match (left, right) {
+        (CssCalculationType::Integer, CssCalculationType::Number)
+        | (CssCalculationType::Number, CssCalculationType::Integer) => {
+            Some(CssCalculationType::Number)
+        }
+        (CssCalculationType::Length, CssCalculationType::Percentage)
+        | (CssCalculationType::Percentage, CssCalculationType::Length)
+        | (CssCalculationType::LengthPercentage, CssCalculationType::Length)
+        | (CssCalculationType::Length, CssCalculationType::LengthPercentage)
+        | (CssCalculationType::LengthPercentage, CssCalculationType::Percentage)
+        | (CssCalculationType::Percentage, CssCalculationType::LengthPercentage) => {
+            Some(CssCalculationType::LengthPercentage)
+        }
+        (CssCalculationType::Angle, CssCalculationType::Percentage)
+        | (CssCalculationType::Percentage, CssCalculationType::Angle)
+        | (CssCalculationType::AnglePercentage, CssCalculationType::Angle)
+        | (CssCalculationType::Angle, CssCalculationType::AnglePercentage)
+        | (CssCalculationType::AnglePercentage, CssCalculationType::Percentage)
+        | (CssCalculationType::Percentage, CssCalculationType::AnglePercentage) => {
+            Some(CssCalculationType::AnglePercentage)
+        }
+        (CssCalculationType::Time, CssCalculationType::Percentage)
+        | (CssCalculationType::Percentage, CssCalculationType::Time)
+        | (CssCalculationType::TimePercentage, CssCalculationType::Time)
+        | (CssCalculationType::Time, CssCalculationType::TimePercentage)
+        | (CssCalculationType::TimePercentage, CssCalculationType::Percentage)
+        | (CssCalculationType::Percentage, CssCalculationType::TimePercentage) => {
+            Some(CssCalculationType::TimePercentage)
+        }
+        (CssCalculationType::Frequency, CssCalculationType::Percentage)
+        | (CssCalculationType::Percentage, CssCalculationType::Frequency)
+        | (CssCalculationType::FrequencyPercentage, CssCalculationType::Frequency)
+        | (CssCalculationType::Frequency, CssCalculationType::FrequencyPercentage)
+        | (CssCalculationType::FrequencyPercentage, CssCalculationType::Percentage)
+        | (CssCalculationType::Percentage, CssCalculationType::FrequencyPercentage) => {
+            Some(CssCalculationType::FrequencyPercentage)
+        }
+        _ => None,
+    }
+}
+
+const fn calculation_product_type(
+    left: CssCalculationType,
+    right: CssCalculationType,
+) -> Option<CssCalculationType> {
+    match (
+        calculation_type_is_number(left),
+        calculation_type_is_number(right),
+    ) {
+        (true, true)
+            if matches!(left, CssCalculationType::Number)
+                || matches!(right, CssCalculationType::Number) =>
+        {
+            Some(CssCalculationType::Number)
+        }
+        (true, true) => Some(CssCalculationType::Integer),
+        (true, false) => Some(right),
+        (false, true) => Some(left),
+        (false, false) => None,
+    }
+}
+
+const fn calculation_quotient_type(
+    numerator: CssCalculationType,
+    denominator: CssCalculationType,
+) -> Option<CssCalculationType> {
+    if !calculation_type_is_number(denominator) {
+        None
+    } else if calculation_type_is_number(numerator) {
+        Some(CssCalculationType::Number)
+    } else {
+        Some(numerator)
+    }
+}
+
+fn validate_calculation_arithmetic<'i>(
+    expression: &CssCalculationExpression,
+    location: cssparser::SourceLocation,
+) -> std::result::Result<(), ParseError<'i, Error>> {
+    match calculation_numeric_value(expression) {
+        Ok(_) => Ok(()),
+        Err(()) => Err(calculation_error(location)),
+    }
+}
+
+fn calculation_numeric_value(expression: &CssCalculationExpression) -> Result<Option<f32>, ()> {
+    match expression {
+        CssCalculationExpression::Value(CssCalculationValue::Integer(value)) => {
+            Ok(Some(*value as f32))
+        }
+        CssCalculationExpression::Value(CssCalculationValue::Number(value)) => {
+            Ok(Some(value.value()))
+        }
+        CssCalculationExpression::Value(
+            CssCalculationValue::Percentage(_)
+            | CssCalculationValue::Length(_)
+            | CssCalculationValue::Angle(_)
+            | CssCalculationValue::Time(_)
+            | CssCalculationValue::Frequency(_),
+        ) => Ok(None),
+        CssCalculationExpression::Sum { terms, .. } => {
+            let mut value = None;
+            for term in terms {
+                let term_value = calculation_numeric_value(&term.expression)?;
+                value = match (value, term_value, term.operator) {
+                    (None, next, None) => next,
+                    (Some(current), Some(next), Some(CssCalculationSumOperator::Add)) => {
+                        Some(current + next)
+                    }
+                    (Some(current), Some(next), Some(CssCalculationSumOperator::Subtract)) => {
+                        Some(current - next)
+                    }
+                    _ => None,
+                };
+                if matches!(value, Some(value) if !value.is_finite()) {
+                    return Err(());
+                }
+            }
+            Ok(value)
+        }
+        CssCalculationExpression::Product { factors, .. } => {
+            let mut value = None;
+            for factor in factors {
+                let factor_value = calculation_numeric_value(&factor.expression)?;
+                value = match (value, factor_value, factor.operator) {
+                    (None, next, None) => next,
+                    (Some(current), Some(next), Some(CssCalculationProductOperator::Multiply)) => {
+                        Some(current * next)
+                    }
+                    (Some(_), Some(0.0), Some(CssCalculationProductOperator::Divide)) => {
+                        return Err(());
+                    }
+                    (Some(current), Some(next), Some(CssCalculationProductOperator::Divide)) => {
+                        Some(current / next)
+                    }
+                    _ => None,
+                };
+                if matches!(value, Some(value) if !value.is_finite()) {
+                    return Err(());
+                }
+            }
+            Ok(value)
+        }
+        CssCalculationExpression::Negate(operand) => {
+            let value = calculation_numeric_value(operand)?.map(|value| -value);
+            if matches!(value, Some(value) if !value.is_finite()) {
+                Err(())
+            } else {
+                Ok(value)
+            }
+        }
+        CssCalculationExpression::Group(operand)
+        | CssCalculationExpression::NestedCalc(operand) => calculation_numeric_value(operand),
+    }
+}
+
+fn calculation_error<'i>(location: cssparser::SourceLocation) -> ParseError<'i, Error> {
+    unsupported_value_at(location, None, "invalid typed calculation")
+}
+
 pub(super) fn parse_calc_length_with_grammar<'i, 't>(
     input: &mut Parser<'i, 't>,
     grammar: LengthGrammar,
 ) -> std::result::Result<CssCalcLength, ParseError<'i, Error>> {
+    let first = CssCalcLengthTerm::add(parse_calc_component(input, grammar)?);
     let mut terms = Vec::new();
-    terms.push(CssCalcLengthTerm::add(parse_calc_component(
-        input, grammar,
-    )?));
 
     while !input.is_exhausted() {
         let location = input.current_source_location();
@@ -310,10 +778,6 @@ pub(super) fn parse_calc_length_with_grammar<'i, 't>(
         terms.push(operator(component));
     }
 
-    let mut terms = terms.into_iter();
-    let first = terms
-        .next()
-        .expect("calc parser records the first term before parsing operators");
     Ok(CssCalcLength::sum(first, terms))
 }
 
@@ -905,5 +1369,272 @@ fn map_predefined_color_space(color_space: ParsedPredefinedColorSpace) -> CssPre
         ParsedPredefinedColorSpace::Rec2020 => CssPredefinedColorSpace::Rec2020,
         ParsedPredefinedColorSpace::XyzD50 => CssPredefinedColorSpace::XyzD50,
         ParsedPredefinedColorSpace::XyzD65 => CssPredefinedColorSpace::XyzD65,
+    }
+}
+
+#[cfg(test)]
+mod typed_calculation_tests {
+    use cssparser::{Parser, ParserInput};
+
+    use super::*;
+    use crate::error::{CssErrorCode, from_parse_error};
+
+    fn parse(
+        source: &str,
+        root: CalculationRoot,
+    ) -> Result<CssCalculationExpression, crate::Error> {
+        let mut input = ParserInput::new(source);
+        let mut parser = Parser::new(&mut input);
+        parser
+            .parse_entirely(|input| parse_typed_calculation(input, root))
+            .map_err(|error| from_parse_error(source, error))
+    }
+
+    #[test]
+    fn typed_root_parser_preserves_all_compound_node_kinds_and_precedence() {
+        let number = parse("1 + 6 / 2", CalculationRoot::Number).unwrap();
+        assert_eq!(number.result_type(), CssCalculationType::Number);
+        let CssCalculationExpressionRef::Sum(sum) = number.as_ref() else {
+            panic!("expected number sum");
+        };
+        assert_eq!(sum.len(), 2);
+        assert_eq!(sum.term(0).unwrap().operator(), None);
+        assert_eq!(
+            sum.term(1).unwrap().operator(),
+            Some(CssCalculationSumOperator::Add)
+        );
+        let CssCalculationExpressionRef::Product(quotient) = sum.term(1).unwrap().expression()
+        else {
+            panic!("division must bind inside the sum");
+        };
+        assert_eq!(quotient.len(), 2);
+        assert_eq!(quotient.factor(0).unwrap().operator(), None);
+        assert_eq!(
+            quotient.factor(1).unwrap().operator(),
+            Some(CssCalculationProductOperator::Divide)
+        );
+
+        let integer = parse("1 + 2 * 3", CalculationRoot::Integer).unwrap();
+        assert_eq!(integer.result_type(), CssCalculationType::Integer);
+        let CssCalculationExpressionRef::Sum(integer_sum) = integer.as_ref() else {
+            panic!("expected integer sum");
+        };
+        let CssCalculationExpressionRef::Product(integer_product) =
+            integer_sum.term(1).unwrap().expression()
+        else {
+            panic!("expected integer product");
+        };
+        assert_eq!(
+            integer_product.factor(1).unwrap().operator(),
+            Some(CssCalculationProductOperator::Multiply)
+        );
+        assert!(integer_product.factor(integer_product.len()).is_none());
+
+        let percentage = parse("10% - 20%", CalculationRoot::Percentage).unwrap();
+        assert_eq!(percentage.result_type(), CssCalculationType::Percentage);
+        let CssCalculationExpressionRef::Sum(percentage_sum) = percentage.as_ref() else {
+            panic!("expected percentage sum");
+        };
+        assert_eq!(
+            percentage_sum.term(1).unwrap().operator(),
+            Some(CssCalculationSumOperator::Subtract)
+        );
+        assert!(percentage_sum.term(percentage_sum.len()).is_none());
+
+        let length = parse("1px + (2em * 3)", CalculationRoot::Length).unwrap();
+        let CssCalculationExpressionRef::Sum(sum) = length.as_ref() else {
+            panic!("expected length sum");
+        };
+        let CssCalculationExpressionRef::Group(group) = sum.term(1).unwrap().expression() else {
+            panic!("expected retained authored group");
+        };
+        assert!(matches!(
+            group.operand(),
+            CssCalculationExpressionRef::Product(_)
+        ));
+
+        let angle = parse("1deg + calc(2turn)", CalculationRoot::Angle).unwrap();
+        assert_eq!(angle.result_type(), CssCalculationType::Angle);
+        let CssCalculationExpressionRef::Sum(sum) = angle.as_ref() else {
+            panic!("expected angle sum");
+        };
+        let CssCalculationExpressionRef::NestedCalc(nested) = sum.term(1).unwrap().expression()
+        else {
+            panic!("expected retained nested calc");
+        };
+        assert!(matches!(
+            nested.operand(),
+            CssCalculationExpressionRef::Value(CssCalculationValueRef::Angle(value))
+                if value.value() == 2.0 && value.unit() == CssAngleUnit::Turns
+        ));
+
+        let time = parse("1s + -(2ms)", CalculationRoot::Time).unwrap();
+        assert_eq!(time.result_type(), CssCalculationType::Time);
+        let CssCalculationExpressionRef::Sum(sum) = time.as_ref() else {
+            panic!("expected time sum");
+        };
+        let CssCalculationExpressionRef::Negate(negate) = sum.term(1).unwrap().expression() else {
+            panic!("expected retained authored negation");
+        };
+        assert!(matches!(
+            negate.operand(),
+            CssCalculationExpressionRef::Group(_)
+        ));
+
+        let frequency = parse("1khz / 2", CalculationRoot::Frequency).unwrap();
+        assert_eq!(frequency.result_type(), CssCalculationType::Frequency);
+        assert!(matches!(
+            frequency.as_ref(),
+            CssCalculationExpressionRef::Product(_)
+        ));
+    }
+
+    #[test]
+    fn typed_root_parser_promotes_only_compatible_percentage_dimensions() {
+        for (root, expected) in [
+            (
+                CalculationRoot::Length,
+                CssCalculationType::LengthPercentage,
+            ),
+            (CalculationRoot::Angle, CssCalculationType::AnglePercentage),
+            (CalculationRoot::Time, CssCalculationType::TimePercentage),
+            (
+                CalculationRoot::Frequency,
+                CssCalculationType::FrequencyPercentage,
+            ),
+        ] {
+            let unit = match root {
+                CalculationRoot::Length => "px",
+                CalculationRoot::Angle => "deg",
+                CalculationRoot::Time => "s",
+                CalculationRoot::Frequency => "hz",
+                CalculationRoot::Number
+                | CalculationRoot::Integer
+                | CalculationRoot::Percentage => unreachable!("test-owned root table"),
+            };
+            let expression = parse(&format!("1{unit} + 2%"), root).unwrap();
+            assert_eq!(expression.result_type(), expected);
+        }
+    }
+
+    #[test]
+    fn typed_root_parser_rejects_invalid_dimensions_divisors_arithmetic_and_consumption() {
+        let cases = [
+            (
+                "1px + 2deg",
+                CalculationRoot::Length,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "1px * 2em",
+                CalculationRoot::Length,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "1px / 2em",
+                CalculationRoot::Length,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "1px / 0",
+                CalculationRoot::Length,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "1px / -0",
+                CalculationRoot::Length,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "1px / calc(1 - 1)",
+                CalculationRoot::Length,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "3.4e38 * 2",
+                CalculationRoot::Number,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "1e999",
+                CalculationRoot::Number,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "2147483648",
+                CalculationRoot::Integer,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "1e999%",
+                CalculationRoot::Percentage,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "1e999px",
+                CalculationRoot::Length,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "1e999deg",
+                CalculationRoot::Angle,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            ("1e999s", CalculationRoot::Time, CssErrorCode::UnexpectedEnd),
+            (
+                "1e999hz",
+                CalculationRoot::Frequency,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "1px +",
+                CalculationRoot::Length,
+                CssErrorCode::UnexpectedEnd,
+            ),
+            (
+                "1px red",
+                CalculationRoot::Length,
+                CssErrorCode::UnexpectedToken,
+            ),
+            ("1px", CalculationRoot::Number, CssErrorCode::UnexpectedEnd),
+        ];
+
+        for (source, root, code) in cases {
+            let error = parse(source, root).expect_err(source);
+            assert_eq!(error.code(), code, "{source}: {error:?}");
+        }
+    }
+
+    #[test]
+    fn typed_root_parser_accepts_256_nested_calculations_and_rejects_257() {
+        for depth in [255_usize, 256] {
+            let source = format!("{}1px{}", "calc(".repeat(depth), ")".repeat(depth));
+            let result_type = std::thread::scope(|scope| {
+                std::thread::Builder::new()
+                    .stack_size(16 * 1024 * 1024)
+                    .spawn_scoped(scope, || {
+                        parse(&source, CalculationRoot::Length)
+                            .map(|expression| expression.result_type())
+                    })
+                    .unwrap()
+                    .join()
+                    .unwrap()
+            })
+            .unwrap();
+            assert_eq!(result_type, CssCalculationType::Length);
+        }
+
+        let depth = 257_usize;
+        let source = format!("{}1px{}", "calc(".repeat(depth), ")".repeat(depth));
+        let error = std::thread::scope(|scope| {
+            std::thread::Builder::new()
+                .stack_size(16 * 1024 * 1024)
+                .spawn_scoped(scope, || parse(&source, CalculationRoot::Length))
+                .unwrap()
+                .join()
+                .unwrap()
+        })
+        .expect_err("depth 257 must fail");
+        assert_eq!(error.code(), CssErrorCode::UnexpectedEnd);
     }
 }

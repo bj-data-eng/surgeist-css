@@ -146,6 +146,28 @@ let _ = validate_style_attribute("color: red");
 //! include a wildcard. This inspection model does not change parsing, recovery,
 //! or diagnostics.
 //!
+//! # Typed authored calculations
+//!
+//! Calculation roots preserve authored numeric values and units without resolving layout,
+//! timelines, or device context. Literal construction is checked, and every expression is
+//! inspected through borrowed views while the owned compound representation remains private.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssAngleCalculation, CssAngleUnit, CssCalculationExpressionRef,
+//!     CssCalculationType, CssCalculationValueRef,
+//! };
+//!
+//! let angle = CssAngleCalculation::try_literal(-0.5, CssAngleUnit::Turns)
+//!     .expect("finite authored angle");
+//! assert_eq!(angle.result_type(), CssCalculationType::Angle);
+//! assert!(matches!(
+//!     angle.expression(),
+//!     CssCalculationExpressionRef::Value(CssCalculationValueRef::Angle(value))
+//!         if value.value() == -0.5 && value.unit() == CssAngleUnit::Turns
+//! ));
+//! ```
+//!
 //! # Diagnostics and coordinates
 //!
 //! Each [`CssRecoveryDiagnostic`] exposes a typed [`ErrorKind`] and stable

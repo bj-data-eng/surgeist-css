@@ -8555,6 +8555,457 @@ pub enum CssAttributeCaseSensitivity {
     ExplicitSensitive,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssCalculationType {
+    Integer,
+    Number,
+    Percentage,
+    Length,
+    LengthPercentage,
+    Angle,
+    AnglePercentage,
+    Time,
+    TimePercentage,
+    Frequency,
+    FrequencyPercentage,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssAngleUnit {
+    Degrees,
+    Gradians,
+    Radians,
+    Turns,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssAngleLiteral {
+    value: CssFiniteNumber,
+    unit: CssAngleUnit,
+}
+
+impl CssAngleLiteral {
+    #[must_use]
+    pub fn try_new(value: f32, unit: CssAngleUnit) -> Option<Self> {
+        CssFiniteNumber::try_new(value).map(|value| Self { value, unit })
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        self.value.value()
+    }
+
+    #[must_use]
+    pub const fn unit(self) -> CssAngleUnit {
+        self.unit
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssFrequencyUnit {
+    Hertz,
+    Kilohertz,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssFrequencyLiteral {
+    value: CssFiniteNumber,
+    unit: CssFrequencyUnit,
+}
+
+impl CssFrequencyLiteral {
+    #[must_use]
+    pub fn try_new(value: f32, unit: CssFrequencyUnit) -> Option<Self> {
+        CssFiniteNumber::try_new(value).map(|value| Self { value, unit })
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        self.value.value()
+    }
+
+    #[must_use]
+    pub const fn unit(self) -> CssFrequencyUnit {
+        self.unit
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssDelayLiteral {
+    value: CssFiniteNumber,
+    unit: CssTimeUnit,
+}
+
+impl CssDelayLiteral {
+    #[must_use]
+    pub fn try_new(value: f32, unit: CssTimeUnit) -> Option<Self> {
+        CssFiniteNumber::try_new(value).map(|value| Self { value, unit })
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        self.value.value()
+    }
+
+    #[must_use]
+    pub const fn unit(self) -> CssTimeUnit {
+        self.unit
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum CssCalculationValue {
+    Integer(i32),
+    Number(CssFiniteNumber),
+    Percentage(CssFiniteNumber),
+    Length(CssLengthDimension),
+    Angle(CssAngleLiteral),
+    Time(CssDelayLiteral),
+    Frequency(CssFrequencyLiteral),
+}
+
+impl CssCalculationValue {
+    const fn result_type(&self) -> CssCalculationType {
+        match self {
+            Self::Integer(_) => CssCalculationType::Integer,
+            Self::Number(_) => CssCalculationType::Number,
+            Self::Percentage(_) => CssCalculationType::Percentage,
+            Self::Length(_) => CssCalculationType::Length,
+            Self::Angle(_) => CssCalculationType::Angle,
+            Self::Time(_) => CssCalculationType::Time,
+            Self::Frequency(_) => CssCalculationType::Frequency,
+        }
+    }
+
+    const fn as_ref(&self) -> CssCalculationValueRef {
+        match self {
+            Self::Integer(value) => CssCalculationValueRef::Integer(*value),
+            Self::Number(value) => CssCalculationValueRef::Number(*value),
+            Self::Percentage(value) => CssCalculationValueRef::Percentage(*value),
+            Self::Length(value) => CssCalculationValueRef::Length(*value),
+            Self::Angle(value) => CssCalculationValueRef::Angle(*value),
+            Self::Time(value) => CssCalculationValueRef::Time(*value),
+            Self::Frequency(value) => CssCalculationValueRef::Frequency(*value),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum CssCalculationExpression {
+    Value(CssCalculationValue),
+    Sum {
+        terms: Vec<CssCalculationSumTerm>,
+        result_type: CssCalculationType,
+    },
+    Product {
+        factors: Vec<CssCalculationProductFactor>,
+        result_type: CssCalculationType,
+    },
+    Negate(Box<Self>),
+    Group(Box<Self>),
+    NestedCalc(Box<Self>),
+}
+
+impl CssCalculationExpression {
+    pub(crate) const fn result_type(&self) -> CssCalculationType {
+        match self {
+            Self::Value(value) => value.result_type(),
+            Self::Sum { result_type, .. } | Self::Product { result_type, .. } => *result_type,
+            Self::Negate(operand) | Self::Group(operand) | Self::NestedCalc(operand) => {
+                operand.result_type()
+            }
+        }
+    }
+
+    pub(crate) fn as_ref(&self) -> CssCalculationExpressionRef<'_> {
+        match self {
+            Self::Value(value) => CssCalculationExpressionRef::Value(value.as_ref()),
+            Self::Sum { terms, .. } => {
+                CssCalculationExpressionRef::Sum(CssCalculationSumRef { terms })
+            }
+            Self::Product { factors, .. } => {
+                CssCalculationExpressionRef::Product(CssCalculationProductRef { factors })
+            }
+            Self::Negate(operand) => {
+                CssCalculationExpressionRef::Negate(CssCalculationUnaryRef { operand })
+            }
+            Self::Group(operand) => {
+                CssCalculationExpressionRef::Group(CssCalculationUnaryRef { operand })
+            }
+            Self::NestedCalc(operand) => {
+                CssCalculationExpressionRef::NestedCalc(CssCalculationUnaryRef { operand })
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CssCalculationSumTerm {
+    pub(crate) operator: Option<CssCalculationSumOperator>,
+    pub(crate) expression: CssCalculationExpression,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CssCalculationProductFactor {
+    pub(crate) operator: Option<CssCalculationProductOperator>,
+    pub(crate) expression: CssCalculationExpression,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssCalculationValueRef {
+    Integer(i32),
+    Number(CssFiniteNumber),
+    Percentage(CssFiniteNumber),
+    Length(CssLengthDimension),
+    Angle(CssAngleLiteral),
+    Time(CssDelayLiteral),
+    Frequency(CssFrequencyLiteral),
+}
+
+#[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
+pub enum CssCalculationExpressionRef<'a> {
+    Value(CssCalculationValueRef),
+    Sum(CssCalculationSumRef<'a>),
+    Product(CssCalculationProductRef<'a>),
+    Negate(CssCalculationUnaryRef<'a>),
+    Group(CssCalculationUnaryRef<'a>),
+    NestedCalc(CssCalculationUnaryRef<'a>),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CssCalculationSumRef<'a> {
+    terms: &'a [CssCalculationSumTerm],
+}
+
+impl<'a> CssCalculationSumRef<'a> {
+    #[must_use]
+    #[expect(
+        clippy::len_without_is_empty,
+        reason = "the reviewed calculation view exposes only non-empty parser-owned sums"
+    )]
+    pub const fn len(self) -> usize {
+        self.terms.len()
+    }
+
+    #[must_use]
+    pub fn term(self, index: usize) -> Option<CssCalculationSumTermRef<'a>> {
+        self.terms.get(index).map(|term| CssCalculationSumTermRef {
+            operator: term.operator,
+            expression: &term.expression,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CssCalculationSumTermRef<'a> {
+    operator: Option<CssCalculationSumOperator>,
+    expression: &'a CssCalculationExpression,
+}
+
+impl<'a> CssCalculationSumTermRef<'a> {
+    #[must_use]
+    pub const fn operator(self) -> Option<CssCalculationSumOperator> {
+        self.operator
+    }
+
+    #[must_use]
+    pub fn expression(self) -> CssCalculationExpressionRef<'a> {
+        self.expression.as_ref()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CssCalculationProductRef<'a> {
+    factors: &'a [CssCalculationProductFactor],
+}
+
+impl<'a> CssCalculationProductRef<'a> {
+    #[must_use]
+    #[expect(
+        clippy::len_without_is_empty,
+        reason = "the reviewed calculation view exposes only non-empty parser-owned products"
+    )]
+    pub const fn len(self) -> usize {
+        self.factors.len()
+    }
+
+    #[must_use]
+    pub fn factor(self, index: usize) -> Option<CssCalculationProductFactorRef<'a>> {
+        self.factors
+            .get(index)
+            .map(|factor| CssCalculationProductFactorRef {
+                operator: factor.operator,
+                expression: &factor.expression,
+            })
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CssCalculationProductFactorRef<'a> {
+    operator: Option<CssCalculationProductOperator>,
+    expression: &'a CssCalculationExpression,
+}
+
+impl<'a> CssCalculationProductFactorRef<'a> {
+    #[must_use]
+    pub const fn operator(self) -> Option<CssCalculationProductOperator> {
+        self.operator
+    }
+
+    #[must_use]
+    pub fn expression(self) -> CssCalculationExpressionRef<'a> {
+        self.expression.as_ref()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CssCalculationUnaryRef<'a> {
+    operand: &'a CssCalculationExpression,
+}
+
+impl<'a> CssCalculationUnaryRef<'a> {
+    #[must_use]
+    pub fn operand(self) -> CssCalculationExpressionRef<'a> {
+        self.operand.as_ref()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssCalculationSumOperator {
+    Add,
+    Subtract,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssCalculationProductOperator {
+    Multiply,
+    Divide,
+}
+
+macro_rules! calculation_root {
+    ($name:ident) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $name {
+            expression: CssCalculationExpression,
+        }
+
+        impl $name {
+            pub(crate) const fn from_expression(expression: CssCalculationExpression) -> Self {
+                Self { expression }
+            }
+
+            #[must_use]
+            pub fn expression(&self) -> CssCalculationExpressionRef<'_> {
+                self.expression.as_ref()
+            }
+
+            #[must_use]
+            pub const fn result_type(&self) -> CssCalculationType {
+                self.expression.result_type()
+            }
+        }
+    };
+}
+
+calculation_root!(CssNumberCalculation);
+calculation_root!(CssIntegerCalculation);
+calculation_root!(CssPercentageCalculation);
+calculation_root!(CssLengthCalculation);
+calculation_root!(CssAngleCalculation);
+calculation_root!(CssTimeCalculation);
+calculation_root!(CssFrequencyCalculation);
+
+impl CssNumberCalculation {
+    #[must_use]
+    pub fn try_literal(value: f32) -> Option<Self> {
+        CssFiniteNumber::try_new(value).map(|value| {
+            Self::from_expression(CssCalculationExpression::Value(
+                CssCalculationValue::Number(value),
+            ))
+        })
+    }
+}
+
+impl CssIntegerCalculation {
+    #[must_use]
+    pub const fn literal(value: i32) -> Self {
+        Self::from_expression(CssCalculationExpression::Value(
+            CssCalculationValue::Integer(value),
+        ))
+    }
+}
+
+impl CssPercentageCalculation {
+    #[must_use]
+    pub fn try_literal(value: f32) -> Option<Self> {
+        CssFiniteNumber::try_new(value).map(|value| {
+            Self::from_expression(CssCalculationExpression::Value(
+                CssCalculationValue::Percentage(value),
+            ))
+        })
+    }
+}
+
+impl CssLengthCalculation {
+    #[must_use]
+    pub fn try_dimension(value: f32, unit: CssLengthUnit) -> Option<Self> {
+        CssLengthDimension::try_new(value, unit).map(|value| {
+            Self::from_expression(CssCalculationExpression::Value(
+                CssCalculationValue::Length(value),
+            ))
+        })
+    }
+
+    #[must_use]
+    pub fn try_percentage(value: f32) -> Option<Self> {
+        CssFiniteNumber::try_new(value).map(|value| {
+            Self::from_expression(CssCalculationExpression::Value(
+                CssCalculationValue::Percentage(value),
+            ))
+        })
+    }
+}
+
+impl CssAngleCalculation {
+    #[must_use]
+    pub fn try_literal(value: f32, unit: CssAngleUnit) -> Option<Self> {
+        CssAngleLiteral::try_new(value, unit).map(|value| {
+            Self::from_expression(CssCalculationExpression::Value(CssCalculationValue::Angle(
+                value,
+            )))
+        })
+    }
+}
+
+impl CssTimeCalculation {
+    #[must_use]
+    pub fn try_literal(value: f32, unit: CssTimeUnit) -> Option<Self> {
+        CssDelayLiteral::try_new(value, unit).map(|value| {
+            Self::from_expression(CssCalculationExpression::Value(CssCalculationValue::Time(
+                value,
+            )))
+        })
+    }
+}
+
+impl CssFrequencyCalculation {
+    #[must_use]
+    pub fn try_literal(value: f32, unit: CssFrequencyUnit) -> Option<Self> {
+        CssFrequencyLiteral::try_new(value, unit).map(|value| {
+            Self::from_expression(CssCalculationExpression::Value(
+                CssCalculationValue::Frequency(value),
+            ))
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum CssCalcLength {

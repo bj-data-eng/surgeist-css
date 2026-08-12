@@ -316,12 +316,13 @@ impl CssExclusionMetadata {
     }
 }
 
-/// Immutable support metadata for one atomic parser-facing CSS production.
+/// Immutable support metadata for one CSS production or preserved baseline alias.
 ///
 /// Records describe authored syntax only. They do not dispatch the parser,
 /// validate source, perform selector/query matching, or resolve authored values.
-/// Fields and construction are catalog-owned so stable identity and status
-/// invariants cannot be forged by downstream callers.
+/// The four aggregate aliases expose immutable atomic targets and do not own
+/// parser dispatch. Fields and construction are catalog-owned so stable identity
+/// and status invariants cannot be forged by downstream callers.
 ///
 /// ```compile_fail
 /// use surgeist_css::feature_catalog;
@@ -340,8 +341,15 @@ pub struct CssFeatureMetadata {
     supported_subset: Option<&'static str>,
     unsupported_remainder: Option<&'static str>,
     recognized_unsupported_code: Option<CssErrorCode>,
+    disposition: CssConformanceDisposition,
     property: Option<CssKnownProperty>,
     property_aliases: &'static [&'static str],
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum CssConformanceDisposition {
+    Atomic,
+    BaselineAlias(&'static [CssFeatureId]),
 }
 
 impl CssFeatureMetadata {
@@ -362,6 +370,7 @@ impl CssFeatureMetadata {
             supported_subset: None,
             unsupported_remainder: None,
             recognized_unsupported_code: None,
+            disposition: CssConformanceDisposition::Atomic,
             property: None,
             property_aliases: &[],
         }
@@ -386,6 +395,32 @@ impl CssFeatureMetadata {
             supported_subset: Some(supported_subset),
             unsupported_remainder: Some(unsupported_remainder),
             recognized_unsupported_code: None,
+            disposition: CssConformanceDisposition::Atomic,
+            property: None,
+            property_aliases: &[],
+        }
+    }
+
+    const fn baseline_alias(
+        id: &'static str,
+        kind: CssFeatureKind,
+        spelling: &'static str,
+        source: CssSpecificationSource,
+        production: &'static str,
+        boundary: (&'static str, &'static str),
+        targets: &'static [CssFeatureId],
+    ) -> Self {
+        Self {
+            id: CssFeatureId::new(id),
+            kind,
+            spelling,
+            source,
+            production,
+            status: CssSupportStatus::Partial,
+            supported_subset: Some(boundary.0),
+            unsupported_remainder: Some(boundary.1),
+            recognized_unsupported_code: None,
+            disposition: CssConformanceDisposition::BaselineAlias(targets),
             property: None,
             property_aliases: &[],
         }
@@ -409,6 +444,7 @@ impl CssFeatureMetadata {
             supported_subset: None,
             unsupported_remainder: None,
             recognized_unsupported_code: Some(code),
+            disposition: CssConformanceDisposition::Atomic,
             property: None,
             property_aliases: &[],
         }
@@ -418,18 +454,20 @@ impl CssFeatureMetadata {
         id: &'static str,
         property: CssKnownProperty,
         canonical_name: &'static str,
+        production: &'static str,
         aliases: &'static [&'static str],
     ) -> Self {
         Self {
             id: CssFeatureId::new(id),
             kind: CssFeatureKind::Property,
             spelling: canonical_name,
-            source: BASELINE_PARSER,
-            production: canonical_name,
+            source: property_source(property),
+            production: property_production(property, production),
             status: CssSupportStatus::Partial,
             supported_subset: Some(PROPERTY_SUBSET),
             unsupported_remainder: Some(PROPERTY_REMAINDER),
             recognized_unsupported_code: None,
+            disposition: CssConformanceDisposition::Atomic,
             property: Some(property),
             property_aliases: aliases,
         }
@@ -489,6 +527,17 @@ impl CssFeatureMetadata {
     #[must_use]
     pub const fn recognized_unsupported_code(&self) -> Option<CssErrorCode> {
         self.recognized_unsupported_code
+    }
+
+    /// Returns the immutable atomic targets of a preserved I01 aggregate alias.
+    ///
+    /// Atomic parser-facing records return an empty slice.
+    #[must_use]
+    pub const fn baseline_alias_targets(&self) -> &'static [CssFeatureId] {
+        match self.disposition {
+            CssConformanceDisposition::Atomic => &[],
+            CssConformanceDisposition::BaselineAlias(targets) => targets,
+        }
     }
 }
 
@@ -1043,93 +1092,20 @@ const X_GRID_TOLERANCE_BASE: CssSpecificationSource = CssSpecificationSource::fr
     "bc5394f:src/parser/grid.rs",
 );
 
-// These exact I01 sources remain active until T3 atomizes their feature records.
-const I01_NAMESPACES3: CssSpecificationSource = dated_source!(
-    "I01-NAMESPACES3-MOVING",
-    "CSS Namespaces",
-    "3 moving reference",
-    CssSpecificationTier::LaterStandard,
-    "https://www.w3.org/TR/css3-namespace/"
-);
-const I01_CONDITIONAL3: CssSpecificationSource = dated_source!(
-    "I01-CONDITIONAL3-MOVING",
-    "CSS Conditional Rules",
-    "3 moving reference",
-    CssSpecificationTier::LaterStandard,
-    "https://www.w3.org/TR/css-conditional-3/"
-);
-const I01_COUNTERSTYLES3: CssSpecificationSource = dated_source!(
-    "I01-COUNTERSTYLES3-MOVING",
-    "CSS Counter Styles",
-    "3 moving reference",
-    CssSpecificationTier::LaterStandard,
-    "https://www.w3.org/TR/css-counter-styles-3/"
-);
-const I01_CSS2_PAGE: CssSpecificationSource = dated_source!(
-    "I01-CSS2-PAGE",
-    "CSS",
-    "2.1 page chapter",
-    CssSpecificationTier::LaterStandard,
-    "https://www.w3.org/TR/CSS2/page.html"
-);
-const I01_FONTS4: CssSpecificationSource = dated_source!(
-    "I01-FONTS4-MOVING",
-    "CSS Fonts",
-    "4 moving reference",
-    CssSpecificationTier::LaterStandard,
-    "https://www.w3.org/TR/css-fonts-4/"
-);
-
 const CSS_SYNTAX_3: CssSpecificationSource = O_SYNTAX3;
 const CSS_STYLE_ATTRIBUTES: CssSpecificationSource = O_STYLE_ATTR;
 const CSS_CASCADE_4: CssSpecificationSource = O_CASCADE4;
-const CSS_NAMESPACES_3: CssSpecificationSource = I01_NAMESPACES3;
-const CSS_CONDITIONAL_3: CssSpecificationSource = I01_CONDITIONAL3;
-const CSS_COUNTER_STYLES_3: CssSpecificationSource = I01_COUNTERSTYLES3;
-const CSS_2_PAGE: CssSpecificationSource = I01_CSS2_PAGE;
-const CSS_FONTS_4: CssSpecificationSource = I01_FONTS4;
-
-const BASELINE_PARSER: CssSpecificationSource = CssSpecificationSource::from_repository(
-    "I01-BASE-PARSER",
-    "Surgeist CSS parser",
-    "I01 baseline",
-    "4b288d6:src/parser/mod.rs",
-);
-const BASELINE_FONT_FACE: CssSpecificationSource = CssSpecificationSource::from_repository(
-    "I01-BASE-FONT-FACE",
-    "Surgeist CSS font-face parser",
-    "I01 baseline",
-    "4b288d6:src/parser/font_face.rs",
-);
-const BASELINE_KEYFRAMES: CssSpecificationSource = CssSpecificationSource::from_repository(
-    "I01-BASE-KEYFRAMES",
-    "Surgeist CSS keyframes parser",
-    "I01 baseline",
-    "4b288d6:src/parser/keyframes.rs",
-);
-const BASELINE_VARIABLES: CssSpecificationSource = CssSpecificationSource::from_repository(
-    "I01-BASE-VARIABLES",
-    "Surgeist CSS variables parser",
-    "I01 baseline",
-    "4b288d6:src/parser/variables.rs",
-);
 const BASELINE_SELECTORS: CssSpecificationSource = CssSpecificationSource::from_repository(
     "I01-BASE-SELECTORS",
     "Surgeist CSS selectors parser",
     "I01 baseline",
-    "4b288d6:src/parser/selectors.rs",
-);
-const BASELINE_NESTING: CssSpecificationSource = CssSpecificationSource::from_repository(
-    "I01-BASE-NESTING",
-    "Surgeist CSS nesting parser",
-    "I01 baseline",
-    "4b288d6:src/parser/nesting.rs",
+    "bc5394f:src/parser/selectors.rs",
 );
 const BASELINE_QUERIES: CssSpecificationSource = CssSpecificationSource::from_repository(
     "I01-BASE-QUERIES",
     "Surgeist CSS query parser",
     "I01 baseline",
-    "4b288d6:src/parser/queries.rs",
+    "bc5394f:src/parser/queries.rs",
 );
 
 static SPECIFICATION_SOURCES: &[CssSpecificationSource] = &[
@@ -1199,17 +1175,7 @@ static SPECIFICATION_SOURCES: &[CssSpecificationSource] = &[
     X_FILTER2_BASE,
     X_DISPLAY_MODE_BASE,
     X_GRID_TOLERANCE_BASE,
-    I01_NAMESPACES3,
-    I01_CONDITIONAL3,
-    I01_COUNTERSTYLES3,
-    I01_CSS2_PAGE,
-    I01_FONTS4,
-    BASELINE_PARSER,
-    BASELINE_FONT_FACE,
-    BASELINE_KEYFRAMES,
-    BASELINE_VARIABLES,
     BASELINE_SELECTORS,
-    BASELINE_NESTING,
     BASELINE_QUERIES,
 ];
 
@@ -1711,19 +1677,324 @@ const PROPERTY_SUBSET: &str = "The property-specific parser behavior at 4b288d6:
 const PROPERTY_REMAINDER: &str =
     "Other valid forms of the cited property production are outside the I01 subset.";
 
+const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
+    match property {
+        CssKnownProperty::All => O_CASCADE4,
+        CssKnownProperty::Display
+        | CssKnownProperty::Position
+        | CssKnownProperty::Overflow
+        | CssKnownProperty::Float
+        | CssKnownProperty::Clear
+        | CssKnownProperty::Visibility
+        | CssKnownProperty::Content
+        | CssKnownProperty::ListStyleType
+        | CssKnownProperty::ListStylePosition
+        | CssKnownProperty::ListStyleImage
+        | CssKnownProperty::ListStyle
+        | CssKnownProperty::CounterReset
+        | CssKnownProperty::CounterIncrement
+        | CssKnownProperty::Width
+        | CssKnownProperty::Height
+        | CssKnownProperty::MinWidth
+        | CssKnownProperty::MinHeight
+        | CssKnownProperty::MaxWidth
+        | CssKnownProperty::MaxHeight
+        | CssKnownProperty::LineHeight
+        | CssKnownProperty::TextAlign
+        | CssKnownProperty::TextIndent
+        | CssKnownProperty::VerticalAlign
+        | CssKnownProperty::LetterSpacing
+        | CssKnownProperty::WhiteSpace
+        | CssKnownProperty::TextDecoration
+        | CssKnownProperty::TextTransform
+        | CssKnownProperty::Top
+        | CssKnownProperty::Right
+        | CssKnownProperty::Bottom
+        | CssKnownProperty::Left
+        | CssKnownProperty::ZIndex => O_CSS2,
+        CssKnownProperty::BoxSizing
+        | CssKnownProperty::TextOverflow
+        | CssKnownProperty::Cursor
+        | CssKnownProperty::Outline
+        | CssKnownProperty::OutlineColor
+        | CssKnownProperty::OutlineStyle
+        | CssKnownProperty::OutlineWidth => O_UI3,
+        CssKnownProperty::Direction | CssKnownProperty::WritingMode => O_WRITING3,
+        CssKnownProperty::FlexDirection
+        | CssKnownProperty::FlexWrap
+        | CssKnownProperty::AlignContent
+        | CssKnownProperty::JustifyContent
+        | CssKnownProperty::AlignItems
+        | CssKnownProperty::AlignSelf
+        | CssKnownProperty::FlexBasis
+        | CssKnownProperty::FlexGrow
+        | CssKnownProperty::FlexShrink
+        | CssKnownProperty::Flex => O_FLEXBOX1,
+        CssKnownProperty::Margin
+        | CssKnownProperty::MarginTop
+        | CssKnownProperty::MarginRight
+        | CssKnownProperty::MarginBottom
+        | CssKnownProperty::MarginLeft
+        | CssKnownProperty::Padding
+        | CssKnownProperty::PaddingTop
+        | CssKnownProperty::PaddingRight
+        | CssKnownProperty::PaddingBottom
+        | CssKnownProperty::PaddingLeft => O_BOX3,
+        CssKnownProperty::Color | CssKnownProperty::Opacity => O_COLOR4,
+        CssKnownProperty::Border
+        | CssKnownProperty::BorderTop
+        | CssKnownProperty::BorderRight
+        | CssKnownProperty::BorderBottom
+        | CssKnownProperty::BorderLeft
+        | CssKnownProperty::BorderWidth
+        | CssKnownProperty::BorderTopWidth
+        | CssKnownProperty::BorderRightWidth
+        | CssKnownProperty::BorderBottomWidth
+        | CssKnownProperty::BorderLeftWidth
+        | CssKnownProperty::Background
+        | CssKnownProperty::BackgroundColor
+        | CssKnownProperty::BorderColor
+        | CssKnownProperty::BorderTopColor
+        | CssKnownProperty::BorderRightColor
+        | CssKnownProperty::BorderBottomColor
+        | CssKnownProperty::BorderLeftColor
+        | CssKnownProperty::BackgroundImage
+        | CssKnownProperty::BackgroundPosition
+        | CssKnownProperty::BackgroundSize
+        | CssKnownProperty::BackgroundRepeat
+        | CssKnownProperty::BackgroundOrigin
+        | CssKnownProperty::BackgroundClip
+        | CssKnownProperty::BackgroundAttachment
+        | CssKnownProperty::BorderStyle
+        | CssKnownProperty::BorderTopStyle
+        | CssKnownProperty::BorderRightStyle
+        | CssKnownProperty::BorderBottomStyle
+        | CssKnownProperty::BorderLeftStyle
+        | CssKnownProperty::BorderRadius
+        | CssKnownProperty::BorderTopLeftRadius
+        | CssKnownProperty::BorderTopRightRadius
+        | CssKnownProperty::BorderBottomRightRadius
+        | CssKnownProperty::BorderBottomLeftRadius
+        | CssKnownProperty::BoxShadow => O_BACKGROUNDS3,
+        CssKnownProperty::FontSize
+        | CssKnownProperty::FontFamily
+        | CssKnownProperty::Font
+        | CssKnownProperty::FontWeight
+        | CssKnownProperty::FontStyle
+        | CssKnownProperty::FontStretch
+        | CssKnownProperty::FontVariant
+        | CssKnownProperty::FontFeatureSettings => O_FONTS3,
+        CssKnownProperty::OverflowX | CssKnownProperty::OverflowY => X_OVERFLOW3,
+        CssKnownProperty::JustifyItems
+        | CssKnownProperty::JustifySelf
+        | CssKnownProperty::PlaceContent
+        | CssKnownProperty::PlaceItems
+        | CssKnownProperty::PlaceSelf
+        | CssKnownProperty::Gap
+        | CssKnownProperty::RowGap
+        | CssKnownProperty::ColumnGap
+        | CssKnownProperty::JustifyTracks
+        | CssKnownProperty::AlignTracks => S_ALIGN3,
+        CssKnownProperty::ContentVisibility => I_CONTAIN2,
+        CssKnownProperty::CounterSet => I_LISTS3,
+        CssKnownProperty::GridFlowTolerance => X_GRID_TOLERANCE_BASE,
+        CssKnownProperty::GridTemplateRows
+        | CssKnownProperty::GridTemplateColumns
+        | CssKnownProperty::GridTemplateAreas
+        | CssKnownProperty::GridTemplate
+        | CssKnownProperty::GridAutoRows
+        | CssKnownProperty::GridAutoColumns
+        | CssKnownProperty::GridAutoFlow
+        | CssKnownProperty::GridRowStart
+        | CssKnownProperty::GridRowEnd
+        | CssKnownProperty::GridColumnStart
+        | CssKnownProperty::GridColumnEnd
+        | CssKnownProperty::GridRow
+        | CssKnownProperty::GridColumn
+        | CssKnownProperty::GridArea
+        | CssKnownProperty::Grid => R_GRID2,
+        CssKnownProperty::TextAlignLast
+        | CssKnownProperty::WordBreak
+        | CssKnownProperty::OverflowWrap => S_TEXT3,
+        CssKnownProperty::TextWrap => X_TEXT4,
+        CssKnownProperty::TextDecorationLine
+        | CssKnownProperty::TextDecorationColor
+        | CssKnownProperty::TextDecorationStyle => S_TEXTDECOR3,
+        CssKnownProperty::TextDecorationThickness => X_TEXTDECOR4,
+        CssKnownProperty::Inset => I_POSITION3,
+        CssKnownProperty::BoxDecorationBreak => S_BREAK3,
+        CssKnownProperty::Order => S_DISPLAY3,
+        CssKnownProperty::AspectRatio => I_SIZING3,
+        CssKnownProperty::ScrollbarWidth => R_SCROLLBARS1,
+        CssKnownProperty::PointerEvents | CssKnownProperty::UserSelect => X_UI4,
+        CssKnownProperty::Transform | CssKnownProperty::TransformOrigin => O_TRANSFORMS1,
+        CssKnownProperty::Translate | CssKnownProperty::Rotate | CssKnownProperty::Scale => {
+            I_TRANSFORMS2
+        }
+        CssKnownProperty::Filter => I_FILTER1,
+        CssKnownProperty::BackdropFilter => X_FILTER2_BASE,
+        CssKnownProperty::ClipPath
+        | CssKnownProperty::Mask
+        | CssKnownProperty::MaskImage
+        | CssKnownProperty::MaskSize
+        | CssKnownProperty::MaskPosition
+        | CssKnownProperty::MaskRepeat => S_MASKING1,
+        CssKnownProperty::TransitionProperty
+        | CssKnownProperty::TransitionDuration
+        | CssKnownProperty::TransitionDelay
+        | CssKnownProperty::TransitionTimingFunction
+        | CssKnownProperty::Transition => I_TRANSITIONS1,
+        CssKnownProperty::AnimationName
+        | CssKnownProperty::AnimationDuration
+        | CssKnownProperty::AnimationDelay
+        | CssKnownProperty::AnimationTimingFunction
+        | CssKnownProperty::AnimationIterationCount
+        | CssKnownProperty::AnimationDirection
+        | CssKnownProperty::AnimationFillMode
+        | CssKnownProperty::AnimationPlayState
+        | CssKnownProperty::Animation => I_ANIMATIONS1,
+    }
+}
+
+const fn property_production(property: CssKnownProperty, default: &'static str) -> &'static str {
+    match property {
+        CssKnownProperty::Display
+        | CssKnownProperty::Position
+        | CssKnownProperty::Float
+        | CssKnownProperty::Clear
+        | CssKnownProperty::Top
+        | CssKnownProperty::Right
+        | CssKnownProperty::Bottom
+        | CssKnownProperty::Left
+        | CssKnownProperty::ZIndex => match property {
+            CssKnownProperty::Display => "visuren.html#propdef-display",
+            CssKnownProperty::Position => "visuren.html#propdef-position",
+            CssKnownProperty::Float => "visuren.html#propdef-float",
+            CssKnownProperty::Clear => "visuren.html#propdef-clear",
+            CssKnownProperty::Top => "visuren.html#propdef-top",
+            CssKnownProperty::Right => "visuren.html#propdef-right",
+            CssKnownProperty::Bottom => "visuren.html#propdef-bottom",
+            CssKnownProperty::Left => "visuren.html#propdef-left",
+            CssKnownProperty::ZIndex => "visuren.html#propdef-z-index",
+            _ => default,
+        },
+        CssKnownProperty::Overflow | CssKnownProperty::Visibility => match property {
+            CssKnownProperty::Overflow => "visufx.html#propdef-overflow",
+            CssKnownProperty::Visibility => "visufx.html#propdef-visibility",
+            _ => default,
+        },
+        CssKnownProperty::Content
+        | CssKnownProperty::CounterIncrement
+        | CssKnownProperty::CounterReset
+        | CssKnownProperty::ListStyle
+        | CssKnownProperty::ListStyleImage
+        | CssKnownProperty::ListStylePosition
+        | CssKnownProperty::ListStyleType => match property {
+            CssKnownProperty::Content => "generate.html#propdef-content",
+            CssKnownProperty::CounterIncrement => "generate.html#propdef-counter-increment",
+            CssKnownProperty::CounterReset => "generate.html#propdef-counter-reset",
+            CssKnownProperty::ListStyle => "generate.html#propdef-list-style",
+            CssKnownProperty::ListStyleImage => "generate.html#propdef-list-style-image",
+            CssKnownProperty::ListStylePosition => "generate.html#propdef-list-style-position",
+            CssKnownProperty::ListStyleType => "generate.html#propdef-list-style-type",
+            _ => default,
+        },
+        CssKnownProperty::Width
+        | CssKnownProperty::Height
+        | CssKnownProperty::MinWidth
+        | CssKnownProperty::MinHeight
+        | CssKnownProperty::MaxWidth
+        | CssKnownProperty::MaxHeight
+        | CssKnownProperty::LineHeight
+        | CssKnownProperty::VerticalAlign => match property {
+            CssKnownProperty::Width => "visudet.html#propdef-width",
+            CssKnownProperty::Height => "visudet.html#propdef-height",
+            CssKnownProperty::MinWidth => "visudet.html#propdef-min-width",
+            CssKnownProperty::MinHeight => "visudet.html#propdef-min-height",
+            CssKnownProperty::MaxWidth => "visudet.html#propdef-max-width",
+            CssKnownProperty::MaxHeight => "visudet.html#propdef-max-height",
+            CssKnownProperty::LineHeight => "visudet.html#propdef-line-height",
+            CssKnownProperty::VerticalAlign => "visudet.html#propdef-vertical-align",
+            _ => default,
+        },
+        CssKnownProperty::LetterSpacing
+        | CssKnownProperty::TextAlign
+        | CssKnownProperty::TextDecoration
+        | CssKnownProperty::TextIndent
+        | CssKnownProperty::TextTransform
+        | CssKnownProperty::WhiteSpace => match property {
+            CssKnownProperty::LetterSpacing => "text.html#propdef-letter-spacing",
+            CssKnownProperty::TextAlign => "text.html#propdef-text-align",
+            CssKnownProperty::TextDecoration => "text.html#propdef-text-decoration",
+            CssKnownProperty::TextIndent => "text.html#propdef-text-indent",
+            CssKnownProperty::TextTransform => "text.html#propdef-text-transform",
+            CssKnownProperty::WhiteSpace => "text.html#propdef-white-space",
+            _ => default,
+        },
+        _ => default,
+    }
+}
+
 macro_rules! property_feature {
     ($property:path, $canonical_name:literal, $stable_id:literal) => {
-        CssFeatureMetadata::partial_property($stable_id, $property, $canonical_name, &[])
+        CssFeatureMetadata::partial_property(
+            $stable_id,
+            $property,
+            $canonical_name,
+            concat!("#propdef-", $canonical_name),
+            &[],
+        )
     };
 }
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
+const PSEUDO_ELEMENT_ALIAS_TARGETS: &[CssFeatureId] = &[
+    CssFeatureId::new("official.selector.generated"),
+    CssFeatureId::new("ext.pseudo-element.marker"),
+    CssFeatureId::new("ext.pseudo-element.selection"),
+    CssFeatureId::new("ext.pseudo-element.backdrop"),
+    CssFeatureId::new("ext.pseudo-element.generated-marker"),
+];
+
+const MEDIA_QUERY_LIST_ALIAS_TARGETS: &[CssFeatureId] = &[
+    CssFeatureId::new("official.media.query-list-core"),
+    CssFeatureId::new("ext.media.condition-syntax"),
+    CssFeatureId::new("ext.media.malformed-member-never"),
+];
+
+const MEDIA_RANGE_ALIAS_TARGETS: &[CssFeatureId] = &[
+    CssFeatureId::new("official.media.feature.width"),
+    CssFeatureId::new("official.media.feature.height"),
+    CssFeatureId::new("official.media.feature.resolution"),
+    CssFeatureId::new("official.media.feature.color"),
+    CssFeatureId::new("official.media.feature.monochrome"),
+    CssFeatureId::new("ext.media.range.width"),
+    CssFeatureId::new("ext.media.range.height"),
+    CssFeatureId::new("ext.media.range.resolution"),
+    CssFeatureId::new("ext.media.range.color"),
+    CssFeatureId::new("ext.media.range.monochrome"),
+];
+
+const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
+    CssFeatureId::new("official.media.feature.orientation"),
+    CssFeatureId::new("ext.media.hover"),
+    CssFeatureId::new("ext.media.any-hover"),
+    CssFeatureId::new("ext.media.pointer"),
+    CssFeatureId::new("ext.media.any-pointer"),
+    CssFeatureId::new("ext.media.prefers-color-scheme"),
+    CssFeatureId::new("ext.media.prefers-reduced-motion"),
+    CssFeatureId::new("ext.media.prefers-reduced-transparency"),
+    CssFeatureId::new("ext.media.prefers-contrast"),
+    CssFeatureId::new("ext.media.forced-colors"),
+    CssFeatureId::new("ext.media.display-mode"),
+];
+
+static FEATURE_CATALOG: [CssFeatureMetadata; 248] = [
     CssFeatureMetadata::partial(
         "baseline.rule.import",
         CssFeatureKind::Rule,
         "@import",
-        BASELINE_PARSER,
-        "@import rule",
+        O_CASCADE4,
+        "#at-import",
         BASELINE_RULE_SUBSET,
         BASELINE_RULE_REMAINDER,
     ),
@@ -1731,8 +2002,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.rule.layer-statement",
         CssFeatureKind::Rule,
         "@layer ...;",
-        BASELINE_PARSER,
-        "@layer statement rule",
+        R_CASCADE5,
+        "#layering",
         BASELINE_RULE_SUBSET,
         BASELINE_RULE_REMAINDER,
     ),
@@ -1740,8 +2011,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.rule.layer-block",
         CssFeatureKind::Rule,
         "@layer {...}",
-        BASELINE_PARSER,
-        "@layer block rule",
+        R_CASCADE5,
+        "#layering",
         BASELINE_RULE_SUBSET,
         BASELINE_RULE_REMAINDER,
     ),
@@ -1749,8 +2020,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.rule.font-face",
         CssFeatureKind::Rule,
         "@font-face",
-        BASELINE_FONT_FACE,
-        "@font-face rule",
+        O_FONTS3,
+        "#font-face-rule",
         BASELINE_RULE_SUBSET,
         BASELINE_RULE_REMAINDER,
     ),
@@ -1758,8 +2029,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.rule.keyframes",
         CssFeatureKind::Rule,
         "@keyframes",
-        BASELINE_KEYFRAMES,
-        "@keyframes rule",
+        I_ANIMATIONS1,
+        "#keyframes",
         BASELINE_RULE_SUBSET,
         BASELINE_RULE_REMAINDER,
     ),
@@ -1767,8 +2038,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.rule.style",
         CssFeatureKind::Rule,
         "style and nested qualified rules",
-        BASELINE_PARSER,
-        "style rule",
+        O_SYNTAX3,
+        "#style-rules",
         BASELINE_RULE_SUBSET,
         BASELINE_RULE_REMAINDER,
     ),
@@ -1776,8 +2047,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.rule.media",
         CssFeatureKind::Rule,
         "@media",
-        BASELINE_PARSER,
-        "@media rule",
+        O_CONDITIONAL3,
+        "#at-media",
         BASELINE_RULE_SUBSET,
         BASELINE_RULE_REMAINDER,
     ),
@@ -1785,8 +2056,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.rule.container",
         CssFeatureKind::Rule,
         "@container",
-        BASELINE_PARSER,
-        "@container rule",
+        X_CONTAIN3,
+        "#container-rule",
         BASELINE_RULE_SUBSET,
         BASELINE_RULE_REMAINDER,
     ),
@@ -1794,8 +2065,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.rule.scope",
         CssFeatureKind::Rule,
         "@scope",
-        BASELINE_PARSER,
-        "@scope rule",
+        X_CASCADE6,
+        "#scope-atrule",
         BASELINE_RULE_SUBSET,
         BASELINE_RULE_REMAINDER,
     ),
@@ -1804,28 +2075,28 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         CssFeatureKind::Rule,
         "optional leading legacy @charset metadata",
         CSS_SYNTAX_3,
-        "CSS Syntax 3 section 3 input byte stream",
+        "#charset-rule",
     ),
     CssFeatureMetadata::complete(
         "foundation.declaration-list.style-attribute",
         CssFeatureKind::Declaration,
         "style-attribute declaration-list structure",
         CSS_STYLE_ATTRIBUTES,
-        "style attribute",
+        "#syntax",
     ),
     CssFeatureMetadata::complete(
         "foundation.declaration.importance",
         CssFeatureKind::Declaration,
         "terminal declaration !important annotation",
         CSS_CASCADE_4,
-        "important declaration",
+        "#importance",
     ),
     CssFeatureMetadata::partial(
         "baseline.declaration.custom-property",
         CssFeatureKind::Declaration,
         "custom-property names and authored token streams",
-        BASELINE_VARIABLES,
-        "custom-property declaration",
+        O_VARIABLES1,
+        "#defining-variables,#syntax",
         "Baseline custom-property names and authored token streams, including I01 recovery behavior, are supported.",
         "Other valid CSS Variables custom-property declaration forms are outside the I01 subset.",
     ),
@@ -1833,8 +2104,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.value.substitution-dependent",
         CssFeatureKind::Value,
         "preserved known-property values containing substitution functions",
-        BASELINE_VARIABLES,
-        "substitution-dependent declaration value",
+        O_VARIABLES1,
+        "#using-variables",
         "Known-property values with syntactically admissible var() references remain authored and symbolic.",
         "Other valid CSS Variables substitution functions and post-substitution forms are outside the I01 subset.",
     ),
@@ -1842,48 +2113,48 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "later.rule.namespace",
         CssFeatureKind::Rule,
         "@namespace",
-        CSS_NAMESPACES_3,
-        "namespace declaration",
+        O_NAMESPACES3,
+        "#declaration,#syntax",
         CssErrorCode::UnsupportedAtRule,
     ),
     CssFeatureMetadata::recognized_unsupported(
         "later.rule.supports",
         CssFeatureKind::Rule,
         "@supports",
-        CSS_CONDITIONAL_3,
-        "@supports rule",
+        O_CONDITIONAL3,
+        "#at-supports",
         CssErrorCode::UnsupportedAtRule,
     ),
     CssFeatureMetadata::recognized_unsupported(
         "later.rule.counter-style",
         CssFeatureKind::Rule,
         "@counter-style",
-        CSS_COUNTER_STYLES_3,
-        "@counter-style rule",
+        O_COUNTERSTYLES3,
+        "#the-counter-style-rule",
         CssErrorCode::UnsupportedAtRule,
     ),
     CssFeatureMetadata::recognized_unsupported(
         "later.rule.page",
         CssFeatureKind::Rule,
         "@page",
-        CSS_2_PAGE,
-        "page rule",
+        O_CSS2,
+        "page.html#page-box",
         CssErrorCode::UnsupportedAtRule,
     ),
     CssFeatureMetadata::recognized_unsupported(
         "later.rule.font-feature-values",
         CssFeatureKind::Rule,
         "@font-feature-values",
-        CSS_FONTS_4,
-        "@font-feature-values rule",
+        I_FONTS4,
+        "#font-feature-values-rule",
         CssErrorCode::UnsupportedAtRule,
     ),
     CssFeatureMetadata::partial(
         "baseline.descriptor.font-family",
         CssFeatureKind::Descriptor,
         "font-family in @font-face",
-        BASELINE_FONT_FACE,
-        "font-family descriptor",
+        O_FONTS3,
+        "#font-family-desc",
         DESCRIPTOR_SUBSET,
         DESCRIPTOR_REMAINDER,
     ),
@@ -1891,8 +2162,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.descriptor.src",
         CssFeatureKind::Descriptor,
         "src in @font-face",
-        BASELINE_FONT_FACE,
-        "src descriptor",
+        O_FONTS3,
+        "#src-desc",
         DESCRIPTOR_SUBSET,
         DESCRIPTOR_REMAINDER,
     ),
@@ -1900,8 +2171,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.descriptor.font-weight",
         CssFeatureKind::Descriptor,
         "font-weight in @font-face",
-        BASELINE_FONT_FACE,
-        "font-weight descriptor",
+        O_FONTS3,
+        "#font-prop-desc",
         DESCRIPTOR_SUBSET,
         DESCRIPTOR_REMAINDER,
     ),
@@ -1909,8 +2180,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.descriptor.font-style",
         CssFeatureKind::Descriptor,
         "font-style in @font-face",
-        BASELINE_FONT_FACE,
-        "font-style descriptor",
+        O_FONTS3,
+        "#font-prop-desc",
         DESCRIPTOR_SUBSET,
         DESCRIPTOR_REMAINDER,
     ),
@@ -1918,8 +2189,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.descriptor.font-stretch",
         CssFeatureKind::Descriptor,
         "font-stretch in @font-face",
-        BASELINE_FONT_FACE,
-        "font-stretch descriptor",
+        O_FONTS3,
+        "#font-prop-desc",
         DESCRIPTOR_SUBSET,
         DESCRIPTOR_REMAINDER,
     ),
@@ -1927,8 +2198,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.descriptor.font-display",
         CssFeatureKind::Descriptor,
         "font-display in @font-face",
-        BASELINE_FONT_FACE,
-        "font-display descriptor",
+        I_FONTS4,
+        "#font-display-desc",
         DESCRIPTOR_SUBSET,
         DESCRIPTOR_REMAINDER,
     ),
@@ -1936,8 +2207,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.descriptor.unicode-range",
         CssFeatureKind::Descriptor,
         "unicode-range in @font-face",
-        BASELINE_FONT_FACE,
-        "unicode-range descriptor",
+        O_FONTS3,
+        "#unicode-range-desc",
         DESCRIPTOR_SUBSET,
         DESCRIPTOR_REMAINDER,
     ),
@@ -1945,8 +2216,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.selector.complex",
         CssFeatureKind::Selector,
         "type, universal, ID, class; presence and six valued attribute matchers; descendant, child, next-sibling, subsequent-sibling combinators",
-        BASELINE_SELECTORS,
-        "complex selector",
+        O_SELECTORS3,
+        "#type-selectors,#universal-selector,#attribute-representation,#attribute-substrings,#class-html,#id-selectors,#descendant-combinators,#child-combinators,#adjacent-sibling-combinators,#general-sibling-combinators",
         "The exact baseline-recognized complex-selector spelling group is supported.",
         SELECTOR_REMAINDER,
     ),
@@ -1954,8 +2225,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.selector.pseudo-class",
         CssFeatureKind::Selector,
         ":root, :hover, :active, :focus, :disabled, :enabled, :checked, :first-child, :last-child, :only-child, :empty, :first-of-type, :last-of-type, :only-of-type",
-        BASELINE_SELECTORS,
-        "baseline pseudo-class selector",
+        O_SELECTORS3,
+        "#dynamic-pseudos,#UIstates,#structural-pseudos",
         "The exact baseline-recognized pseudo-class spelling group is supported.",
         SELECTOR_REMAINDER,
     ),
@@ -1963,8 +2234,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.selector.functional",
         CssFeatureKind::Selector,
         ":nth-child(), :nth-last-child(), :nth-of-type(), :nth-last-of-type(), :not()",
-        BASELINE_SELECTORS,
-        "baseline functional pseudo-class selector",
+        O_SELECTORS3,
+        "#structural-pseudos,#negation",
         "The exact baseline-recognized functional pseudo-class spelling group is supported.",
         SELECTOR_REMAINDER,
     ),
@@ -1972,8 +2243,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.selector.extension-state",
         CssFeatureKind::Selector,
         ":scope, :focus-visible, :focus-within, :required, :optional, :valid, :invalid, :placeholder-shown, :default, :indeterminate, :read-only, :read-write, :in-range, :out-of-range, :modal, :fullscreen, :popover-open",
-        BASELINE_SELECTORS,
-        "extension state pseudo-class selector",
+        I_SELECTORS4,
+        "#useraction-pseudos,#input-pseudos,#resource-pseudos,#display-state-pseudos",
         "The exact I01 extension-state pseudo-class spelling group is supported.",
         SELECTOR_REMAINDER,
     ),
@@ -1981,8 +2252,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.selector.extension-functional",
         CssFeatureKind::Selector,
         ":is(), :where(), complex :not(), :has(), and nth-child of lists",
-        BASELINE_SELECTORS,
-        "extension functional pseudo-class selector",
+        I_SELECTORS4,
+        "#matches,#zero-matches,#relational,#negation,#the-nth-child-pseudo",
         "The exact I01 extension-functional pseudo-class spelling group is supported.",
         SELECTOR_REMAINDER,
     ),
@@ -1990,71 +2261,83 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.selector.attribute-case",
         CssFeatureKind::Selector,
         "i and s attribute-selector modifiers",
-        BASELINE_SELECTORS,
-        "attribute-selector case-sensitivity modifier",
+        I_SELECTORS4,
+        "#attribute-case",
         "The i and s attribute-selector case modifiers are supported.",
         SELECTOR_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::baseline_alias(
         "baseline.selector.pseudo-element",
         CssFeatureKind::Selector,
         "::before, ::after, ::marker, ::selection, ::backdrop, and generated ::marker sequences",
         BASELINE_SELECTORS,
         "pseudo-element selector",
-        "The exact baseline-recognized pseudo-element spelling group is supported.",
-        SELECTOR_REMAINDER,
+        (
+            "The exact baseline-recognized pseudo-element spelling group is supported.",
+            SELECTOR_REMAINDER,
+        ),
+        PSEUDO_ELEMENT_ALIAS_TARGETS,
     ),
     CssFeatureMetadata::partial(
         "baseline.selector.nesting",
         CssFeatureKind::Selector,
         "nesting &, scoped selector anchors, and scoped relative selectors",
-        BASELINE_NESTING,
-        "nesting selector",
+        I_NESTING1,
+        "#nest-selector",
         "Nesting &, scoped selector anchors, and scoped relative selectors are supported.",
         SELECTOR_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::baseline_alias(
         "baseline.media.query-list",
         CssFeatureKind::MediaQuery,
         "typed/condition query lists, not/only, and/or/not, range and colon forms, and malformed-member Never recovery",
         BASELINE_QUERIES,
         "media query list",
-        "The exact baseline-recognized media query-list spelling group and malformed-member Never recovery are supported.",
-        QUERY_REMAINDER,
+        (
+            "The exact baseline-recognized media query-list spelling group and malformed-member Never recovery are supported.",
+            QUERY_REMAINDER,
+        ),
+        MEDIA_QUERY_LIST_ALIAS_TARGETS,
     ),
     CssFeatureMetadata::partial(
         "baseline.media.type",
         CssFeatureKind::MediaQuery,
         "all, screen, print",
-        BASELINE_QUERIES,
-        "media type",
+        O_MEDIA3,
+        "#media1",
         "The all, screen, and print media types are supported.",
         QUERY_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::baseline_alias(
         "baseline.media.range-feature",
         CssFeatureKind::MediaQuery,
         "width, height, resolution, color, monochrome and their min-/max- names",
         BASELINE_QUERIES,
         "media range feature",
-        "The exact baseline-recognized media range-feature spelling group is supported.",
-        QUERY_REMAINDER,
+        (
+            "The exact baseline-recognized media range-feature spelling group is supported.",
+            QUERY_REMAINDER,
+        ),
+        MEDIA_RANGE_ALIAS_TARGETS,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::baseline_alias(
         "baseline.media.discrete-feature",
         CssFeatureKind::MediaQuery,
         "orientation, prefers-color-scheme, prefers-reduced-motion, prefers-reduced-transparency, prefers-contrast, forced-colors, hover, any-hover, pointer, any-pointer, display-mode",
         BASELINE_QUERIES,
         "media discrete feature",
-        "The exact baseline-recognized media discrete-feature spelling group is supported.",
-        QUERY_REMAINDER,
+        (
+            "The exact baseline-recognized media discrete-feature spelling group is supported.",
+            QUERY_REMAINDER,
+        ),
+        MEDIA_DISCRETE_ALIAS_TARGETS,
     ),
     CssFeatureMetadata::partial(
         "baseline.container.condition",
         CssFeatureKind::ContainerQuery,
         "and/or/not, size features, and custom-property style existence/equality",
-        BASELINE_QUERIES,
-        "container condition",
+        X_CONTAIN3,
+        "#container-rule",
         "The exact baseline-recognized container-condition spelling group is supported.",
         QUERY_REMAINDER,
     ),
@@ -2062,8 +2345,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "baseline.container.size-feature",
         CssFeatureKind::ContainerQuery,
         "width, height, inline-size, block-size, aspect-ratio, orientation and applicable min-/max- names",
-        BASELINE_QUERIES,
-        "container size feature",
+        X_CONTAIN3,
+        "#size-container",
         "The exact baseline-recognized container size-feature spelling group is supported.",
         QUERY_REMAINDER,
     ),
@@ -2898,9 +3181,237 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
         "animation",
         "baseline.property.animation"
     ),
+    CssFeatureMetadata::complete(
+        "official.selector.generated",
+        CssFeatureKind::Selector,
+        "::before, ::after",
+        O_SELECTORS3,
+        "#gen-content",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.pseudo-element.marker",
+        CssFeatureKind::Selector,
+        "::marker",
+        X_PSEUDO4,
+        "#marker-pseudo",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.pseudo-element.selection",
+        CssFeatureKind::Selector,
+        "::selection",
+        X_PSEUDO4,
+        "#selectordef-selection",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.pseudo-element.backdrop",
+        CssFeatureKind::Selector,
+        "::backdrop",
+        X_PSEUDO4,
+        "#selectordef-backdrop",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.pseudo-element.generated-marker",
+        CssFeatureKind::Selector,
+        "::before::marker, ::after::marker",
+        X_PSEUDO4,
+        "#marker-pseudo",
+    ),
+    CssFeatureMetadata::partial(
+        "official.media.query-list-core",
+        CssFeatureKind::MediaQuery,
+        "Media Queries 3 query-list core",
+        O_MEDIA3,
+        "#syntax",
+        "The I01 all, screen, and print typed query-list core is supported.",
+        "Other valid Media Queries 3 query-list forms are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.condition-syntax",
+        CssFeatureKind::MediaQuery,
+        "not, and, and comma-separated condition syntax",
+        R_MEDIA4,
+        "#mq-syntax",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.malformed-member-never",
+        CssFeatureKind::MediaQuery,
+        "malformed query-list members become Never",
+        R_MEDIA4,
+        "#mq-invalid",
+    ),
+    CssFeatureMetadata::partial(
+        "official.media.feature.width",
+        CssFeatureKind::MediaQuery,
+        "width, min-width, max-width colon forms",
+        O_MEDIA3,
+        "#width",
+        "Finite authored length values in width colon forms are supported.",
+        "Other valid Media Queries 3 width values are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::partial(
+        "official.media.feature.height",
+        CssFeatureKind::MediaQuery,
+        "height, min-height, max-height colon forms",
+        O_MEDIA3,
+        "#height",
+        "Finite authored length values in height colon forms are supported.",
+        "Other valid Media Queries 3 height values are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::partial(
+        "official.media.feature.resolution",
+        CssFeatureKind::MediaQuery,
+        "resolution, min-resolution, max-resolution colon forms",
+        O_MEDIA3,
+        "#resolution",
+        "Finite positive dpi, dpcm, and dppx values in resolution colon forms are supported.",
+        "Other valid Media Queries 3 resolution values are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::partial(
+        "official.media.feature.color",
+        CssFeatureKind::MediaQuery,
+        "color, min-color, max-color colon forms",
+        O_MEDIA3,
+        "#color",
+        "Non-negative integer color values in colon forms are supported.",
+        "Other valid Media Queries 3 color values are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::partial(
+        "official.media.feature.monochrome",
+        CssFeatureKind::MediaQuery,
+        "monochrome, min-monochrome, max-monochrome colon forms",
+        O_MEDIA3,
+        "#monochrome",
+        "Non-negative integer monochrome values in colon forms are supported.",
+        "Other valid Media Queries 3 monochrome values are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::partial(
+        "ext.media.range.width",
+        CssFeatureKind::MediaQuery,
+        "width comparison form",
+        R_MEDIA4,
+        "#width",
+        "One-sided finite authored length comparisons are supported.",
+        "Other valid Media Queries 4 width range forms are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::partial(
+        "ext.media.range.height",
+        CssFeatureKind::MediaQuery,
+        "height comparison form",
+        R_MEDIA4,
+        "#height",
+        "One-sided finite authored length comparisons are supported.",
+        "Other valid Media Queries 4 height range forms are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::partial(
+        "ext.media.range.resolution",
+        CssFeatureKind::MediaQuery,
+        "resolution comparison form",
+        R_MEDIA4,
+        "#resolution",
+        "One-sided finite positive resolution comparisons are supported.",
+        "Other valid Media Queries 4 resolution range forms are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::partial(
+        "ext.media.range.color",
+        CssFeatureKind::MediaQuery,
+        "color comparison form",
+        R_MEDIA4,
+        "#color",
+        "One-sided non-negative integer color comparisons are supported.",
+        "Other valid Media Queries 4 color range forms are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::partial(
+        "ext.media.range.monochrome",
+        CssFeatureKind::MediaQuery,
+        "monochrome comparison form",
+        R_MEDIA4,
+        "#monochrome",
+        "One-sided non-negative integer monochrome comparisons are supported.",
+        "Other valid Media Queries 4 monochrome range forms are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::complete(
+        "official.media.feature.orientation",
+        CssFeatureKind::MediaQuery,
+        "orientation",
+        O_MEDIA3,
+        "#orientation",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.hover",
+        CssFeatureKind::MediaQuery,
+        "hover",
+        R_MEDIA4,
+        "#hover",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.any-hover",
+        CssFeatureKind::MediaQuery,
+        "any-hover",
+        R_MEDIA4,
+        "#any-hover",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.pointer",
+        CssFeatureKind::MediaQuery,
+        "pointer",
+        R_MEDIA4,
+        "#pointer",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.any-pointer",
+        CssFeatureKind::MediaQuery,
+        "any-pointer",
+        R_MEDIA4,
+        "#any-pointer",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.prefers-color-scheme",
+        CssFeatureKind::MediaQuery,
+        "prefers-color-scheme",
+        X_MEDIA5,
+        "#prefers-color-scheme",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.prefers-reduced-motion",
+        CssFeatureKind::MediaQuery,
+        "prefers-reduced-motion",
+        X_MEDIA5,
+        "#prefers-reduced-motion",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.prefers-reduced-transparency",
+        CssFeatureKind::MediaQuery,
+        "prefers-reduced-transparency",
+        X_MEDIA5,
+        "#prefers-reduced-transparency",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.prefers-contrast",
+        CssFeatureKind::MediaQuery,
+        "prefers-contrast",
+        X_MEDIA5,
+        "#prefers-contrast",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.forced-colors",
+        CssFeatureKind::MediaQuery,
+        "forced-colors",
+        X_MEDIA5,
+        "#forced-colors",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.display-mode",
+        CssFeatureKind::MediaQuery,
+        "display-mode",
+        X_DISPLAY_MODE_BASE,
+        "display-mode baseline subset",
+    ),
 ];
 
-/// Returns the immutable I01 support-catalog records in stable inventory order.
+/// Returns the immutable support catalog in stable inventory order.
+///
+/// The preserved I01 records retain their exact lookup identities. Atomic records
+/// added for the four baseline aliases follow those records.
 #[must_use]
 pub fn feature_catalog() -> &'static [CssFeatureMetadata] {
     &FEATURE_CATALOG

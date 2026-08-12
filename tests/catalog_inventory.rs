@@ -39,16 +39,27 @@ fn public_feature_catalog_exposes_declared_metadata_and_lookup() {
         assert_eq!(feature.id().as_str(), vector.id);
         assert_eq!(feature.kind(), CssFeatureKind::Property);
         assert_eq!(feature.spelling(), vector.canonical_name);
-        assert_eq!(feature.production(), vector.canonical_name);
+        assert!(
+            feature.production().contains("#propdef-"),
+            "{} exact property production",
+            vector.id
+        );
         assert_eq!(feature.status(), CssSupportStatus::Partial);
         assert_eq!(feature.supported_subset(), Some(PROPERTY_SUBSET));
         assert_eq!(feature.unsupported_remainder(), Some(PROPERTY_REMAINDER));
         assert_eq!(feature.recognized_unsupported_code(), None);
-        assert_eq!(
-            feature.source().repository_provenance(),
-            Some("4b288d6:src/parser/mod.rs")
+        assert_ne!(
+            feature.source().id().as_str(),
+            "I01-BASE-PARSER",
+            "{} retained generic baseline provenance",
+            vector.id
         );
-        assert_eq!(feature.source().url(), None);
+        assert_ne!(
+            feature.source().url().is_some(),
+            feature.source().repository_provenance().is_some(),
+            "{} source provenance XOR",
+            vector.id
+        );
         assert_eq!(metadata.property().canonical_name(), vector.canonical_name);
         assert_eq!(metadata.canonical_name(), vector.canonical_name);
         assert!(metadata.aliases().is_empty());
@@ -77,6 +88,47 @@ fn public_feature_catalog_exposes_declared_metadata_and_lookup() {
         );
     }
     assert!(feature_metadata("BASELINE.PROPERTY.DISPLAY").is_none());
+
+    let exact_source_cases = [
+        ("display", "O-CSS2"),
+        ("all", "O-CASCADE4"),
+        ("margin", "O-BOX3"),
+        ("color", "O-COLOR4"),
+        ("background", "O-BACKGROUNDS3"),
+        ("font", "O-FONTS3"),
+        ("direction", "O-WRITING3"),
+        ("flex", "O-FLEXBOX1"),
+        ("cursor", "O-UI3"),
+        ("transform", "O-TRANSFORMS1"),
+        ("overflow-x", "X-OVERFLOW3"),
+        ("gap", "S-ALIGN3"),
+        ("content-visibility", "I-CONTAIN2"),
+        ("counter-set", "I-LISTS3"),
+        ("grid-flow-tolerance", "X-GRID-TOLERANCE-BASE"),
+        ("grid", "R-GRID2"),
+        ("word-break", "S-TEXT3"),
+        ("text-wrap", "X-TEXT4"),
+        ("text-decoration-line", "S-TEXTDECOR3"),
+        ("text-decoration-thickness", "X-TEXTDECOR4"),
+        ("inset", "I-POSITION3"),
+        ("box-decoration-break", "S-BREAK3"),
+        ("order", "S-DISPLAY3"),
+        ("aspect-ratio", "I-SIZING3"),
+        ("scrollbar-width", "R-SCROLLBARS1"),
+        ("user-select", "X-UI4"),
+        ("translate", "I-TRANSFORMS2"),
+        ("filter", "I-FILTER1"),
+        ("backdrop-filter", "X-FILTER2-BASE"),
+        ("mask", "S-MASKING1"),
+        ("transition", "I-TRANSITIONS1"),
+        ("animation", "I-ANIMATIONS1"),
+    ];
+    for (property, source_id) in exact_source_cases {
+        let feature = property_metadata(property)
+            .expect("representative property")
+            .feature();
+        assert_eq!(feature.source().id().as_str(), source_id, "{property}");
+    }
 }
 
 #[test]

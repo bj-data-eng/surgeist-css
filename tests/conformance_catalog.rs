@@ -1,13 +1,12 @@
 use surgeist_css::{
-    CssErrorCode, CssExclusionReason, CssFeatureKind, CssSpecificationTier, CssSupportStatus,
-    ErrorKind, conformance_exclusion, conformance_exclusions, feature_metadata, parse_sheet,
-    parse_style_attribute, specification_source, specification_sources,
+    CssErrorCode, CssExclusionReason, CssFeatureKind, CssRecoveryAction, CssSpecificationTier,
+    CssSupportStatus, ErrorKind, conformance_exclusion, conformance_exclusions, feature_metadata,
+    parse_sheet, parse_style_attribute, specification_source, specification_sources,
 };
 
 #[derive(Clone, Copy)]
 enum ExpectedSource {
-    Url(&'static str),
-    Repository(&'static str),
+    Id(&'static str),
 }
 
 #[derive(Clone, Copy)]
@@ -48,8 +47,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.rule.import",
         kind: CssFeatureKind::Rule,
         spelling: "@import",
-        source: ExpectedSource::Repository("4b288d6:src/parser/mod.rs"),
-        production: "@import rule",
+        source: ExpectedSource::Id("O-CASCADE4"),
+        production: "#at-import",
         status: CssSupportStatus::Partial,
         supported_subset: Some(BASELINE_RULE_SUBSET),
         unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
@@ -64,8 +63,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.rule.layer-statement",
         kind: CssFeatureKind::Rule,
         spelling: "@layer ...;",
-        source: ExpectedSource::Repository("4b288d6:src/parser/mod.rs"),
-        production: "@layer statement rule",
+        source: ExpectedSource::Id("R-CASCADE5"),
+        production: "#layering",
         status: CssSupportStatus::Partial,
         supported_subset: Some(BASELINE_RULE_SUBSET),
         unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
@@ -80,8 +79,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.rule.layer-block",
         kind: CssFeatureKind::Rule,
         spelling: "@layer {...}",
-        source: ExpectedSource::Repository("4b288d6:src/parser/mod.rs"),
-        production: "@layer block rule",
+        source: ExpectedSource::Id("R-CASCADE5"),
+        production: "#layering",
         status: CssSupportStatus::Partial,
         supported_subset: Some(BASELINE_RULE_SUBSET),
         unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
@@ -96,8 +95,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.rule.font-face",
         kind: CssFeatureKind::Rule,
         spelling: "@font-face",
-        source: ExpectedSource::Repository("4b288d6:src/parser/font_face.rs"),
-        production: "@font-face rule",
+        source: ExpectedSource::Id("O-FONTS3"),
+        production: "#font-face-rule",
         status: CssSupportStatus::Partial,
         supported_subset: Some(BASELINE_RULE_SUBSET),
         unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
@@ -114,8 +113,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.rule.keyframes",
         kind: CssFeatureKind::Rule,
         spelling: "@keyframes",
-        source: ExpectedSource::Repository("4b288d6:src/parser/keyframes.rs"),
-        production: "@keyframes rule",
+        source: ExpectedSource::Id("I-ANIMATIONS1"),
+        production: "#keyframes",
         status: CssSupportStatus::Partial,
         supported_subset: Some(BASELINE_RULE_SUBSET),
         unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
@@ -132,8 +131,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.rule.style",
         kind: CssFeatureKind::Rule,
         spelling: "style and nested qualified rules",
-        source: ExpectedSource::Repository("4b288d6:src/parser/mod.rs"),
-        production: "style rule",
+        source: ExpectedSource::Id("O-SYNTAX3"),
+        production: "#style-rules",
         status: CssSupportStatus::Partial,
         supported_subset: Some(BASELINE_RULE_SUBSET),
         unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
@@ -148,8 +147,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.rule.media",
         kind: CssFeatureKind::Rule,
         spelling: "@media",
-        source: ExpectedSource::Repository("4b288d6:src/parser/mod.rs"),
-        production: "@media rule",
+        source: ExpectedSource::Id("O-CONDITIONAL3"),
+        production: "#at-media",
         status: CssSupportStatus::Partial,
         supported_subset: Some(BASELINE_RULE_SUBSET),
         unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
@@ -164,8 +163,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.rule.container",
         kind: CssFeatureKind::Rule,
         spelling: "@container",
-        source: ExpectedSource::Repository("4b288d6:src/parser/mod.rs"),
-        production: "@container rule",
+        source: ExpectedSource::Id("X-CONTAIN3"),
+        production: "#container-rule",
         status: CssSupportStatus::Partial,
         supported_subset: Some(BASELINE_RULE_SUBSET),
         unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
@@ -182,8 +181,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.rule.scope",
         kind: CssFeatureKind::Rule,
         spelling: "@scope",
-        source: ExpectedSource::Repository("4b288d6:src/parser/mod.rs"),
-        production: "@scope rule",
+        source: ExpectedSource::Id("X-CASCADE6"),
+        production: "#scope-atrule",
         status: CssSupportStatus::Partial,
         supported_subset: Some(BASELINE_RULE_SUBSET),
         unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
@@ -198,8 +197,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "foundation.encoding.charset",
         kind: CssFeatureKind::Rule,
         spelling: "optional leading legacy @charset metadata",
-        source: ExpectedSource::Url("https://www.w3.org/TR/2021/CRD-css-syntax-3-20211224/"),
-        production: "CSS Syntax 3 section 3 input byte stream",
+        source: ExpectedSource::Id("O-SYNTAX3"),
+        production: "#charset-rule",
         status: CssSupportStatus::Complete,
         supported_subset: None,
         unsupported_remainder: None,
@@ -211,8 +210,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "foundation.declaration-list.style-attribute",
         kind: CssFeatureKind::Declaration,
         spelling: "style-attribute declaration-list structure",
-        source: ExpectedSource::Url("https://www.w3.org/TR/2013/REC-css-style-attr-20131107/"),
-        production: "style attribute",
+        source: ExpectedSource::Id("O-STYLE-ATTR"),
+        production: "#syntax",
         status: CssSupportStatus::Complete,
         supported_subset: None,
         unsupported_remainder: None,
@@ -224,8 +223,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "foundation.declaration.importance",
         kind: CssFeatureKind::Declaration,
         spelling: "terminal declaration !important annotation",
-        source: ExpectedSource::Url("https://www.w3.org/TR/2022/CR-css-cascade-4-20220113/"),
-        production: "important declaration",
+        source: ExpectedSource::Id("O-CASCADE4"),
+        production: "#importance",
         status: CssSupportStatus::Complete,
         supported_subset: None,
         unsupported_remainder: None,
@@ -237,8 +236,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.declaration.custom-property",
         kind: CssFeatureKind::Declaration,
         spelling: "custom-property names and authored token streams",
-        source: ExpectedSource::Repository("4b288d6:src/parser/variables.rs"),
-        production: "custom-property declaration",
+        source: ExpectedSource::Id("O-VARIABLES1"),
+        production: "#defining-variables,#syntax",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
             "Baseline custom-property names and authored token streams, including I01 recovery behavior, are supported.",
@@ -257,8 +256,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.value.substitution-dependent",
         kind: CssFeatureKind::Value,
         spelling: "preserved known-property values containing substitution functions",
-        source: ExpectedSource::Repository("4b288d6:src/parser/variables.rs"),
-        production: "substitution-dependent declaration value",
+        source: ExpectedSource::Id("O-VARIABLES1"),
+        production: "#using-variables",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
             "Known-property values with syntactically admissible var() references remain authored and symbolic.",
@@ -277,8 +276,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "later.rule.namespace",
         kind: CssFeatureKind::Rule,
         spelling: "@namespace",
-        source: ExpectedSource::Url("https://www.w3.org/TR/css3-namespace/"),
-        production: "namespace declaration",
+        source: ExpectedSource::Id("O-NAMESPACES3"),
+        production: "#declaration,#syntax",
         status: CssSupportStatus::RecognizedUnsupported,
         supported_subset: None,
         unsupported_remainder: None,
@@ -293,8 +292,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "later.rule.supports",
         kind: CssFeatureKind::Rule,
         spelling: "@supports",
-        source: ExpectedSource::Url("https://www.w3.org/TR/css-conditional-3/"),
-        production: "@supports rule",
+        source: ExpectedSource::Id("O-CONDITIONAL3"),
+        production: "#at-supports",
         status: CssSupportStatus::RecognizedUnsupported,
         supported_subset: None,
         unsupported_remainder: None,
@@ -309,8 +308,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "later.rule.counter-style",
         kind: CssFeatureKind::Rule,
         spelling: "@counter-style",
-        source: ExpectedSource::Url("https://www.w3.org/TR/css-counter-styles-3/"),
-        production: "@counter-style rule",
+        source: ExpectedSource::Id("O-COUNTERSTYLES3"),
+        production: "#the-counter-style-rule",
         status: CssSupportStatus::RecognizedUnsupported,
         supported_subset: None,
         unsupported_remainder: None,
@@ -325,8 +324,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "later.rule.page",
         kind: CssFeatureKind::Rule,
         spelling: "@page",
-        source: ExpectedSource::Url("https://www.w3.org/TR/CSS2/page.html"),
-        production: "page rule",
+        source: ExpectedSource::Id("O-CSS2"),
+        production: "page.html#page-box",
         status: CssSupportStatus::RecognizedUnsupported,
         supported_subset: None,
         unsupported_remainder: None,
@@ -341,8 +340,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "later.rule.font-feature-values",
         kind: CssFeatureKind::Rule,
         spelling: "@font-feature-values",
-        source: ExpectedSource::Url("https://www.w3.org/TR/css-fonts-4/"),
-        production: "@font-feature-values rule",
+        source: ExpectedSource::Id("I-FONTS4"),
+        production: "#font-feature-values-rule",
         status: CssSupportStatus::RecognizedUnsupported,
         supported_subset: None,
         unsupported_remainder: None,
@@ -357,8 +356,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.descriptor.font-family",
         kind: CssFeatureKind::Descriptor,
         spelling: "font-family in @font-face",
-        source: ExpectedSource::Repository("4b288d6:src/parser/font_face.rs"),
-        production: "font-family descriptor",
+        source: ExpectedSource::Id("O-FONTS3"),
+        production: "#font-family-desc",
         status: CssSupportStatus::Partial,
         supported_subset: Some(DESCRIPTOR_SUBSET),
         unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
@@ -375,8 +374,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.descriptor.src",
         kind: CssFeatureKind::Descriptor,
         spelling: "src in @font-face",
-        source: ExpectedSource::Repository("4b288d6:src/parser/font_face.rs"),
-        production: "src descriptor",
+        source: ExpectedSource::Id("O-FONTS3"),
+        production: "#src-desc",
         status: CssSupportStatus::Partial,
         supported_subset: Some(DESCRIPTOR_SUBSET),
         unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
@@ -393,8 +392,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.descriptor.font-weight",
         kind: CssFeatureKind::Descriptor,
         spelling: "font-weight in @font-face",
-        source: ExpectedSource::Repository("4b288d6:src/parser/font_face.rs"),
-        production: "font-weight descriptor",
+        source: ExpectedSource::Id("O-FONTS3"),
+        production: "#font-prop-desc",
         status: CssSupportStatus::Partial,
         supported_subset: Some(DESCRIPTOR_SUBSET),
         unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
@@ -413,8 +412,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.descriptor.font-style",
         kind: CssFeatureKind::Descriptor,
         spelling: "font-style in @font-face",
-        source: ExpectedSource::Repository("4b288d6:src/parser/font_face.rs"),
-        production: "font-style descriptor",
+        source: ExpectedSource::Id("O-FONTS3"),
+        production: "#font-prop-desc",
         status: CssSupportStatus::Partial,
         supported_subset: Some(DESCRIPTOR_SUBSET),
         unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
@@ -433,8 +432,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.descriptor.font-stretch",
         kind: CssFeatureKind::Descriptor,
         spelling: "font-stretch in @font-face",
-        source: ExpectedSource::Repository("4b288d6:src/parser/font_face.rs"),
-        production: "font-stretch descriptor",
+        source: ExpectedSource::Id("O-FONTS3"),
+        production: "#font-prop-desc",
         status: CssSupportStatus::Partial,
         supported_subset: Some(DESCRIPTOR_SUBSET),
         unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
@@ -453,8 +452,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.descriptor.font-display",
         kind: CssFeatureKind::Descriptor,
         spelling: "font-display in @font-face",
-        source: ExpectedSource::Repository("4b288d6:src/parser/font_face.rs"),
-        production: "font-display descriptor",
+        source: ExpectedSource::Id("I-FONTS4"),
+        production: "#font-display-desc",
         status: CssSupportStatus::Partial,
         supported_subset: Some(DESCRIPTOR_SUBSET),
         unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
@@ -473,8 +472,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.descriptor.unicode-range",
         kind: CssFeatureKind::Descriptor,
         spelling: "unicode-range in @font-face",
-        source: ExpectedSource::Repository("4b288d6:src/parser/font_face.rs"),
-        production: "unicode-range descriptor",
+        source: ExpectedSource::Id("O-FONTS3"),
+        production: "#unicode-range-desc",
         status: CssSupportStatus::Partial,
         supported_subset: Some(DESCRIPTOR_SUBSET),
         unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
@@ -493,8 +492,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.selector.complex",
         kind: CssFeatureKind::Selector,
         spelling: "type, universal, ID, class; presence and six valued attribute matchers; descendant, child, next-sibling, subsequent-sibling combinators",
-        source: ExpectedSource::Repository("4b288d6:src/parser/selectors.rs"),
-        production: "complex selector",
+        source: ExpectedSource::Id("O-SELECTORS3"),
+        production: "#type-selectors,#universal-selector,#attribute-representation,#attribute-substrings,#class-html,#id-selectors,#descendant-combinators,#child-combinators,#adjacent-sibling-combinators,#general-sibling-combinators",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
             "The exact baseline-recognized complex-selector spelling group is supported.",
@@ -513,8 +512,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.selector.pseudo-class",
         kind: CssFeatureKind::Selector,
         spelling: ":root, :hover, :active, :focus, :disabled, :enabled, :checked, :first-child, :last-child, :only-child, :empty, :first-of-type, :last-of-type, :only-of-type",
-        source: ExpectedSource::Repository("4b288d6:src/parser/selectors.rs"),
-        production: "baseline pseudo-class selector",
+        source: ExpectedSource::Id("O-SELECTORS3"),
+        production: "#dynamic-pseudos,#UIstates,#structural-pseudos",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
             "The exact baseline-recognized pseudo-class spelling group is supported.",
@@ -531,8 +530,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.selector.functional",
         kind: CssFeatureKind::Selector,
         spelling: ":nth-child(), :nth-last-child(), :nth-of-type(), :nth-last-of-type(), :not()",
-        source: ExpectedSource::Repository("4b288d6:src/parser/selectors.rs"),
-        production: "baseline functional pseudo-class selector",
+        source: ExpectedSource::Id("O-SELECTORS3"),
+        production: "#structural-pseudos,#negation",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
             "The exact baseline-recognized functional pseudo-class spelling group is supported.",
@@ -549,8 +548,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.selector.extension-state",
         kind: CssFeatureKind::Selector,
         spelling: ":scope, :focus-visible, :focus-within, :required, :optional, :valid, :invalid, :placeholder-shown, :default, :indeterminate, :read-only, :read-write, :in-range, :out-of-range, :modal, :fullscreen, :popover-open",
-        source: ExpectedSource::Repository("4b288d6:src/parser/selectors.rs"),
-        production: "extension state pseudo-class selector",
+        source: ExpectedSource::Id("I-SELECTORS4"),
+        production: "#useraction-pseudos,#input-pseudos,#resource-pseudos,#display-state-pseudos",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
             "The exact I01 extension-state pseudo-class spelling group is supported.",
@@ -567,8 +566,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.selector.extension-functional",
         kind: CssFeatureKind::Selector,
         spelling: ":is(), :where(), complex :not(), :has(), and nth-child of lists",
-        source: ExpectedSource::Repository("4b288d6:src/parser/selectors.rs"),
-        production: "extension functional pseudo-class selector",
+        source: ExpectedSource::Id("I-SELECTORS4"),
+        production: "#matches,#zero-matches,#relational,#negation,#the-nth-child-pseudo",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
             "The exact I01 extension-functional pseudo-class spelling group is supported.",
@@ -587,8 +586,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.selector.attribute-case",
         kind: CssFeatureKind::Selector,
         spelling: "i and s attribute-selector modifiers",
-        source: ExpectedSource::Repository("4b288d6:src/parser/selectors.rs"),
-        production: "attribute-selector case-sensitivity modifier",
+        source: ExpectedSource::Id("I-SELECTORS4"),
+        production: "#attribute-case",
         status: CssSupportStatus::Partial,
         supported_subset: Some("The i and s attribute-selector case modifiers are supported."),
         unsupported_remainder: Some(SELECTOR_REMAINDER),
@@ -603,7 +602,7 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.selector.pseudo-element",
         kind: CssFeatureKind::Selector,
         spelling: "::before, ::after, ::marker, ::selection, ::backdrop, and generated ::marker sequences",
-        source: ExpectedSource::Repository("4b288d6:src/parser/selectors.rs"),
+        source: ExpectedSource::Id("I01-BASE-SELECTORS"),
         production: "pseudo-element selector",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
@@ -621,8 +620,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.selector.nesting",
         kind: CssFeatureKind::Selector,
         spelling: "nesting &, scoped selector anchors, and scoped relative selectors",
-        source: ExpectedSource::Repository("4b288d6:src/parser/nesting.rs"),
-        production: "nesting selector",
+        source: ExpectedSource::Id("I-NESTING1"),
+        production: "#nest-selector",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
             "Nesting &, scoped selector anchors, and scoped relative selectors are supported.",
@@ -639,7 +638,7 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.media.query-list",
         kind: CssFeatureKind::MediaQuery,
         spelling: "typed/condition query lists, not/only, and/or/not, range and colon forms, and malformed-member Never recovery",
-        source: ExpectedSource::Repository("4b288d6:src/parser/queries.rs"),
+        source: ExpectedSource::Id("I01-BASE-QUERIES"),
         production: "media query list",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
@@ -659,8 +658,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.media.type",
         kind: CssFeatureKind::MediaQuery,
         spelling: "all, screen, print",
-        source: ExpectedSource::Repository("4b288d6:src/parser/queries.rs"),
-        production: "media type",
+        source: ExpectedSource::Id("O-MEDIA3"),
+        production: "#media1",
         status: CssSupportStatus::Partial,
         supported_subset: Some("The all, screen, and print media types are supported."),
         unsupported_remainder: Some(QUERY_REMAINDER),
@@ -675,7 +674,7 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.media.range-feature",
         kind: CssFeatureKind::MediaQuery,
         spelling: "width, height, resolution, color, monochrome and their min-/max- names",
-        source: ExpectedSource::Repository("4b288d6:src/parser/queries.rs"),
+        source: ExpectedSource::Id("I01-BASE-QUERIES"),
         production: "media range feature",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
@@ -693,7 +692,7 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.media.discrete-feature",
         kind: CssFeatureKind::MediaQuery,
         spelling: "orientation, prefers-color-scheme, prefers-reduced-motion, prefers-reduced-transparency, prefers-contrast, forced-colors, hover, any-hover, pointer, any-pointer, display-mode",
-        source: ExpectedSource::Repository("4b288d6:src/parser/queries.rs"),
+        source: ExpectedSource::Id("I01-BASE-QUERIES"),
         production: "media discrete feature",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
@@ -713,8 +712,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.container.condition",
         kind: CssFeatureKind::ContainerQuery,
         spelling: "and/or/not, size features, and custom-property style existence/equality",
-        source: ExpectedSource::Repository("4b288d6:src/parser/queries.rs"),
-        production: "container condition",
+        source: ExpectedSource::Id("X-CONTAIN3"),
+        production: "#container-rule",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
             "The exact baseline-recognized container-condition spelling group is supported.",
@@ -733,8 +732,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         id: "baseline.container.size-feature",
         kind: CssFeatureKind::ContainerQuery,
         spelling: "width, height, inline-size, block-size, aspect-ratio, orientation and applicable min-/max- names",
-        source: ExpectedSource::Repository("4b288d6:src/parser/queries.rs"),
-        production: "container size feature",
+        source: ExpectedSource::Id("X-CONTAIN3"),
+        production: "#size-container",
         status: CssSupportStatus::Partial,
         supported_subset: Some(
             "The exact baseline-recognized container size-feature spelling group is supported.",
@@ -788,31 +787,13 @@ fn named_conformance_records_expose_declared_metadata() {
             "{} recognized code",
             expected.id
         );
-        match expected.source {
-            ExpectedSource::Url(url) => {
-                assert_eq!(
-                    actual.source().url(),
-                    Some(url),
-                    "{} source URL",
-                    expected.id
-                );
-                assert_eq!(
-                    actual.source().repository_provenance(),
-                    None,
-                    "{} repository source",
-                    expected.id
-                );
-            }
-            ExpectedSource::Repository(provenance) => {
-                assert_eq!(actual.source().url(), None, "{} source URL", expected.id);
-                assert_eq!(
-                    actual.source().repository_provenance(),
-                    Some(provenance),
-                    "{} repository source",
-                    expected.id
-                );
-            }
-        }
+        let ExpectedSource::Id(source_id) = expected.source;
+        assert_eq!(
+            actual.source().id().as_str(),
+            source_id,
+            "{} source",
+            expected.id
+        );
 
         let partial = expected.status == CssSupportStatus::Partial;
         assert_eq!(
@@ -956,6 +937,304 @@ fn source_registry_exposes_containment_level_three_extension_provenance() {
 
     assert!(specification_source("x-contain3").is_none());
     assert!(specification_source(" X-CONTAIN3").is_none());
+}
+
+#[test]
+fn preserved_i01_catalog_exposes_dated_atomic_provenance_and_alias_targets() {
+    let scrollbar =
+        feature_metadata("baseline.property.scrollbar-width").expect("scrollbar-width record");
+    assert_eq!(scrollbar.source().id().as_str(), "R-SCROLLBARS1");
+    assert_eq!(
+        scrollbar.source().tier(),
+        CssSpecificationTier::Snapshot2026Reliable
+    );
+
+    for id in [
+        "baseline.rule.container",
+        "baseline.container.condition",
+        "baseline.container.size-feature",
+    ] {
+        let feature = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}`"));
+        assert_eq!(feature.source().id().as_str(), "X-CONTAIN3", "{id}");
+        assert_eq!(
+            feature.source().tier(),
+            CssSpecificationTier::SurgeistExtension
+        );
+    }
+
+    let alias = feature_metadata("baseline.selector.pseudo-element")
+        .expect("preserved pseudo-element alias");
+    let targets: Vec<_> = alias
+        .baseline_alias_targets()
+        .iter()
+        .map(|id| id.as_str())
+        .collect();
+    assert_eq!(
+        targets,
+        [
+            "official.selector.generated",
+            "ext.pseudo-element.marker",
+            "ext.pseudo-element.selection",
+            "ext.pseudo-element.backdrop",
+            "ext.pseudo-element.generated-marker",
+        ]
+    );
+
+    let generated =
+        feature_metadata("official.selector.generated").expect("atomic generated pseudo-element");
+    assert_eq!(generated.source().id().as_str(), "O-SELECTORS3");
+    assert!(generated.baseline_alias_targets().is_empty());
+
+    let report = parse_sheet(".note::before { color: red; }");
+    assert!(
+        report.is_clean(),
+        "atomic parser case: {:?}",
+        report.diagnostics()
+    );
+    assert_eq!(report.syntax().rules().len(), 1);
+}
+
+#[test]
+fn every_alias_atomic_target_has_declared_metadata_and_public_parser_evidence() {
+    let aliases: &[(&str, &[&str])] = &[
+        (
+            "baseline.selector.pseudo-element",
+            &[
+                "official.selector.generated",
+                "ext.pseudo-element.marker",
+                "ext.pseudo-element.selection",
+                "ext.pseudo-element.backdrop",
+                "ext.pseudo-element.generated-marker",
+            ],
+        ),
+        (
+            "baseline.media.query-list",
+            &[
+                "official.media.query-list-core",
+                "ext.media.condition-syntax",
+                "ext.media.malformed-member-never",
+            ],
+        ),
+        (
+            "baseline.media.range-feature",
+            &[
+                "official.media.feature.width",
+                "official.media.feature.height",
+                "official.media.feature.resolution",
+                "official.media.feature.color",
+                "official.media.feature.monochrome",
+                "ext.media.range.width",
+                "ext.media.range.height",
+                "ext.media.range.resolution",
+                "ext.media.range.color",
+                "ext.media.range.monochrome",
+            ],
+        ),
+        (
+            "baseline.media.discrete-feature",
+            &[
+                "official.media.feature.orientation",
+                "ext.media.hover",
+                "ext.media.any-hover",
+                "ext.media.pointer",
+                "ext.media.any-pointer",
+                "ext.media.prefers-color-scheme",
+                "ext.media.prefers-reduced-motion",
+                "ext.media.prefers-reduced-transparency",
+                "ext.media.prefers-contrast",
+                "ext.media.forced-colors",
+                "ext.media.display-mode",
+            ],
+        ),
+    ];
+    for (alias_id, expected_targets) in aliases {
+        let alias = feature_metadata(alias_id).unwrap_or_else(|| panic!("missing `{alias_id}`"));
+        let actual_targets: Vec<_> = alias
+            .baseline_alias_targets()
+            .iter()
+            .map(|target| target.as_str())
+            .collect();
+        assert_eq!(actual_targets, *expected_targets, "{alias_id}");
+    }
+
+    let clean_cases = [
+        (
+            "official.selector.generated",
+            "O-SELECTORS3",
+            ".x::after { color: red; }",
+        ),
+        (
+            "ext.pseudo-element.marker",
+            "X-PSEUDO4",
+            "li::marker { color: red; }",
+        ),
+        (
+            "ext.pseudo-element.selection",
+            "X-PSEUDO4",
+            "::selection { color: red; }",
+        ),
+        (
+            "ext.pseudo-element.backdrop",
+            "X-PSEUDO4",
+            ".dialog::backdrop { color: red; }",
+        ),
+        (
+            "ext.pseudo-element.generated-marker",
+            "X-PSEUDO4",
+            ".item::before::marker { color: red; }",
+        ),
+        (
+            "official.media.query-list-core",
+            "O-MEDIA3",
+            "@media screen, print { .x { color: red; } }",
+        ),
+        (
+            "ext.media.condition-syntax",
+            "R-MEDIA4",
+            "@media not screen and (width: 1px) { .x { color: red; } }",
+        ),
+        (
+            "official.media.feature.width",
+            "O-MEDIA3",
+            "@media (min-width: 1px) { .x { color: red; } }",
+        ),
+        (
+            "official.media.feature.height",
+            "O-MEDIA3",
+            "@media (max-height: 2px) { .x { color: red; } }",
+        ),
+        (
+            "official.media.feature.resolution",
+            "O-MEDIA3",
+            "@media (resolution: 2dppx) { .x { color: red; } }",
+        ),
+        (
+            "official.media.feature.color",
+            "O-MEDIA3",
+            "@media (color: 8) { .x { color: red; } }",
+        ),
+        (
+            "official.media.feature.monochrome",
+            "O-MEDIA3",
+            "@media (monochrome: 1) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.range.width",
+            "R-MEDIA4",
+            "@media (width >= 1px) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.range.height",
+            "R-MEDIA4",
+            "@media (height < 2px) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.range.resolution",
+            "R-MEDIA4",
+            "@media (resolution > 1dppx) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.range.color",
+            "R-MEDIA4",
+            "@media (color >= 8) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.range.monochrome",
+            "R-MEDIA4",
+            "@media (monochrome = 1) { .x { color: red; } }",
+        ),
+        (
+            "official.media.feature.orientation",
+            "O-MEDIA3",
+            "@media (orientation: portrait) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.hover",
+            "R-MEDIA4",
+            "@media (hover: hover) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.any-hover",
+            "R-MEDIA4",
+            "@media (any-hover: none) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.pointer",
+            "R-MEDIA4",
+            "@media (pointer: fine) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.any-pointer",
+            "R-MEDIA4",
+            "@media (any-pointer: coarse) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.prefers-color-scheme",
+            "X-MEDIA5",
+            "@media (prefers-color-scheme: dark) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.prefers-reduced-motion",
+            "X-MEDIA5",
+            "@media (prefers-reduced-motion: reduce) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.prefers-reduced-transparency",
+            "X-MEDIA5",
+            "@media (prefers-reduced-transparency: reduce) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.prefers-contrast",
+            "X-MEDIA5",
+            "@media (prefers-contrast: more) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.forced-colors",
+            "X-MEDIA5",
+            "@media (forced-colors: active) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.display-mode",
+            "X-DISPLAY-MODE-BASE",
+            "@media (display-mode: picture-in-picture) { .x { color: red; } }",
+        ),
+    ];
+    for (id, source_id, css) in clean_cases {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}`"));
+        assert_eq!(metadata.source().id().as_str(), source_id, "{id}");
+        assert!(metadata.baseline_alias_targets().is_empty(), "{id}");
+        let report = parse_sheet(css);
+        assert!(report.is_clean(), "{id}: {:?}", report.diagnostics());
+        assert_eq!(report.syntax().rules().len(), 1, "{id}");
+    }
+
+    let malformed = feature_metadata("ext.media.malformed-member-never")
+        .expect("malformed-member recovery target");
+    assert_eq!(malformed.source().id().as_str(), "R-MEDIA4");
+    assert!(malformed.baseline_alias_targets().is_empty());
+    let source = "@media screen, ??? { .x { color: red; } }";
+    let report = parse_sheet(source);
+    assert_eq!(report.syntax().rules().len(), 1);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected one malformed-member diagnostic");
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::InvalidMediaQuery);
+    assert_eq!(
+        diagnostic.action(),
+        CssRecoveryAction::ReplaceMediaQueryWithNever
+    );
+    assert_eq!(
+        diagnostic.error().position().byte_offset().value(),
+        source.find("???").expect("responsible malformed member")
+    );
+    assert_eq!(
+        diagnostic.span().start().byte_offset().value(),
+        source.find(" ???").expect("malformed recovery unit")
+    );
+    assert_eq!(
+        diagnostic.span().end().byte_offset().value(),
+        source.find('{').expect("end of media query list")
+    );
 }
 
 #[test]

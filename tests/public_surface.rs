@@ -3,8 +3,8 @@ use surgeist_css::{
     CssGridAutoFlowAxis, CssImportance, CssKnownDeclaredValueRef, CssKnownProperty,
     CssKnownPropertyValueRef, CssMediaQueryModifier, CssPropertyNameRef, CssRecoveryAction,
     CssRelativeColorFunction, CssRule, CssSelectorCombinator, CssSpecificationTier,
-    CssSupportStatus, ErrorKind, conformance_exclusion, feature_catalog, feature_metadata,
-    parse_sheet, parse_style_attribute, property_metadata, specification_source,
+    CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata, parse_sheet,
+    parse_style_attribute, property_metadata, specification_source,
 };
 
 fn known_declared_value_kind(value: CssKnownDeclaredValueRef<'_>) -> &'static str {
@@ -309,8 +309,6 @@ fn public_surface_known_declarations_expose_coupled_authored_value_views() {
 
 #[test]
 fn public_surface_metadata_exposes_every_final_accessor_and_bounded_status() {
-    assert_eq!(feature_catalog().len(), 219);
-
     let complete =
         feature_metadata("foundation.declaration.importance").expect("importance catalog record");
     assert_eq!(complete.id().as_str(), "foundation.declaration.importance");
@@ -324,6 +322,7 @@ fn public_surface_metadata_exposes_every_final_accessor_and_bounded_status() {
     assert_eq!(complete.supported_subset(), None);
     assert_eq!(complete.unsupported_remainder(), None);
     assert_eq!(complete.recognized_unsupported_code(), None);
+    assert!(complete.baseline_alias_targets().is_empty());
     assert!(complete.source().url().is_some());
     assert_eq!(complete.source().repository_provenance(), None);
 
@@ -339,10 +338,14 @@ fn public_surface_metadata_exposes_every_final_accessor_and_bounded_status() {
             .unsupported_remainder()
             .is_some_and(|text| !text.is_empty())
     );
-    assert_eq!(partial.source().url(), None);
+    assert_eq!(partial.source().id().as_str(), "O-SYNTAX3");
+    assert_eq!(partial.source().repository_provenance(), None);
+
+    let alias = feature_metadata("baseline.media.query-list").expect("media baseline alias");
+    assert_eq!(alias.baseline_alias_targets().len(), 3);
     assert_eq!(
-        partial.source().repository_provenance(),
-        Some("4b288d6:src/parser/mod.rs")
+        alias.baseline_alias_targets()[0].as_str(),
+        "official.media.query-list-core"
     );
 
     let unsupported = feature_metadata("later.rule.namespace").expect("namespace record");

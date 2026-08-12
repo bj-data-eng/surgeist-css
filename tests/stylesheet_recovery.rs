@@ -35,6 +35,61 @@ fn assert_drop(
     assert!(diagnostic.span().start() < diagnostic.span().end());
 }
 
+fn assert_root_token_drop(
+    source: &str,
+    diagnostic: &surgeist_css::CssRecoveryDiagnostic,
+    start: usize,
+    authored: &str,
+    kind: surgeist_css::CssTokenKind,
+) {
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidQualifiedRule
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropQualifiedRule);
+    assert_eq!(diagnostic.error().position().byte_offset().value(), start);
+    assert_eq!(diagnostic.span().start().byte_offset().value(), start);
+    assert_eq!(
+        diagnostic.span().end().byte_offset().value(),
+        start + authored.len()
+    );
+    assert_eq!(&source[start..start + authored.len()], authored);
+    assert!(diagnostic.span().start() < diagnostic.span().end());
+
+    let ErrorKind::InvalidQualifiedRule(detail) = diagnostic.error().kind() else {
+        panic!("expected invalid qualified-rule detail")
+    };
+    assert_eq!(detail.production().as_str(), "css.qualified-rule");
+    assert_eq!(detail.expectation().as_str(), "valid CSS syntax");
+    let encountered = detail.encountered().expect("responsible root token");
+    assert_eq!(encountered.kind(), kind);
+    assert_eq!(encountered.authored(), authored);
+}
+
+fn assert_nonleading_encoding_drop(source: &str, diagnostic: &surgeist_css::CssRecoveryDiagnostic) {
+    assert_drop(
+        source,
+        diagnostic,
+        CssErrorCode::InvalidEncodingDeclaration,
+        CssRecoveryAction::DropAtRule,
+        "@charset \"UTF-8\";",
+    );
+    assert_eq!(
+        diagnostic.error().position().byte_offset().value(),
+        source.find("\"UTF-8\"").unwrap()
+    );
+    let ErrorKind::InvalidEncodingDeclaration(detail) = diagnostic.error().kind() else {
+        panic!("expected encoding declaration detail")
+    };
+    assert_eq!(
+        detail.expectation().as_str(),
+        "a non-empty double-quoted encoding label followed by a semicolon"
+    );
+    let encountered = detail.encountered().expect("responsible encoding token");
+    assert_eq!(encountered.kind(), surgeist_css::CssTokenKind::String);
+    assert_eq!(encountered.authored(), "\"UTF-8\"");
+}
+
 #[test]
 fn stylesheet_recovery_front_door_has_report_signature() {
     fn require_signature(_: fn(&str) -> surgeist_css::CssParseReport<surgeist_css::CssSheet>) {}
@@ -74,6 +129,125 @@ fn stylesheet_recovery_top_level_cdc_is_silent_before_and_between_valid_rules() 
 
     assert_eq!(style_rule_names(&report), ["before", "after"]);
     assert!(report.is_clean());
+}
+
+#[test]
+fn stylesheet_recovery_root_semicolon_before_valid_rule_is_one_exact_drop() {
+    let source = "; .after { color: blue; }";
+
+    let report = parse_sheet(source);
+
+    assert_eq!(style_rule_names(&report), ["after"]);
+    assert_eq!(report.diagnostics().len(), 1);
+    assert_root_token_drop(
+        source,
+        &report.diagnostics()[0],
+        0,
+        ";",
+        surgeist_css::CssTokenKind::Semicolon,
+    );
+}
+
+#[test]
+fn stylesheet_recovery_root_semicolon_between_valid_rules_is_one_exact_drop() {
+    let source = ".before { color: red; } ; .after { color: blue; }";
+    let stray = source.find("} ;").unwrap() + 2;
+
+    let report = parse_sheet(source);
+
+    assert_eq!(style_rule_names(&report), ["before", "after"]);
+    assert_eq!(report.diagnostics().len(), 1);
+    assert_root_token_drop(
+        source,
+        &report.diagnostics()[0],
+        stray,
+        ";",
+        surgeist_css::CssTokenKind::Semicolon,
+    );
+}
+
+#[test]
+fn stylesheet_recovery_unmatched_root_closing_brace_before_valid_rule_is_one_exact_drop() {
+    let source = "} .after { color: blue; }";
+
+    let report = parse_sheet(source);
+
+    assert_eq!(style_rule_names(&report), ["after"]);
+    assert_eq!(report.diagnostics().len(), 1);
+    assert_root_token_drop(
+        source,
+        &report.diagnostics()[0],
+        0,
+        "}",
+        surgeist_css::CssTokenKind::CloseCurlyBracket,
+    );
+}
+
+#[test]
+fn stylesheet_recovery_unmatched_root_closing_brace_between_valid_rules_is_one_exact_drop() {
+    let source = ".before { color: red; } } .after { color: blue; }";
+    let stray = source.find("} }").unwrap() + 2;
+
+    let report = parse_sheet(source);
+
+    assert_eq!(style_rule_names(&report), ["before", "after"]);
+    assert_eq!(report.diagnostics().len(), 1);
+    assert_root_token_drop(
+        source,
+        &report.diagnostics()[0],
+        stray,
+        "}",
+        surgeist_css::CssTokenKind::CloseCurlyBracket,
+    );
+}
+
+#[test]
+fn stylesheet_recovery_root_semicolon_makes_following_encoding_nonleading() {
+    let source = "; @charset \"UTF-8\"; .after { color: blue; }";
+
+    let report = parse_sheet(source);
+
+    assert_eq!(style_rule_names(&report), ["after"]);
+    assert!(report.syntax().encoding().is_none());
+    assert_eq!(report.diagnostics().len(), 2);
+    assert_root_token_drop(
+        source,
+        &report.diagnostics()[0],
+        0,
+        ";",
+        surgeist_css::CssTokenKind::Semicolon,
+    );
+    assert_nonleading_encoding_drop(source, &report.diagnostics()[1]);
+    assert!(report.diagnostics()[0].span() < report.diagnostics()[1].span());
+}
+
+#[test]
+fn stylesheet_recovery_unmatched_root_closing_brace_makes_following_encoding_nonleading() {
+    let source = "} @charset \"UTF-8\"; .after { color: blue; }";
+
+    let report = parse_sheet(source);
+
+    assert_eq!(style_rule_names(&report), ["after"]);
+    assert!(report.syntax().encoding().is_none());
+    assert_eq!(report.diagnostics().len(), 2);
+    assert_root_token_drop(
+        source,
+        &report.diagnostics()[0],
+        0,
+        "}",
+        surgeist_css::CssTokenKind::CloseCurlyBracket,
+    );
+    assert_nonleading_encoding_drop(source, &report.diagnostics()[1]);
+    assert!(report.diagnostics()[0].span() < report.diagnostics()[1].span());
+}
+
+#[test]
+fn stylesheet_recovery_trivia_and_legacy_tokens_alone_remain_clean() {
+    let report = parse_sheet(" \n/**/ <!-- --> \t");
+
+    assert!(report.is_clean());
+    assert!(report.syntax().rules().is_empty());
+    assert!(report.syntax().encoding().is_none());
 }
 
 #[test]

@@ -56,9 +56,10 @@ use variables::{
 use crate::error::{
     Error, basic, from_rule_parse_error, invalid_at_rule_block, invalid_at_rule_placement,
     invalid_custom_declaration_annotation, invalid_descriptor_annotation,
-    invalid_encoding_declaration, invalid_known_declaration_annotation, invalid_syntax,
-    normalize_encoding_error, property_name_error, unsupported_value, with_at_rule_prelude_context,
-    with_encoding_declaration_context, with_media_query_context, with_property_context,
+    invalid_encoding_declaration, invalid_known_declaration_annotation, invalid_root_syntax,
+    invalid_syntax, normalize_encoding_error, property_name_error, unsupported_value,
+    with_at_rule_prelude_context, with_encoding_declaration_context, with_media_query_context,
+    with_property_context,
 };
 use crate::properties::{CssOverflowPropertyValue, property_schema};
 use crate::syntax::*;
@@ -149,7 +150,12 @@ pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
     {
         let mut rules = RuleBodyParser::new(&mut parser, &mut rule_parser);
         loop {
-            skip_top_level_legacy_tokens(rules.input);
+            if let Some(diagnostic) = discard_malformed_top_level_token(source, rules.input) {
+                rules.parser.encoding_allowed = false;
+                previous_end = diagnostic.span().end().byte_offset().value();
+                diagnostics.push(diagnostic);
+                continue;
+            }
             let Some(result) = rules.next() else {
                 break;
             };
@@ -208,14 +214,35 @@ pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
     crate::CssParseReport::new(sheet, diagnostics)
 }
 
-fn skip_top_level_legacy_tokens(input: &mut Parser<'_, '_>) {
+fn discard_malformed_top_level_token(
+    source: &str,
+    input: &mut Parser<'_, '_>,
+) -> Option<crate::CssRecoveryDiagnostic> {
     loop {
         let state = input.state();
+        let token_start = input.position().byte_index();
         match input.next_including_whitespace_and_comments() {
             Ok(Token::WhiteSpace(_) | Token::Comment(_) | Token::CDO | Token::CDC) => {}
+            Ok(token @ (Token::Semicolon | Token::CloseCurlyBracket)) => {
+                let token = token.clone();
+                let token_end = input.position().byte_index();
+                let error = invalid_root_syntax(source, token_start, &token);
+                let span = crate::CssSourceSpan::new(
+                    crate::CssSourcePosition::from_byte_offset_in(source, token_start),
+                    crate::CssSourcePosition::from_byte_offset_in(source, token_end),
+                )
+                .expect("a consumed top-level token has an ordered non-empty span");
+                let diagnostic = crate::CssRecoveryDiagnostic::new(
+                    error,
+                    span,
+                    crate::CssRecoveryAction::DropQualifiedRule,
+                )
+                .expect("the responsible top-level token starts its recovery span");
+                return Some(diagnostic);
+            }
             Ok(_) | Err(_) => {
                 input.reset(&state);
-                break;
+                return None;
             }
         }
     }

@@ -1258,6 +1258,17 @@ pub(crate) fn invalid_syntax<'i>(
     )
 }
 
+pub(crate) fn invalid_root_syntax(source: &str, byte_offset: usize, token: &Token<'_>) -> Error {
+    Error {
+        kind: ErrorKind::InvalidQualifiedRule(CssQualifiedRuleError {
+            production: QUALIFIED_RULE,
+            expectation: EXPECT_CSS_SYNTAX,
+            encountered: Some(CssTokenSummary::from_token(token)),
+        }),
+        position: CssSourcePosition::from_byte_offset_in(source, byte_offset),
+    }
+}
+
 pub(crate) fn invalid_qualified_rule<'i>(
     location: cssparser::SourceLocation,
     production: &'static str,

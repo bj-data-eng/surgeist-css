@@ -40,36 +40,134 @@ pub enum CssSupportStatus {
     RecognizedUnsupported,
 }
 
+/// A stable identity for one immutable conformance source.
+///
+/// Source identities are registry-owned and cannot be forged by downstream
+/// callers.
+///
+/// ```compile_fail
+/// use surgeist_css::CssSpecificationSourceId;
+///
+/// let _ = CssSpecificationSourceId("O-CSS2");
+/// ```
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CssSpecificationSourceId(&'static str);
+
+impl CssSpecificationSourceId {
+    const fn new(value: &'static str) -> Self {
+        Self(value)
+    }
+
+    /// Returns the exact stable source identity.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+/// The selected conformance-profile tier of a specification source.
+///
+/// A tier classifies provenance only. It never implies parser support.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CssSpecificationTier {
+    /// An official dated source in the Snapshot 2026 profile.
+    Snapshot2026Official,
+    /// A reliable dated source preserved by the Snapshot 2026 profile.
+    Snapshot2026Reliable,
+    /// A stable dated source preserved by the Snapshot 2026 profile.
+    Snapshot2026Stable,
+    /// An interoperability source preserved by the Snapshot 2026 profile.
+    Snapshot2026Interop,
+    /// A deliberately selected Surgeist extension or repository baseline.
+    SurgeistExtension,
+    /// A standards-track source outside the selected profile.
+    LaterStandard,
+}
+
 /// Immutable provenance for one support-catalog record.
 ///
 /// Exactly one of [`Self::url`] and [`Self::repository_provenance`] is present.
 /// Values are catalog-owned and cannot be constructed by downstream callers.
 ///
 /// ```compile_fail
-/// use surgeist_css::feature_catalog;
+/// use surgeist_css::{CssSpecificationSource, CssSpecificationTier};
 ///
-/// let source = feature_catalog()[0].source();
-/// let _ = source.url;
+/// let _ = CssSpecificationSource {
+///     id: todo!(),
+///     module: "CSS",
+///     level: "3",
+///     tier: CssSpecificationTier::LaterStandard,
+///     url: None,
+///     repository_provenance: None,
+/// };
 /// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct CssSpecificationSource {
+    id: CssSpecificationSourceId,
+    module: &'static str,
+    level: &'static str,
+    tier: CssSpecificationTier,
     url: Option<&'static str>,
     repository_provenance: Option<&'static str>,
 }
 
 impl CssSpecificationSource {
-    const fn from_url(value: &'static str) -> Self {
+    const fn from_url(
+        id: &'static str,
+        module: &'static str,
+        level: &'static str,
+        tier: CssSpecificationTier,
+        value: &'static str,
+    ) -> Self {
         Self {
+            id: CssSpecificationSourceId::new(id),
+            module,
+            level,
+            tier,
             url: Some(value),
             repository_provenance: None,
         }
     }
 
-    const fn from_repository(value: &'static str) -> Self {
+    const fn from_repository(
+        id: &'static str,
+        module: &'static str,
+        level: &'static str,
+        value: &'static str,
+    ) -> Self {
         Self {
+            id: CssSpecificationSourceId::new(id),
+            module,
+            level,
+            tier: CssSpecificationTier::SurgeistExtension,
             url: None,
             repository_provenance: Some(value),
         }
+    }
+
+    /// Returns the exact stable source identity.
+    #[must_use]
+    pub const fn id(self) -> CssSpecificationSourceId {
+        self.id
+    }
+
+    /// Returns the specification module name.
+    #[must_use]
+    pub const fn module(self) -> &'static str {
+        self.module
+    }
+
+    /// Returns the module level or exact selected baseline slice.
+    #[must_use]
+    pub const fn level(self) -> &'static str {
+        self.level
+    }
+
+    /// Returns the source's conformance-profile tier.
+    #[must_use]
+    pub const fn tier(self) -> CssSpecificationTier {
+        self.tier
     }
 
     /// Returns the immutable specification URL, when this record cites a specification.
@@ -82,6 +180,139 @@ impl CssSpecificationSource {
     #[must_use]
     pub const fn repository_provenance(self) -> Option<&'static str> {
         self.repository_provenance
+    }
+}
+
+/// A stable identity for one official conformance exclusion.
+///
+/// ```compile_fail
+/// use surgeist_css::CssConformanceExclusionId;
+///
+/// let _ = CssConformanceExclusionId("excluded.O-CSS2.informative-audit");
+/// ```
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CssConformanceExclusionId(&'static str);
+
+impl CssConformanceExclusionId {
+    const fn new(value: &'static str) -> Self {
+        Self(value)
+    }
+
+    /// Returns the exact stable exclusion identity.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+/// Why an official source item is not an authored parser-facing production.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CssExclusionReason {
+    /// The source item is informative rather than a normative production.
+    InformativeOnly,
+    /// A selected source replaced the item without leaving a current production.
+    SupersededWithoutCurrentProduction,
+    /// The item specifies semantics outside strict authored CSS syntax.
+    OutsideAuthoredSyntaxBoundary,
+}
+
+/// A stable identity for a source or production that supersedes an exclusion.
+///
+/// This semantic identity can name an active feature, a planned official
+/// feature, or a selected source when the exclusion covers a broader source
+/// area. Values are registry-owned and cannot be forged downstream.
+///
+/// ```compile_fail
+/// use surgeist_css::CssConformanceSupersedingId;
+///
+/// let _ = CssConformanceSupersedingId("O-SYNTAX3");
+/// ```
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CssConformanceSupersedingId(&'static str);
+
+impl CssConformanceSupersedingId {
+    const fn new(value: &'static str) -> Self {
+        Self(value)
+    }
+
+    /// Returns the exact stable superseding identity.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+/// Immutable metadata for one official conformance exclusion.
+///
+/// Exclusions are audit facts. They do not dispatch the parser, carry a support
+/// status, or change how authored input is diagnosed.
+///
+/// ```compile_fail
+/// use surgeist_css::CssExclusionReason;
+///
+/// let _ = surgeist_css::CssExclusionMetadata {
+///     id: todo!(),
+///     source: todo!(),
+///     production: "example",
+///     reason: CssExclusionReason::InformativeOnly,
+///     superseding_ids: None,
+/// };
+/// ```
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CssExclusionMetadata {
+    id: CssConformanceExclusionId,
+    source: CssSpecificationSource,
+    production: &'static str,
+    reason: CssExclusionReason,
+    superseding_ids: Option<&'static [CssConformanceSupersedingId]>,
+}
+
+impl CssExclusionMetadata {
+    const fn new(
+        id: &'static str,
+        source: CssSpecificationSource,
+        production: &'static str,
+        reason: CssExclusionReason,
+        superseding_ids: Option<&'static [CssConformanceSupersedingId]>,
+    ) -> Self {
+        Self {
+            id: CssConformanceExclusionId::new(id),
+            source,
+            production,
+            reason,
+            superseding_ids,
+        }
+    }
+
+    /// Returns the globally unique stable exclusion identity.
+    #[must_use]
+    pub const fn id(&self) -> CssConformanceExclusionId {
+        self.id
+    }
+
+    /// Returns the immutable official source containing the excluded item.
+    #[must_use]
+    pub const fn source(&self) -> CssSpecificationSource {
+        self.source
+    }
+
+    /// Returns the exact source area, production, or fragment.
+    #[must_use]
+    pub const fn production(&self) -> &'static str {
+        self.production
+    }
+
+    /// Returns why the item is excluded from authored syntax coverage.
+    #[must_use]
+    pub const fn reason(&self) -> CssExclusionReason {
+        self.reason
+    }
+
+    /// Returns stable IDs that supersede the item, when the contract names them.
+    #[must_use]
+    pub const fn superseding_ids(&self) -> Option<&'static [CssConformanceSupersedingId]> {
+        self.superseding_ids
     }
 }
 
@@ -299,37 +530,1152 @@ impl CssPropertyMetadata {
     }
 }
 
-const CSS_SYNTAX_3: CssSpecificationSource =
-    CssSpecificationSource::from_url("https://www.w3.org/TR/2021/CRD-css-syntax-3-20211224/");
-const CSS_STYLE_ATTRIBUTES: CssSpecificationSource =
-    CssSpecificationSource::from_url("https://www.w3.org/TR/2013/REC-css-style-attr-20131107/");
-const CSS_CASCADE_4: CssSpecificationSource =
-    CssSpecificationSource::from_url("https://www.w3.org/TR/2022/CR-css-cascade-4-20220113/");
-const CSS_NAMESPACES_3: CssSpecificationSource =
-    CssSpecificationSource::from_url("https://www.w3.org/TR/css3-namespace/");
-const CSS_CONDITIONAL_3: CssSpecificationSource =
-    CssSpecificationSource::from_url("https://www.w3.org/TR/css-conditional-3/");
-const CSS_COUNTER_STYLES_3: CssSpecificationSource =
-    CssSpecificationSource::from_url("https://www.w3.org/TR/css-counter-styles-3/");
-const CSS_2_PAGE: CssSpecificationSource =
-    CssSpecificationSource::from_url("https://www.w3.org/TR/CSS2/page.html");
-const CSS_FONTS_4: CssSpecificationSource =
-    CssSpecificationSource::from_url("https://www.w3.org/TR/css-fonts-4/");
+macro_rules! dated_source {
+    ($id:literal, $module:literal, $level:literal, $tier:path, $url:literal) => {
+        CssSpecificationSource::from_url($id, $module, $level, $tier, $url)
+    };
+}
 
-const BASELINE_PARSER: CssSpecificationSource =
-    CssSpecificationSource::from_repository("4b288d6:src/parser/mod.rs");
-const BASELINE_FONT_FACE: CssSpecificationSource =
-    CssSpecificationSource::from_repository("4b288d6:src/parser/font_face.rs");
-const BASELINE_KEYFRAMES: CssSpecificationSource =
-    CssSpecificationSource::from_repository("4b288d6:src/parser/keyframes.rs");
-const BASELINE_VARIABLES: CssSpecificationSource =
-    CssSpecificationSource::from_repository("4b288d6:src/parser/variables.rs");
-const BASELINE_SELECTORS: CssSpecificationSource =
-    CssSpecificationSource::from_repository("4b288d6:src/parser/selectors.rs");
-const BASELINE_NESTING: CssSpecificationSource =
-    CssSpecificationSource::from_repository("4b288d6:src/parser/nesting.rs");
-const BASELINE_QUERIES: CssSpecificationSource =
-    CssSpecificationSource::from_repository("4b288d6:src/parser/queries.rs");
+const O_CSS2: CssSpecificationSource = dated_source!(
+    "O-CSS2",
+    "CSS",
+    "2.1",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2011/REC-CSS2-20110607/"
+);
+const O_SYNTAX3: CssSpecificationSource = dated_source!(
+    "O-SYNTAX3",
+    "CSS Syntax",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2021/CRD-css-syntax-3-20211224/"
+);
+const O_STYLE_ATTR: CssSpecificationSource = dated_source!(
+    "O-STYLE-ATTR",
+    "CSS Style Attributes",
+    "1",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2013/REC-css-style-attr-20131107/"
+);
+const O_MEDIA3: CssSpecificationSource = dated_source!(
+    "O-MEDIA3",
+    "Media Queries",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2024/REC-mediaqueries-3-20240521/"
+);
+const O_CONDITIONAL3: CssSpecificationSource = dated_source!(
+    "O-CONDITIONAL3",
+    "CSS Conditional Rules",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2024/CRD-css-conditional-3-20240815/"
+);
+const O_SELECTORS3: CssSpecificationSource = dated_source!(
+    "O-SELECTORS3",
+    "Selectors",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2018/REC-selectors-3-20181106/"
+);
+const O_NAMESPACES3: CssSpecificationSource = dated_source!(
+    "O-NAMESPACES3",
+    "CSS Namespaces",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2014/REC-css-namespaces-3-20140320/"
+);
+const O_CASCADE4: CssSpecificationSource = dated_source!(
+    "O-CASCADE4",
+    "CSS Cascading and Inheritance",
+    "4",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2022/CR-css-cascade-4-20220113/"
+);
+const O_VALUES3: CssSpecificationSource = dated_source!(
+    "O-VALUES3",
+    "CSS Values and Units",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2024/CRD-css-values-3-20240322/"
+);
+const O_VARIABLES1: CssSpecificationSource = dated_source!(
+    "O-VARIABLES1",
+    "CSS Custom Properties for Cascading Variables",
+    "1",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2022/CR-css-variables-1-20220616/"
+);
+const O_BOX3: CssSpecificationSource = dated_source!(
+    "O-BOX3",
+    "CSS Box Model",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2024/REC-css-box-3-20240411/"
+);
+const O_COLOR4: CssSpecificationSource = dated_source!(
+    "O-COLOR4",
+    "CSS Color",
+    "4",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2026/CRD-css-color-4-20260326/"
+);
+const O_BACKGROUNDS3: CssSpecificationSource = dated_source!(
+    "O-BACKGROUNDS3",
+    "CSS Backgrounds and Borders",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2024/CRD-css-backgrounds-3-20240311/"
+);
+const O_IMAGES3: CssSpecificationSource = dated_source!(
+    "O-IMAGES3",
+    "CSS Images",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2023/CRD-css-images-3-20231218/"
+);
+const O_FONTS3: CssSpecificationSource = dated_source!(
+    "O-FONTS3",
+    "CSS Fonts",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2018/REC-css-fonts-3-20180920/"
+);
+const O_WRITING3: CssSpecificationSource = dated_source!(
+    "O-WRITING3",
+    "CSS Writing Modes",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2019/REC-css-writing-modes-3-20191210/"
+);
+const O_MULTICOL1: CssSpecificationSource = dated_source!(
+    "O-MULTICOL1",
+    "CSS Multi-column Layout",
+    "1",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2024/CR-css-multicol-1-20240516/"
+);
+const O_FLEXBOX1: CssSpecificationSource = dated_source!(
+    "O-FLEXBOX1",
+    "CSS Flexible Box Layout",
+    "1",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2025/CRD-css-flexbox-1-20251014/"
+);
+const O_UI3: CssSpecificationSource = dated_source!(
+    "O-UI3",
+    "CSS Basic User Interface",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2018/REC-css-ui-3-20180621/"
+);
+const O_CONTAIN1: CssSpecificationSource = dated_source!(
+    "O-CONTAIN1",
+    "CSS Containment",
+    "1",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2024/REC-css-contain-1-20240625/"
+);
+const O_TRANSFORMS1: CssSpecificationSource = dated_source!(
+    "O-TRANSFORMS1",
+    "CSS Transforms",
+    "1",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2019/CR-css-transforms-1-20190214/"
+);
+const O_COMPOSITING1: CssSpecificationSource = dated_source!(
+    "O-COMPOSITING1",
+    "Compositing and Blending",
+    "1",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2024/CRD-compositing-1-20240321/"
+);
+const O_EASING1: CssSpecificationSource = dated_source!(
+    "O-EASING1",
+    "CSS Easing Functions",
+    "1",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2023/CRD-css-easing-1-20230213/"
+);
+const O_COUNTERSTYLES3: CssSpecificationSource = dated_source!(
+    "O-COUNTERSTYLES3",
+    "CSS Counter Styles",
+    "3",
+    CssSpecificationTier::Snapshot2026Official,
+    "https://www.w3.org/TR/2021/CR-css-counter-styles-3-20210727/"
+);
+
+macro_rules! profile_source {
+    ($name:ident, $id:literal, $module:literal, $level:literal, $tier:path, $url:literal) => {
+        const $name: CssSpecificationSource = dated_source!($id, $module, $level, $tier, $url);
+    };
+}
+
+profile_source!(
+    R_MEDIA4,
+    "R-MEDIA4",
+    "Media Queries",
+    "4",
+    CssSpecificationTier::Snapshot2026Reliable,
+    "https://www.w3.org/TR/2026/CRD-mediaqueries-4-20260219/"
+);
+profile_source!(
+    R_GRID1,
+    "R-GRID1",
+    "CSS Grid Layout",
+    "1",
+    CssSpecificationTier::Snapshot2026Reliable,
+    "https://www.w3.org/TR/2025/CRD-css-grid-1-20250326/"
+);
+profile_source!(
+    R_GRID2,
+    "R-GRID2",
+    "CSS Grid Layout",
+    "2",
+    CssSpecificationTier::Snapshot2026Reliable,
+    "https://www.w3.org/TR/2025/CRD-css-grid-2-20250326/"
+);
+profile_source!(
+    R_CASCADE5,
+    "R-CASCADE5",
+    "CSS Cascading and Inheritance",
+    "5",
+    CssSpecificationTier::Snapshot2026Reliable,
+    "https://www.w3.org/TR/2022/CR-css-cascade-5-20220113/"
+);
+profile_source!(
+    R_CONDITIONAL4,
+    "R-CONDITIONAL4",
+    "CSS Conditional Rules",
+    "4",
+    CssSpecificationTier::Snapshot2026Reliable,
+    "https://www.w3.org/TR/2025/CRD-css-conditional-4-20250904/"
+);
+profile_source!(
+    S_DISPLAY3,
+    "S-DISPLAY3",
+    "CSS Display",
+    "3",
+    CssSpecificationTier::Snapshot2026Stable,
+    "https://www.w3.org/TR/2026/CRD-css-display-3-20260605/"
+);
+profile_source!(
+    S_WRITING4,
+    "S-WRITING4",
+    "CSS Writing Modes",
+    "4",
+    CssSpecificationTier::Snapshot2026Stable,
+    "https://www.w3.org/TR/2019/CR-css-writing-modes-4-20190730/"
+);
+profile_source!(
+    S_BREAK3,
+    "S-BREAK3",
+    "CSS Fragmentation",
+    "3",
+    CssSpecificationTier::Snapshot2026Stable,
+    "https://www.w3.org/TR/2018/CR-css-break-3-20181204/"
+);
+profile_source!(
+    S_ALIGN3,
+    "S-ALIGN3",
+    "CSS Box Alignment",
+    "3",
+    CssSpecificationTier::Snapshot2026Stable,
+    "https://www.w3.org/TR/2026/WD-css-align-3-20260130/"
+);
+profile_source!(
+    S_SHAPES1,
+    "S-SHAPES1",
+    "CSS Shapes",
+    "1",
+    CssSpecificationTier::Snapshot2026Stable,
+    "https://www.w3.org/TR/2025/CRD-css-shapes-1-20250612/"
+);
+profile_source!(
+    S_TEXT3,
+    "S-TEXT3",
+    "CSS Text",
+    "3",
+    CssSpecificationTier::Snapshot2026Stable,
+    "https://www.w3.org/TR/2026/CRD-css-text-3-20260608/"
+);
+profile_source!(
+    S_TEXTDECOR3,
+    "S-TEXTDECOR3",
+    "CSS Text Decoration",
+    "3",
+    CssSpecificationTier::Snapshot2026Stable,
+    "https://www.w3.org/TR/2022/CRD-css-text-decor-3-20220505/"
+);
+profile_source!(
+    S_MASKING1,
+    "S-MASKING1",
+    "CSS Masking",
+    "1",
+    CssSpecificationTier::Snapshot2026Stable,
+    "https://www.w3.org/TR/2021/CRD-css-masking-1-20210805/"
+);
+profile_source!(
+    I_TRANSITIONS1,
+    "I-TRANSITIONS1",
+    "CSS Transitions",
+    "1",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2026/WD-css-transitions-1-20260108/"
+);
+profile_source!(
+    I_ANIMATIONS1,
+    "I-ANIMATIONS1",
+    "CSS Animations",
+    "1",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2023/WD-css-animations-1-20230302/"
+);
+profile_source!(
+    I_FILTER1,
+    "I-FILTER1",
+    "Filter Effects",
+    "1",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2018/WD-filter-effects-1-20181218/"
+);
+profile_source!(
+    I_SIZING3,
+    "I-SIZING3",
+    "CSS Box Sizing",
+    "3",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2021/WD-css-sizing-3-20211217/"
+);
+profile_source!(
+    I_TRANSFORMS2,
+    "I-TRANSFORMS2",
+    "CSS Transforms",
+    "2",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2021/WD-css-transforms-2-20211109/"
+);
+profile_source!(
+    I_LISTS3,
+    "I-LISTS3",
+    "CSS Lists and Counters",
+    "3",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2020/WD-css-lists-3-20201117/"
+);
+profile_source!(
+    I_POSITION3,
+    "I-POSITION3",
+    "CSS Positioned Layout",
+    "3",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2025/WD-css-position-3-20251007/"
+);
+profile_source!(
+    I_FONTS4,
+    "I-FONTS4",
+    "CSS Fonts",
+    "4",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2026/WD-css-fonts-4-20260422/"
+);
+profile_source!(
+    I_COLOR5,
+    "I-COLOR5",
+    "CSS Color",
+    "5",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2026/WD-css-color-5-20260618/"
+);
+profile_source!(
+    I_SELECTORS4,
+    "I-SELECTORS4",
+    "Selectors",
+    "4",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2026/WD-selectors-4-20260122/"
+);
+profile_source!(
+    I_CONTAIN2,
+    "I-CONTAIN2",
+    "CSS Containment",
+    "2",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2022/WD-css-contain-2-20220917/"
+);
+profile_source!(
+    I_NESTING1,
+    "I-NESTING1",
+    "CSS Nesting",
+    "1",
+    CssSpecificationTier::Snapshot2026Interop,
+    "https://www.w3.org/TR/2026/WD-css-nesting-1-20260122/"
+);
+profile_source!(
+    X_CONDITIONAL5,
+    "X-CONDITIONAL5",
+    "CSS Conditional Rules",
+    "5",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2025/WD-css-conditional-5-20251030/"
+);
+profile_source!(
+    X_CASCADE6,
+    "X-CASCADE6",
+    "CSS Cascading and Inheritance",
+    "6",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2024/WD-css-cascade-6-20240906/"
+);
+profile_source!(
+    X_PSEUDO4,
+    "X-PSEUDO4",
+    "CSS Pseudo-Elements",
+    "4",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2025/WD-css-pseudo-4-20250627/"
+);
+profile_source!(
+    X_VALUES4,
+    "X-VALUES4",
+    "CSS Values and Units",
+    "4",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2024/WD-css-values-4-20240312/"
+);
+profile_source!(
+    X_MEDIA5,
+    "X-MEDIA5",
+    "Media Queries",
+    "5",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2026/WD-mediaqueries-5-20260219/"
+);
+profile_source!(
+    X_OVERFLOW3,
+    "X-OVERFLOW3",
+    "CSS Overflow",
+    "3",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2025/WD-css-overflow-3-20251007/"
+);
+profile_source!(
+    X_SIZING4,
+    "X-SIZING4",
+    "CSS Box Sizing",
+    "4",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2021/WD-css-sizing-4-20210520/"
+);
+profile_source!(
+    X_TEXT4,
+    "X-TEXT4",
+    "CSS Text",
+    "4",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2026/WD-css-text-4-20260608/"
+);
+profile_source!(
+    X_TEXTDECOR4,
+    "X-TEXTDECOR4",
+    "CSS Text Decoration",
+    "4",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2022/WD-css-text-decor-4-20220504/"
+);
+profile_source!(
+    X_UI4,
+    "X-UI4",
+    "CSS Basic User Interface",
+    "4",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2026/WD-css-ui-4-20260120/"
+);
+profile_source!(
+    X_CONTENT3,
+    "X-CONTENT3",
+    "CSS Generated Content",
+    "3",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2025/WD-css-content-3-20251204/"
+);
+profile_source!(
+    X_FULLSCREEN,
+    "X-FULLSCREEN",
+    "Fullscreen",
+    "unleveled",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2012/WD-fullscreen-20120703/"
+);
+
+const X_FILTER2_BASE: CssSpecificationSource = CssSpecificationSource::from_repository(
+    "X-FILTER2-BASE",
+    "Filter Effects",
+    "2 baseline subset",
+    "bc5394f:src/parser/effects.rs",
+);
+const X_DISPLAY_MODE_BASE: CssSpecificationSource = CssSpecificationSource::from_repository(
+    "X-DISPLAY-MODE-BASE",
+    "Media Queries",
+    "display-mode baseline subset",
+    "bc5394f:src/parser/queries.rs",
+);
+const X_GRID_TOLERANCE_BASE: CssSpecificationSource = CssSpecificationSource::from_repository(
+    "X-GRID-TOLERANCE-BASE",
+    "CSS Grid Layout",
+    "grid-flow-tolerance baseline subset",
+    "bc5394f:src/parser/grid.rs",
+);
+
+// These exact I01 sources remain active until T3 atomizes their feature records.
+const I01_NAMESPACES3: CssSpecificationSource = dated_source!(
+    "I01-NAMESPACES3-MOVING",
+    "CSS Namespaces",
+    "3 moving reference",
+    CssSpecificationTier::LaterStandard,
+    "https://www.w3.org/TR/css3-namespace/"
+);
+const I01_CONDITIONAL3: CssSpecificationSource = dated_source!(
+    "I01-CONDITIONAL3-MOVING",
+    "CSS Conditional Rules",
+    "3 moving reference",
+    CssSpecificationTier::LaterStandard,
+    "https://www.w3.org/TR/css-conditional-3/"
+);
+const I01_COUNTERSTYLES3: CssSpecificationSource = dated_source!(
+    "I01-COUNTERSTYLES3-MOVING",
+    "CSS Counter Styles",
+    "3 moving reference",
+    CssSpecificationTier::LaterStandard,
+    "https://www.w3.org/TR/css-counter-styles-3/"
+);
+const I01_CSS2_PAGE: CssSpecificationSource = dated_source!(
+    "I01-CSS2-PAGE",
+    "CSS",
+    "2.1 page chapter",
+    CssSpecificationTier::LaterStandard,
+    "https://www.w3.org/TR/CSS2/page.html"
+);
+const I01_FONTS4: CssSpecificationSource = dated_source!(
+    "I01-FONTS4-MOVING",
+    "CSS Fonts",
+    "4 moving reference",
+    CssSpecificationTier::LaterStandard,
+    "https://www.w3.org/TR/css-fonts-4/"
+);
+
+const CSS_SYNTAX_3: CssSpecificationSource = O_SYNTAX3;
+const CSS_STYLE_ATTRIBUTES: CssSpecificationSource = O_STYLE_ATTR;
+const CSS_CASCADE_4: CssSpecificationSource = O_CASCADE4;
+const CSS_NAMESPACES_3: CssSpecificationSource = I01_NAMESPACES3;
+const CSS_CONDITIONAL_3: CssSpecificationSource = I01_CONDITIONAL3;
+const CSS_COUNTER_STYLES_3: CssSpecificationSource = I01_COUNTERSTYLES3;
+const CSS_2_PAGE: CssSpecificationSource = I01_CSS2_PAGE;
+const CSS_FONTS_4: CssSpecificationSource = I01_FONTS4;
+
+const BASELINE_PARSER: CssSpecificationSource = CssSpecificationSource::from_repository(
+    "I01-BASE-PARSER",
+    "Surgeist CSS parser",
+    "I01 baseline",
+    "4b288d6:src/parser/mod.rs",
+);
+const BASELINE_FONT_FACE: CssSpecificationSource = CssSpecificationSource::from_repository(
+    "I01-BASE-FONT-FACE",
+    "Surgeist CSS font-face parser",
+    "I01 baseline",
+    "4b288d6:src/parser/font_face.rs",
+);
+const BASELINE_KEYFRAMES: CssSpecificationSource = CssSpecificationSource::from_repository(
+    "I01-BASE-KEYFRAMES",
+    "Surgeist CSS keyframes parser",
+    "I01 baseline",
+    "4b288d6:src/parser/keyframes.rs",
+);
+const BASELINE_VARIABLES: CssSpecificationSource = CssSpecificationSource::from_repository(
+    "I01-BASE-VARIABLES",
+    "Surgeist CSS variables parser",
+    "I01 baseline",
+    "4b288d6:src/parser/variables.rs",
+);
+const BASELINE_SELECTORS: CssSpecificationSource = CssSpecificationSource::from_repository(
+    "I01-BASE-SELECTORS",
+    "Surgeist CSS selectors parser",
+    "I01 baseline",
+    "4b288d6:src/parser/selectors.rs",
+);
+const BASELINE_NESTING: CssSpecificationSource = CssSpecificationSource::from_repository(
+    "I01-BASE-NESTING",
+    "Surgeist CSS nesting parser",
+    "I01 baseline",
+    "4b288d6:src/parser/nesting.rs",
+);
+const BASELINE_QUERIES: CssSpecificationSource = CssSpecificationSource::from_repository(
+    "I01-BASE-QUERIES",
+    "Surgeist CSS query parser",
+    "I01 baseline",
+    "4b288d6:src/parser/queries.rs",
+);
+
+static SPECIFICATION_SOURCES: &[CssSpecificationSource] = &[
+    O_CSS2,
+    O_SYNTAX3,
+    O_STYLE_ATTR,
+    O_MEDIA3,
+    O_CONDITIONAL3,
+    O_SELECTORS3,
+    O_NAMESPACES3,
+    O_CASCADE4,
+    O_VALUES3,
+    O_VARIABLES1,
+    O_BOX3,
+    O_COLOR4,
+    O_BACKGROUNDS3,
+    O_IMAGES3,
+    O_FONTS3,
+    O_WRITING3,
+    O_MULTICOL1,
+    O_FLEXBOX1,
+    O_UI3,
+    O_CONTAIN1,
+    O_TRANSFORMS1,
+    O_COMPOSITING1,
+    O_EASING1,
+    O_COUNTERSTYLES3,
+    R_MEDIA4,
+    R_GRID1,
+    R_GRID2,
+    R_CASCADE5,
+    R_CONDITIONAL4,
+    S_DISPLAY3,
+    S_WRITING4,
+    S_BREAK3,
+    S_ALIGN3,
+    S_SHAPES1,
+    S_TEXT3,
+    S_TEXTDECOR3,
+    S_MASKING1,
+    I_TRANSITIONS1,
+    I_ANIMATIONS1,
+    I_FILTER1,
+    I_SIZING3,
+    I_TRANSFORMS2,
+    I_LISTS3,
+    I_POSITION3,
+    I_FONTS4,
+    I_COLOR5,
+    I_SELECTORS4,
+    I_CONTAIN2,
+    I_NESTING1,
+    X_CONDITIONAL5,
+    X_CASCADE6,
+    X_PSEUDO4,
+    X_VALUES4,
+    X_MEDIA5,
+    X_OVERFLOW3,
+    X_SIZING4,
+    X_TEXT4,
+    X_TEXTDECOR4,
+    X_UI4,
+    X_CONTENT3,
+    X_FULLSCREEN,
+    X_FILTER2_BASE,
+    X_DISPLAY_MODE_BASE,
+    X_GRID_TOLERANCE_BASE,
+    I01_NAMESPACES3,
+    I01_CONDITIONAL3,
+    I01_COUNTERSTYLES3,
+    I01_CSS2_PAGE,
+    I01_FONTS4,
+    BASELINE_PARSER,
+    BASELINE_FONT_FACE,
+    BASELINE_KEYFRAMES,
+    BASELINE_VARIABLES,
+    BASELINE_SELECTORS,
+    BASELINE_NESTING,
+    BASELINE_QUERIES,
+];
+
+macro_rules! exclusion {
+    ($id:expr, $source:ident, $production:expr, $reason:path) => {
+        CssExclusionMetadata::new($id, $source, $production, $reason, None)
+    };
+    ($id:expr, $source:ident, $production:expr, $reason:path, [$($owner:literal),+ $(,)?]) => {
+        CssExclusionMetadata::new(
+            $id,
+            $source,
+            $production,
+            $reason,
+            Some(&[$(CssConformanceSupersedingId::new($owner)),+]),
+        )
+    };
+}
+
+macro_rules! superseded_css2_property {
+    ($name:literal, $chapter:literal, $owner:literal) => {
+        exclusion!(
+            concat!("excluded.O-CSS2.property.", $name),
+            O_CSS2,
+            concat!($chapter, "#propdef-", $name),
+            CssExclusionReason::SupersededWithoutCurrentProduction,
+            [$owner]
+        )
+    };
+}
+
+macro_rules! informative_css2_property {
+    ($name:literal) => {
+        exclusion!(
+            concat!("excluded.O-CSS2.informative-property.", $name),
+            O_CSS2,
+            concat!("aural.html#propdef-", $name),
+            CssExclusionReason::InformativeOnly
+        )
+    };
+}
+
+const INFORMATIVE_SOURCE_AUDIT: &str = "examples, explicitly non-normative notes, status/TOC, changelogs, acknowledgments, indexes, bibliography, test inventories, and conformance boilerplate";
+
+macro_rules! informative_source_audit {
+    ($source_id:literal, $source:ident) => {
+        exclusion!(
+            concat!("excluded.", $source_id, ".informative-audit"),
+            $source,
+            INFORMATIVE_SOURCE_AUDIT,
+            CssExclusionReason::InformativeOnly
+        )
+    };
+}
+
+static CONFORMANCE_EXCLUSIONS: &[CssExclusionMetadata] = &[
+    exclusion!(
+        "excluded.O-WRITING3.property.glyph-orientation-horizontal",
+        O_WRITING3,
+        "#propdef-glyph-orientation-horizontal",
+        CssExclusionReason::SupersededWithoutCurrentProduction,
+        ["official.property.text-orientation"]
+    ),
+    exclusion!(
+        "excluded.O-UI3.property.ime-mode",
+        O_UI3,
+        "#propdef-ime-mode",
+        CssExclusionReason::SupersededWithoutCurrentProduction
+    ),
+    superseded_css2_property!("margin", "box.html", "baseline.property.margin"),
+    superseded_css2_property!(
+        "margin-bottom",
+        "box.html",
+        "baseline.property.margin-bottom"
+    ),
+    superseded_css2_property!("margin-left", "box.html", "baseline.property.margin-left"),
+    superseded_css2_property!("margin-right", "box.html", "baseline.property.margin-right"),
+    superseded_css2_property!("margin-top", "box.html", "baseline.property.margin-top"),
+    superseded_css2_property!("padding", "box.html", "baseline.property.padding"),
+    superseded_css2_property!(
+        "padding-bottom",
+        "box.html",
+        "baseline.property.padding-bottom"
+    ),
+    superseded_css2_property!("padding-left", "box.html", "baseline.property.padding-left"),
+    superseded_css2_property!(
+        "padding-right",
+        "box.html",
+        "baseline.property.padding-right"
+    ),
+    superseded_css2_property!("padding-top", "box.html", "baseline.property.padding-top"),
+    superseded_css2_property!("color", "colors.html", "baseline.property.color"),
+    superseded_css2_property!("background", "colors.html", "baseline.property.background"),
+    superseded_css2_property!(
+        "background-attachment",
+        "colors.html",
+        "baseline.property.background-attachment"
+    ),
+    superseded_css2_property!(
+        "background-color",
+        "colors.html",
+        "baseline.property.background-color"
+    ),
+    superseded_css2_property!(
+        "background-image",
+        "colors.html",
+        "baseline.property.background-image"
+    ),
+    superseded_css2_property!(
+        "background-position",
+        "colors.html",
+        "baseline.property.background-position"
+    ),
+    superseded_css2_property!(
+        "background-repeat",
+        "colors.html",
+        "baseline.property.background-repeat"
+    ),
+    superseded_css2_property!("border", "box.html", "baseline.property.border"),
+    superseded_css2_property!(
+        "border-bottom",
+        "box.html",
+        "baseline.property.border-bottom"
+    ),
+    superseded_css2_property!(
+        "border-bottom-color",
+        "box.html",
+        "baseline.property.border-bottom-color"
+    ),
+    superseded_css2_property!(
+        "border-bottom-style",
+        "box.html",
+        "baseline.property.border-bottom-style"
+    ),
+    superseded_css2_property!(
+        "border-bottom-width",
+        "box.html",
+        "baseline.property.border-bottom-width"
+    ),
+    superseded_css2_property!("border-color", "box.html", "baseline.property.border-color"),
+    superseded_css2_property!("border-left", "box.html", "baseline.property.border-left"),
+    superseded_css2_property!(
+        "border-left-color",
+        "box.html",
+        "baseline.property.border-left-color"
+    ),
+    superseded_css2_property!(
+        "border-left-style",
+        "box.html",
+        "baseline.property.border-left-style"
+    ),
+    superseded_css2_property!(
+        "border-left-width",
+        "box.html",
+        "baseline.property.border-left-width"
+    ),
+    superseded_css2_property!("border-right", "box.html", "baseline.property.border-right"),
+    superseded_css2_property!(
+        "border-right-color",
+        "box.html",
+        "baseline.property.border-right-color"
+    ),
+    superseded_css2_property!(
+        "border-right-style",
+        "box.html",
+        "baseline.property.border-right-style"
+    ),
+    superseded_css2_property!(
+        "border-right-width",
+        "box.html",
+        "baseline.property.border-right-width"
+    ),
+    superseded_css2_property!("border-style", "box.html", "baseline.property.border-style"),
+    superseded_css2_property!("border-top", "box.html", "baseline.property.border-top"),
+    superseded_css2_property!(
+        "border-top-color",
+        "box.html",
+        "baseline.property.border-top-color"
+    ),
+    superseded_css2_property!(
+        "border-top-style",
+        "box.html",
+        "baseline.property.border-top-style"
+    ),
+    superseded_css2_property!(
+        "border-top-width",
+        "box.html",
+        "baseline.property.border-top-width"
+    ),
+    superseded_css2_property!("border-width", "box.html", "baseline.property.border-width"),
+    superseded_css2_property!("font", "fonts.html", "baseline.property.font"),
+    superseded_css2_property!("font-family", "fonts.html", "baseline.property.font-family"),
+    superseded_css2_property!("font-size", "fonts.html", "baseline.property.font-size"),
+    superseded_css2_property!("font-style", "fonts.html", "baseline.property.font-style"),
+    superseded_css2_property!(
+        "font-variant",
+        "fonts.html",
+        "baseline.property.font-variant"
+    ),
+    superseded_css2_property!("font-weight", "fonts.html", "baseline.property.font-weight"),
+    superseded_css2_property!("direction", "visuren.html", "baseline.property.direction"),
+    superseded_css2_property!(
+        "unicode-bidi",
+        "visuren.html",
+        "official.property.unicode-bidi"
+    ),
+    superseded_css2_property!("cursor", "ui.html", "baseline.property.cursor"),
+    superseded_css2_property!("outline", "ui.html", "baseline.property.outline"),
+    superseded_css2_property!(
+        "outline-color",
+        "ui.html",
+        "baseline.property.outline-color"
+    ),
+    superseded_css2_property!(
+        "outline-style",
+        "ui.html",
+        "baseline.property.outline-style"
+    ),
+    superseded_css2_property!(
+        "outline-width",
+        "ui.html",
+        "baseline.property.outline-width"
+    ),
+    informative_css2_property!("azimuth"),
+    informative_css2_property!("cue"),
+    informative_css2_property!("cue-after"),
+    informative_css2_property!("cue-before"),
+    informative_css2_property!("elevation"),
+    informative_css2_property!("pause"),
+    informative_css2_property!("pause-after"),
+    informative_css2_property!("pause-before"),
+    informative_css2_property!("pitch"),
+    informative_css2_property!("pitch-range"),
+    informative_css2_property!("play-during"),
+    informative_css2_property!("richness"),
+    informative_css2_property!("speak"),
+    informative_css2_property!("speak-header"),
+    informative_css2_property!("speak-numeral"),
+    informative_css2_property!("speak-punctuation"),
+    informative_css2_property!("speech-rate"),
+    informative_css2_property!("stress"),
+    informative_css2_property!("voice-family"),
+    informative_css2_property!("volume"),
+    exclusion!(
+        "excluded.O-CSS2.superseded-syntax",
+        O_CSS2,
+        "syndata.html;grammar.html",
+        CssExclusionReason::SupersededWithoutCurrentProduction,
+        ["O-SYNTAX3"]
+    ),
+    exclusion!(
+        "excluded.O-CSS2.superseded-media",
+        O_CSS2,
+        "media.html",
+        CssExclusionReason::SupersededWithoutCurrentProduction,
+        ["O-MEDIA3", "O-CONDITIONAL3"]
+    ),
+    exclusion!(
+        "excluded.O-CSS2.superseded-selectors",
+        O_CSS2,
+        "selector.html",
+        CssExclusionReason::SupersededWithoutCurrentProduction,
+        ["O-SELECTORS3", "O-NAMESPACES3"]
+    ),
+    exclusion!(
+        "excluded.O-CSS2.superseded-cascade-values",
+        O_CSS2,
+        "cascade.html;syndata.html",
+        CssExclusionReason::SupersededWithoutCurrentProduction,
+        ["O-CASCADE4", "O-VALUES3", "O-VARIABLES1"]
+    ),
+    exclusion!(
+        "excluded.O-CSS2.non-authored-semantics",
+        O_CSS2,
+        "visuren.html;visufx.html;tables.html;page.html#outside-page-box,#page-breaks,#page-cascade",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-SYNTAX3.fragment-api",
+        O_SYNTAX3,
+        "#parse-rule,#parse-declaration,#parse-component-value,#parse-list-of-component-values,#parse-comma-separated-list-of-component-values",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-SYNTAX3.serialization",
+        O_SYNTAX3,
+        "#serialization",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-STYLE-ATTR.interpretation",
+        O_STYLE_ATTR,
+        "#interpret",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-MEDIA3.evaluation",
+        O_MEDIA3,
+        "#media0,#media1 evaluation portions",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-CONDITIONAL3.evaluation-api",
+        O_CONDITIONAL3,
+        "#processing,#the-cssmediarule-interface,#the-csssupportsrule-interface,#apis",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-SELECTORS3.matching-specificity",
+        O_SELECTORS3,
+        "#selectors,#specificity,#first-formatted-line,#application-in-css",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-NAMESPACES3.uri-matching",
+        O_NAMESPACES3,
+        "semantic portions of #scope,#css-qnames",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-CASCADE4.processing",
+        O_CASCADE4,
+        "#import-processing,#value-stages,#filtering,#cascading,#initial-values,#inheriting",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-VALUES3.metasyntax",
+        O_VALUES3,
+        "#value-defs",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-VALUES3.computation",
+        O_VALUES3,
+        "#calc-computed-value,#calc-range,#calc-serialize,#relative-urls",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-VARIABLES1.substitution",
+        O_VARIABLES1,
+        "#cycles,#invalid-variables,#variables-in-shorthands,#apis",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-BOX3.layout",
+        O_BOX3,
+        "#box-model,#fragmentation",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-COLOR4.color5-syntax",
+        O_COLOR4,
+        "Color 5 references",
+        CssExclusionReason::SupersededWithoutCurrentProduction,
+        ["I-COLOR5"]
+    ),
+    exclusion!(
+        "excluded.O-COLOR4.quirky-color",
+        O_COLOR4,
+        "#quirky-color",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-COLOR4.processing",
+        O_COLOR4,
+        "conversion/interpolation/gamut/resolution/serialization/sample-code sections",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-BACKGROUNDS3.painting",
+        O_BACKGROUNDS3,
+        "serialization/painting/corner/border-image/shadow algorithms",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-IMAGES3.processing",
+        O_IMAGES3,
+        "object negotiation/sizing/interpolation/serialization algorithms",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-FONTS3.processing",
+        O_FONTS3,
+        "loading/fetching/matching/feature-resolution/object-model sections",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-FONTS3.font-display",
+        O_FONTS3,
+        "no Fonts 3 production",
+        CssExclusionReason::SupersededWithoutCurrentProduction,
+        ["baseline.descriptor.font-display"]
+    ),
+    exclusion!(
+        "excluded.O-FONTS3.font-feature-values",
+        O_FONTS3,
+        "no Fonts 3 production",
+        CssExclusionReason::SupersededWithoutCurrentProduction,
+        ["later.rule.font-feature-values"]
+    ),
+    exclusion!(
+        "excluded.O-WRITING3.layout",
+        O_WRITING3,
+        "bidi/inline/abstract/principal-flow/text-combine algorithms",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-MULTICOL1.layout",
+        O_MULTICOL1,
+        "model/pseudo-algorithm/stacking/overflow sections",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-FLEXBOX1.layout",
+        O_FLEXBOX1,
+        "box/items/lines/layout/pagination/axis algorithms",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-FLEXBOX1.webkit-legacy",
+        O_FLEXBOX1,
+        "#webkit-aliases",
+        CssExclusionReason::SupersededWithoutCurrentProduction
+    ),
+    exclusion!(
+        "excluded.O-UI3.behavior",
+        O_UI3,
+        "ellipsis/input/default-style behavior sections",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-CONTAIN1.semantics",
+        O_CONTAIN1,
+        "containment-type/optimization sections",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-TRANSFORMS1.processing",
+        O_TRANSFORMS1,
+        "rendering/SVG/animation/interpolation/matrix algorithms",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-COMPOSITING1.processing",
+        O_COMPOSITING1,
+        "Canvas/formula/backdrop/group/advanced-compositing sections",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-EASING1.evaluation",
+        O_EASING1,
+        "easing output/serialization sections",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    exclusion!(
+        "excluded.O-COUNTERSTYLES3.processing",
+        O_COUNTERSTYLES3,
+        "counter algorithms/predefined rendering/APIs/sample sheet",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    ),
+    informative_source_audit!("O-CSS2", O_CSS2),
+    informative_source_audit!("O-SYNTAX3", O_SYNTAX3),
+    informative_source_audit!("O-STYLE-ATTR", O_STYLE_ATTR),
+    informative_source_audit!("O-MEDIA3", O_MEDIA3),
+    informative_source_audit!("O-CONDITIONAL3", O_CONDITIONAL3),
+    informative_source_audit!("O-SELECTORS3", O_SELECTORS3),
+    informative_source_audit!("O-NAMESPACES3", O_NAMESPACES3),
+    informative_source_audit!("O-CASCADE4", O_CASCADE4),
+    informative_source_audit!("O-VALUES3", O_VALUES3),
+    informative_source_audit!("O-VARIABLES1", O_VARIABLES1),
+    informative_source_audit!("O-BOX3", O_BOX3),
+    informative_source_audit!("O-COLOR4", O_COLOR4),
+    informative_source_audit!("O-BACKGROUNDS3", O_BACKGROUNDS3),
+    informative_source_audit!("O-IMAGES3", O_IMAGES3),
+    informative_source_audit!("O-FONTS3", O_FONTS3),
+    informative_source_audit!("O-WRITING3", O_WRITING3),
+    informative_source_audit!("O-MULTICOL1", O_MULTICOL1),
+    informative_source_audit!("O-FLEXBOX1", O_FLEXBOX1),
+    informative_source_audit!("O-UI3", O_UI3),
+    informative_source_audit!("O-CONTAIN1", O_CONTAIN1),
+    informative_source_audit!("O-TRANSFORMS1", O_TRANSFORMS1),
+    informative_source_audit!("O-COMPOSITING1", O_COMPOSITING1),
+    informative_source_audit!("O-EASING1", O_EASING1),
+    informative_source_audit!("O-COUNTERSTYLES3", O_COUNTERSTYLES3),
+];
 
 const BASELINE_RULE_SUBSET: &str =
     "The baseline parser spelling and the I01 recovery extensions are supported.";
@@ -1540,6 +2886,38 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 219] = [
 #[must_use]
 pub fn feature_catalog() -> &'static [CssFeatureMetadata] {
     &FEATURE_CATALOG
+}
+
+/// Returns the immutable specification-source registry in stable declaration order.
+#[must_use]
+pub const fn specification_sources() -> &'static [CssSpecificationSource] {
+    SPECIFICATION_SOURCES
+}
+
+/// Returns the specification source for an exact stable source ID.
+///
+/// Lookup is case-sensitive and performs no trimming or aliasing.
+#[must_use]
+pub fn specification_source(id: &str) -> Option<&'static CssSpecificationSource> {
+    SPECIFICATION_SOURCES
+        .iter()
+        .find(|source| source.id.as_str() == id)
+}
+
+/// Returns the immutable official conformance-exclusion registry.
+#[must_use]
+pub const fn conformance_exclusions() -> &'static [CssExclusionMetadata] {
+    CONFORMANCE_EXCLUSIONS
+}
+
+/// Returns exclusion metadata for an exact stable exclusion ID.
+///
+/// Lookup is case-sensitive and performs no trimming or aliasing.
+#[must_use]
+pub fn conformance_exclusion(id: &str) -> Option<&'static CssExclusionMetadata> {
+    CONFORMANCE_EXCLUSIONS
+        .iter()
+        .find(|exclusion| exclusion.id.as_str() == id)
 }
 
 /// Returns metadata for an exact stable feature ID.

@@ -1,6 +1,7 @@
 use surgeist_css::{
-    CssErrorCode, CssFeatureKind, CssSupportStatus, ErrorKind, feature_metadata, parse_sheet,
-    parse_style_attribute,
+    CssErrorCode, CssExclusionReason, CssFeatureKind, CssSpecificationTier, CssSupportStatus,
+    ErrorKind, conformance_exclusion, conformance_exclusions, feature_metadata, parse_sheet,
+    parse_style_attribute, specification_source, specification_sources,
 };
 
 #[derive(Clone, Copy)]
@@ -897,6 +898,74 @@ fn conformance_catalog_vectors_cover_each_supported_and_unsupported_boundary() {
             }
         }
     }
+}
+
+#[test]
+fn source_registry_lookups_are_exact_and_preserve_provenance_xor() {
+    let filter = specification_source("X-FILTER2-BASE").expect("filter baseline source");
+    assert_eq!(filter.module(), "Filter Effects");
+    assert_eq!(filter.level(), "2 baseline subset");
+    assert_eq!(filter.tier(), CssSpecificationTier::SurgeistExtension);
+    assert_eq!(filter.url(), None);
+    assert_eq!(
+        filter.repository_provenance(),
+        Some("bc5394f:src/parser/effects.rs")
+    );
+
+    for source in specification_sources() {
+        assert_ne!(
+            source.url().is_some(),
+            source.repository_provenance().is_some()
+        );
+    }
+    assert!(specification_source("o-color4").is_none());
+    assert!(specification_source(" O-COLOR4").is_none());
+    assert!(specification_source("O-COLOR4 ").is_none());
+    assert!(specification_source("").is_none());
+}
+
+#[test]
+fn exclusion_registry_exposes_named_official_audit_facts() {
+    let predecessor = conformance_exclusion("excluded.O-CSS2.property.margin")
+        .expect("superseded CSS2 margin definition");
+    assert_eq!(predecessor.source().id().as_str(), "O-CSS2");
+    assert_eq!(predecessor.production(), "box.html#propdef-margin");
+    assert_eq!(
+        predecessor.reason(),
+        CssExclusionReason::SupersededWithoutCurrentProduction
+    );
+    assert_eq!(
+        predecessor.superseding_ids().map(|ids| ids[0].as_str()),
+        Some("baseline.property.margin")
+    );
+
+    let informative = conformance_exclusion("excluded.O-CSS2.informative-property.azimuth")
+        .expect("informative CSS2 Appendix A property row");
+    assert_eq!(informative.production(), "aural.html#propdef-azimuth");
+    assert_eq!(informative.reason(), CssExclusionReason::InformativeOnly);
+    assert_eq!(informative.superseding_ids(), None);
+
+    let processing = conformance_exclusion("excluded.O-IMAGES3.processing")
+        .expect("out-of-boundary Images processing row");
+    assert_eq!(
+        processing.reason(),
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary
+    );
+
+    let audit = conformance_exclusion("excluded.O-COLOR4.informative-audit")
+        .expect("Color 4 informative source audit row");
+    assert_eq!(audit.source().id().as_str(), "O-COLOR4");
+    assert_eq!(audit.reason(), CssExclusionReason::InformativeOnly);
+    assert!(audit.superseding_ids().is_none());
+
+    assert!(
+        conformance_exclusions()
+            .iter()
+            .any(|row| row.id() == audit.id())
+    );
+    assert!(conformance_exclusion("EXCLUDED.O-COLOR4.INFORMATIVE-AUDIT").is_none());
+    assert!(conformance_exclusion(" excluded.O-COLOR4.informative-audit").is_none());
+    assert!(conformance_exclusion("excluded.O-COLOR4.informative-audit ").is_none());
 }
 
 fn diagnostics(input: Input) -> Vec<(CssErrorCode, Option<&'static str>)> {

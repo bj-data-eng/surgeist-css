@@ -1,9 +1,10 @@
 use surgeist_css::{
-    CssAnimationDirection, CssCalcOperator, CssErrorCode, CssFeatureKind, CssGridAutoFlowAxis,
-    CssImportance, CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef,
-    CssMediaQueryModifier, CssPropertyNameRef, CssRecoveryAction, CssRelativeColorFunction,
-    CssRule, CssSelectorCombinator, CssSupportStatus, ErrorKind, feature_catalog, feature_metadata,
-    parse_sheet, parse_style_attribute, property_metadata,
+    CssAnimationDirection, CssCalcOperator, CssErrorCode, CssExclusionReason, CssFeatureKind,
+    CssGridAutoFlowAxis, CssImportance, CssKnownDeclaredValueRef, CssKnownProperty,
+    CssKnownPropertyValueRef, CssMediaQueryModifier, CssPropertyNameRef, CssRecoveryAction,
+    CssRelativeColorFunction, CssRule, CssSelectorCombinator, CssSpecificationTier,
+    CssSupportStatus, ErrorKind, conformance_exclusion, feature_catalog, feature_metadata,
+    parse_sheet, parse_style_attribute, property_metadata, specification_source,
 };
 
 fn known_declared_value_kind(value: CssKnownDeclaredValueRef<'_>) -> &'static str {
@@ -64,6 +65,27 @@ fn support_status_kind(status: CssSupportStatus) -> &'static str {
         CssSupportStatus::Complete => "complete",
         CssSupportStatus::Partial => "partial",
         CssSupportStatus::RecognizedUnsupported => "recognized unsupported",
+    }
+}
+
+fn specification_tier_kind(tier: CssSpecificationTier) -> &'static str {
+    match tier {
+        CssSpecificationTier::Snapshot2026Official => "official",
+        CssSpecificationTier::Snapshot2026Reliable => "reliable",
+        CssSpecificationTier::Snapshot2026Stable => "stable",
+        CssSpecificationTier::Snapshot2026Interop => "interop",
+        CssSpecificationTier::SurgeistExtension => "extension",
+        CssSpecificationTier::LaterStandard => "later",
+        _ => "future tier",
+    }
+}
+
+fn exclusion_reason_kind(reason: CssExclusionReason) -> &'static str {
+    match reason {
+        CssExclusionReason::InformativeOnly => "informative",
+        CssExclusionReason::SupersededWithoutCurrentProduction => "superseded",
+        CssExclusionReason::OutsideAuthoredSyntaxBoundary => "outside authored syntax",
+        _ => "future reason",
     }
 }
 
@@ -341,6 +363,39 @@ fn public_surface_metadata_exposes_every_final_accessor_and_bounded_status() {
     assert_eq!(property_metadata("--width"), None);
     assert_eq!(property_metadata("not-a-property"), None);
     assert_eq!(feature_metadata("BASELINE.PROPERTY.WIDTH"), None);
+}
+
+#[test]
+fn public_surface_exposes_dated_sources_and_exclusion_metadata() {
+    let color = specification_source("O-COLOR4").expect("dated Color 4 source");
+    assert_eq!(color.id().as_str(), "O-COLOR4");
+    assert_eq!(color.module(), "CSS Color");
+    assert_eq!(color.level(), "4");
+    assert_eq!(specification_tier_kind(color.tier()), "official");
+    assert_eq!(
+        color.url(),
+        Some("https://www.w3.org/TR/2026/CRD-css-color-4-20260326/")
+    );
+    assert_eq!(color.repository_provenance(), None);
+
+    let grid = specification_source("R-GRID1").expect("dated Grid 1 source");
+    assert_eq!(grid.module(), "CSS Grid Layout");
+    assert_eq!(grid.level(), "1");
+    assert_eq!(specification_tier_kind(grid.tier()), "reliable");
+
+    let glyph = conformance_exclusion("excluded.O-WRITING3.property.glyph-orientation-horizontal")
+        .expect("removed horizontal glyph-orientation property");
+    assert_eq!(
+        glyph.id().as_str(),
+        "excluded.O-WRITING3.property.glyph-orientation-horizontal"
+    );
+    assert_eq!(glyph.source().id().as_str(), "O-WRITING3");
+    assert_eq!(glyph.production(), "#propdef-glyph-orientation-horizontal");
+    assert_eq!(exclusion_reason_kind(glyph.reason()), "superseded");
+    assert_eq!(
+        glyph.superseding_ids().map(|ids| ids[0].as_str()),
+        Some("official.property.text-orientation")
+    );
 }
 
 #[test]

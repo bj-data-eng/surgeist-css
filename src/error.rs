@@ -9,36 +9,66 @@ use crate::source::CssSourcePosition;
 use crate::syntax::{CssCustomPropertyName, CssProperty};
 use crate::validation::{PropertyNameStatus, classify_property_name, property_for_supported_name};
 
+/// The result of strict CSS parsing with a structured diagnostic on failure.
+///
+/// This alias does not imply browser-style recovery or downstream value resolution.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// A stable machine-readable root category for a CSS parse failure.
+/// A stable machine-readable diagnostic-phase category for a strict CSS parse failure.
+///
+/// A code classifies the rejected authored syntax; it does not select recovery policy or
+/// resolve authored values.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CssErrorCode {
+    /// The parser required more authored syntax but reached the end of input.
     UnexpectedEnd,
+    /// The parser encountered an authored token that the active grammar did not accept.
     UnexpectedToken,
+    /// The authored encoding declaration did not satisfy its grammar or placement rules.
     InvalidEncodingDeclaration,
+    /// An authored at-rule appeared outside its permitted grammar context.
     InvalidAtRulePlacement,
+    /// An authored at-rule prelude did not satisfy the rule's grammar.
     InvalidAtRulePrelude,
+    /// An authored at-rule body did not satisfy the rule's grammar.
     InvalidAtRuleBody,
+    /// The authored at-rule name is not recognized by the CSS catalog.
     UnknownAtRule,
+    /// The authored at-rule is recognized but is outside this crate's supported subset.
     UnsupportedAtRule,
+    /// An authored qualified rule did not satisfy its grammar.
     InvalidQualifiedRule,
+    /// An authored selector did not satisfy the supported selector grammar.
     InvalidSelector,
+    /// An authored media query did not satisfy the supported media-query grammar.
     InvalidMediaQuery,
+    /// The authored property name is not recognized by the CSS catalog.
     UnknownProperty,
+    /// The authored property is recognized but is outside this crate's supported subset.
     UnsupportedProperty,
+    /// An authored value did not satisfy its known property's grammar.
     InvalidPropertyValue,
+    /// An authored declaration annotation was malformed or misplaced.
     InvalidDeclarationAnnotation,
+    /// The authored descriptor name is not recognized for its owning at-rule.
     UnknownDescriptor,
+    /// The authored descriptor is recognized but is outside this crate's supported subset.
     UnsupportedDescriptor,
+    /// An authored value did not satisfy its known descriptor's grammar.
     InvalidDescriptorValue,
+    /// Authored descriptors formed a combination rejected by their at-rule grammar.
     InvalidDescriptorCombination,
+    /// Authored color syntax did not satisfy the supported color grammar.
     InvalidColorSyntax,
+    /// Authored nesting exceeded the parser's configured structural limit.
     NestingLimit,
 }
 
-/// A static identifier for one CSS grammar production.
+/// A static diagnostic-metadata identifier for one CSS grammar production.
+///
+/// The identifier names the grammar active at a strict parse failure; it does not parse,
+/// recover, or resolve authored syntax.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct CssProductionId(&'static str);
 
@@ -48,12 +78,16 @@ impl CssProductionId {
     }
 
     #[must_use]
+    /// Returns the stable production identifier.
     pub const fn as_str(self) -> &'static str {
         self.0
     }
 }
 
-/// A static description of the grammar expected at a failure position.
+/// A static diagnostic-phase description of the grammar expected at a failure position.
+///
+/// The description records an invariant the authored syntax violated; it is not a recovery
+/// instruction or a downstream validation rule.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct CssGrammarExpectation(&'static str);
 
@@ -63,12 +97,16 @@ impl CssGrammarExpectation {
     }
 
     #[must_use]
+    /// Returns the stable expectation description.
     pub const fn as_str(self) -> &'static str {
         self.0
     }
 }
 
-/// A stable support-catalog identity attached to recognized unsupported syntax.
+/// A stable diagnostic-metadata identity for recognized but unsupported authored syntax.
+///
+/// The identity distinguishes catalogued support from unknown syntax; it does not enable the
+/// feature, choose a fallback, or perform downstream resolution.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct CssFeatureId(&'static str);
 
@@ -78,6 +116,7 @@ impl CssFeatureId {
     }
 
     #[must_use]
+    /// Returns the stable support-catalog identifier.
     pub const fn as_str(self) -> &'static str {
         self.0
     }
@@ -95,6 +134,7 @@ macro_rules! owned_name {
             }
 
             #[must_use]
+            /// Returns the decoded authored identifier retained by the diagnostic.
             pub fn as_str(&self) -> &str {
                 &self.0
             }
@@ -102,53 +142,102 @@ macro_rules! owned_name {
     };
 }
 
-owned_name!(CssAtRuleName, "A decoded authored CSS at-rule name.");
-owned_name!(CssPropertyName, "A decoded authored CSS property name.");
-owned_name!(CssDescriptorName, "A decoded authored CSS descriptor name.");
+owned_name!(
+    CssAtRuleName,
+    "A diagnostic-phase identity preserving a decoded authored CSS at-rule name; it does not parse the rule or select recovery."
+);
+owned_name!(
+    CssPropertyName,
+    "A diagnostic-phase identity preserving a decoded authored CSS property name; it does not parse, resolve, or apply the property."
+);
+owned_name!(
+    CssDescriptorName,
+    "A diagnostic-phase identity preserving a decoded authored CSS descriptor name; it does not parse, resolve, or apply the descriptor."
+);
 owned_name!(
     CssMediaFeatureName,
-    "A decoded authored media-feature name."
+    "A diagnostic-phase identity preserving a decoded authored media-feature name; it does not evaluate the media query."
 );
-owned_name!(CssColorComponentName, "A semantic color component name.");
+owned_name!(
+    CssColorComponentName,
+    "A diagnostic-phase identity naming the authored color component responsible for a failure; it does not evaluate or convert the color."
+);
 
-/// The CSS token category retained by an error summary.
+/// The diagnostic-phase CSS token category retained by an error summary.
+///
+/// The non-exhaustive category describes authored syntax without exposing parser tokens; it does
+/// not drive tokenization, recovery, or downstream value resolution.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CssTokenKind {
+    /// An identifier token.
     Ident,
+    /// An at-keyword token.
     AtKeyword,
+    /// An unrestricted hash token.
     Hash,
+    /// An identifier-like hash token.
     IdHash,
+    /// A string token.
     String,
+    /// A URL token.
     Url,
+    /// A delimiter token.
     Delim,
+    /// A number token.
     Number,
+    /// A percentage token.
     Percentage,
+    /// A dimension token.
     Dimension,
+    /// A whitespace token.
     Whitespace,
+    /// A comment token.
     Comment,
+    /// A colon token.
     Colon,
+    /// A semicolon token.
     Semicolon,
+    /// A comma token.
     Comma,
+    /// An include-match (`~=`) token.
     IncludeMatch,
+    /// A dash-match (`|=`) token.
     DashMatch,
+    /// A prefix-match (`^=`) token.
     PrefixMatch,
+    /// A suffix-match (`$=`) token.
     SuffixMatch,
+    /// A substring-match (`*=`) token.
     SubstringMatch,
+    /// A CSS `<!--` token.
     Cdo,
+    /// A CSS `-->` token.
     Cdc,
+    /// A function token.
     Function,
+    /// A parenthesis block token.
     ParenthesisBlock,
+    /// A square-bracket block token.
     SquareBracketBlock,
+    /// A curly-bracket block token.
     CurlyBracketBlock,
+    /// A malformed URL token.
     BadUrl,
+    /// A malformed string token.
     BadString,
+    /// An unmatched closing-parenthesis token.
     CloseParenthesis,
+    /// An unmatched closing-square-bracket token.
     CloseSquareBracket,
+    /// An unmatched closing-curly-bracket token.
     CloseCurlyBracket,
 }
 
-/// A semantic token category plus its exact authored source slice.
+/// A diagnostic-phase token category paired with its exact authored source slice.
+///
+/// The pair preserves the responsible authored token without exposing parser internals; it is not
+/// a token-stream input and does not choose or perform recovery.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssTokenSummary {
     kind: CssTokenKind,
@@ -157,11 +246,13 @@ pub struct CssTokenSummary {
 
 impl CssTokenSummary {
     #[must_use]
+    /// Returns the semantic category of the encountered authored token.
     pub const fn kind(&self) -> CssTokenKind {
         self.kind
     }
 
     #[must_use]
+    /// Returns the exact authored source spelling of the encountered token.
     pub fn authored(&self) -> &str {
         &self.authored
     }
@@ -189,6 +280,10 @@ const EXPECT_COLOR: CssGrammarExpectation = CssGrammarExpectation::new("valid co
 const QUALIFIED_RULE: CssProductionId = CssProductionId::new("css.qualified-rule");
 const SELECTOR_LIST: CssProductionId = CssProductionId::new("baseline.selector.complex");
 
+/// Diagnostic detail for strict parsing that reached EOF before an expected production completed.
+///
+/// The stored expectation identifies the violated grammar invariant; this value does not insert
+/// missing syntax or perform browser-style recovery.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssUnexpectedEndError {
     expectation: CssGrammarExpectation,
@@ -196,11 +291,16 @@ pub struct CssUnexpectedEndError {
 
 impl CssUnexpectedEndError {
     #[must_use]
+    /// Returns the grammar expectation that remained unsatisfied at EOF.
     pub const fn expectation(&self) -> CssGrammarExpectation {
         self.expectation
     }
 }
 
+/// Diagnostic detail for an authored token rejected by the active strict grammar.
+///
+/// The expectation and exact encountered token identify the violation; this value does not skip,
+/// replace, or otherwise recover from the token.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssUnexpectedTokenError {
     expectation: CssGrammarExpectation,
@@ -209,16 +309,22 @@ pub struct CssUnexpectedTokenError {
 
 impl CssUnexpectedTokenError {
     #[must_use]
+    /// Returns the grammar expectation violated by the token.
     pub const fn expectation(&self) -> CssGrammarExpectation {
         self.expectation
     }
 
     #[must_use]
+    /// Returns the exact authored token rejected by the grammar.
     pub const fn encountered(&self) -> &CssTokenSummary {
         &self.encountered
     }
 }
 
+/// Diagnostic detail for an invalid authored CSS encoding declaration.
+///
+/// The detail preserves the violated grammar expectation and any responsible token; it does not
+/// decode bytes, change source encoding, or recover the declaration.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssEncodingDeclarationError {
     expectation: CssGrammarExpectation,
@@ -227,16 +333,22 @@ pub struct CssEncodingDeclarationError {
 
 impl CssEncodingDeclarationError {
     #[must_use]
+    /// Returns the grammar expectation for a valid encoding declaration.
     pub const fn expectation(&self) -> CssGrammarExpectation {
         self.expectation
     }
 
     #[must_use]
+    /// Returns the responsible authored token, or `None` when the declaration ended at EOF.
     pub const fn encountered(&self) -> Option<&CssTokenSummary> {
         self.encountered.as_ref()
     }
 }
 
+/// Diagnostic detail for an authored at-rule rejected in its current grammar context.
+///
+/// The decoded name and expected context identify the placement invariant; this value does not
+/// move, drop, or recover the at-rule.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssAtRulePlacementError {
     name: CssAtRuleName,
@@ -245,16 +357,23 @@ pub struct CssAtRulePlacementError {
 
 impl CssAtRulePlacementError {
     #[must_use]
+    /// Returns the decoded authored at-rule name.
     pub const fn name(&self) -> &CssAtRuleName {
         &self.name
     }
 
     #[must_use]
+    /// Returns the grammar context in which the at-rule was expected to appear.
     pub const fn expected_context(&self) -> CssGrammarExpectation {
         self.expected_context
     }
 }
 
+/// Diagnostic detail for an authored at-rule prelude or body rejected by strict parsing.
+///
+/// The enclosing [`ErrorKind`] variant supplies the prelude/body phase, while this detail retains
+/// the rule, production, expectation, and responsible token. It does not recover or evaluate the
+/// at-rule.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssAtRuleSyntaxError {
     name: CssAtRuleName,
@@ -265,26 +384,34 @@ pub struct CssAtRuleSyntaxError {
 
 impl CssAtRuleSyntaxError {
     #[must_use]
+    /// Returns the decoded authored at-rule name.
     pub const fn name(&self) -> &CssAtRuleName {
         &self.name
     }
 
     #[must_use]
+    /// Returns the grammar production being parsed when the failure occurred.
     pub const fn production(&self) -> CssProductionId {
         self.production
     }
 
     #[must_use]
+    /// Returns the grammar expectation violated by the authored syntax.
     pub const fn expectation(&self) -> CssGrammarExpectation {
         self.expectation
     }
 
     #[must_use]
+    /// Returns the responsible authored token, or `None` when the production ended at EOF.
     pub const fn encountered(&self) -> Option<&CssTokenSummary> {
         self.encountered.as_ref()
     }
 }
 
+/// Diagnostic detail for an authored at-rule name absent from the CSS catalog.
+///
+/// The decoded name preserves authored identity; this value does not reinterpret the unknown rule
+/// or select a recovery action.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssUnknownAtRuleError {
     name: CssAtRuleName,
@@ -292,11 +419,16 @@ pub struct CssUnknownAtRuleError {
 
 impl CssUnknownAtRuleError {
     #[must_use]
+    /// Returns the decoded authored at-rule name.
     pub const fn name(&self) -> &CssAtRuleName {
         &self.name
     }
 }
 
+/// Diagnostic detail for a recognized authored at-rule outside the supported subset.
+///
+/// The decoded name and catalog feature identity distinguish unsupported syntax from unknown
+/// syntax; this value does not enable, lower, or recover the rule.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssUnsupportedAtRuleError {
     name: CssAtRuleName,
@@ -305,16 +437,22 @@ pub struct CssUnsupportedAtRuleError {
 
 impl CssUnsupportedAtRuleError {
     #[must_use]
+    /// Returns the decoded authored at-rule name.
     pub const fn name(&self) -> &CssAtRuleName {
         &self.name
     }
 
     #[must_use]
+    /// Returns the support-catalog identity for the recognized at-rule.
     pub const fn feature(&self) -> CssFeatureId {
         self.feature
     }
 }
 
+/// Diagnostic detail for an authored qualified rule rejected by strict parsing.
+///
+/// The production, expectation, and optional responsible token identify the syntax invariant;
+/// this value does not discard or recover the rule.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssQualifiedRuleError {
     production: CssProductionId,
@@ -324,21 +462,28 @@ pub struct CssQualifiedRuleError {
 
 impl CssQualifiedRuleError {
     #[must_use]
+    /// Returns the qualified-rule grammar production that rejected the syntax.
     pub const fn production(&self) -> CssProductionId {
         self.production
     }
 
     #[must_use]
+    /// Returns the grammar expectation violated by the authored rule.
     pub const fn expectation(&self) -> CssGrammarExpectation {
         self.expectation
     }
 
     #[must_use]
+    /// Returns the responsible authored token, or `None` when the rule ended at EOF.
     pub const fn encountered(&self) -> Option<&CssTokenSummary> {
         self.encountered.as_ref()
     }
 }
 
+/// Diagnostic detail for an authored selector rejected by the supported strict grammar.
+///
+/// The optional production, expectation, and token preserve parse provenance; this value does not
+/// match selectors, recover forgiving selector lists, or evaluate document state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssSelectorError {
     production: Option<CssProductionId>,
@@ -348,21 +493,28 @@ pub struct CssSelectorError {
 
 impl CssSelectorError {
     #[must_use]
+    /// Returns the responsible selector production when one is available.
     pub const fn production(&self) -> Option<CssProductionId> {
         self.production
     }
 
     #[must_use]
+    /// Returns the selector grammar expectation violated by the authored syntax.
     pub const fn expectation(&self) -> CssGrammarExpectation {
         self.expectation
     }
 
     #[must_use]
+    /// Returns the responsible authored token, or `None` when the selector ended at EOF.
     pub const fn encountered(&self) -> Option<&CssTokenSummary> {
         self.encountered.as_ref()
     }
 }
 
+/// Diagnostic detail for an authored media query rejected by the supported strict grammar.
+///
+/// The optional feature name, expectation, and token preserve parse provenance; this value does
+/// not evaluate the query against an environment or select recovery policy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssMediaQueryError {
     feature: Option<CssMediaFeatureName>,
@@ -372,21 +524,28 @@ pub struct CssMediaQueryError {
 
 impl CssMediaQueryError {
     #[must_use]
+    /// Returns the decoded authored media-feature name when one caused the failure.
     pub const fn feature(&self) -> Option<&CssMediaFeatureName> {
         self.feature.as_ref()
     }
 
     #[must_use]
+    /// Returns the media-query grammar expectation violated by the authored syntax.
     pub const fn expectation(&self) -> CssGrammarExpectation {
         self.expectation
     }
 
     #[must_use]
+    /// Returns the responsible authored token, or `None` when the query ended at EOF.
     pub const fn encountered(&self) -> Option<&CssTokenSummary> {
         self.encountered.as_ref()
     }
 }
 
+/// Diagnostic detail for an authored property name absent from the CSS catalog.
+///
+/// The decoded name preserves authored identity; this value does not reinterpret the declaration,
+/// apply cascade, or select recovery.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssUnknownPropertyError {
     name: CssPropertyName,
@@ -394,11 +553,16 @@ pub struct CssUnknownPropertyError {
 
 impl CssUnknownPropertyError {
     #[must_use]
+    /// Returns the decoded authored property name.
     pub const fn name(&self) -> &CssPropertyName {
         &self.name
     }
 }
 
+/// Diagnostic detail for a recognized authored property outside the supported subset.
+///
+/// The decoded name and catalog feature identity distinguish unsupported syntax from unknown
+/// syntax; this value does not enable, resolve, or apply the property.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssUnsupportedPropertyError {
     name: CssPropertyName,
@@ -407,16 +571,22 @@ pub struct CssUnsupportedPropertyError {
 
 impl CssUnsupportedPropertyError {
     #[must_use]
+    /// Returns the decoded authored property name.
     pub const fn name(&self) -> &CssPropertyName {
         &self.name
     }
 
     #[must_use]
+    /// Returns the support-catalog identity for the recognized property.
     pub const fn feature(&self) -> CssFeatureId {
         self.feature
     }
 }
 
+/// Diagnostic detail for an authored value rejected by a known property's strict grammar.
+///
+/// The canonical property, expectation, and optional token identify the parse invariant; this
+/// value does not substitute variables, resolve context, compute cascade, or recover the value.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssPropertyValueError {
     property: CssProperty,
@@ -426,16 +596,19 @@ pub struct CssPropertyValueError {
 
 impl CssPropertyValueError {
     #[must_use]
+    /// Returns the canonical property whose value grammar rejected the authored syntax.
     pub const fn property(&self) -> &CssProperty {
         &self.property
     }
 
     #[must_use]
+    /// Returns the property-value grammar expectation that was not met.
     pub const fn expectation(&self) -> CssGrammarExpectation {
         self.expectation
     }
 
     #[must_use]
+    /// Returns the responsible authored token, or `None` when the value ended at EOF.
     pub const fn encountered(&self) -> Option<&CssTokenSummary> {
         self.encountered.as_ref()
     }
@@ -451,15 +624,24 @@ enum CssDeclarationContext {
     },
 }
 
-/// A borrowed, extensible inspection boundary for a declaration's grammar context.
+/// A borrowed diagnostic-phase view of the grammar context for an authored declaration.
+///
+/// Exactly one variant identifies the context that owns the declaration invariant. The view does
+/// not apply declarations, compute cascade, substitute custom properties, or choose recovery.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CssDeclarationContextRef<'a> {
+    /// A declaration for a known ordinary property.
     KnownProperty(&'a CssProperty),
+    /// A declaration for a case-sensitive authored custom property.
     CustomProperty(&'a CssCustomPropertyName),
+    /// A declaration for a known property inside an authored keyframe.
     Keyframe(&'a CssProperty),
+    /// A descriptor declaration owned by an authored at-rule.
     Descriptor {
+        /// The decoded authored name of the owning at-rule.
         at_rule: &'a CssAtRuleName,
+        /// The decoded authored descriptor name.
         descriptor: &'a CssDescriptorName,
     },
 }
@@ -483,6 +665,10 @@ impl CssDeclarationContext {
     }
 }
 
+/// Diagnostic detail for a malformed or misplaced authored declaration annotation.
+///
+/// The declaration context and exact token identify the strict grammar violation; this value does
+/// not apply importance, mutate the declaration, or recover it.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssDeclarationAnnotationError {
     context: CssDeclarationContext,
@@ -491,11 +677,13 @@ pub struct CssDeclarationAnnotationError {
 
 impl CssDeclarationAnnotationError {
     #[must_use]
+    /// Returns the grammar context that owns the declaration.
     pub const fn context(&self) -> CssDeclarationContextRef<'_> {
         self.context.as_ref()
     }
 
     #[must_use]
+    /// Returns the exact authored annotation token rejected by the grammar.
     pub const fn encountered(&self) -> &CssTokenSummary {
         &self.encountered
     }
@@ -507,6 +695,10 @@ impl CssDeclarationAnnotationError {
     }
 }
 
+/// Diagnostic detail for an authored descriptor name unknown to its at-rule grammar.
+///
+/// The owning rule and descriptor names preserve authored identity; this value does not reinterpret,
+/// apply, or recover the descriptor.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssUnknownDescriptorError {
     at_rule: CssAtRuleName,
@@ -515,16 +707,22 @@ pub struct CssUnknownDescriptorError {
 
 impl CssUnknownDescriptorError {
     #[must_use]
+    /// Returns the decoded authored name of the owning at-rule.
     pub const fn at_rule(&self) -> &CssAtRuleName {
         &self.at_rule
     }
 
     #[must_use]
+    /// Returns the decoded authored descriptor name.
     pub const fn descriptor(&self) -> &CssDescriptorName {
         &self.descriptor
     }
 }
 
+/// Diagnostic detail for a recognized authored descriptor outside the supported subset.
+///
+/// The owning rule, descriptor, and catalog identity distinguish unsupported syntax from unknown
+/// syntax; this value does not enable, apply, or recover the descriptor.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssUnsupportedDescriptorError {
     at_rule: CssAtRuleName,
@@ -534,21 +732,28 @@ pub struct CssUnsupportedDescriptorError {
 
 impl CssUnsupportedDescriptorError {
     #[must_use]
+    /// Returns the decoded authored name of the owning at-rule.
     pub const fn at_rule(&self) -> &CssAtRuleName {
         &self.at_rule
     }
 
     #[must_use]
+    /// Returns the decoded authored descriptor name.
     pub const fn descriptor(&self) -> &CssDescriptorName {
         &self.descriptor
     }
 
     #[must_use]
+    /// Returns the support-catalog identity for the recognized descriptor.
     pub const fn feature(&self) -> CssFeatureId {
         self.feature
     }
 }
 
+/// Diagnostic detail for an authored value rejected by a known descriptor's strict grammar.
+///
+/// The owning rule, descriptor, expectation, and optional token identify the parse invariant; this
+/// value does not resolve resources, apply descriptor effects, or recover the value.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssDescriptorValueError {
     at_rule: CssAtRuleName,
@@ -559,26 +764,34 @@ pub struct CssDescriptorValueError {
 
 impl CssDescriptorValueError {
     #[must_use]
+    /// Returns the decoded authored name of the owning at-rule.
     pub const fn at_rule(&self) -> &CssAtRuleName {
         &self.at_rule
     }
 
     #[must_use]
+    /// Returns the decoded authored descriptor name.
     pub const fn descriptor(&self) -> &CssDescriptorName {
         &self.descriptor
     }
 
     #[must_use]
+    /// Returns the descriptor-value grammar expectation that was not met.
     pub const fn expectation(&self) -> CssGrammarExpectation {
         self.expectation
     }
 
     #[must_use]
+    /// Returns the responsible authored token, or `None` when the value ended at EOF.
     pub const fn encountered(&self) -> Option<&CssTokenSummary> {
         self.encountered.as_ref()
     }
 }
 
+/// Diagnostic detail for authored descriptors rejected as an invalid combination.
+///
+/// The owning rule, responsible descriptor, and conflict set identify the validation invariant;
+/// this value does not choose a descriptor, apply rule effects, or recover the block.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssDescriptorCombinationError {
     at_rule: CssAtRuleName,
@@ -588,21 +801,28 @@ pub struct CssDescriptorCombinationError {
 
 impl CssDescriptorCombinationError {
     #[must_use]
+    /// Returns the decoded authored name of the owning at-rule.
     pub const fn at_rule(&self) -> &CssAtRuleName {
         &self.at_rule
     }
 
     #[must_use]
+    /// Returns the descriptor that made the authored combination invalid.
     pub const fn responsible(&self) -> &CssDescriptorName {
         &self.responsible
     }
 
     #[must_use]
+    /// Returns the descriptors that conflict with the responsible descriptor.
     pub fn conflicting(&self) -> &[CssDescriptorName] {
         &self.conflicting
     }
 }
 
+/// Diagnostic detail for authored color syntax rejected by strict parsing.
+///
+/// The optional component, expectation, and token identify the color grammar violation; this value
+/// does not resolve system colors, evaluate relative channels, mix, convert, or recover colors.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssColorSyntaxError {
     component: Option<CssColorComponentName>,
@@ -612,21 +832,28 @@ pub struct CssColorSyntaxError {
 
 impl CssColorSyntaxError {
     #[must_use]
+    /// Returns the semantic color component responsible for the failure, when known.
     pub const fn component(&self) -> Option<&CssColorComponentName> {
         self.component.as_ref()
     }
 
     #[must_use]
+    /// Returns the color grammar expectation that was not met.
     pub const fn expectation(&self) -> CssGrammarExpectation {
         self.expectation
     }
 
     #[must_use]
+    /// Returns the responsible authored token, or `None` when the color ended at EOF.
     pub const fn encountered(&self) -> Option<&CssTokenSummary> {
         self.encountered.as_ref()
     }
 }
 
+/// Diagnostic detail for authored CSS nesting beyond the parser's structural limit.
+///
+/// The configured limit and enclosing production identify the rejected parse invariant; this value
+/// does not flatten additional nesting, recover the construct, or perform selector matching.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssNestingLimitError {
     limit: u32,
@@ -635,44 +862,75 @@ pub struct CssNestingLimitError {
 
 impl CssNestingLimitError {
     #[must_use]
+    /// Returns the maximum nesting depth accepted by the strict parser.
     pub const fn limit(&self) -> u32 {
         self.limit
     }
 
     #[must_use]
+    /// Returns the grammar production enclosing the excessive nesting.
     pub const fn enclosing_production(&self) -> CssProductionId {
         self.enclosing_production
     }
 }
 
-/// The structured semantic detail for a CSS parse failure.
+/// The structured diagnostic-phase detail for one strict CSS parse failure.
+///
+/// Every variant carries the payload required by its stable [`CssErrorCode`] and preserves authored
+/// provenance without a free-form catch-all. Matching a variant diagnoses rejected syntax; it does
+/// not perform browser-style recovery, cascade, substitution, matching, or contextual resolution.
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ErrorKind {
+    /// Strict parsing reached EOF before an expected production completed.
     UnexpectedEnd(CssUnexpectedEndError),
+    /// Strict parsing encountered a token rejected by the active grammar.
     UnexpectedToken(CssUnexpectedTokenError),
+    /// An authored encoding declaration was invalid.
     InvalidEncodingDeclaration(CssEncodingDeclarationError),
+    /// An authored at-rule appeared outside its permitted grammar context.
     InvalidAtRulePlacement(CssAtRulePlacementError),
+    /// An authored at-rule prelude was invalid.
     InvalidAtRulePrelude(CssAtRuleSyntaxError),
+    /// An authored at-rule body was invalid.
     InvalidAtRuleBody(CssAtRuleSyntaxError),
+    /// An authored at-rule name was not recognized.
     UnknownAtRule(CssUnknownAtRuleError),
+    /// An authored at-rule was recognized but unsupported.
     UnsupportedAtRule(CssUnsupportedAtRuleError),
+    /// An authored qualified rule was invalid.
     InvalidQualifiedRule(CssQualifiedRuleError),
+    /// An authored selector was invalid or outside the supported grammar.
     InvalidSelector(CssSelectorError),
+    /// An authored media query was invalid or outside the supported grammar.
     InvalidMediaQuery(CssMediaQueryError),
+    /// An authored property name was not recognized.
     UnknownProperty(CssUnknownPropertyError),
+    /// An authored property was recognized but unsupported.
     UnsupportedProperty(CssUnsupportedPropertyError),
+    /// An authored property value was invalid.
     InvalidPropertyValue(CssPropertyValueError),
+    /// An authored declaration annotation was malformed or misplaced.
     InvalidDeclarationAnnotation(CssDeclarationAnnotationError),
+    /// An authored descriptor name was not recognized for its at-rule.
     UnknownDescriptor(CssUnknownDescriptorError),
+    /// An authored descriptor was recognized but unsupported.
     UnsupportedDescriptor(CssUnsupportedDescriptorError),
+    /// An authored descriptor value was invalid.
     InvalidDescriptorValue(CssDescriptorValueError),
+    /// Authored descriptors formed an invalid combination.
     InvalidDescriptorCombination(CssDescriptorCombinationError),
+    /// Authored color syntax was invalid or outside the supported grammar.
     InvalidColorSyntax(CssColorSyntaxError),
+    /// Authored nesting exceeded the parser's configured structural limit.
     NestingLimit(CssNestingLimitError),
 }
 
-/// A structured CSS parse failure at one semantic source position.
+/// A structured strict-parse diagnostic at one semantic authored-source position.
+///
+/// The kind and position jointly identify the rejected syntax invariant. This error reports the
+/// failure but does not perform browser-style recovery, cascade, substitution, selector matching,
+/// contextual resolution, or resource loading.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Error {
     kind: ErrorKind,
@@ -693,11 +951,13 @@ impl Error {
     }
 
     #[must_use]
+    /// Returns the structured diagnostic detail for the parse failure.
     pub const fn kind(&self) -> &ErrorKind {
         &self.kind
     }
 
     #[must_use]
+    /// Returns the stable machine-readable root category corresponding to [`Self::kind`].
     pub const fn code(&self) -> CssErrorCode {
         match self.kind {
             ErrorKind::UnexpectedEnd(_) => CssErrorCode::UnexpectedEnd,
@@ -729,6 +989,7 @@ impl Error {
     }
 
     #[must_use]
+    /// Returns the semantic authored-source position of the responsible token or missing token.
     pub const fn position(&self) -> CssSourcePosition {
         self.position
     }

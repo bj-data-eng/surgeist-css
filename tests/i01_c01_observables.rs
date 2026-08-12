@@ -108,14 +108,436 @@ fn parse_fixture(source: &str) -> Result<Vec<Row>, String> {
             "true" | "false" => {}
             value => return Err(format!("{}: invalid clean state `{value}`", row.case_id)),
         }
+        validate_retained_field(&row.retained, &row.case_id)?;
         parse_semantic_values(&row.values, &row.case_id)?;
         validate_authored_field(&row)?;
+        validate_diagnostics_field(&row.diagnostics, &row.case_id)?;
         rows.push(row);
     }
     if rows.is_empty() {
         return Err("fixture has no cases".to_owned());
     }
     Ok(rows)
+}
+
+fn sequence_members<'a>(
+    field: &'a str,
+    field_name: &str,
+    case_id: &str,
+) -> Result<Vec<&'a str>, String> {
+    if field == "-" {
+        return Ok(Vec::new());
+    }
+    let members = field.split('~').collect::<Vec<_>>();
+    if members
+        .iter()
+        .any(|member| member.is_empty() || *member == "-")
+    {
+        return Err(format!(
+            "{case_id}: malformed {field_name} sequence `{field}`"
+        ));
+    }
+    Ok(members)
+}
+
+fn validate_retained_field(field: &str, case_id: &str) -> Result<(), String> {
+    for item in sequence_members(field, "retained", case_id)? {
+        if let Some(id) = item.strip_prefix("rule:") {
+            if !is_prefixed_stable_id(id, "baseline.rule.") {
+                return Err(format!(
+                    "{case_id}: malformed retained rule identity `{id}`"
+                ));
+            }
+        } else if let Some(id) = item.strip_prefix("property:") {
+            if !is_property_identity(id) {
+                return Err(format!(
+                    "{case_id}: malformed retained property identity `{id}`"
+                ));
+            }
+        } else {
+            return Err(format!(
+                "{case_id}: malformed retained sequence member `{item}`"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn is_prefixed_stable_id(id: &str, prefix: &str) -> bool {
+    id.strip_prefix(prefix).is_some_and(is_stable_slug)
+}
+
+fn is_stable_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && !slug.starts_with('-')
+        && !slug.ends_with('-')
+        && slug
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+fn is_property_identity(id: &str) -> bool {
+    is_prefixed_stable_id(id, "baseline.property.")
+        || id.strip_prefix("custom:--").is_some_and(|name| {
+            !name.is_empty()
+                && name.chars().all(|character| {
+                    character == '-'
+                        || character == '_'
+                        || character.is_alphanumeric()
+                        || !character.is_ascii()
+                })
+        })
+}
+
+fn validate_diagnostics_field(field: &str, case_id: &str) -> Result<(), String> {
+    for diagnostic in sequence_members(field, "diagnostic", case_id)? {
+        validate_diagnostic(diagnostic, case_id)?;
+    }
+    Ok(())
+}
+
+fn validate_diagnostic(diagnostic: &str, case_id: &str) -> Result<(), String> {
+    let (code, remainder) = diagnostic
+        .split_once('/')
+        .ok_or_else(|| format!("{case_id}: malformed diagnostic code/root `{diagnostic}`"))?;
+    if !is_diagnostic_code(code) {
+        return Err(format!("{case_id}: unknown diagnostic code `{code}`"));
+    }
+    let (root_and_payload, action_and_coordinates) = remainder
+        .rsplit_once('/')
+        .ok_or_else(|| format!("{case_id}: malformed diagnostic code/root `{diagnostic}`"))?;
+    validate_diagnostic_root_and_payload(code, root_and_payload, case_id)?;
+
+    let (action, coordinates) = action_and_coordinates
+        .split_once('@')
+        .ok_or_else(|| format!("{case_id}: malformed recovery action/coordinates"))?;
+    if !matches!(
+        action,
+        "DropDeclaration"
+            | "DropDescriptor"
+            | "DropQualifiedRule"
+            | "DropAtRule"
+            | "DropKeyframeBlock"
+            | "DropSelectorListItem"
+            | "ReplaceMediaQueryWithNever"
+            | "RetainWithImplicitClosure"
+            | "IgnoreLegacyToken"
+            | "StopAtNestingLimit"
+    ) {
+        return Err(format!("{case_id}: unknown recovery action `{action}`"));
+    }
+
+    let (position, span) = coordinates
+        .split_once('>')
+        .ok_or_else(|| format!("{case_id}: ill-formed diagnostic position `{coordinates}`"))?;
+    let position = parse_coordinate(position, "diagnostic position", case_id)?;
+    let (start, end) = span
+        .split_once('-')
+        .ok_or_else(|| format!("{case_id}: ill-formed diagnostic span `{span}`"))?;
+    let start = parse_coordinate(start, "diagnostic span start", case_id)?;
+    let end = parse_span_end(end, case_id)?;
+    let start_line_column = (start.line, start.column);
+    let position_line_column = (position.line, position.column);
+    let end_line_column = (end.line, end.column);
+    if start.byte > end.byte
+        || start_line_column > end_line_column
+        || position.byte < start.byte
+        || position.byte > end.byte
+        || position_line_column < start_line_column
+        || position_line_column > end_line_column
+    {
+        return Err(format!(
+            "{case_id}: reversed or invalid diagnostic span `{span}`"
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
+struct FixtureCoordinate {
+    byte: usize,
+    line: usize,
+    column: usize,
+}
+
+fn parse_coordinate(
+    serialized: &str,
+    field_name: &str,
+    case_id: &str,
+) -> Result<FixtureCoordinate, String> {
+    let fields = serialized.split(':').collect::<Vec<_>>();
+    if fields.len() != 3 {
+        return Err(format!("{case_id}: ill-formed {field_name} `{serialized}`"));
+    }
+    Ok(FixtureCoordinate {
+        byte: parse_decimal(fields[0], field_name, case_id)?,
+        line: parse_decimal(fields[1], field_name, case_id)?,
+        column: parse_decimal(fields[2], field_name, case_id)?,
+    })
+}
+
+fn parse_span_end(serialized: &str, case_id: &str) -> Result<FixtureCoordinate, String> {
+    let fields = serialized.split(':').collect::<Vec<_>>();
+    if fields.len() != 4 {
+        return Err(format!(
+            "{case_id}: ill-formed diagnostic span end `{serialized}`"
+        ));
+    }
+    let coordinate = FixtureCoordinate {
+        byte: parse_decimal(fields[0], "diagnostic span end", case_id)?,
+        line: parse_decimal(fields[1], "diagnostic span end", case_id)?,
+        column: parse_decimal(fields[2], "diagnostic span end", case_id)?,
+    };
+    let repeated_end_byte = parse_decimal(fields[3], "diagnostic span end", case_id)?;
+    if coordinate.byte != repeated_end_byte {
+        return Err(format!(
+            "{case_id}: inconsistent diagnostic span endpoint `{serialized}`"
+        ));
+    }
+    Ok(coordinate)
+}
+
+fn parse_decimal(serialized: &str, field_name: &str, case_id: &str) -> Result<usize, String> {
+    if serialized.is_empty() || !serialized.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(format!(
+            "{case_id}: nondecimal {field_name} coordinate `{serialized}`"
+        ));
+    }
+    serialized
+        .parse()
+        .map_err(|_| format!("{case_id}: out-of-range {field_name} coordinate `{serialized}`"))
+}
+
+fn is_diagnostic_code(code: &str) -> bool {
+    matches!(
+        code,
+        "UnexpectedEnd"
+            | "UnexpectedToken"
+            | "InvalidEncodingDeclaration"
+            | "InvalidAtRulePlacement"
+            | "InvalidAtRulePrelude"
+            | "InvalidAtRuleBody"
+            | "UnknownAtRule"
+            | "UnsupportedAtRule"
+            | "InvalidQualifiedRule"
+            | "InvalidSelector"
+            | "InvalidMediaQuery"
+            | "UnknownProperty"
+            | "UnsupportedProperty"
+            | "InvalidPropertyValue"
+            | "InvalidDeclarationAnnotation"
+            | "UnknownDescriptor"
+            | "UnsupportedDescriptor"
+            | "InvalidDescriptorValue"
+            | "InvalidDescriptorCombination"
+            | "InvalidColorSyntax"
+            | "NestingLimit"
+    )
+}
+
+fn validate_diagnostic_root_and_payload(
+    code: &str,
+    serialized: &str,
+    case_id: &str,
+) -> Result<(), String> {
+    let (root, payload) = serialized
+        .split_once(':')
+        .ok_or_else(|| format!("{case_id}: malformed diagnostic code/root `{serialized}`"))?;
+    if root != code {
+        return Err(format!(
+            "{case_id}: diagnostic code/root family mismatch `{code}`/`{root}`"
+        ));
+    }
+    if payload.is_empty() {
+        return Err(format!("{case_id}: empty diagnostic payload for `{root}`"));
+    }
+
+    match root {
+        "UnexpectedEnd" | "UnknownAtRule" | "UnknownProperty" => {
+            validate_payload_parts(payload, 1, root, case_id)
+        }
+        "InvalidAtRulePlacement" | "UnsupportedAtRule" | "UnknownDescriptor" | "NestingLimit" => {
+            validate_payload_parts(payload, 2, root, case_id)
+        }
+        "UnsupportedProperty" => {
+            let parts = payload.split(':').collect::<Vec<_>>();
+            if parts.len() != 2 || !is_prefixed_stable_id(parts[0], "baseline.property.") {
+                return Err(format!(
+                    "{case_id}: malformed diagnostic payload for `{root}`"
+                ));
+            }
+            validate_nonempty_parts(&parts, root, case_id)
+        }
+        "UnsupportedDescriptor" | "InvalidDescriptorCombination" => {
+            validate_payload_parts(payload, 3, root, case_id)
+        }
+        "UnexpectedToken" => validate_token_payload(payload, 1, false, root, case_id),
+        "InvalidEncodingDeclaration" => validate_token_payload(payload, 1, true, root, case_id),
+        "InvalidAtRulePrelude" | "InvalidAtRuleBody" | "InvalidDescriptorValue" => {
+            validate_token_payload(payload, 3, true, root, case_id)
+        }
+        "InvalidQualifiedRule" | "InvalidSelector" | "InvalidMediaQuery" | "InvalidColorSyntax" => {
+            validate_token_payload(payload, 2, true, root, case_id)
+        }
+        "InvalidPropertyValue" => {
+            let mut parts = payload.splitn(3, ':');
+            let property = parts.next().unwrap_or_default();
+            let expectation = parts.next().unwrap_or_default();
+            let token = parts.next().unwrap_or_default();
+            if !is_prefixed_stable_id(property, "baseline.property.") || expectation.is_empty() {
+                return Err(format!(
+                    "{case_id}: malformed diagnostic payload for `{root}`"
+                ));
+            }
+            validate_token(token, true, root, case_id)
+        }
+        "InvalidDeclarationAnnotation" => {
+            let (context, token) = split_token_suffix(payload, root, case_id)?;
+            validate_declaration_context(context, root, case_id)?;
+            validate_token(token, false, root, case_id)
+        }
+        _ => unreachable!("validated diagnostic code/root"),
+    }
+}
+
+fn validate_payload_parts(
+    payload: &str,
+    expected: usize,
+    root: &str,
+    case_id: &str,
+) -> Result<(), String> {
+    let parts = payload.split(':').collect::<Vec<_>>();
+    if parts.len() != expected {
+        return Err(format!(
+            "{case_id}: malformed diagnostic payload for `{root}`"
+        ));
+    }
+    validate_nonempty_parts(&parts, root, case_id)
+}
+
+fn validate_nonempty_parts(parts: &[&str], root: &str, case_id: &str) -> Result<(), String> {
+    if parts.iter().any(|part| part.is_empty()) {
+        return Err(format!(
+            "{case_id}: malformed diagnostic payload for `{root}`"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_token_payload(
+    payload: &str,
+    prefix_parts: usize,
+    allow_absent_token: bool,
+    root: &str,
+    case_id: &str,
+) -> Result<(), String> {
+    let parts = payload.splitn(prefix_parts + 1, ':').collect::<Vec<_>>();
+    if parts.len() != prefix_parts + 1 || parts[..prefix_parts].iter().any(|part| part.is_empty()) {
+        return Err(format!(
+            "{case_id}: malformed diagnostic payload for `{root}`"
+        ));
+    }
+    validate_token(parts[prefix_parts], allow_absent_token, root, case_id)
+}
+
+fn validate_token(
+    token: &str,
+    allow_absent: bool,
+    root: &str,
+    case_id: &str,
+) -> Result<(), String> {
+    if allow_absent && token == "-" {
+        return Ok(());
+    }
+    let (kind, authored) = token
+        .split_once(':')
+        .ok_or_else(|| format!("{case_id}: malformed diagnostic payload for `{root}`"))?;
+    if !is_token_kind(kind) || authored.is_empty() {
+        return Err(format!(
+            "{case_id}: malformed diagnostic payload for `{root}`"
+        ));
+    }
+    Ok(())
+}
+
+fn split_token_suffix<'a>(
+    payload: &'a str,
+    root: &str,
+    case_id: &str,
+) -> Result<(&'a str, &'a str), String> {
+    for kind in TOKEN_KINDS {
+        let marker = format!(":{kind}:");
+        if let Some(index) = payload.rfind(&marker) {
+            let context = &payload[..index];
+            let token = &payload[index + 1..];
+            if !context.is_empty() {
+                return Ok((context, token));
+            }
+        }
+    }
+    Err(format!(
+        "{case_id}: malformed diagnostic payload for `{root}`"
+    ))
+}
+
+fn validate_declaration_context(context: &str, root: &str, case_id: &str) -> Result<(), String> {
+    let valid = context
+        .strip_prefix("known:")
+        .or_else(|| context.strip_prefix("keyframe:"))
+        .is_some_and(|id| is_prefixed_stable_id(id, "baseline.property."))
+        || context
+            .strip_prefix("custom:")
+            .or_else(|| context.strip_prefix("keyframe-custom:"))
+            .is_some_and(|name| is_property_identity(&format!("custom:{name}")))
+        || context.strip_prefix("descriptor:").is_some_and(|details| {
+            let parts = details.split(':').collect::<Vec<_>>();
+            parts.len() == 2 && parts.iter().all(|part| !part.is_empty())
+        })
+        || context == "future";
+    if !valid {
+        return Err(format!(
+            "{case_id}: malformed diagnostic payload for `{root}`"
+        ));
+    }
+    Ok(())
+}
+
+const TOKEN_KINDS: &[&str] = &[
+    "Ident",
+    "AtKeyword",
+    "Hash",
+    "IdHash",
+    "String",
+    "Url",
+    "Delim",
+    "Number",
+    "Percentage",
+    "Dimension",
+    "Whitespace",
+    "Comment",
+    "Colon",
+    "Semicolon",
+    "Comma",
+    "IncludeMatch",
+    "DashMatch",
+    "PrefixMatch",
+    "SuffixMatch",
+    "SubstringMatch",
+    "Cdo",
+    "Cdc",
+    "Function",
+    "ParenthesisBlock",
+    "SquareBracketBlock",
+    "CurlyBracketBlock",
+    "BadUrl",
+    "BadString",
+    "CloseParenthesis",
+    "CloseSquareBracket",
+    "CloseCurlyBracket",
+];
+
+fn is_token_kind(kind: &str) -> bool {
+    TOKEN_KINDS.contains(&kind)
 }
 
 fn validate_authored_field(row: &Row) -> Result<(), String> {
@@ -473,6 +895,151 @@ fn malformed_observable_fixture_rows_are_rejected() {
             .contains("absent required observable"),
         "responsible case: {}",
         rows[0].case_id
+    );
+
+    let malformed_diagnostic_row = rows
+        .iter()
+        .find(|row| row.diagnostics != "-")
+        .expect("fixture must contain a recovery diagnostic");
+    let diagnostic = &malformed_diagnostic_row.diagnostics;
+
+    let mut malformed_retained_rule = malformed_diagnostic_row.clone();
+    malformed_retained_rule.retained = "rule:not-a-stable-id".to_owned();
+    assert_fixture_row_rejected(
+        &malformed_retained_rule,
+        "malformed retained rule identity",
+        "retained rule identity",
+    );
+
+    let declaration_row = rows
+        .iter()
+        .find(|row| {
+            row.retained.contains("property:baseline.property.")
+                && row.authored_declarations != "-"
+                && row.values != "-"
+        })
+        .expect("fixture must contain a semantic property declaration");
+    let property_id = declaration_row
+        .retained
+        .split('~')
+        .find_map(|item| item.strip_prefix("property:"))
+        .expect("retained property identity");
+    let mut malformed_retained_property = declaration_row.clone();
+    malformed_retained_property.retained = malformed_retained_property
+        .retained
+        .replace(property_id, "not-a-stable-id");
+    malformed_retained_property.values = malformed_retained_property
+        .values
+        .replace(property_id, "not-a-stable-id");
+    malformed_retained_property.authored_declarations = malformed_retained_property
+        .authored_declarations
+        .replace(property_id, "not-a-stable-id");
+    assert_fixture_row_rejected(
+        &malformed_retained_property,
+        "malformed retained property identity",
+        "retained property identity",
+    );
+
+    for retained in [
+        "rule:baseline.rule.style~~rule:baseline.rule.media",
+        "-~rule:baseline.rule.style",
+    ] {
+        let mut malformed_retained_sequence = malformed_diagnostic_row.clone();
+        malformed_retained_sequence.retained = retained.to_owned();
+        assert_fixture_row_rejected(
+            &malformed_retained_sequence,
+            "malformed retained sequence",
+            "retained sequence",
+        );
+    }
+
+    let diagnostic_cases = [
+        (
+            diagnostic.replacen("InvalidAtRulePrelude/", "NotACssError/", 1),
+            "diagnostic code",
+            "unknown diagnostic code",
+        ),
+        (
+            diagnostic.replacen(
+                "/InvalidAtRulePrelude:",
+                "/UnexpectedEnd:",
+                1,
+            ),
+            "diagnostic code/root family",
+            "mismatched diagnostic root",
+        ),
+        (
+            diagnostic.replacen(
+                "/InvalidAtRulePrelude:container:baseline.rule.container:a supported @container prelude:Function:style(/",
+                "/InvalidAtRulePrelude:/",
+                1,
+            ),
+            "diagnostic payload",
+            "empty diagnostic payload",
+        ),
+        (
+            diagnostic.replacen("/DropAtRule@", "/KeepEverything@", 1),
+            "recovery action",
+            "unknown recovery action",
+        ),
+        (
+            diagnostic.replacen("@11:0:11>", "@eleven:0:11>", 1),
+            "diagnostic position",
+            "nondecimal diagnostic coordinate",
+        ),
+        (
+            diagnostic.replacen("@11:0:11>", "@11:0>", 1),
+            "diagnostic position",
+            "ill-formed diagnostic position",
+        ),
+        (
+            diagnostic.replacen(">0:0:0-51:0:51:51", ">0:0-51:0:51:51", 1),
+            "diagnostic span",
+            "ill-formed diagnostic span",
+        ),
+        (
+            diagnostic.replacen(">0:0:0-51:0:51:51", ">51:0:51-0:0:0:0", 1),
+            "diagnostic span",
+            "reversed diagnostic span",
+        ),
+        (
+            diagnostic.replacen("-51:0:51:51", "-51:0:51:50", 1),
+            "diagnostic span",
+            "inconsistent diagnostic span endpoint",
+        ),
+        (
+            format!("{diagnostic}~"),
+            "diagnostic sequence",
+            "empty diagnostic sequence member",
+        ),
+        (
+            format!("-~{diagnostic}"),
+            "diagnostic sequence",
+            "empty-sequence marker mixed with diagnostics",
+        ),
+    ];
+    for (malformed_diagnostics, expected_error, reason) in diagnostic_cases {
+        let mut malformed = malformed_diagnostic_row.clone();
+        malformed.diagnostics = malformed_diagnostics;
+        assert_fixture_row_rejected(&malformed, expected_error, reason);
+    }
+
+    let mut delimiter_payload = malformed_diagnostic_row.clone();
+    delimiter_payload.diagnostics = diagnostic.replacen(
+        "Function:style(",
+        "Url:url(https://example.test/@value:part)",
+        1,
+    );
+    parse_fixture(&format!("{HEADER}\n{}\n", render_row(&delimiter_payload)))
+        .expect("authored token payload delimiters remain valid fixture data");
+}
+
+fn assert_fixture_row_rejected(row: &Row, expected_error: &str, reason: &str) {
+    let source = format!("{HEADER}\n{}\n", render_row(row));
+    let error = parse_fixture(&source).expect_err(reason);
+    assert!(
+        error.contains(expected_error),
+        "{reason}: expected `{expected_error}` in `{error}`"
     );
 }
 

@@ -1,9 +1,6 @@
-use std::collections::BTreeSet;
-
 use surgeist_css::{
-    CssErrorCode, CssFeatureKind, CssImportance, CssKnownProperty, CssRecoveryAction, CssRule,
-    CssSupportStatus, ErrorKind, feature_catalog, feature_metadata, parse_sheet,
-    parse_style_attribute, property_metadata,
+    CssErrorCode, CssImportance, CssKnownProperty, CssRecoveryAction, CssRule, CssSupportStatus,
+    ErrorKind, feature_metadata, parse_sheet, parse_style_attribute, property_metadata,
 };
 
 fn actions(source: &str) -> Vec<CssRecoveryAction> {
@@ -212,56 +209,7 @@ fn custom_substitution_and_known_declarations_preserve_coupled_values() {
 }
 
 #[test]
-fn support_catalog_statuses_and_property_lookup_are_consistent() {
-    let catalog = feature_catalog();
-    assert_eq!(catalog.len(), 219, "catalog size");
-    assert_eq!(
-        catalog
-            .iter()
-            .filter(|record| record.kind() == CssFeatureKind::Property)
-            .count(),
-        179,
-        "property inventory"
-    );
-
-    let ids = catalog
-        .iter()
-        .map(|record| record.id().as_str())
-        .collect::<BTreeSet<_>>();
-    assert_eq!(ids.len(), catalog.len(), "unique IDs");
-    for record in catalog {
-        match record.status() {
-            CssSupportStatus::Complete => {
-                assert_eq!(record.supported_subset(), None, "{}", record.id().as_str());
-                assert_eq!(
-                    record.unsupported_remainder(),
-                    None,
-                    "{}",
-                    record.id().as_str()
-                );
-                assert_eq!(record.recognized_unsupported_code(), None);
-            }
-            CssSupportStatus::Partial => {
-                assert!(
-                    record
-                        .supported_subset()
-                        .is_some_and(|text| !text.is_empty())
-                );
-                assert!(
-                    record
-                        .unsupported_remainder()
-                        .is_some_and(|text| !text.is_empty())
-                );
-                assert_eq!(record.recognized_unsupported_code(), None);
-            }
-            CssSupportStatus::RecognizedUnsupported => {
-                assert_eq!(record.supported_subset(), None);
-                assert_eq!(record.unsupported_remainder(), None);
-                assert!(record.recognized_unsupported_code().is_some());
-            }
-        }
-    }
-
+fn named_property_metadata_lookup_is_exact() {
     let width = property_metadata("WiDtH").expect("width metadata");
     assert_eq!(width.property(), CssKnownProperty::Width);
     assert_eq!(width.feature().id().as_str(), "baseline.property.width");

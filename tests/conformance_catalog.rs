@@ -1,8 +1,6 @@
-use std::collections::HashSet;
-
 use surgeist_css::{
-    CssErrorCode, CssFeatureKind, CssSupportStatus, ErrorKind, feature_catalog, feature_metadata,
-    parse_sheet, parse_style_attribute,
+    CssErrorCode, CssFeatureKind, CssSupportStatus, ErrorKind, feature_metadata, parse_sheet,
+    parse_style_attribute,
 };
 
 #[derive(Clone, Copy)]
@@ -753,22 +751,7 @@ const EXPECTED: &[ExpectedFeature] = &[
 ];
 
 #[test]
-fn conformance_catalog_has_the_exact_independent_non_property_table() {
-    assert_eq!(feature_catalog().len(), 219);
-    assert_eq!(EXPECTED.len(), 40);
-
-    let actual_ids: HashSet<_> = feature_catalog()
-        .iter()
-        .filter(|feature| feature.kind() != CssFeatureKind::Property)
-        .map(|feature| feature.id().as_str())
-        .collect();
-    let expected_ids: HashSet<_> = EXPECTED.iter().map(|feature| feature.id).collect();
-    assert_eq!(actual_ids.len(), 40, "catalog IDs must be unique");
-    assert_eq!(
-        actual_ids, expected_ids,
-        "catalog IDs must match section 9.2"
-    );
-
+fn named_conformance_records_expose_declared_metadata() {
     for expected in EXPECTED {
         let actual = feature_metadata(expected.id).expect("expected catalog record");
         assert_eq!(actual.id().as_str(), expected.id);

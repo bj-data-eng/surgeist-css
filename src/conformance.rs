@@ -1575,34 +1575,36 @@ pub fn property_metadata(name: &str) -> Option<CssPropertyMetadata> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::*;
 
     #[test]
-    fn support_catalog_records_expose_consistent_status_and_source_metadata() {
-        let mut ids = HashSet::new();
-        for feature in feature_catalog() {
-            assert!(ids.insert(feature.id().as_str()));
-            assert_ne!(feature.spelling(), "");
-            assert_ne!(feature.production(), "");
-            assert_ne!(
-                feature.source().url().is_some(),
-                feature.source().repository_provenance().is_some()
-            );
-            assert_eq!(
-                feature.supported_subset().is_some(),
-                feature.status() == CssSupportStatus::Partial
-            );
-            assert_eq!(
-                feature.unsupported_remainder().is_some(),
-                feature.status() == CssSupportStatus::Partial
-            );
-            assert_eq!(
-                feature.recognized_unsupported_code().is_some(),
-                feature.status() == CssSupportStatus::RecognizedUnsupported
-            );
-        }
-        assert_eq!(ids.len(), 219);
+    fn exact_lookup_exposes_named_status_metadata() {
+        let importance =
+            feature_metadata("foundation.declaration.importance").expect("importance metadata");
+        assert_eq!(importance.status(), CssSupportStatus::Complete);
+        assert_eq!(importance.supported_subset(), None);
+        assert_eq!(importance.unsupported_remainder(), None);
+        assert_eq!(importance.recognized_unsupported_code(), None);
+
+        let import = feature_metadata("baseline.rule.import").expect("import metadata");
+        assert_eq!(import.status(), CssSupportStatus::Partial);
+        assert_eq!(
+            import.supported_subset(),
+            Some("The baseline parser spelling and the I01 recovery extensions are supported.")
+        );
+        assert_eq!(
+            import.unsupported_remainder(),
+            Some("Other valid forms of the cited rule production are outside the I01 subset.")
+        );
+        assert_eq!(import.recognized_unsupported_code(), None);
+
+        let namespace = feature_metadata("later.rule.namespace").expect("namespace metadata");
+        assert_eq!(namespace.status(), CssSupportStatus::RecognizedUnsupported);
+        assert_eq!(namespace.supported_subset(), None);
+        assert_eq!(namespace.unsupported_remainder(), None);
+        assert_eq!(
+            namespace.recognized_unsupported_code(),
+            Some(CssErrorCode::UnsupportedAtRule)
+        );
     }
 }

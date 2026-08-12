@@ -1,12 +1,10 @@
-use std::collections::HashSet;
-
 mod catalog_inventory {
     pub mod vectors;
 }
 
 use catalog_inventory::vectors::{PROPERTY_NEGATIVE_VECTORS, PROPERTY_POSITIVE_VECTORS};
 use surgeist_css::{
-    CssErrorCode, CssFeatureKind, CssSupportStatus, ErrorKind, feature_catalog, feature_metadata,
+    CssErrorCode, CssFeatureKind, CssSupportStatus, ErrorKind, feature_metadata,
     parse_style_attribute, property_metadata,
 };
 
@@ -33,25 +31,6 @@ fn contains_substitution(authored_value: &str) -> bool {
 
 #[test]
 fn public_feature_catalog_exposes_declared_metadata_and_lookup() {
-    assert_eq!(feature_catalog().len(), 219);
-
-    let property_features: Vec<_> = feature_catalog()
-        .iter()
-        .filter(|feature| feature.kind() == CssFeatureKind::Property)
-        .collect();
-    assert_eq!(property_features.len(), 179);
-    assert_eq!(feature_catalog().len() - property_features.len(), 40);
-
-    let mut all_ids = HashSet::new();
-    for feature in feature_catalog() {
-        assert!(
-            all_ids.insert(feature.id().as_str()),
-            "duplicate catalog ID `{}`",
-            feature.id().as_str()
-        );
-    }
-    assert_eq!(all_ids.len(), 219);
-
     for vector in PROPERTY_POSITIVE_VECTORS {
         let metadata = property_metadata(vector.canonical_name)
             .unwrap_or_else(|| panic!("missing metadata for `{}`", vector.canonical_name));

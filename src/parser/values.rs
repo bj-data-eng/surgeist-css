@@ -4,9 +4,7 @@ use cssparser::{
 };
 use cssparser_color::{Color as ParsedColor, DefaultColorParser, parse_color_with};
 
-use crate::error::{
-    Error, ErrorKind, basic, error_at, invalid_color, unsupported_value, unsupported_value_at,
-};
+use crate::error::{Error, basic, invalid_color, unsupported_value_at, with_color_context};
 use crate::syntax::{self, *};
 use crate::validation::{LengthUnitStatus, classify_length_unit, parse_global_keyword};
 
@@ -423,12 +421,9 @@ pub(super) fn parse_custom_ident_from_str_at<'i>(
         || ident.eq_ignore_ascii_case("span")
         || ident.eq_ignore_ascii_case("auto")
     {
-        Err(error_at(
+        Err(unsupported_value_at(
             location,
-            ErrorKind::UnsupportedValue {
-                property: None,
-                reason: format!("unsupported {context} `{ident}`"),
-            },
+            None,
             format!("unsupported {context} `{ident}`"),
         ))
     } else {
@@ -462,7 +457,7 @@ pub(super) fn next_is_ident<'i, 't>(input: &mut Parser<'i, 't>, expected: &str) 
 pub(super) fn parse_color<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssColor, ParseError<'i, Error>> {
-    parse_color_inner(input)
+    parse_color_inner(input).map_err(|error| with_color_context(error, None))
 }
 
 fn parse_color_inner<'i, 't>(
@@ -480,7 +475,7 @@ fn parse_color_inner<'i, 't>(
     if let Ok(color) = input.try_parse(parse_system_color) {
         return Ok(color);
     }
-    Err(unsupported_value(input, None, "unsupported color syntax"))
+    Err(invalid_color(input.current_source_location(), None))
 }
 
 fn parse_relative_color<'i, 't>(
@@ -798,11 +793,7 @@ fn parse_absolute_color_with_cssparser_color<'i, 't>(
     let location = input.current_source_location();
     match parse_color_with(&DefaultColorParser, input) {
         Ok(parsed) => map_parsed_color(parsed, location),
-        Err(_) => Err(invalid_color(
-            location,
-            "<color>",
-            "unsupported color syntax",
-        )),
+        Err(_) => Err(invalid_color(location, None)),
     }
 }
 
@@ -887,11 +878,7 @@ fn map_parsed_color<'i>(
 }
 
 fn invalid_color_component<'i>(location: cssparser::SourceLocation) -> ParseError<'i, Error> {
-    invalid_color(
-        location,
-        "<color>",
-        "unsupported non-finite color component",
-    )
+    invalid_color(location, Some("component"))
 }
 
 fn map_predefined_color_space(color_space: ParsedPredefinedColorSpace) -> CssPredefinedColorSpace {

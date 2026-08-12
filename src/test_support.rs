@@ -73,58 +73,65 @@ impl AcceptedValueCase {
 pub(crate) enum ExpectedErrorKind {
     InvalidSyntax,
     InvalidSelector,
-    InvalidSyntaxOrUnsupportedValueForProperty {
-        property: &'static str,
-    },
-    UnsupportedAtRule {
-        name: &'static str,
-    },
-    UnknownProperty {
-        name: &'static str,
-    },
-    UnsupportedValueForProperty {
-        property: &'static str,
-    },
-    UnsupportedValue {
-        property: Option<&'static str>,
-        reason: &'static str,
-    },
+    InvalidSyntaxOrUnsupportedValueForProperty { property: &'static str },
+    UnsupportedAtRule { name: &'static str },
+    UnknownProperty { name: &'static str },
+    UnsupportedValueForProperty { property: &'static str },
+    UnsupportedValue { property: Option<&'static str> },
 }
 
 impl ExpectedErrorKind {
     fn assert_matches(&self, actual: &ErrorKind, label: &str) {
         match (self, actual) {
-            (Self::InvalidSyntax, ErrorKind::InvalidSyntax { .. }) => {}
-            (Self::InvalidSelector, ErrorKind::InvalidSelector { .. }) => {}
+            (
+                Self::InvalidSyntax,
+                ErrorKind::UnexpectedEnd(_)
+                | ErrorKind::UnexpectedToken(_)
+                | ErrorKind::InvalidQualifiedRule(_)
+                | ErrorKind::InvalidAtRulePrelude(_)
+                | ErrorKind::InvalidAtRuleBody(_)
+                | ErrorKind::InvalidPropertyValue(_),
+            ) => {}
+            (Self::InvalidSelector, ErrorKind::InvalidSelector(_)) => {}
             (
                 Self::InvalidSyntaxOrUnsupportedValueForProperty { property },
-                ErrorKind::UnsupportedValue {
-                    property: actual_property,
-                    ..
-                },
-            ) if Some(*property) == actual_property.as_deref() => {}
+                ErrorKind::InvalidPropertyValue(detail),
+            ) if crate::validation::property_for_supported_name(property).as_ref()
+                == Some(detail.property()) => {}
             (
                 Self::InvalidSyntaxOrUnsupportedValueForProperty { .. },
-                ErrorKind::InvalidSyntax { .. },
+                ErrorKind::UnexpectedEnd(_)
+                | ErrorKind::UnexpectedToken(_)
+                | ErrorKind::InvalidQualifiedRule(_)
+                | ErrorKind::InvalidColorSyntax(_),
             ) => {}
-            (Self::UnsupportedAtRule { name }, ErrorKind::UnsupportedAtRule { name: actual })
-                if name == actual => {}
-            (Self::UnknownProperty { name }, ErrorKind::UnknownProperty { name: actual })
-                if name == actual => {}
+            (Self::UnsupportedAtRule { name }, ErrorKind::UnsupportedAtRule(detail))
+                if *name == detail.name().as_str() => {}
+            (Self::UnsupportedAtRule { name }, ErrorKind::UnknownAtRule(detail))
+                if *name == detail.name().as_str() => {}
+            (Self::UnknownProperty { name }, ErrorKind::UnknownProperty(detail))
+                if *name == detail.name().as_str() => {}
             (
                 Self::UnsupportedValueForProperty { property },
-                ErrorKind::UnsupportedValue {
-                    property: actual_property,
-                    ..
-                },
-            ) if Some(*property) == actual_property.as_deref() => {}
+                ErrorKind::InvalidPropertyValue(detail),
+            ) if crate::validation::property_for_supported_name(property).as_ref()
+                == Some(detail.property()) => {}
+            (Self::UnsupportedValueForProperty { .. }, ErrorKind::InvalidColorSyntax(_)) => {}
             (
-                Self::UnsupportedValue { property, reason },
-                ErrorKind::UnsupportedValue {
-                    property: actual_property,
-                    reason: actual_reason,
+                Self::UnsupportedValue {
+                    property: Some(property),
                 },
-            ) if *property == actual_property.as_deref() && *reason == actual_reason => {}
+                ErrorKind::InvalidPropertyValue(detail),
+            ) if crate::validation::property_for_supported_name(property).as_ref()
+                == Some(detail.property()) => {}
+            (
+                Self::UnsupportedValue { property: None },
+                ErrorKind::UnexpectedEnd(_)
+                | ErrorKind::UnexpectedToken(_)
+                | ErrorKind::InvalidQualifiedRule(_)
+                | ErrorKind::InvalidColorSyntax(_)
+                | ErrorKind::InvalidMediaQuery(_),
+            ) => {}
             _ => panic!("{label} rejected with unexpected error kind: {actual:?}"),
         }
     }
@@ -157,7 +164,7 @@ impl RejectedDeclarationCase {
         let css = declaration_sheet(self.property_name, self.authored_value);
         let error = assert_sheet_rejected(&css, &self.expected_error);
         assert_eq!(
-            matches!(error.kind(), ErrorKind::UnknownProperty { .. }),
+            matches!(error.kind(), ErrorKind::UnknownProperty(_)),
             !self.property_name_should_be_recognized,
             "{} property-name recognition mismatch",
             self.label,

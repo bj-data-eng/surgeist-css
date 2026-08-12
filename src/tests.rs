@@ -4397,7 +4397,6 @@ fn strict_declaration_case_helpers_accept_and_reject_cases() {
             authored_value: "inline",
             expected_error: ExpectedErrorKind::UnsupportedValue {
                 property: Some("display"),
-                reason: "unsupported display keyword `inline`",
             },
             property_name_should_be_recognized: true,
         },
@@ -4420,7 +4419,6 @@ fn strict_whole_sheet_rejection_helper_rejects_mixed_declarations() {
         ".panel { width: 10px; display: inline; }",
         &ExpectedErrorKind::UnsupportedValue {
             property: Some("display"),
-            reason: "unsupported display keyword `inline`",
         },
     );
     assert_sheet_rejected(
@@ -4437,7 +4435,6 @@ fn strict_no_recovery_whole_sheet_rejects_every_invalid_surface() {
             input: ".panel { width: 10px; display: inline; height: 20px; }",
             expected_error: ExpectedErrorKind::UnsupportedValue {
                 property: Some("display"),
-                reason: "unsupported display keyword `inline`",
             },
         },
         RejectedSheetCase {
@@ -4445,7 +4442,6 @@ fn strict_no_recovery_whole_sheet_rejects_every_invalid_surface() {
             input: ".panel { display: inline; width: 10px; }",
             expected_error: ExpectedErrorKind::UnsupportedValue {
                 property: Some("display"),
-                reason: "unsupported display keyword `inline`",
             },
         },
         RejectedSheetCase {
@@ -4651,7 +4647,10 @@ fn rejection_malformed_functions_lists_and_shorthands_matrix() {
         assert!(
             matches!(
                 error.kind(),
-                ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+                ErrorKind::InvalidPropertyValue(_)
+                    | ErrorKind::UnexpectedEnd(_)
+                    | ErrorKind::UnexpectedToken(_)
+                    | ErrorKind::InvalidQualifiedRule(_)
             ),
             "{input} rejected with unexpected error kind: {:?}",
             error.kind(),
@@ -6133,7 +6132,6 @@ fn rejection_unsupported_but_syntactically_valid_css_keywords_stay_rejected() {
             authored_value: "inline",
             expected_error: ExpectedErrorKind::UnsupportedValue {
                 property: Some("display"),
-                reason: "unsupported display keyword `inline`",
             },
             property_name_should_be_recognized: true,
         },
@@ -6143,7 +6141,6 @@ fn rejection_unsupported_but_syntactically_valid_css_keywords_stay_rejected() {
             authored_value: "auto",
             expected_error: ExpectedErrorKind::UnsupportedValue {
                 property: Some("overflow"),
-                reason: "unsupported overflow keyword `auto`",
             },
             property_name_should_be_recognized: true,
         },
@@ -7719,14 +7716,12 @@ fn unit_matrix_rejects_unknown_length_units_in_ordinary_and_calc_contexts() {
         ".panel { width: 1quux; }",
         &ExpectedErrorKind::UnsupportedValue {
             property: Some("width"),
-            reason: "unknown box size unit `quux`",
         },
     );
     assert_sheet_rejected(
         ".panel { width: calc(1quux + 2px); }",
         &ExpectedErrorKind::UnsupportedValue {
             property: Some("width"),
-            reason: "unknown calc length unit `quux`",
         },
     );
 }
@@ -7789,13 +7784,10 @@ fn supported_length_units() -> [CssLengthUnit; 49] {
 fn typo_property_has_unknown_property_error_kind() {
     let error = parse_sheet(".panel { widht: 10px; }").unwrap_err();
 
-    assert_eq!(
-        error.kind(),
-        &ErrorKind::UnknownProperty {
-            name: "widht".to_owned(),
-        }
-    );
-    assert!(error.message().contains("unknown CSS property `widht`"));
+    let ErrorKind::UnknownProperty(detail) = error.kind() else {
+        panic!("unexpected error kind: {:?}", error.kind());
+    };
+    assert_eq!(detail.name().as_str(), "widht");
 }
 
 #[test]
@@ -7849,13 +7841,10 @@ fn rejects_non_global_all_values_with_typed_unsupported_value() {
     for input in [".panel { all: block; }", ".panel { all: 1px; }"] {
         let error = parse_sheet(input).expect_err(input);
 
-        assert_eq!(
-            error.kind(),
-            &ErrorKind::UnsupportedValue {
-                property: Some("all".to_owned()),
-                reason: "`all` only accepts CSS-wide global keywords".to_owned(),
-            }
-        );
+        let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
+            panic!("unexpected error kind: {:?}", error.kind());
+        };
+        assert_eq!(detail.property(), &CssProperty::All);
     }
 }
 
@@ -7863,59 +7852,50 @@ fn rejects_non_global_all_values_with_typed_unsupported_value() {
 fn global_keyword_must_be_the_whole_value() {
     let error = parse_sheet(".panel { width: inherit 10px; }").unwrap_err();
 
-    assert!(matches!(error.kind(), ErrorKind::InvalidSyntax { .. }));
+    assert!(matches!(
+        error.kind(),
+        ErrorKind::InvalidPropertyValue(_) | ErrorKind::UnexpectedToken(_)
+    ));
 }
 
 #[test]
 fn unsupported_display_keyword_is_typed_with_property_context() {
     let error = parse_sheet(".panel { display: inline; }").unwrap_err();
 
-    assert_eq!(
-        error.kind(),
-        &ErrorKind::UnsupportedValue {
-            property: Some("display".to_owned()),
-            reason: "unsupported display keyword `inline`".to_owned(),
-        }
-    );
+    let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
+        panic!("unexpected error kind: {:?}", error.kind());
+    };
+    assert_eq!(detail.property(), &CssProperty::Display);
 }
 
 #[test]
 fn unsupported_overflow_keyword_is_typed_with_property_context() {
     let error = parse_sheet(".panel { overflow: auto; }").unwrap_err();
 
-    assert_eq!(
-        error.kind(),
-        &ErrorKind::UnsupportedValue {
-            property: Some("overflow".to_owned()),
-            reason: "unsupported overflow keyword `auto`".to_owned(),
-        }
-    );
+    let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
+        panic!("unexpected error kind: {:?}", error.kind());
+    };
+    assert_eq!(detail.property(), &CssProperty::Overflow);
 }
 
 #[test]
 fn unsupported_position_keyword_is_typed_with_property_context() {
     let error = parse_sheet(".panel { position: running; }").unwrap_err();
 
-    assert_eq!(
-        error.kind(),
-        &ErrorKind::UnsupportedValue {
-            property: Some("position".to_owned()),
-            reason: "unsupported position keyword `running`".to_owned(),
-        }
-    );
+    let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
+        panic!("unexpected error kind: {:?}", error.kind());
+    };
+    assert_eq!(detail.property(), &CssProperty::Position);
 }
 
 #[test]
 fn unsupported_alignment_keyword_is_typed_with_property_context() {
     let error = parse_sheet(".panel { align-items: unsafe center; }").unwrap_err();
 
-    assert_eq!(
-        error.kind(),
-        &ErrorKind::UnsupportedValue {
-            property: Some("align-items".to_owned()),
-            reason: "unsupported alignment keyword `unsafe center`".to_owned(),
-        }
-    );
+    let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
+        panic!("unexpected error kind: {:?}", error.kind());
+    };
+    assert_eq!(detail.property(), &CssProperty::AlignItems);
 }
 
 #[test]
@@ -8062,41 +8042,34 @@ fn rejects_unmodeled_safe_prefixed_alignment_values() {
 fn unknown_dimension_units_are_reported_as_unknown_units() {
     let error = parse_sheet(".panel { width: 1quux; }").unwrap_err();
 
-    assert_eq!(
-        error.kind(),
-        &ErrorKind::UnsupportedValue {
-            property: Some("width".to_owned()),
-            reason: "unknown box size unit `quux`".to_owned(),
-        }
-    );
+    let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
+        panic!("unexpected error kind: {:?}", error.kind());
+    };
+    assert_eq!(detail.property(), &CssProperty::Width);
 }
 
 #[test]
 fn unknown_calc_dimension_units_are_reported_as_unknown_units() {
     let error = parse_sheet(".panel { width: calc(1quux + 2px); }").unwrap_err();
 
-    assert_eq!(
-        error.kind(),
-        &ErrorKind::UnsupportedValue {
-            property: Some("width".to_owned()),
-            reason: "unknown calc length unit `quux`".to_owned(),
-        }
-    );
+    let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
+        panic!("unexpected error kind: {:?}", error.kind());
+    };
+    assert_eq!(detail.property(), &CssProperty::Width);
 }
 
 #[test]
 fn selector_parse_failure_has_typed_error_kind() {
     let error = parse_sheet("??? { width: 10px; }").unwrap_err();
 
-    assert!(matches!(error.kind(), ErrorKind::InvalidSelector { .. }));
-    assert!(error.message().contains("unexpected selector token"));
+    assert!(matches!(error.kind(), ErrorKind::InvalidSelector(_)));
 }
 
 #[test]
 fn selector_missing_class_name_has_typed_error_kind() {
     let error = parse_sheet(". { width: 10px; }").unwrap_err();
 
-    assert!(matches!(error.kind(), ErrorKind::InvalidSelector { .. }));
+    assert!(matches!(error.kind(), ErrorKind::InvalidSelector(_)));
 }
 
 #[test]
@@ -8118,7 +8091,7 @@ fn grid_flow_tolerance_calc_is_preserved_as_css_syntax() {
 #[test]
 fn rejects_unknown_calc_functions() {
     let error = parse_sheet(".panel { width: min(10px, 20px); }").unwrap_err();
-    assert!(error.message().contains("unsupported length function"));
+    assert!(matches!(error.kind(), ErrorKind::InvalidPropertyValue(_)));
 }
 
 #[test]
@@ -8173,19 +8146,19 @@ fn parses_authored_calc_gap_without_canonicalizing_it() {
 #[test]
 fn rejects_line_height_auto() {
     let error = parse_sheet(".panel { line-height: auto; }").unwrap_err();
-    assert!(error.message().contains("unsupported line-height"));
+    assert!(matches!(error.kind(), ErrorKind::InvalidPropertyValue(_)));
 }
 
 #[test]
 fn rejects_line_height_min_content() {
     let error = parse_sheet(".panel { line-height: min-content; }").unwrap_err();
-    assert!(error.message().contains("unsupported line-height"));
+    assert!(matches!(error.kind(), ErrorKind::InvalidPropertyValue(_)));
 }
 
 #[test]
 fn rejects_font_size_auto() {
     let error = parse_sheet(".panel { font-size: auto; }").unwrap_err();
-    assert!(error.message().contains("unsupported font-size"));
+    assert!(matches!(error.kind(), ErrorKind::InvalidPropertyValue(_)));
 }
 
 #[test]
@@ -8569,7 +8542,11 @@ fn rejects_task_5_cross_family_leakage_values() {
         let error = parse_sheet(input).expect_err(input);
         assert!(matches!(
             error.kind(),
-            ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ErrorKind::InvalidPropertyValue(_)
+                | ErrorKind::UnexpectedEnd(_)
+                | ErrorKind::UnexpectedToken(_)
+                | ErrorKind::InvalidQualifiedRule(_)
+                | ErrorKind::InvalidColorSyntax(_)
         ));
     }
 }
@@ -9061,7 +9038,10 @@ fn rejects_task_6_cross_family_leakage_values_and_empty_lists() {
         let error = parse_sheet(input).expect_err(input);
         assert!(matches!(
             error.kind(),
-            ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ErrorKind::InvalidPropertyValue(_)
+                | ErrorKind::UnexpectedEnd(_)
+                | ErrorKind::UnexpectedToken(_)
+                | ErrorKind::InvalidQualifiedRule(_)
         ));
     }
 }
@@ -9083,7 +9063,10 @@ fn rejects_duplicate_axis_position_keywords_across_shared_position_properties() 
         let error = parse_sheet(input).expect_err(input);
         assert!(matches!(
             error.kind(),
-            ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ErrorKind::InvalidPropertyValue(_)
+                | ErrorKind::UnexpectedEnd(_)
+                | ErrorKind::UnexpectedToken(_)
+                | ErrorKind::InvalidQualifiedRule(_)
         ));
     }
 }
@@ -9114,7 +9097,10 @@ fn rejects_task_6_invalid_function_arguments() {
         let error = parse_sheet(input).expect_err(input);
         assert!(matches!(
             error.kind(),
-            ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ErrorKind::InvalidPropertyValue(_)
+                | ErrorKind::UnexpectedEnd(_)
+                | ErrorKind::UnexpectedToken(_)
+                | ErrorKind::InvalidQualifiedRule(_)
         ));
     }
 }
@@ -9122,19 +9108,19 @@ fn rejects_task_6_invalid_function_arguments() {
 #[test]
 fn rejects_padding_auto() {
     let error = parse_sheet(".panel { padding: auto; }").unwrap_err();
-    assert!(error.message().contains("unsupported padding"));
+    assert!(matches!(error.kind(), ErrorKind::InvalidPropertyValue(_)));
 }
 
 #[test]
 fn rejects_border_width_percent() {
     let error = parse_sheet(".panel { border-width: 10%; }").unwrap_err();
-    assert!(error.message().contains("unsupported border-width"));
+    assert!(matches!(error.kind(), ErrorKind::InvalidPropertyValue(_)));
 }
 
 #[test]
 fn rejects_gap_auto() {
     let error = parse_sheet(".panel { gap: auto; }").unwrap_err();
-    assert!(error.message().contains("unsupported gap"));
+    assert!(matches!(error.kind(), ErrorKind::InvalidPropertyValue(_)));
 }
 
 #[test]
@@ -9527,7 +9513,7 @@ fn rejects_negative_lengths_for_non_negative_task_2_properties() {
         ".panel { box-shadow: 1px 2px -3px; }",
     ] {
         let error = parse_sheet(input).expect_err(input);
-        assert!(matches!(error.kind(), ErrorKind::UnsupportedValue { .. }));
+        assert!(matches!(error.kind(), ErrorKind::InvalidPropertyValue(_)));
     }
 }
 
@@ -9545,7 +9531,11 @@ fn rejects_task_2_cross_family_leakage_values() {
         let error = parse_sheet(input).expect_err(input);
         assert!(matches!(
             error.kind(),
-            ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ErrorKind::InvalidPropertyValue(_)
+                | ErrorKind::UnexpectedEnd(_)
+                | ErrorKind::UnexpectedToken(_)
+                | ErrorKind::InvalidQualifiedRule(_)
+                | ErrorKind::InvalidColorSyntax(_)
         ));
     }
 }
@@ -9802,7 +9792,10 @@ fn rejects_task_4_cross_family_leakage_values() {
         let error = parse_sheet(input).expect_err(input);
         assert!(matches!(
             error.kind(),
-            ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ErrorKind::InvalidPropertyValue(_)
+                | ErrorKind::UnexpectedEnd(_)
+                | ErrorKind::UnexpectedToken(_)
+                | ErrorKind::InvalidQualifiedRule(_)
         ));
     }
 }
@@ -9869,7 +9862,10 @@ fn rejects_grid_auto_flow_shorthand_without_explicit_tracks() {
         let error = parse_sheet(input).expect_err(input);
         assert!(matches!(
             error.kind(),
-            ErrorKind::UnsupportedValue { .. } | ErrorKind::InvalidSyntax { .. }
+            ErrorKind::InvalidPropertyValue(_)
+                | ErrorKind::UnexpectedEnd(_)
+                | ErrorKind::UnexpectedToken(_)
+                | ErrorKind::InvalidQualifiedRule(_)
         ));
     }
 }
@@ -9878,16 +9874,14 @@ fn rejects_grid_auto_flow_shorthand_without_explicit_tracks() {
 fn invalid_parser_custom_ident_errors_keep_source_location() {
     let error = parse_sheet(".panel {\n  grid-template-columns: [auto] 1fr;\n}").unwrap_err();
 
-    assert!(matches!(error.kind(), ErrorKind::UnsupportedValue { .. }));
-    assert_ne!(error.line(), 0);
-    assert_ne!(error.column(), 0);
-    assert_eq!(error.line(), 1);
+    assert!(matches!(error.kind(), ErrorKind::InvalidPropertyValue(_)));
+    assert_eq!(error.position().line().value(), 1);
+    assert_ne!(error.position().column().value(), 0);
 }
 
 #[test]
 fn rejects_inconsistent_grid_template_area_row_widths() {
     let error = parse_sheet(".panel { grid-template-areas: \"a a\" \"b\"; }").unwrap_err();
 
-    assert!(matches!(error.kind(), ErrorKind::UnsupportedValue { .. }));
-    assert!(error.message().contains("inconsistent widths"));
+    assert!(matches!(error.kind(), ErrorKind::InvalidPropertyValue(_)));
 }

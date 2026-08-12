@@ -13,7 +13,10 @@ use super::{
     CssContainerPrelude, CssScopePrelude, StrictDeclarationParser, parse_container_prelude,
     parse_layer_prelude, parse_scope_prelude, parse_scoped_rule_list,
 };
-use crate::error::{Error, invalid_selector, invalid_syntax, selector_basic};
+use crate::error::{
+    Error, invalid_at_rule_body, invalid_at_rule_placement, invalid_selector, invalid_syntax,
+    selector_basic, with_at_rule_prelude_context, with_media_query_context,
+};
 use crate::syntax::*;
 
 pub(super) fn parse_style_rule_block<'i, 't>(
@@ -98,36 +101,72 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
             "media" => {
                 let query = parse_media_query_list(input)?;
                 if !input.is_exhausted() {
-                    return Err(invalid_syntax(
-                        input.current_source_location(),
-                        "unexpected token after media query list",
+                    return Err(with_media_query_context(
+                        invalid_syntax(
+                            input.current_source_location(),
+                            "unexpected token after media query list",
+                        ),
+                        None,
                     ));
                 }
                 Ok(NestedStyleAtRulePrelude::Media(query))
             },
             "container" => {
-                let prelude = parse_container_prelude(input)?;
+                let prelude = parse_container_prelude(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "container",
+                        "baseline.rule.container",
+                        "a supported @container prelude",
+                    )
+                })?;
                 if !input.is_exhausted() {
-                    return Err(invalid_syntax(
-                        input.current_source_location(),
-                        "unexpected token after container condition",
+                    return Err(with_at_rule_prelude_context(
+                        invalid_syntax(
+                            input.current_source_location(),
+                            "unexpected token after container condition",
+                        ),
+                        "container",
+                        "baseline.rule.container",
+                        "the end of the @container prelude",
                     ));
                 }
                 Ok(NestedStyleAtRulePrelude::Container(prelude))
             },
-            "layer" => Ok(NestedStyleAtRulePrelude::Layer(parse_layer_prelude(input)?)),
-            "scope" => Ok(NestedStyleAtRulePrelude::Scope(parse_scope_prelude(input)?)),
-            "import" => Err(invalid_syntax(
-                input.current_source_location(),
-                "@import rules are not supported inside style blocks",
+            "layer" => Ok(NestedStyleAtRulePrelude::Layer(
+                parse_layer_prelude(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "layer",
+                        "baseline.rule.layer-block",
+                        "a supported @layer prelude",
+                    )
+                })?,
             )),
-            "font-face" => Err(invalid_syntax(
-                input.current_source_location(),
-                "@font-face rules are not supported inside style blocks",
+            "scope" => Ok(NestedStyleAtRulePrelude::Scope(
+                parse_scope_prelude(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "scope",
+                        "baseline.rule.scope",
+                        "a supported @scope prelude",
+                    )
+                })?,
             )),
-            "keyframes" => Err(invalid_syntax(
+            "import" => Err(invalid_at_rule_placement(
                 input.current_source_location(),
-                "@keyframes rules are not supported inside style blocks",
+                "import",
+                "the stylesheet top level",
+            )),
+            "font-face" => Err(invalid_at_rule_placement(
+                input.current_source_location(),
+                "font-face",
+                "a stylesheet or conditional group rule list",
+            )),
+            "keyframes" => Err(invalid_at_rule_placement(
+                input.current_source_location(),
+                "keyframes",
+                "a stylesheet or conditional group rule list",
             )),
             _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
         }
@@ -167,9 +206,11 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
             }
             NestedStyleAtRulePrelude::Layer(names) => {
                 if names.len() > 1 {
-                    return Err(invalid_syntax(
+                    return Err(invalid_at_rule_body(
                         start.source_location(),
-                        "@layer block rules accept at most one layer name",
+                        "layer",
+                        "baseline.rule.layer-block",
+                        "at most one layer name before a block",
                     ));
                 }
                 let rules = parse_style_rule_block(self.parent_selectors.clone(), input)?;

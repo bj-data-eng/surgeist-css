@@ -54,22 +54,25 @@ use variables::{
 };
 
 use crate::error::{
-    Error, Result, basic, from_parse_error, invalid_syntax, property_name_error, unsupported_value,
-    with_property_context,
+    Error, Result, basic, from_rule_parse_error, invalid_at_rule_body, invalid_at_rule_placement,
+    invalid_syntax, property_name_error, unsupported_value, with_at_rule_prelude_context,
+    with_declaration_annotation_context, with_media_query_context, with_property_context,
 };
 use crate::syntax::*;
 use crate::validation::{PropertyNameStatus, classify_property_name, parse_global_keyword};
 
 pub(crate) use crate::validation::property_for_supported_name;
 
-pub fn parse_sheet(input: &str) -> Result<CssSheet> {
-    let mut input = ParserInput::new(input);
+pub fn parse_sheet(source: &str) -> Result<CssSheet> {
+    let mut input = ParserInput::new(source);
     let mut parser = Parser::new(&mut input);
     let mut rule_parser = StrictRuleParser::top_level();
     let mut sheet = CssSheet::new();
 
     for rule in StyleSheetParser::new(&mut parser, &mut rule_parser) {
-        for rule in rule.map_err(|(error, _)| from_parse_error(error))? {
+        for rule in
+            rule.map_err(|(error, failed_unit)| from_rule_parse_error(source, failed_unit, error))?
+        {
             sheet.push_rule(rule);
         }
     }
@@ -143,35 +146,71 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
         match_ignore_ascii_case! { &name,
             "import" => {
                 if !self.is_top_level {
-                    return Err(invalid_syntax(
+                    return Err(invalid_at_rule_placement(
                         input.current_source_location(),
-                        "@import rules are only supported at the top level",
+                        "import",
+                        "the stylesheet top level",
                     ));
                 }
                 if !self.imports_allowed {
-                    return Err(invalid_syntax(
+                    return Err(invalid_at_rule_placement(
                         input.current_source_location(),
-                        "@import rules must precede all non-import top-level rules",
+                        "import",
+                        "before every non-import top-level rule",
                     ));
                 }
-                Ok(StrictAtRulePrelude::Import(parse_import_prelude(input)?))
+                let prelude = parse_import_prelude(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "import",
+                        "baseline.rule.import",
+                        "a supported @import prelude",
+                    )
+                })?;
+                Ok(StrictAtRulePrelude::Import(prelude))
             },
             "font-face" => {
                 if !input.is_exhausted() {
-                    return Err(invalid_syntax(
-                        input.current_source_location(),
-                        "unexpected token after font-face at-rule name",
+                    return Err(with_at_rule_prelude_context(
+                        invalid_syntax(
+                            input.current_source_location(),
+                            "unexpected token after font-face at-rule name",
+                        ),
+                        "font-face",
+                        "baseline.rule.font-face",
+                        "an empty @font-face prelude",
                     ));
                 }
                 Ok(StrictAtRulePrelude::FontFace)
             },
-            "layer" => Ok(StrictAtRulePrelude::Layer(parse_layer_prelude(input)?)),
+            "layer" => Ok(StrictAtRulePrelude::Layer(
+                parse_layer_prelude(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "layer",
+                        "baseline.rule.layer-block",
+                        "a supported @layer prelude",
+                    )
+                })?,
+            )),
             "keyframes" => {
-                let name = parse_keyframes_name(input)?;
+                let name = parse_keyframes_name(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "keyframes",
+                        "baseline.rule.keyframes",
+                        "a supported keyframes name",
+                    )
+                })?;
                 if !input.is_exhausted() {
-                    return Err(invalid_syntax(
-                        input.current_source_location(),
-                        "unexpected token after keyframes name",
+                    return Err(with_at_rule_prelude_context(
+                        invalid_syntax(
+                            input.current_source_location(),
+                            "unexpected token after keyframes name",
+                        ),
+                        "keyframes",
+                        "baseline.rule.keyframes",
+                        "the end of the @keyframes prelude",
                     ));
                 }
                 Ok(StrictAtRulePrelude::Keyframes(name))
@@ -179,24 +218,48 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
             "media" => {
                 let query = parse_media_query_list(input)?;
                 if !input.is_exhausted() {
-                    return Err(invalid_syntax(
-                        input.current_source_location(),
-                        "unexpected token after media query list",
+                    return Err(crate::error::with_media_query_context(
+                        invalid_syntax(
+                            input.current_source_location(),
+                            "unexpected token after media query list",
+                        ),
+                        None,
                     ));
                 }
                 Ok(StrictAtRulePrelude::Media(query))
             },
             "container" => {
-                let prelude = parse_container_prelude(input)?;
+                let prelude = parse_container_prelude(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "container",
+                        "baseline.rule.container",
+                        "a supported @container prelude",
+                    )
+                })?;
                 if !input.is_exhausted() {
-                    return Err(invalid_syntax(
-                        input.current_source_location(),
-                        "unexpected token after container condition",
+                    return Err(with_at_rule_prelude_context(
+                        invalid_syntax(
+                            input.current_source_location(),
+                            "unexpected token after container condition",
+                        ),
+                        "container",
+                        "baseline.rule.container",
+                        "the end of the @container prelude",
                     ));
                 }
                 Ok(StrictAtRulePrelude::Container(prelude))
             },
-            "scope" => Ok(StrictAtRulePrelude::Scope(parse_scope_prelude(input)?)),
+            "scope" => Ok(StrictAtRulePrelude::Scope(
+                parse_scope_prelude(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "scope",
+                        "baseline.rule.scope",
+                        "a supported @scope prelude",
+                    )
+                })?,
+            )),
             _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
         }
     }
@@ -242,15 +305,19 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::AtRule, ParseError<'i, Self::Error>> {
         match prelude {
-            StrictAtRulePrelude::Import(_) => Err(invalid_syntax(
+            StrictAtRulePrelude::Import(_) => Err(invalid_at_rule_body(
                 start.source_location(),
-                "@import rules must not have a block",
+                "import",
+                "baseline.rule.import",
+                "a semicolon-terminated @import rule",
             )),
             StrictAtRulePrelude::Layer(names) => {
                 if names.len() > 1 {
-                    return Err(invalid_syntax(
+                    return Err(invalid_at_rule_body(
                         start.source_location(),
-                        "@layer block rules accept at most one layer name",
+                        "layer",
+                        "baseline.rule.layer-block",
+                        "at most one layer name before a block",
                     ));
                 }
                 let name = names.into_iter().next();
@@ -552,36 +619,72 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser {
             "media" => {
                 let query = parse_media_query_list(input)?;
                 if !input.is_exhausted() {
-                    return Err(invalid_syntax(
-                        input.current_source_location(),
-                        "unexpected token after media query list",
+                    return Err(with_media_query_context(
+                        invalid_syntax(
+                            input.current_source_location(),
+                            "unexpected token after media query list",
+                        ),
+                        None,
                     ));
                 }
                 Ok(ScopedAtRulePrelude::Media(query))
             },
             "container" => {
-                let prelude = parse_container_prelude(input)?;
+                let prelude = parse_container_prelude(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "container",
+                        "baseline.rule.container",
+                        "a supported @container prelude",
+                    )
+                })?;
                 if !input.is_exhausted() {
-                    return Err(invalid_syntax(
-                        input.current_source_location(),
-                        "unexpected token after container condition",
+                    return Err(with_at_rule_prelude_context(
+                        invalid_syntax(
+                            input.current_source_location(),
+                            "unexpected token after container condition",
+                        ),
+                        "container",
+                        "baseline.rule.container",
+                        "the end of the @container prelude",
                     ));
                 }
                 Ok(ScopedAtRulePrelude::Container(prelude))
             },
-            "layer" => Ok(ScopedAtRulePrelude::Layer(parse_layer_prelude(input)?)),
-            "scope" => Ok(ScopedAtRulePrelude::Scope(parse_scope_prelude(input)?)),
-            "import" => Err(invalid_syntax(
-                input.current_source_location(),
-                "@import rules are not supported inside scope blocks",
+            "layer" => Ok(ScopedAtRulePrelude::Layer(
+                parse_layer_prelude(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "layer",
+                        "baseline.rule.layer-block",
+                        "a supported @layer prelude",
+                    )
+                })?,
             )),
-            "font-face" => Err(invalid_syntax(
-                input.current_source_location(),
-                "@font-face rules are not supported inside scope blocks",
+            "scope" => Ok(ScopedAtRulePrelude::Scope(
+                parse_scope_prelude(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "scope",
+                        "baseline.rule.scope",
+                        "a supported @scope prelude",
+                    )
+                })?,
             )),
-            "keyframes" => Err(invalid_syntax(
+            "import" => Err(invalid_at_rule_placement(
                 input.current_source_location(),
-                "@keyframes rules are not supported inside scope blocks",
+                "import",
+                "the stylesheet top level",
+            )),
+            "font-face" => Err(invalid_at_rule_placement(
+                input.current_source_location(),
+                "font-face",
+                "a stylesheet or conditional group rule list",
+            )),
+            "keyframes" => Err(invalid_at_rule_placement(
+                input.current_source_location(),
+                "keyframes",
+                "a stylesheet or conditional group rule list",
             )),
             _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
         }
@@ -639,9 +742,11 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser {
             }
             ScopedAtRulePrelude::Layer(names) => {
                 if names.len() > 1 {
-                    return Err(invalid_syntax(
+                    return Err(invalid_at_rule_body(
                         start.source_location(),
-                        "@layer block rules accept at most one layer name",
+                        "layer",
+                        "baseline.rule.layer-block",
+                        "at most one layer name before a block",
                     ));
                 }
                 let name = names.into_iter().next();
@@ -740,7 +845,10 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
         );
         if name.starts_with("--") {
             let Some(custom_name) = parse_custom_property_name(name.as_ref()) else {
-                return Err(property_name_error(input, name.as_ref()));
+                return Err(property_name_error(
+                    declaration_start.source_location(),
+                    name.as_ref(),
+                ));
             };
             let value = parse_custom_property_value(input)
                 .map_err(|error| with_property_context(error, name.as_ref()))?;
@@ -773,9 +881,12 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
                 match classify_property_name(name.as_ref()) {
                     PropertyNameStatus::Supported => {
                         if !input.is_exhausted() {
-                            return Err(invalid_syntax(
-                                input.current_source_location(),
-                                "CSS global keyword must be the entire declaration value",
+                            return Err(with_property_context(
+                                invalid_syntax(
+                                    input.current_source_location(),
+                                    "CSS global keyword must be the entire declaration value",
+                                ),
+                                name.as_ref(),
                             ));
                         }
                         return Ok(CssDeclaration::new(
@@ -787,7 +898,10 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
                     }
                     PropertyNameStatus::KnownUnsupported | PropertyNameStatus::Unknown => {
                         input.reset(&state);
-                        return Err(property_name_error(input, name.as_ref()));
+                        return Err(property_name_error(
+                            declaration_start.source_location(),
+                            name.as_ref(),
+                        ));
                     }
                 }
             }
@@ -976,12 +1090,17 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             "animation-fill-mode" => (CssProperty::AnimationFillMode, CssValue::AnimationFillMode(parse_animation_fill_mode_list(input)?)),
             "animation-play-state" => (CssProperty::AnimationPlayState, CssValue::AnimationPlayState(parse_animation_play_state_list(input)?)),
             "animation" => (CssProperty::Animation, CssValue::Animation(parse_animation_list(input)?)),
-            _ => return Err(property_name_error(input, name.as_ref())),
+            _ => return Err(property_name_error(
+                declaration_start.source_location(),
+                name.as_ref(),
+            )),
             })
         })()
         .map_err(|error| with_property_context(error, name.as_ref()))?;
-        input.expect_exhausted().map_err(basic)?;
         let (property, value) = result;
+        input.expect_exhausted().map_err(|error| {
+            with_declaration_annotation_context(error.into(), property.clone(), false)
+        })?;
         Ok(CssDeclaration::new(property, value, position))
     }
 }

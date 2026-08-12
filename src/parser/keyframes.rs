@@ -6,7 +6,10 @@ use cssparser::{
 
 use super::StrictDeclarationParser;
 use super::values::parse_custom_ident_from_str_at;
-use crate::error::{Error, basic, invalid_syntax, unsupported_value, unsupported_value_at};
+use crate::error::{
+    Error, basic, invalid_at_rule_body, invalid_qualified_rule, make_keyframe_annotation_context,
+    unsupported_value, unsupported_value_at,
+};
 use crate::syntax::*;
 
 pub(super) fn parse_keyframes_name<'i, 't>(
@@ -47,7 +50,14 @@ pub(super) fn parse_keyframes_rule<'i, 't>(
         blocks,
         crate::source::CssSourcePosition::from_cssparser(start.position(), start.source_location()),
     )
-    .ok_or_else(|| invalid_syntax(start.source_location(), "invalid @keyframes block list"))
+    .ok_or_else(|| {
+        invalid_at_rule_body(
+            start.source_location(),
+            "keyframes",
+            "baseline.rule.keyframes",
+            "one or more valid keyframe blocks",
+        )
+    })
 }
 
 struct KeyframeBlockParser;
@@ -90,7 +100,13 @@ impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser {
                 start.source_location(),
             ),
         )
-        .ok_or_else(|| invalid_syntax(start.source_location(), "keyframe block is empty"))
+        .ok_or_else(|| {
+            invalid_qualified_rule(
+                start.source_location(),
+                "baseline.keyframes.block",
+                "a non-empty keyframe block",
+            )
+        })
     }
 }
 
@@ -185,6 +201,11 @@ impl<'i> DeclarationParser<'i> for KeyframeDeclarationParser {
         input: &mut Parser<'i, 't>,
         declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
-        StrictDeclarationParser.parse_value(name, input, declaration_start)
+        StrictDeclarationParser
+            .parse_value(name, input, declaration_start)
+            .map_err(|mut error| {
+                make_keyframe_annotation_context(&mut error);
+                error
+            })
     }
 }

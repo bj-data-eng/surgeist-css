@@ -3,7 +3,7 @@ use cssparser::ParserInput;
 use cssparser::{ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
 
 use super::variables::collect_authored_declaration_value;
-use crate::error::{Error, basic, invalid_syntax, unsupported_value_at};
+use crate::error::{Error, basic, invalid_syntax, unsupported_value_at, with_media_query_context};
 #[cfg(test)]
 use crate::error::{Result as CrateResult, from_parse_error};
 use crate::syntax::*;
@@ -11,25 +11,32 @@ use crate::syntax::*;
 pub(crate) fn parse_media_query_list<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssMediaQueryList, ParseError<'i, Error>> {
-    let mut queries = vec![parse_media_query(input)?];
+    let result = (|| {
+        let mut queries = vec![parse_media_query(input)?];
 
-    while input.try_parse(Parser::expect_comma).is_ok() {
-        queries.push(parse_media_query(input)?);
-    }
+        while input.try_parse(Parser::expect_comma).is_ok() {
+            queries.push(parse_media_query(input)?);
+        }
 
-    Ok(CssMediaQueryList::new(queries))
+        Ok(CssMediaQueryList::new(queries))
+    })();
+    result.map_err(|error| with_media_query_context(error, None))
 }
 
 #[cfg(test)]
-pub(crate) fn parse_media_query_list_for_test(input: &str) -> CrateResult<CssMediaQueryList> {
-    let mut input = ParserInput::new(input);
+pub(crate) fn parse_media_query_list_for_test(source: &str) -> CrateResult<CssMediaQueryList> {
+    let mut input = ParserInput::new(source);
     let mut parser = Parser::new(&mut input);
-    let list = parse_media_query_list(&mut parser).map_err(from_parse_error)?;
+    let list =
+        parse_media_query_list(&mut parser).map_err(|error| from_parse_error(source, error))?;
     if !parser.is_exhausted() {
-        return Err(from_parse_error(invalid_syntax(
-            parser.current_source_location(),
-            "unexpected token after media query list",
-        )));
+        return Err(from_parse_error(
+            source,
+            invalid_syntax(
+                parser.current_source_location(),
+                "unexpected token after media query list",
+            ),
+        ));
     }
     Ok(list)
 }
@@ -76,16 +83,20 @@ pub(crate) fn parse_container_condition<'i, 't>(
 
 #[cfg(test)]
 pub(crate) fn parse_container_condition_for_test(
-    input: &str,
+    source: &str,
 ) -> CrateResult<CssContainerCondition> {
-    let mut input = ParserInput::new(input);
+    let mut input = ParserInput::new(source);
     let mut parser = Parser::new(&mut input);
-    let condition = parse_container_condition(&mut parser).map_err(from_parse_error)?;
+    let condition =
+        parse_container_condition(&mut parser).map_err(|error| from_parse_error(source, error))?;
     if !parser.is_exhausted() {
-        return Err(from_parse_error(invalid_syntax(
-            parser.current_source_location(),
-            "unexpected token after container condition",
-        )));
+        return Err(from_parse_error(
+            source,
+            invalid_syntax(
+                parser.current_source_location(),
+                "unexpected token after container condition",
+            ),
+        ));
     }
     Ok(condition)
 }
@@ -339,10 +350,13 @@ fn parse_media_feature_query<'i, 't>(
     let location = input.current_source_location();
     let ident = input.expect_ident_cloned().map_err(basic)?;
     let Some(feature_name) = MediaFeatureName::parse(&ident) else {
-        return Err(unsupported_value_at(
-            location,
-            None,
-            format!("unsupported media feature `{ident}`"),
+        return Err(with_media_query_context(
+            unsupported_value_at(
+                location,
+                None,
+                format!("unsupported media feature `{ident}`"),
+            ),
+            Some(ident.as_ref()),
         ));
     };
 

@@ -82,6 +82,89 @@ impl CssSourcePosition {
         }
     }
 
+    pub(crate) const fn from_source_location(location: cssparser::SourceLocation) -> Self {
+        Self {
+            byte_offset: CssByteOffset::new(0),
+            line: CssLineIndex::new(location.line),
+            column: CssUtf16ColumnIndex::new(location.column.saturating_sub(1)),
+        }
+    }
+
+    pub(crate) fn from_source_location_in(
+        source: &str,
+        location: cssparser::SourceLocation,
+    ) -> Self {
+        let target_line = location.line;
+        let target_column = location.column.saturating_sub(1);
+        let mut line = 0_u32;
+        let mut column = 0_u32;
+        let mut byte_offset = 0_usize;
+        let mut characters = source.char_indices().peekable();
+
+        while let Some((index, character)) = characters.next() {
+            if line == target_line && column >= target_column {
+                byte_offset = index;
+                break;
+            }
+
+            byte_offset = index + character.len_utf8();
+            match character {
+                '\r' => {
+                    if characters
+                        .peek()
+                        .is_some_and(|(_, next_character)| *next_character == '\n')
+                        && let Some((next_index, next_character)) = characters.next()
+                    {
+                        byte_offset = next_index + next_character.len_utf8();
+                    }
+                    line = line.saturating_add(1);
+                    column = 0;
+                }
+                '\n' | '\u{000c}' => {
+                    line = line.saturating_add(1);
+                    column = 0;
+                }
+                _ => column = column.saturating_add(character.len_utf16() as u32),
+            }
+        }
+
+        Self {
+            byte_offset: CssByteOffset::new(byte_offset),
+            line: CssLineIndex::new(location.line),
+            column: CssUtf16ColumnIndex::new(target_column),
+        }
+    }
+
+    pub(crate) fn from_byte_offset_in(source: &str, target: usize) -> Self {
+        let target = target.min(source.len());
+        let mut line = 0_u32;
+        let mut column = 0_u32;
+        let mut characters = source[..target].chars().peekable();
+
+        while let Some(character) = characters.next() {
+            match character {
+                '\r' => {
+                    if characters.peek().is_some_and(|next| *next == '\n') {
+                        characters.next();
+                    }
+                    line = line.saturating_add(1);
+                    column = 0;
+                }
+                '\n' | '\u{000c}' => {
+                    line = line.saturating_add(1);
+                    column = 0;
+                }
+                _ => column = column.saturating_add(character.len_utf16() as u32),
+            }
+        }
+
+        Self {
+            byte_offset: CssByteOffset::new(target),
+            line: CssLineIndex::new(line),
+            column: CssUtf16ColumnIndex::new(column),
+        }
+    }
+
     /// Returns the zero-based UTF-8 byte offset.
     #[must_use]
     pub const fn byte_offset(self) -> CssByteOffset {

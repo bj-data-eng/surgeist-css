@@ -4,8 +4,8 @@
 //! strict by design: unsupported selectors, at-rules, properties, and values are
 //! errors instead of browser-style recoverable invalid declarations.
 //!
-//! Parse failures expose typed [`ErrorKind`] values plus source line and column
-//! information so callers do not need to parse display strings.
+//! Parse failures expose typed [`ErrorKind`] values, stable [`CssErrorCode`]
+//! roots, and semantic source positions so callers do not parse display text.
 
 mod error;
 mod parser;
@@ -15,7 +15,7 @@ mod syntax;
 mod test_support;
 mod validation;
 
-pub use error::{Error, ErrorKind, Result};
+pub use error::*;
 pub use parser::parse_sheet;
 pub use source::*;
 pub use syntax::*;

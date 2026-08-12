@@ -6,7 +6,7 @@ use super::values::{
     LengthGrammar, next_is_delim, parse_box_size_value, parse_calc_length_with_grammar,
     parse_custom_ident_from_str_at, parse_length_with_context, parse_positive_integer,
 };
-use crate::error::{Error, ErrorKind, basic, error_at, unsupported_value, unsupported_value_at};
+use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::{self, *};
 use crate::validation::{LengthUnitStatus, classify_length_unit, unsupported_keyword_reason};
 
@@ -277,12 +277,9 @@ pub(super) fn parse_grid_template_area_row<'i>(
             if token.chars().all(|ch| ch == '.') {
                 Ok(CssGridTemplateAreaCell::Empty)
             } else if token.contains('.') {
-                Err(error_at(
+                Err(unsupported_value_at(
                     location,
-                    ErrorKind::UnsupportedValue {
-                        property: None,
-                        reason: format!("invalid grid template area token `{token}`"),
-                    },
+                    None,
                     format!("invalid grid template area token `{token}`"),
                 ))
             } else {
@@ -293,12 +290,9 @@ pub(super) fn parse_grid_template_area_row<'i>(
         .collect::<std::result::Result<Vec<_>, _>>()?;
 
     if cells.is_empty() {
-        Err(error_at(
+        Err(unsupported_value_at(
             location,
-            ErrorKind::UnsupportedValue {
-                property: None,
-                reason: "grid template area row is empty".to_owned(),
-            },
+            None,
             "grid template area row is empty",
         ))
     } else {

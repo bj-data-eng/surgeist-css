@@ -6,8 +6,9 @@ use cssparser::{
 
 use super::typography::parse_font_family_name;
 use crate::error::{
-    Error, basic, invalid_syntax, property_name_error, unsupported_value, unsupported_value_at,
-    with_property_context,
+    Error, basic, descriptor_name_error, invalid_at_rule_body, invalid_descriptor_combination,
+    unsupported_value, unsupported_value_at, with_descriptor_annotation_context,
+    with_descriptor_context,
 };
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
@@ -33,9 +34,11 @@ pub(super) fn parse_font_face_rule<'i, 't>(
         descriptors.unicode_range,
     )
     .ok_or_else(|| {
-        invalid_syntax(
+        invalid_at_rule_body(
             start.source_location(),
-            "@font-face requires font-family and src descriptors",
+            "font-face",
+            "baseline.rule.font-face",
+            "font-family and src descriptors",
         )
     })?;
 
@@ -94,9 +97,11 @@ fn set_descriptor<'i, T>(
     name: &str,
 ) -> std::result::Result<(), ParseError<'i, Error>> {
     if slot.is_some() {
-        return Err(invalid_syntax(
+        return Err(invalid_descriptor_combination(
             location,
-            format!("duplicate @font-face descriptor `{name}`"),
+            "font-face",
+            name,
+            &[name],
         ));
     }
     *slot = Some(value);
@@ -157,11 +162,17 @@ impl<'i> DeclarationParser<'i> for FontFaceDescriptorParser {
                 "font-stretch" => FontFaceDescriptor::FontStretch(parse_font_face_stretch(input)?, location),
                 "font-display" => FontFaceDescriptor::FontDisplay(parse_font_display(input)?, location),
                 "unicode-range" => FontFaceDescriptor::UnicodeRange(parse_unicode_range_list(input)?, location),
-                _ => return Err(property_name_error(input, name.as_ref())),
+                _ => return Err(descriptor_name_error(
+                    declaration_start.source_location(),
+                    "font-face",
+                    name.as_ref(),
+                )),
             })
         })()
-        .map_err(|error| with_property_context(error, name.as_ref()))?;
-        input.expect_exhausted().map_err(basic)?;
+        .map_err(|error| with_descriptor_context(error, "font-face", name.as_ref()))?;
+        input.expect_exhausted().map_err(|error| {
+            with_descriptor_annotation_context(error.into(), "font-face", name.as_ref())
+        })?;
         Ok(result)
     }
 }
@@ -476,6 +487,7 @@ fn parse_font_stretch_percent<'i, 't>(
 fn parse_font_display<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssFontDisplay, ParseError<'i, Error>> {
+    let location = input.current_source_location();
     let ident = input.expect_ident_cloned().map_err(basic)?;
     match_ignore_ascii_case! { &ident,
         "auto" => Ok(CssFontDisplay::Auto),
@@ -483,8 +495,8 @@ fn parse_font_display<'i, 't>(
         "swap" => Ok(CssFontDisplay::Swap),
         "fallback" => Ok(CssFontDisplay::Fallback),
         "optional" => Ok(CssFontDisplay::Optional),
-        _ => Err(unsupported_value(
-            input,
+        _ => Err(unsupported_value_at(
+            location,
             None,
             unsupported_keyword_reason("font-display", ident.as_ref()),
         )),

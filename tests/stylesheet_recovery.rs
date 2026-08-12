@@ -436,18 +436,6 @@ fn stylesheet_recovery_top_level_failure_classes_have_one_exact_parent_drop() {
             responsible: "<end>",
         },
         Case {
-            failed: "@media screen { .inside { made-up: 1; } }",
-            code: CssErrorCode::UnknownProperty,
-            action: CssRecoveryAction::DropAtRule,
-            responsible: "made-up",
-        },
-        Case {
-            failed: ".broken { made-up: fn({x;y}); }",
-            code: CssErrorCode::UnknownProperty,
-            action: CssRecoveryAction::DropQualifiedRule,
-            responsible: "made-up",
-        },
-        Case {
             failed: "??? { color: red; }",
             code: CssErrorCode::InvalidSelector,
             action: CssRecoveryAction::DropQualifiedRule,

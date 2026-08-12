@@ -54,12 +54,12 @@ use variables::{
 };
 
 use crate::error::{
-    Error, basic, from_rule_parse_error, invalid_at_rule_block, invalid_at_rule_placement,
-    invalid_custom_declaration_annotation, invalid_descriptor_annotation,
-    invalid_encoding_declaration, invalid_known_declaration_annotation, invalid_root_syntax,
-    invalid_syntax, normalize_encoding_error, property_name_error, unsupported_value,
-    with_at_rule_prelude_context, with_encoding_declaration_context, with_media_query_context,
-    with_property_context,
+    Error, basic, from_parse_error, from_rule_parse_error, invalid_at_rule_block,
+    invalid_at_rule_placement, invalid_custom_declaration_annotation,
+    invalid_descriptor_annotation, invalid_encoding_declaration,
+    invalid_known_declaration_annotation, invalid_root_syntax, invalid_syntax,
+    normalize_encoding_error, property_name_error, unsupported_value, with_at_rule_prelude_context,
+    with_encoding_declaration_context, with_media_query_context, with_property_context,
 };
 use crate::properties::{CssOverflowPropertyValue, property_schema};
 use crate::syntax::*;
@@ -142,7 +142,7 @@ pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
     if source.starts_with('\u{feff}') {
         let _ = parser.next_including_whitespace_and_comments();
     }
-    let mut rule_parser = StrictRuleParser::top_level(source.len());
+    let mut rule_parser = StrictRuleParser::top_level(source);
     let mut sheet = CssSheet::new();
     let mut diagnostics = Vec::new();
     let mut previous_end = parser.position().byte_index();
@@ -171,6 +171,7 @@ pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
                     });
             }
             let unit_end = rules.input.position().byte_index();
+            diagnostics.append(&mut rules.parser.diagnostics);
             match result {
                 Ok(parsed_rules) => {
                     for rule in parsed_rules {
@@ -269,32 +270,81 @@ fn recovery_at_rule_name(failed_unit: &str) -> Option<&str> {
     Some(&after_at[..name_end])
 }
 
-struct StrictRuleParser {
+pub(super) struct Recovered<T> {
+    pub(super) syntax: T,
+    pub(super) diagnostics: Vec<crate::CssRecoveryDiagnostic>,
+}
+
+pub(super) fn block_item_diagnostic(
+    source: &str,
+    error: ParseError<'_, Error>,
+    failed_unit: &str,
+    unit_end: usize,
+    action: crate::CssRecoveryAction,
+) -> Option<crate::CssRecoveryDiagnostic> {
+    let unit_start = unit_end.saturating_sub(failed_unit.len());
+    block_item_diagnostic_from_start(source, error, unit_start, unit_end, action)
+}
+
+pub(super) fn block_item_diagnostic_from_start(
+    source: &str,
+    error: ParseError<'_, Error>,
+    unit_start: usize,
+    unit_end: usize,
+    action: crate::CssRecoveryAction,
+) -> Option<crate::CssRecoveryDiagnostic> {
+    let error = from_parse_error(source, error);
+    let span = crate::CssSourceSpan::new(
+        crate::CssSourcePosition::from_byte_offset_in(source, unit_start),
+        crate::CssSourcePosition::from_byte_offset_in(source, unit_end),
+    )?;
+    if span.start() == span.end() {
+        return None;
+    }
+    crate::CssRecoveryDiagnostic::new(error, span, action)
+}
+
+pub(super) fn is_declaration_recovery_unit(failed_unit: &str) -> bool {
+    let mut input = ParserInput::new(failed_unit);
+    let mut parser = Parser::new(&mut input);
+    matches!(
+        parser.next_including_whitespace_and_comments(),
+        Ok(Token::Ident(_))
+    )
+}
+
+struct StrictRuleParser<'s> {
+    source: &'s str,
     is_top_level: bool,
     imports_allowed: bool,
     encoding_allowed: bool,
     source_len: usize,
     encoding: Option<CssEncodingDeclaration>,
+    diagnostics: Vec<crate::CssRecoveryDiagnostic>,
 }
 
-impl StrictRuleParser {
-    const fn top_level(source_len: usize) -> Self {
+impl<'s> StrictRuleParser<'s> {
+    fn top_level(source: &'s str) -> Self {
         Self {
+            source,
             is_top_level: true,
             imports_allowed: true,
             encoding_allowed: true,
-            source_len,
+            source_len: source.len(),
             encoding: None,
+            diagnostics: Vec::new(),
         }
     }
 
-    const fn nested() -> Self {
+    fn nested(source: &'s str) -> Self {
         Self {
+            source,
             is_top_level: false,
             imports_allowed: false,
             encoding_allowed: false,
             source_len: usize::MAX,
             encoding: None,
+            diagnostics: Vec::new(),
         }
     }
 
@@ -332,7 +382,7 @@ struct CssScopePrelude {
     limit: Option<CssScopeSelectorList>,
 }
 
-impl<'i> AtRuleParser<'i> for StrictRuleParser {
+impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
     type Prelude = StrictAtRulePrelude;
     type AtRule = Vec<CssRule>;
     type Error = Error;
@@ -568,7 +618,9 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                     ));
                 }
                 let name = names.into_iter().next();
-                let rules = parse_nested_group_rules(input)?;
+                let recovered = parse_nested_group_rules(self.source, input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 self.mark_non_import_top_level_rule();
                 Ok(vec![CssRule::LayerBlock(CssLayerBlockRule::new(
                     name,
@@ -580,7 +632,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 ))])
             }
             StrictAtRulePrelude::FontFace => {
-                let rule = parse_font_face_rule(input, start)?;
+                let rule = parse_font_face_rule(self.source, input, start, &mut self.diagnostics)?;
                 self.mark_non_import_top_level_rule();
                 Ok(vec![CssRule::FontFace(rule)])
             }
@@ -590,7 +642,9 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 Ok(vec![CssRule::Keyframes(rule)])
             }
             StrictAtRulePrelude::Media(query) => {
-                let rules = parse_nested_group_rules(input)?;
+                let recovered = parse_nested_group_rules(self.source, input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 self.mark_non_import_top_level_rule();
                 Ok(vec![CssRule::Media(CssMediaRule::new(
                     query,
@@ -602,7 +656,9 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 ))])
             }
             StrictAtRulePrelude::Container(prelude) => {
-                let rules = parse_nested_group_rules(input)?;
+                let recovered = parse_nested_group_rules(self.source, input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 self.mark_non_import_top_level_rule();
                 Ok(vec![CssRule::Container(CssContainerRule::new(
                     prelude.name,
@@ -615,7 +671,9 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
                 ))])
             }
             StrictAtRulePrelude::Scope(prelude) => {
-                let rules = parse_scoped_rule_list(input)?;
+                let recovered = parse_scoped_rule_list(self.source, input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 self.mark_non_import_top_level_rule();
                 Ok(vec![CssRule::Scope(CssScopeRule::new(
                     prelude.root,
@@ -631,7 +689,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
     }
 }
 
-impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {
+impl<'i> QualifiedRuleParser<'i> for StrictRuleParser<'i> {
     type Prelude = Vec<CssSelector>;
     type QualifiedRule = Vec<CssRule>;
     type Error = Error;
@@ -650,18 +708,20 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {
         _start: &ParserState,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
-        let rules = parse_style_rule_block(selectors, input)?;
+        let recovered = parse_style_rule_block(self.source, selectors, input)?;
+        self.diagnostics.extend(recovered.diagnostics);
+        let rules = recovered.syntax;
         self.mark_non_import_top_level_rule();
         Ok(rules)
     }
 }
 
-impl<'i> DeclarationParser<'i> for StrictRuleParser {
+impl<'i> DeclarationParser<'i> for StrictRuleParser<'i> {
     type Declaration = Vec<CssRule>;
     type Error = Error;
 }
 
-impl<'i> RuleBodyItemParser<'i, Vec<CssRule>, Error> for StrictRuleParser {
+impl<'i> RuleBodyItemParser<'i, Vec<CssRule>, Error> for StrictRuleParser<'i> {
     fn parse_declarations(&self) -> bool {
         false
     }
@@ -716,25 +776,36 @@ fn parse_container_prelude<'i, 't>(
 }
 
 fn parse_nested_group_rules<'i, 't>(
+    source: &'i str,
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<Vec<CssRule>, ParseError<'i, Error>> {
-    let mut rule_parser = StrictRuleParser::nested();
+) -> std::result::Result<Recovered<Vec<CssRule>>, ParseError<'i, Error>> {
+    let mut rule_parser = StrictRuleParser::nested(source);
     let mut rules = Vec::new();
     for rule in StyleSheetParser::new(input, &mut rule_parser) {
         rules.extend(rule.map_err(|(error, _)| error)?);
     }
-    Ok(rules)
+    Ok(Recovered {
+        syntax: rules,
+        diagnostics: rule_parser.diagnostics,
+    })
 }
 
-fn parse_scoped_rule_list<'i, 't>(
+pub(super) fn parse_scoped_rule_list<'i, 't>(
+    source: &'i str,
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssScopedRuleList, ParseError<'i, Error>> {
-    let mut rule_parser = ScopedRuleParser;
+) -> std::result::Result<Recovered<CssScopedRuleList>, ParseError<'i, Error>> {
+    let mut rule_parser = ScopedRuleParser {
+        source,
+        diagnostics: Vec::new(),
+    };
     let mut rules = Vec::new();
     for rule in StyleSheetParser::new(input, &mut rule_parser) {
         rules.extend(rule.map_err(|(error, _)| error)?);
     }
-    Ok(CssScopedRuleList::from_rules(rules))
+    Ok(Recovered {
+        syntax: CssScopedRuleList::from_rules(rules),
+        diagnostics: rule_parser.diagnostics,
+    })
 }
 
 fn parse_import_target<'i, 't>(
@@ -859,7 +930,10 @@ fn parse_scope_prelude<'i, 't>(
     Ok(CssScopePrelude { root, limit })
 }
 
-struct ScopedRuleParser;
+struct ScopedRuleParser<'s> {
+    source: &'s str,
+    diagnostics: Vec<crate::CssRecoveryDiagnostic>,
+}
 
 enum ScopedAtRulePrelude {
     Media(CssMediaQueryList),
@@ -868,7 +942,7 @@ enum ScopedAtRulePrelude {
     Scope(CssScopePrelude),
 }
 
-impl<'i> AtRuleParser<'i> for ScopedRuleParser {
+impl<'i> AtRuleParser<'i> for ScopedRuleParser<'i> {
     type Prelude = ScopedAtRulePrelude;
     type AtRule = Vec<CssScopedRule>;
     type Error = Error;
@@ -989,13 +1063,17 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser {
         );
         match prelude {
             ScopedAtRulePrelude::Media(query) => {
-                let rules = parse_scoped_rule_list(input)?;
+                let recovered = parse_scoped_rule_list(self.source, input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 Ok(vec![CssScopedRule::Media(CssScopedMediaRule::new(
                     query, rules, position,
                 ))])
             }
             ScopedAtRulePrelude::Container(prelude) => {
-                let rules = parse_scoped_rule_list(input)?;
+                let recovered = parse_scoped_rule_list(self.source, input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 Ok(vec![CssScopedRule::Container(CssScopedContainerRule::new(
                     prelude.name,
                     prelude.condition,
@@ -1013,13 +1091,17 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser {
                     ));
                 }
                 let name = names.into_iter().next();
-                let rules = parse_scoped_rule_list(input)?;
+                let recovered = parse_scoped_rule_list(self.source, input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 Ok(vec![CssScopedRule::LayerBlock(
                     CssScopedLayerBlockRule::new(name, rules, position),
                 )])
             }
             ScopedAtRulePrelude::Scope(prelude) => {
-                let rules = parse_scoped_rule_list(input)?;
+                let recovered = parse_scoped_rule_list(self.source, input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 Ok(vec![CssScopedRule::Scope(CssScopeRule::new(
                     prelude.root,
                     prelude.limit,
@@ -1031,7 +1113,7 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser {
     }
 }
 
-impl<'i> QualifiedRuleParser<'i> for ScopedRuleParser {
+impl<'i> QualifiedRuleParser<'i> for ScopedRuleParser<'i> {
     type Prelude = CssScopedStyleSelectorList;
     type QualifiedRule = Vec<CssScopedRule>;
     type Error = Error;
@@ -1049,7 +1131,9 @@ impl<'i> QualifiedRuleParser<'i> for ScopedRuleParser {
         _start: &ParserState,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
-        let declarations = parse_declaration_block(input)?;
+        let recovered = parse_declaration_block(self.source, input)?;
+        self.diagnostics.extend(recovered.diagnostics);
+        let declarations = recovered.syntax;
         Ok(vec![CssScopedRule::Style(CssScopedStyleRule::new(
             selectors,
             declarations,
@@ -1058,14 +1142,35 @@ impl<'i> QualifiedRuleParser<'i> for ScopedRuleParser {
 }
 
 fn parse_declaration_block<'i, 't>(
+    source: &'i str,
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssDeclarationList, ParseError<'i, Error>> {
+) -> std::result::Result<Recovered<CssDeclarationList>, ParseError<'i, Error>> {
     let mut declarations = Vec::new();
+    let mut diagnostics = Vec::new();
     let mut declaration_parser = StrictDeclarationParser;
-    for declaration in RuleBodyParser::new(input, &mut declaration_parser) {
-        declarations.push(declaration.map_err(|(error, _)| error)?);
+    let mut items = RuleBodyParser::new(input, &mut declaration_parser);
+    while let Some(item) = items.next() {
+        let unit_end = items.input.position().byte_index();
+        match item {
+            Ok(declaration) => declarations.push(declaration),
+            Err((error, failed_unit)) if is_declaration_recovery_unit(failed_unit) => {
+                if let Some(diagnostic) = block_item_diagnostic(
+                    source,
+                    error,
+                    failed_unit,
+                    unit_end,
+                    crate::CssRecoveryAction::DropDeclaration,
+                ) {
+                    diagnostics.push(diagnostic);
+                }
+            }
+            Err((error, _)) => return Err(error),
+        }
     }
-    Ok(CssDeclarationList::new(declarations))
+    Ok(Recovered {
+        syntax: CssDeclarationList::new(declarations),
+        diagnostics,
+    })
 }
 
 struct StrictDeclarationParser;

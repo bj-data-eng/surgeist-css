@@ -10,7 +10,8 @@ use super::selectors::{
     parse_rule_selector,
 };
 use super::{
-    CssContainerPrelude, CssScopePrelude, StrictDeclarationParser, parse_container_prelude,
+    CssContainerPrelude, CssScopePrelude, Recovered, StrictDeclarationParser,
+    block_item_diagnostic, is_declaration_recovery_unit, parse_container_prelude,
     parse_layer_prelude, parse_scope_prelude, parse_scoped_rule_list,
 };
 use crate::error::{
@@ -20,23 +21,44 @@ use crate::error::{
 use crate::syntax::*;
 
 pub(super) fn parse_style_rule_block<'i, 't>(
+    source: &'i str,
     parent_selectors: Vec<CssSelector>,
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<Vec<CssRule>, ParseError<'i, Error>> {
-    let mut body_parser = NestedStyleRuleParser { parent_selectors };
+) -> std::result::Result<Recovered<Vec<CssRule>>, ParseError<'i, Error>> {
+    let mut body_parser = NestedStyleRuleParser {
+        source,
+        parent_selectors,
+        diagnostics: Vec::new(),
+    };
     let parent_selectors = body_parser.parent_selectors.clone();
     let mut rules = Vec::new();
     let mut declaration_buffer = Vec::new();
     let mut saw_item = false;
 
-    for item in RuleBodyParser::new(input, &mut body_parser) {
+    let mut items = RuleBodyParser::new(input, &mut body_parser);
+    while let Some(item) = items.next() {
         saw_item = true;
-        match item.map_err(|(error, _)| error)? {
-            StyleBlockItem::Declaration(declaration) => declaration_buffer.push(*declaration),
-            StyleBlockItem::NestedRules(nested_rules) => {
+        let unit_end = items.input.position().byte_index();
+        match item {
+            Ok(StyleBlockItem::Declaration(declaration)) => {
+                declaration_buffer.push(*declaration);
+            }
+            Ok(StyleBlockItem::NestedRules(nested_rules)) => {
                 flush_declarations(&parent_selectors, &mut declaration_buffer, &mut rules);
                 rules.extend(nested_rules);
             }
+            Err((error, failed_unit)) if is_declaration_recovery_unit(failed_unit) => {
+                if let Some(diagnostic) = block_item_diagnostic(
+                    source,
+                    error,
+                    failed_unit,
+                    unit_end,
+                    crate::CssRecoveryAction::DropDeclaration,
+                ) {
+                    items.parser.diagnostics.push(diagnostic);
+                }
+            }
+            Err((error, _)) => return Err(error),
         }
     }
 
@@ -50,7 +72,10 @@ pub(super) fn parse_style_rule_block<'i, 't>(
         }
     }
 
-    Ok(rules)
+    Ok(Recovered {
+        syntax: rules,
+        diagnostics: body_parser.diagnostics,
+    })
 }
 
 fn flush_declarations(
@@ -71,8 +96,10 @@ fn flush_declarations(
     declaration_buffer.clear();
 }
 
-struct NestedStyleRuleParser {
+struct NestedStyleRuleParser<'s> {
+    source: &'s str,
     parent_selectors: Vec<CssSelector>,
+    diagnostics: Vec<crate::CssRecoveryDiagnostic>,
 }
 
 enum StyleBlockItem {
@@ -87,7 +114,7 @@ enum NestedStyleAtRulePrelude {
     Scope(CssScopePrelude),
 }
 
-impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
+impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
     type Prelude = NestedStyleAtRulePrelude;
     type AtRule = StyleBlockItem;
     type Error = Error;
@@ -192,11 +219,17 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
         );
         let rule = match prelude {
             NestedStyleAtRulePrelude::Media(query) => {
-                let rules = parse_style_rule_block(self.parent_selectors.clone(), input)?;
+                let recovered =
+                    parse_style_rule_block(self.source, self.parent_selectors.clone(), input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 CssRule::Media(CssMediaRule::new(query, rules, position))
             }
             NestedStyleAtRulePrelude::Container(prelude) => {
-                let rules = parse_style_rule_block(self.parent_selectors.clone(), input)?;
+                let recovered =
+                    parse_style_rule_block(self.source, self.parent_selectors.clone(), input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 CssRule::Container(CssContainerRule::new(
                     prelude.name,
                     prelude.condition,
@@ -213,7 +246,10 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
                         "at most one layer name before a block",
                     ));
                 }
-                let rules = parse_style_rule_block(self.parent_selectors.clone(), input)?;
+                let recovered =
+                    parse_style_rule_block(self.source, self.parent_selectors.clone(), input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 CssRule::LayerBlock(CssLayerBlockRule::new(
                     names.into_iter().next(),
                     rules,
@@ -221,7 +257,9 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
                 ))
             }
             NestedStyleAtRulePrelude::Scope(prelude) => {
-                let rules = parse_scoped_rule_list(input)?;
+                let recovered = parse_scoped_rule_list(self.source, input)?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
                 CssRule::Scope(CssScopeRule::new(
                     prelude.root,
                     prelude.limit,
@@ -234,7 +272,7 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
     }
 }
 
-impl<'i> QualifiedRuleParser<'i> for NestedStyleRuleParser {
+impl<'i> QualifiedRuleParser<'i> for NestedStyleRuleParser<'i> {
     type Prelude = Vec<NestedSelector>;
     type QualifiedRule = StyleBlockItem;
     type Error = Error;
@@ -259,11 +297,13 @@ impl<'i> QualifiedRuleParser<'i> for NestedStyleRuleParser {
             }
         }
 
-        parse_style_rule_block(flattened_selectors, input).map(StyleBlockItem::NestedRules)
+        let recovered = parse_style_rule_block(self.source, flattened_selectors, input)?;
+        self.diagnostics.extend(recovered.diagnostics);
+        Ok(StyleBlockItem::NestedRules(recovered.syntax))
     }
 }
 
-impl<'i> RuleBodyItemParser<'i, StyleBlockItem, Error> for NestedStyleRuleParser {
+impl<'i> RuleBodyItemParser<'i, StyleBlockItem, Error> for NestedStyleRuleParser<'i> {
     fn parse_declarations(&self) -> bool {
         true
     }
@@ -273,7 +313,7 @@ impl<'i> RuleBodyItemParser<'i, StyleBlockItem, Error> for NestedStyleRuleParser
     }
 }
 
-impl<'i> DeclarationParser<'i> for NestedStyleRuleParser {
+impl<'i> DeclarationParser<'i> for NestedStyleRuleParser<'i> {
     type Declaration = StyleBlockItem;
     type Error = Error;
 

@@ -4,8 +4,11 @@ use cssparser::{
     UnicodeRange as ParsedUnicodeRange, match_ignore_ascii_case,
 };
 
-use super::parse_descriptor_boundary;
 use super::typography::parse_font_family_name;
+use super::{
+    block_item_diagnostic, block_item_diagnostic_from_start, is_declaration_recovery_unit,
+    parse_descriptor_boundary,
+};
 use crate::error::{
     Error, basic, descriptor_name_error, invalid_at_rule_body, invalid_descriptor_combination,
     unsupported_value, unsupported_value_at, with_descriptor_context,
@@ -14,14 +17,45 @@ use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
 
 pub(super) fn parse_font_face_rule<'i, 't>(
+    source: &'i str,
     input: &mut Parser<'i, 't>,
     start: &ParserState,
+    diagnostics: &mut Vec<crate::CssRecoveryDiagnostic>,
 ) -> std::result::Result<CssFontFaceRule, ParseError<'i, Error>> {
     let mut descriptors = ParsedFontFaceDescriptors::default();
     let mut descriptor_parser = FontFaceDescriptorParser;
 
-    for descriptor in RuleBodyParser::new(input, &mut descriptor_parser) {
-        descriptors.set(descriptor.map_err(|(error, _)| error)?)?;
+    let mut items = RuleBodyParser::new(input, &mut descriptor_parser);
+    while let Some(item) = items.next() {
+        let unit_end = items.input.position().byte_index();
+        match item {
+            Ok(descriptor) => {
+                let unit_start = descriptor.position().byte_offset().value();
+                if let Err(error) = descriptors.set(descriptor)
+                    && let Some(diagnostic) = block_item_diagnostic_from_start(
+                        source,
+                        error,
+                        unit_start,
+                        unit_end,
+                        crate::CssRecoveryAction::DropDescriptor,
+                    )
+                {
+                    diagnostics.push(diagnostic);
+                }
+            }
+            Err((error, failed_unit)) if is_declaration_recovery_unit(failed_unit) => {
+                if let Some(diagnostic) = block_item_diagnostic(
+                    source,
+                    error,
+                    failed_unit,
+                    unit_end,
+                    crate::CssRecoveryAction::DropDescriptor,
+                ) {
+                    diagnostics.push(diagnostic);
+                }
+            }
+            Err((error, _)) => return Err(error),
+        }
     }
 
     let descriptors = CssFontFaceDescriptors::try_new(
@@ -137,6 +171,20 @@ enum FontFaceDescriptor {
         CssDescriptorOccurrence<CssUnicodeRangeList>,
         cssparser::SourceLocation,
     ),
+}
+
+impl FontFaceDescriptor {
+    fn position(&self) -> crate::CssSourcePosition {
+        match self {
+            Self::FontFamily(value, _) => value.position(),
+            Self::Src(value, _) => value.position(),
+            Self::FontWeight(value, _) => value.position(),
+            Self::FontStyle(value, _) => value.position(),
+            Self::FontStretch(value, _) => value.position(),
+            Self::FontDisplay(value, _) => value.position(),
+            Self::UnicodeRange(value, _) => value.position(),
+        }
+    }
 }
 
 struct FontFaceDescriptorParser;

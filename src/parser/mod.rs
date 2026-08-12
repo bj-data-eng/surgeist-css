@@ -50,7 +50,8 @@ use recovery::{
     recovery_action_for_error,
 };
 use selectors::{
-    parse_rule_selector_list, parse_scope_boundary_selector_list, parse_scoped_style_selector_list,
+    SelectorRecovery, parse_rule_selector_list, parse_scope_boundary_selector_list,
+    parse_scoped_style_selector_list,
 };
 use timing::*;
 use typography::*;
@@ -1038,7 +1039,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                         "before every non-import top-level rule",
                     ));
                 }
-                let prelude = parse_import_prelude(input).map_err(|error| {
+                let prelude = parse_import_prelude(self.source, input, &mut self.diagnostics).map_err(|error| {
                     with_at_rule_prelude_context(
                         error,
                         "import",
@@ -1095,7 +1096,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 Ok(StrictAtRulePrelude::Keyframes(name))
             },
             "media" => {
-                let query = parse_media_query_list(input)?;
+                let query = parse_media_query_list(self.source, input, &mut self.diagnostics)?;
                 if !input.is_exhausted() {
                     return Err(crate::error::with_media_query_context(
                         invalid_syntax(
@@ -1130,7 +1131,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 Ok(StrictAtRulePrelude::Container(prelude))
             },
             "scope" => Ok(StrictAtRulePrelude::Scope(
-                parse_scope_prelude(input).map_err(|error| {
+                parse_scope_prelude(self.source, input, &mut self.diagnostics).map_err(|error| {
                     with_at_rule_prelude_context(
                         error,
                         "scope",
@@ -1313,7 +1314,8 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser<'i> {
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
         self.encoding_allowed = false;
-        parse_rule_selector_list(input)
+        let mut recovery = SelectorRecovery::new(self.source, &mut self.diagnostics);
+        parse_rule_selector_list(input, &mut recovery)
     }
 
     fn parse_block<'t>(
@@ -1358,14 +1360,16 @@ impl<'i> RuleBodyItemParser<'i, Vec<CssRule>, Error> for StrictRuleParser<'i> {
 }
 
 fn parse_import_prelude<'i, 't>(
+    source: &str,
     input: &mut Parser<'i, 't>,
+    diagnostics: &mut Vec<crate::CssRecoveryDiagnostic>,
 ) -> std::result::Result<CssImportPrelude, ParseError<'i, Error>> {
     let target = parse_import_target(input)?;
     let layer = parse_import_layer(input)?;
     let media = if input.is_exhausted() {
         None
     } else {
-        Some(parse_media_query_list(input)?)
+        Some(parse_media_query_list(source, input, diagnostics)?)
     };
 
     if !input.is_exhausted() {
@@ -1617,10 +1621,15 @@ fn parse_layer_name<'i, 't>(
 }
 
 fn parse_scope_prelude<'i, 't>(
+    source: &str,
     input: &mut Parser<'i, 't>,
+    diagnostics: &mut Vec<crate::CssRecoveryDiagnostic>,
 ) -> std::result::Result<CssScopePrelude, ParseError<'i, Error>> {
     let root = if input.try_parse(Parser::expect_parenthesis_block).is_ok() {
-        Some(input.parse_nested_block(parse_scope_boundary_selector_list)?)
+        Some(input.parse_nested_block(|input| {
+            let mut recovery = SelectorRecovery::new(source, diagnostics);
+            parse_scope_boundary_selector_list(input, &mut recovery)
+        })?)
     } else {
         None
     };
@@ -1630,7 +1639,10 @@ fn parse_scope_prelude<'i, 't>(
         .is_ok()
     {
         input.expect_parenthesis_block().map_err(basic)?;
-        Some(input.parse_nested_block(parse_scope_boundary_selector_list)?)
+        Some(input.parse_nested_block(|input| {
+            let mut recovery = SelectorRecovery::new(source, diagnostics);
+            parse_scope_boundary_selector_list(input, &mut recovery)
+        })?)
     } else {
         None
     };
@@ -1681,7 +1693,7 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser<'i> {
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
         match_ignore_ascii_case! { &name,
             "media" => {
-                let query = parse_media_query_list(input)?;
+                let query = parse_media_query_list(self.source, input, &mut self.diagnostics)?;
                 if !input.is_exhausted() {
                     return Err(with_media_query_context(
                         invalid_syntax(
@@ -1726,7 +1738,7 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser<'i> {
                 })?,
             )),
             "scope" => Ok(ScopedAtRulePrelude::Scope(
-                parse_scope_prelude(input).map_err(|error| {
+                parse_scope_prelude(self.source, input, &mut self.diagnostics).map_err(|error| {
                     with_at_rule_prelude_context(
                         error,
                         "scope",
@@ -1852,7 +1864,8 @@ impl<'i> QualifiedRuleParser<'i> for ScopedRuleParser<'i> {
         &mut self,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
-        parse_scoped_style_selector_list(input)
+        let mut recovery = SelectorRecovery::new(self.source, &mut self.diagnostics);
+        parse_scoped_style_selector_list(input, &mut recovery)
     }
 
     fn parse_block<'t>(

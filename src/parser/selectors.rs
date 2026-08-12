@@ -1,14 +1,62 @@
-use cssparser::{BasicParseErrorKind, ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
+use cssparser::{
+    BasicParseErrorKind, Delimiter, ParseError, Parser, ToCss, Token, match_ignore_ascii_case,
+};
 
-use crate::error::{Error, invalid_selector, selector_basic};
+use super::recovery::comma_member_span;
+use crate::error::{Error, from_parse_error, invalid_selector, selector_basic};
 use crate::syntax::*;
+
+pub(super) struct SelectorRecovery<'a> {
+    source: &'a str,
+    diagnostics: &'a mut Vec<crate::CssRecoveryDiagnostic>,
+}
+
+impl<'a> SelectorRecovery<'a> {
+    pub(super) fn new(
+        source: &'a str,
+        diagnostics: &'a mut Vec<crate::CssRecoveryDiagnostic>,
+    ) -> Self {
+        Self {
+            source,
+            diagnostics,
+        }
+    }
+
+    fn drop_forgiving_member(
+        &mut self,
+        error: ParseError<'_, Error>,
+        member_start: usize,
+        member_end: usize,
+        following_comma: Option<(usize, usize)>,
+        preceding_comma: Option<(usize, usize)>,
+    ) {
+        let error = from_parse_error(self.source, error);
+        let Some(span) = comma_member_span(
+            self.source,
+            member_start,
+            member_end,
+            following_comma,
+            preceding_comma,
+        ) else {
+            return;
+        };
+        if let Some(diagnostic) = crate::CssRecoveryDiagnostic::new(
+            error,
+            span,
+            crate::CssRecoveryAction::DropSelectorListItem,
+        ) {
+            self.diagnostics.push(diagnostic);
+        }
+    }
+}
 
 pub(super) fn parse_rule_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<Vec<CssSelector>, ParseError<'i, Error>> {
     let mut selectors = Vec::new();
     loop {
-        selectors.push(parse_rule_selector(input)?);
+        selectors.push(parse_rule_selector(input, recovery)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -19,19 +67,24 @@ pub(super) fn parse_rule_selector_list<'i, 't>(
 
 pub(super) fn parse_scope_boundary_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssScopeSelectorList, ParseError<'i, Error>> {
-    let selectors =
-        parse_rule_selector_list_with_options(input, SelectorParseOptions::scope_boundary())?;
+    let selectors = parse_rule_selector_list_with_options(
+        input,
+        SelectorParseOptions::scope_boundary(),
+        recovery,
+    )?;
     CssScopeSelectorList::try_new(selectors)
         .ok_or_else(|| invalid_selector(input, "scope selector list must not be empty"))
 }
 
 pub(super) fn parse_scoped_style_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssScopedStyleSelectorList, ParseError<'i, Error>> {
     let mut selectors = Vec::new();
     loop {
-        selectors.push(parse_scoped_style_selector(input)?);
+        selectors.push(parse_scoped_style_selector(input, recovery)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -43,6 +96,7 @@ pub(super) fn parse_scoped_style_selector_list<'i, 't>(
 
 fn parse_scoped_style_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssScopedStyleSelector, ParseError<'i, Error>> {
     consume_selector_whitespace(input)?;
     let state = input.state();
@@ -51,18 +105,21 @@ fn parse_scoped_style_selector<'i, 't>(
             input,
             CssSelectorCombinator::Child,
             SelectorParseOptions::scoped_style(),
+            recovery,
         )
         .map(CssScopedStyleSelector::Relative),
         Ok(Token::Delim('+')) => parse_selector_after_leading_combinator_with_options(
             input,
             CssSelectorCombinator::NextSibling,
             SelectorParseOptions::scoped_style(),
+            recovery,
         )
         .map(CssScopedStyleSelector::Relative),
         Ok(Token::Delim('~')) => parse_selector_after_leading_combinator_with_options(
             input,
             CssSelectorCombinator::SubsequentSibling,
             SelectorParseOptions::scoped_style(),
+            recovery,
         )
         .map(CssScopedStyleSelector::Relative),
         Ok(Token::Delim('|')) => Err(invalid_selector(
@@ -71,7 +128,7 @@ fn parse_scoped_style_selector<'i, 't>(
         )),
         Ok(_) => {
             input.reset(&state);
-            parse_rule_selector_with_options(input, SelectorParseOptions::scoped_style())
+            parse_rule_selector_with_options(input, SelectorParseOptions::scoped_style(), recovery)
                 .map(CssScopedStyleSelector::Selector)
         }
         Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
@@ -84,8 +141,9 @@ fn parse_scoped_style_selector<'i, 't>(
 
 pub(super) fn parse_rule_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssSelector, ParseError<'i, Error>> {
-    parse_rule_selector_with_options(input, SelectorParseOptions::standard())
+    parse_rule_selector_with_options(input, SelectorParseOptions::standard(), recovery)
 }
 
 #[derive(Clone, Copy)]
@@ -140,10 +198,11 @@ impl SelectorParseOptions {
 fn parse_rule_selector_list_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
     options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<Vec<CssSelector>, ParseError<'i, Error>> {
     let mut selectors = Vec::new();
     loop {
-        selectors.push(parse_rule_selector_with_options(input, options)?);
+        selectors.push(parse_rule_selector_with_options(input, options, recovery)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -155,15 +214,17 @@ fn parse_rule_selector_list_with_options<'i, 't>(
 fn parse_rule_selector_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
     options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssSelector, ParseError<'i, Error>> {
-    let first = parse_compound_selector_model_with_options(input, options)?;
-    parse_selector_after_first_compound(input, first, options)
+    let first = parse_compound_selector_model_with_options(input, options, recovery)?;
+    parse_selector_after_first_compound(input, first, options, recovery)
 }
 
 fn parse_selector_after_first_compound<'i, 't>(
     input: &mut Parser<'i, 't>,
     first: CssCompoundSelector,
     options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssSelector, ParseError<'i, Error>> {
     let mut rest = Vec::new();
 
@@ -185,6 +246,7 @@ fn parse_selector_after_first_compound<'i, 't>(
                     input,
                     CssSelectorCombinator::Child,
                     options,
+                    recovery,
                 )?);
             }
             Ok(Token::Delim('+')) => {
@@ -192,6 +254,7 @@ fn parse_selector_after_first_compound<'i, 't>(
                     input,
                     CssSelectorCombinator::NextSibling,
                     options,
+                    recovery,
                 )?);
             }
             Ok(Token::Delim('~')) => {
@@ -199,6 +262,7 @@ fn parse_selector_after_first_compound<'i, 't>(
                     input,
                     CssSelectorCombinator::SubsequentSibling,
                     options,
+                    recovery,
                 )?);
             }
             Ok(Token::Delim('|')) => {
@@ -209,7 +273,8 @@ fn parse_selector_after_first_compound<'i, 't>(
             }
             Ok(_) if had_whitespace => {
                 input.reset(&state);
-                let selector = parse_compound_selector_model_with_options(input, options)?;
+                let selector =
+                    parse_compound_selector_model_with_options(input, options, recovery)?;
                 rest.push(CssComplexSelectorPart::new(
                     CssSelectorCombinator::Descendant,
                     selector,
@@ -235,17 +300,24 @@ fn parse_selector_after_first_compound<'i, 't>(
 pub(super) fn parse_complex_selector_part<'i, 't>(
     input: &mut Parser<'i, 't>,
     combinator: CssSelectorCombinator,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssComplexSelectorPart, ParseError<'i, Error>> {
-    parse_complex_selector_part_with_options(input, combinator, SelectorParseOptions::standard())
+    parse_complex_selector_part_with_options(
+        input,
+        combinator,
+        SelectorParseOptions::standard(),
+        recovery,
+    )
 }
 
 fn parse_complex_selector_part_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
     combinator: CssSelectorCombinator,
     options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssComplexSelectorPart, ParseError<'i, Error>> {
     consume_selector_whitespace(input)?;
-    let selector = parse_compound_selector_model_with_options(input, options)?;
+    let selector = parse_compound_selector_model_with_options(input, options, recovery)?;
     Ok(CssComplexSelectorPart::new(combinator, selector))
 }
 
@@ -272,13 +344,15 @@ pub(super) fn consume_selector_whitespace<'i, 't>(
 
 pub(super) fn parse_compound_selector_model<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssCompoundSelector, ParseError<'i, Error>> {
-    parse_compound_selector_model_with_options(input, SelectorParseOptions::standard())
+    parse_compound_selector_model_with_options(input, SelectorParseOptions::standard(), recovery)
 }
 
 fn parse_compound_selector_model_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
     options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssCompoundSelector, ParseError<'i, Error>> {
     loop {
         let state = input.state();
@@ -369,7 +443,7 @@ fn parse_compound_selector_model_with_options<'i, 't>(
                 let sequence = parse_pseudo_element_sequence(input)?;
                 pseudo_elements = Some(sequence);
             } else {
-                let pseudo_class = parse_pseudo_class_with_options(input, options)?;
+                let pseudo_class = parse_pseudo_class_with_options(input, options, recovery)?;
                 pseudo_classes.push(pseudo_class);
             }
             continue;
@@ -677,6 +751,7 @@ fn parse_attribute_case_sensitivity<'i, 't>(
 fn parse_pseudo_class_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
     options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssPseudoClass, ParseError<'i, Error>> {
     let state = input.state();
     match input.next() {
@@ -722,19 +797,19 @@ fn parse_pseudo_class_with_options<'i, 't>(
             input.parse_nested_block(|input| {
                 let pseudo_class = match_ignore_ascii_case! { &name,
                     "nth-child" => {
-                        CssPseudoClass::NthChild(parse_nth_child_pattern(input, options)?)
+                        CssPseudoClass::NthChild(parse_nth_child_pattern(input, options, recovery)?)
                     },
                     "nth-last-child" => {
-                        CssPseudoClass::NthLastChild(parse_nth_child_pattern(input, options)?)
+                        CssPseudoClass::NthLastChild(parse_nth_child_pattern(input, options, recovery)?)
                     },
                     "nth-of-type" => CssPseudoClass::NthOfType(parse_nth_pattern(input)?),
                     "nth-last-of-type" => {
                         CssPseudoClass::NthLastOfType(parse_nth_pattern(input)?)
                     },
-                    "not" => CssPseudoClass::Not(parse_pseudo_selector_list_with_options(input, options.without_pseudo_elements())?),
-                    "is" => CssPseudoClass::Is(parse_pseudo_selector_list_with_options(input, options.without_pseudo_elements())?),
-                    "where" => CssPseudoClass::Where(parse_pseudo_selector_list_with_options(input, options.without_pseudo_elements())?),
-                    "has" if options.allow_has => CssPseudoClass::Has(parse_has_relative_selector_list(input)?),
+                    "not" => CssPseudoClass::Not(parse_pseudo_selector_list_with_options(input, options.without_pseudo_elements(), recovery)?),
+                    "is" => CssPseudoClass::Is(parse_forgiving_pseudo_selector_list(input, options.without_pseudo_elements(), recovery)?),
+                    "where" => CssPseudoClass::Where(parse_forgiving_pseudo_selector_list(input, options.without_pseudo_elements(), recovery)?),
+                    "has" if options.allow_has => CssPseudoClass::Has(parse_has_relative_selector_list(input, recovery)?),
                     "has" => {
                         return Err(invalid_selector(input, "nested `:has()` is unsupported"));
                     },
@@ -762,8 +837,9 @@ fn parse_pseudo_class_with_options<'i, 't>(
 fn parse_pseudo_selector_list_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
     options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssPseudoSelectorList, ParseError<'i, Error>> {
-    let selectors = parse_pseudo_selector_list_items_with_options(input, options)?;
+    let selectors = parse_pseudo_selector_list_items_with_options(input, options, recovery)?;
     CssPseudoSelectorList::try_new(selectors)
         .ok_or_else(|| invalid_selector(input, "pseudo-class selector list must not be empty"))
 }
@@ -771,10 +847,11 @@ fn parse_pseudo_selector_list_with_options<'i, 't>(
 fn parse_pseudo_selector_list_items_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
     options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<Vec<CssSelector>, ParseError<'i, Error>> {
     let mut selectors = Vec::new();
     loop {
-        selectors.push(parse_rule_selector_with_options(input, options)?);
+        selectors.push(parse_rule_selector_with_options(input, options, recovery)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -783,12 +860,54 @@ fn parse_pseudo_selector_list_items_with_options<'i, 't>(
     Ok(selectors)
 }
 
+fn parse_forgiving_pseudo_selector_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
+) -> std::result::Result<CssPseudoSelectorList, ParseError<'i, Error>> {
+    let mut selectors = Vec::new();
+    let mut preceding_comma = None;
+    loop {
+        let member_start = input.position().byte_index();
+        let result = input.parse_until_before(Delimiter::Comma, |member| {
+            parse_rule_selector_with_options(member, options, recovery)
+        });
+        let member_end = input.position().byte_index();
+        let comma_start = member_end;
+        let following_comma = match input.next() {
+            Ok(Token::Comma) => Some((comma_start, input.position().byte_index())),
+            Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => None,
+            Ok(_) => return Err(invalid_selector(input, "invalid selector-list delimiter")),
+            Err(error) => return Err(selector_basic(error)),
+        };
+
+        match result {
+            Ok(selector) => selectors.push(selector),
+            Err(error) => recovery.drop_forgiving_member(
+                error,
+                member_start,
+                member_end,
+                following_comma,
+                preceding_comma,
+            ),
+        }
+
+        let Some(comma) = following_comma else {
+            break;
+        };
+        preceding_comma = Some(comma);
+    }
+
+    Ok(CssPseudoSelectorList::new_forgiving(selectors))
+}
+
 fn parse_has_relative_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssRelativeSelectorList, ParseError<'i, Error>> {
     let mut selectors = Vec::new();
     loop {
-        selectors.push(parse_has_relative_selector(input)?);
+        selectors.push(parse_has_relative_selector(input, recovery)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -800,19 +919,24 @@ fn parse_has_relative_selector_list<'i, 't>(
 
 fn parse_has_relative_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssRelativeSelector, ParseError<'i, Error>> {
     consume_selector_whitespace(input)?;
     let state = input.state();
     match input.next_including_whitespace() {
         Ok(Token::Delim('>')) => {
-            parse_selector_after_leading_combinator(input, CssSelectorCombinator::Child)
+            parse_selector_after_leading_combinator(input, CssSelectorCombinator::Child, recovery)
         }
-        Ok(Token::Delim('+')) => {
-            parse_selector_after_leading_combinator(input, CssSelectorCombinator::NextSibling)
-        }
-        Ok(Token::Delim('~')) => {
-            parse_selector_after_leading_combinator(input, CssSelectorCombinator::SubsequentSibling)
-        }
+        Ok(Token::Delim('+')) => parse_selector_after_leading_combinator(
+            input,
+            CssSelectorCombinator::NextSibling,
+            recovery,
+        ),
+        Ok(Token::Delim('~')) => parse_selector_after_leading_combinator(
+            input,
+            CssSelectorCombinator::SubsequentSibling,
+            recovery,
+        ),
         Ok(Token::Delim('|')) => Err(invalid_selector(
             input,
             "unsupported selector combinator `||`",
@@ -822,6 +946,7 @@ fn parse_has_relative_selector<'i, 't>(
             let selector = parse_rule_selector_with_options(
                 input,
                 SelectorParseOptions::without_nested_has().without_pseudo_elements(),
+                recovery,
             )?;
             Ok(CssRelativeSelector::new(
                 CssSelectorCombinator::Descendant,
@@ -839,11 +964,13 @@ fn parse_has_relative_selector<'i, 't>(
 fn parse_selector_after_leading_combinator<'i, 't>(
     input: &mut Parser<'i, 't>,
     combinator: CssSelectorCombinator,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssRelativeSelector, ParseError<'i, Error>> {
     parse_selector_after_leading_combinator_with_options(
         input,
         combinator,
         SelectorParseOptions::without_nested_has().without_pseudo_elements(),
+        recovery,
     )
 }
 
@@ -851,23 +978,28 @@ fn parse_selector_after_leading_combinator_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
     combinator: CssSelectorCombinator,
     options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssRelativeSelector, ParseError<'i, Error>> {
     consume_selector_whitespace(input)?;
-    let first = parse_compound_selector_model_with_options(input, options)?;
-    let selector = parse_selector_after_first_compound(input, first, options)?;
+    let first = parse_compound_selector_model_with_options(input, options, recovery)?;
+    let selector = parse_selector_after_first_compound(input, first, options, recovery)?;
     Ok(CssRelativeSelector::new(combinator, selector))
 }
 
 fn parse_nth_child_pattern<'i, 't>(
     input: &mut Parser<'i, 't>,
     options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssNthChildPattern, ParseError<'i, Error>> {
     let pattern = parse_nth_pattern(input)?;
     let state = input.state();
     match input.next() {
         Ok(Token::Ident(value)) if value.eq_ignore_ascii_case("of") => {
-            let selector_list =
-                parse_pseudo_selector_list_with_options(input, options.without_pseudo_elements())?;
+            let selector_list = parse_pseudo_selector_list_with_options(
+                input,
+                options.without_pseudo_elements(),
+                recovery,
+            )?;
             Ok(CssNthChildPattern::new(pattern, Some(selector_list)))
         }
         Ok(_) => {

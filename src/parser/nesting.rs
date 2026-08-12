@@ -7,8 +7,8 @@ use cssparser::{
 use super::queries::parse_media_query_list;
 use super::recovery::{RecoveryLoopOutcome, RecoveryProgress, RecoveryState};
 use super::selectors::{
-    consume_selector_whitespace, parse_complex_selector_part, parse_compound_selector_model,
-    parse_rule_selector,
+    SelectorRecovery, consume_selector_whitespace, parse_complex_selector_part,
+    parse_compound_selector_model, parse_rule_selector,
 };
 use super::{
     CssContainerPrelude, CssScopePrelude, Recovered, StrictDeclarationParser,
@@ -202,7 +202,8 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
         match_ignore_ascii_case! { &name,
             "media" => {
-                let query = parse_media_query_list(input)?;
+                let query =
+                    parse_media_query_list(self.source, input, &mut self.diagnostics)?;
                 if !input.is_exhausted() {
                     return Err(with_media_query_context(
                         invalid_syntax(
@@ -247,7 +248,7 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
                 })?,
             )),
             "scope" => Ok(NestedStyleAtRulePrelude::Scope(
-                parse_scope_prelude(input).map_err(|error| {
+                parse_scope_prelude(self.source, input, &mut self.diagnostics).map_err(|error| {
                     with_at_rule_prelude_context(
                         error,
                         "scope",
@@ -375,7 +376,8 @@ impl<'i> QualifiedRuleParser<'i> for NestedStyleRuleParser<'i> {
         &mut self,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
-        parse_nested_selector_list(input)
+        let mut recovery = SelectorRecovery::new(self.source, &mut self.diagnostics);
+        parse_nested_selector_list(input, &mut recovery)
     }
 
     fn parse_block<'t>(
@@ -485,10 +487,11 @@ impl NestedSelector {
 
 fn parse_nested_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<Vec<NestedSelector>, ParseError<'i, Error>> {
     let mut selectors = Vec::new();
     loop {
-        selectors.push(parse_nested_selector(input)?);
+        selectors.push(parse_nested_selector(input, recovery)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -499,15 +502,20 @@ fn parse_nested_selector_list<'i, 't>(
 
 fn parse_nested_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<NestedSelector, ParseError<'i, Error>> {
     consume_selector_whitespace(input)?;
     let state = input.state();
     match input.next_including_whitespace() {
-        Ok(Token::Delim('&')) => parse_ampersand_nested_selector(input),
-        Ok(Token::Delim('>')) => parse_relative_selector(input, CssSelectorCombinator::Child),
-        Ok(Token::Delim('+')) => parse_relative_selector(input, CssSelectorCombinator::NextSibling),
+        Ok(Token::Delim('&')) => parse_ampersand_nested_selector(input, recovery),
+        Ok(Token::Delim('>')) => {
+            parse_relative_selector(input, CssSelectorCombinator::Child, recovery)
+        }
+        Ok(Token::Delim('+')) => {
+            parse_relative_selector(input, CssSelectorCombinator::NextSibling, recovery)
+        }
         Ok(Token::Delim('~')) => {
-            parse_relative_selector(input, CssSelectorCombinator::SubsequentSibling)
+            parse_relative_selector(input, CssSelectorCombinator::SubsequentSibling, recovery)
         }
         Ok(Token::Delim('|')) => Err(invalid_selector(
             input,
@@ -515,7 +523,7 @@ fn parse_nested_selector<'i, 't>(
         )),
         Ok(_) => {
             input.reset(&state);
-            parse_rule_selector(input).map(NestedSelector::Descendant)
+            parse_rule_selector(input, recovery).map(NestedSelector::Descendant)
         }
         Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
             input.reset(&state);
@@ -527,6 +535,7 @@ fn parse_nested_selector<'i, 't>(
 
 fn parse_ampersand_nested_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<NestedSelector, ParseError<'i, Error>> {
     let had_whitespace = consume_selector_whitespace(input)?;
     let state = input.state();
@@ -544,10 +553,14 @@ fn parse_ampersand_nested_selector<'i, 't>(
             input,
             "nesting selector `&` is only supported once at the start",
         )),
-        Ok(Token::Delim('>')) => parse_relative_selector(input, CssSelectorCombinator::Child),
-        Ok(Token::Delim('+')) => parse_relative_selector(input, CssSelectorCombinator::NextSibling),
+        Ok(Token::Delim('>')) => {
+            parse_relative_selector(input, CssSelectorCombinator::Child, recovery)
+        }
+        Ok(Token::Delim('+')) => {
+            parse_relative_selector(input, CssSelectorCombinator::NextSibling, recovery)
+        }
         Ok(Token::Delim('~')) => {
-            parse_relative_selector(input, CssSelectorCombinator::SubsequentSibling)
+            parse_relative_selector(input, CssSelectorCombinator::SubsequentSibling, recovery)
         }
         Ok(Token::Delim('|')) => Err(invalid_selector(
             input,
@@ -555,11 +568,11 @@ fn parse_ampersand_nested_selector<'i, 't>(
         )),
         Ok(_) if had_whitespace => {
             input.reset(&state);
-            parse_relative_selector(input, CssSelectorCombinator::Descendant)
+            parse_relative_selector(input, CssSelectorCombinator::Descendant, recovery)
         }
         Ok(_) => {
             input.reset(&state);
-            let suffix = parse_compound_selector_model(input)?;
+            let suffix = parse_compound_selector_model(input, recovery)?;
             ensure_nested_selector_boundary(input)?;
             Ok(NestedSelector::Append(suffix))
         }
@@ -569,8 +582,13 @@ fn parse_ampersand_nested_selector<'i, 't>(
 fn parse_relative_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
     first_combinator: CssSelectorCombinator,
+    recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<NestedSelector, ParseError<'i, Error>> {
-    let mut parts = vec![parse_complex_selector_part(input, first_combinator)?];
+    let mut parts = vec![parse_complex_selector_part(
+        input,
+        first_combinator,
+        recovery,
+    )?];
     loop {
         let had_whitespace = consume_selector_whitespace(input)?;
         let state = input.state();
@@ -587,14 +605,17 @@ fn parse_relative_selector<'i, 't>(
             Ok(Token::Delim('>')) => parts.push(parse_complex_selector_part(
                 input,
                 CssSelectorCombinator::Child,
+                recovery,
             )?),
             Ok(Token::Delim('+')) => parts.push(parse_complex_selector_part(
                 input,
                 CssSelectorCombinator::NextSibling,
+                recovery,
             )?),
             Ok(Token::Delim('~')) => parts.push(parse_complex_selector_part(
                 input,
                 CssSelectorCombinator::SubsequentSibling,
+                recovery,
             )?),
             Ok(Token::Delim('|')) => {
                 return Err(invalid_selector(
@@ -610,7 +631,7 @@ fn parse_relative_selector<'i, 't>(
             }
             Ok(_) if had_whitespace => {
                 input.reset(&state);
-                let selector = parse_compound_selector_model(input)?;
+                let selector = parse_compound_selector_model(input, recovery)?;
                 parts.push(CssComplexSelectorPart::new(
                     CssSelectorCombinator::Descendant,
                     selector,

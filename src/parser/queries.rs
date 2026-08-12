@@ -1,26 +1,82 @@
 #[cfg(test)]
 use cssparser::ParserInput;
-use cssparser::{ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
+use cssparser::{
+    BasicParseErrorKind, Delimiter, ParseError, Parser, ToCss, Token, match_ignore_ascii_case,
+};
 
+use super::recovery::{comma_member_span, first_non_trivia_position};
 use super::variables::collect_authored_declaration_value;
-#[cfg(test)]
-use crate::error::from_parse_error;
-use crate::error::{Error, basic, invalid_syntax, unsupported_value_at, with_media_query_context};
+use crate::error::{
+    Error, basic, from_parse_error, invalid_syntax, unsupported_value_at, with_media_query_context,
+};
 use crate::syntax::*;
 
 pub(crate) fn parse_media_query_list<'i, 't>(
+    source: &str,
     input: &mut Parser<'i, 't>,
+    diagnostics: &mut Vec<crate::CssRecoveryDiagnostic>,
 ) -> std::result::Result<CssMediaQueryList, ParseError<'i, Error>> {
-    let result = (|| {
-        let mut queries = vec![parse_media_query(input)?];
+    let mut queries = Vec::new();
+    let mut preceding_comma = None;
+    loop {
+        let member_start = input.position().byte_index();
+        let result = input.parse_until_before(Delimiter::Comma, parse_media_query);
+        let member_end = input.position().byte_index();
+        let comma_start = member_end;
+        let following_comma = match input.next().cloned() {
+            Ok(Token::Comma) => Some((comma_start, input.position().byte_index())),
+            Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => None,
+            Ok(token) => {
+                return Err(with_media_query_context(
+                    input.new_unexpected_token_error(token),
+                    None,
+                ));
+            }
+            Err(error) => return Err(with_media_query_context(error.into(), None)),
+        };
 
-        while input.try_parse(Parser::expect_comma).is_ok() {
-            queries.push(parse_media_query(input)?);
+        match result {
+            Ok(query) => queries.push(query),
+            Err(error) => {
+                let error = with_media_query_context(error, None);
+                let Some(span) = comma_member_span(
+                    source,
+                    member_start,
+                    member_end,
+                    following_comma,
+                    preceding_comma,
+                ) else {
+                    return Err(error);
+                };
+                if span.start() == span.end() {
+                    return Err(error);
+                }
+                let position = first_non_trivia_position(source, member_start, member_end);
+                let error = from_parse_error(source, error);
+                let Some(diagnostic) = crate::CssRecoveryDiagnostic::new(
+                    error,
+                    span,
+                    crate::CssRecoveryAction::ReplaceMediaQueryWithNever,
+                ) else {
+                    return Err(with_media_query_context(
+                        invalid_syntax(
+                            input.current_source_location(),
+                            "invalid media-query recovery provenance",
+                        ),
+                        None,
+                    ));
+                };
+                diagnostics.push(diagnostic);
+                queries.push(CssMediaQuery::Never(CssNeverMediaQuery::new(position)));
+            }
         }
 
-        Ok(CssMediaQueryList::new(queries))
-    })();
-    result.map_err(|error| with_media_query_context(error, None))
+        let Some(comma) = following_comma else {
+            break;
+        };
+        preceding_comma = Some(comma);
+    }
+    Ok(CssMediaQueryList::new(queries))
 }
 
 #[cfg(test)]
@@ -29,8 +85,12 @@ pub(crate) fn parse_media_query_list_for_test(
 ) -> std::result::Result<CssMediaQueryList, Error> {
     let mut input = ParserInput::new(source);
     let mut parser = Parser::new(&mut input);
-    let list =
-        parse_media_query_list(&mut parser).map_err(|error| from_parse_error(source, error))?;
+    let mut diagnostics = Vec::new();
+    let list = parse_media_query_list(source, &mut parser, &mut diagnostics)
+        .map_err(|error| from_parse_error(source, error))?;
+    if let Some(diagnostic) = diagnostics.into_iter().next() {
+        return Err(diagnostic.error().clone());
+    }
     if !parser.is_exhausted() {
         return Err(from_parse_error(
             source,
@@ -223,7 +283,8 @@ fn parse_container_style_query<'i, 't>(
 fn parse_media_query<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssMediaQuery, ParseError<'i, Error>> {
-    if let Ok(query) = input.try_parse(parse_typed_media_query) {
+    let position = first_non_trivia_parser_position(input);
+    if let Ok(query) = input.try_parse(|input| parse_typed_media_query(input, position)) {
         return Ok(CssMediaQuery::Typed(query));
     }
 
@@ -232,6 +293,7 @@ fn parse_media_query<'i, 't>(
 
 fn parse_typed_media_query<'i, 't>(
     input: &mut Parser<'i, 't>,
+    position: crate::CssSourcePosition,
 ) -> std::result::Result<CssTypedMediaQuery, ParseError<'i, Error>> {
     let modifier = input.try_parse(parse_media_query_modifier).ok();
     let media_type = parse_media_type(input)?;
@@ -244,7 +306,9 @@ fn parse_typed_media_query<'i, 't>(
         None
     };
 
-    Ok(CssTypedMediaQuery::new(modifier, media_type, condition))
+    Ok(CssTypedMediaQuery::new(
+        modifier, media_type, condition, position,
+    ))
 }
 
 fn parse_media_query_modifier<'i, 't>(
@@ -283,6 +347,7 @@ fn parse_media_type<'i, 't>(
 fn parse_media_condition<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssMediaCondition, ParseError<'i, Error>> {
+    let position = first_non_trivia_parser_position(input);
     let first = parse_media_condition_atom(input)?;
 
     if input
@@ -296,9 +361,10 @@ fn parse_media_condition<'i, 't>(
         {
             conditions.push(parse_media_condition_atom(input)?);
         }
-        return Ok(CssMediaCondition::And(CssMediaConditionList::new(
-            conditions,
-        )));
+        return Ok(CssMediaCondition::new(
+            CssMediaConditionKind::And(CssMediaConditionList::new(conditions)),
+            position,
+        ));
     }
 
     if input
@@ -312,9 +378,10 @@ fn parse_media_condition<'i, 't>(
         {
             conditions.push(parse_media_condition_atom(input)?);
         }
-        return Ok(CssMediaCondition::Or(CssMediaConditionList::new(
-            conditions,
-        )));
+        return Ok(CssMediaCondition::new(
+            CssMediaConditionKind::Or(CssMediaConditionList::new(conditions)),
+            position,
+        ));
     }
 
     Ok(first)
@@ -323,13 +390,15 @@ fn parse_media_condition<'i, 't>(
 fn parse_media_condition_atom<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssMediaCondition, ParseError<'i, Error>> {
+    let position = first_non_trivia_parser_position(input);
     if input
         .try_parse(|input| input.expect_ident_matching("not"))
         .is_ok()
     {
-        return Ok(CssMediaCondition::Not(Box::new(
-            parse_media_condition_atom(input)?,
-        )));
+        return Ok(CssMediaCondition::new(
+            CssMediaConditionKind::Not(Box::new(parse_media_condition_atom(input)?)),
+            position,
+        ));
     }
 
     input.expect_parenthesis_block().map_err(basic)?;
@@ -343,7 +412,34 @@ fn parse_media_condition_atom<'i, 't>(
         }
         Ok(feature)
     })?;
-    Ok(CssMediaCondition::Feature(feature))
+    Ok(CssMediaCondition::new(
+        CssMediaConditionKind::Feature(feature),
+        position,
+    ))
+}
+
+fn first_non_trivia_parser_position(input: &mut Parser<'_, '_>) -> crate::CssSourcePosition {
+    let initial = input.state();
+    let position = loop {
+        let token_start = input.state();
+        match input.next_including_whitespace_and_comments() {
+            Ok(Token::WhiteSpace(_) | Token::Comment(_)) => {}
+            Ok(_) => {
+                break crate::CssSourcePosition::from_cssparser(
+                    token_start.position(),
+                    token_start.source_location(),
+                );
+            }
+            Err(_) => {
+                break crate::CssSourcePosition::from_cssparser(
+                    input.position(),
+                    input.current_source_location(),
+                );
+            }
+        }
+    };
+    input.reset(&initial);
+    position
 }
 
 fn parse_media_feature_query<'i, 't>(

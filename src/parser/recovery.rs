@@ -590,6 +590,55 @@ pub(super) fn recovery_action_for_error(
     }
 }
 
+pub(super) fn first_non_trivia_position(
+    source: &str,
+    member_start: usize,
+    member_end: usize,
+) -> CssSourcePosition {
+    let bounded_start = member_start.min(source.len());
+    let bounded_end = member_end.min(source.len()).max(bounded_start);
+    let Some(member) = source.get(bounded_start..bounded_end) else {
+        return CssSourcePosition::from_byte_offset_in(source, bounded_end);
+    };
+    let mut input = ParserInput::new(member);
+    let mut parser = Parser::new(&mut input);
+    loop {
+        let token_start = parser.position().byte_index();
+        match parser.next_including_whitespace_and_comments() {
+            Ok(Token::WhiteSpace(_) | Token::Comment(_)) => {}
+            Ok(_) => {
+                return CssSourcePosition::from_byte_offset_in(
+                    source,
+                    bounded_start.saturating_add(token_start),
+                );
+            }
+            Err(_) => return CssSourcePosition::from_byte_offset_in(source, bounded_end),
+        }
+    }
+}
+
+pub(super) fn comma_member_span(
+    source: &str,
+    member_start: usize,
+    member_end: usize,
+    following_comma: Option<(usize, usize)>,
+    preceding_comma: Option<(usize, usize)>,
+) -> Option<crate::CssSourceSpan> {
+    let (span_start, span_end) = if member_start < member_end {
+        (member_start, member_end)
+    } else if let Some(comma) = following_comma {
+        comma
+    } else if let Some(comma) = preceding_comma {
+        comma
+    } else {
+        (member_start, member_end)
+    };
+    crate::CssSourceSpan::new(
+        CssSourcePosition::from_byte_offset_in(source, span_start),
+        CssSourcePosition::from_byte_offset_in(source, span_end),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use cssparser::{Parser, ParserInput};

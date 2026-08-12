@@ -18,6 +18,10 @@ fn source_position(line: u32, column: u32) -> CssSourcePosition {
     CssSourcePosition::from_cssparser(parser.position(), parser.current_source_location())
 }
 
+fn test_media_position() -> CssSourcePosition {
+    source_position(0, 0)
+}
+
 fn style_rule(rule: &CssRule) -> &CssStyleRule {
     match rule {
         CssRule::Style(rule) => rule,
@@ -763,6 +767,7 @@ fn scoped_group_rule_models_keep_scoped_children() {
         None,
         CssMediaType::Screen,
         None,
+        test_media_position(),
     ))])
     .unwrap();
     let media = CssScopedMediaRule::new(query.clone(), scoped_children.clone(), location);
@@ -858,6 +863,7 @@ fn import_rule_accessors_expose_authored_structure() {
         None,
         CssMediaType::Screen,
         None,
+        test_media_position(),
     ))])
     .unwrap();
     let location = source_position(3, 7);
@@ -925,14 +931,10 @@ fn import_rule_parser_accepts_targets_layers_and_media() {
     let [rule] = sheet.rules() else {
         panic!("expected one import rule");
     };
-    assert_eq!(
-        import_rule(rule).media().unwrap().queries(),
-        &[CssMediaQuery::Typed(CssTypedMediaQuery::new(
-            None,
-            CssMediaType::Print,
-            None,
-        ))]
-    );
+    let [CssMediaQuery::Typed(print_query)] = import_rule(rule).media().unwrap().queries() else {
+        panic!("expected typed print media query");
+    };
+    assert_eq!(print_query.media_type(), CssMediaType::Print);
 
     let sheet = parse_sheet(r#"@import url("wide.css") screen and (min-width: 900px);"#).unwrap();
     let [rule] = sheet.rules() else {
@@ -4917,6 +4919,7 @@ fn media_query_list_constructor_requires_queries() {
             None,
             CssMediaType::Screen,
             None,
+            test_media_position(),
         ))])
         .is_some()
     );
@@ -4924,10 +4927,13 @@ fn media_query_list_constructor_requires_queries() {
 
 #[test]
 fn media_condition_list_constructor_requires_at_least_two_conditions() {
-    let width = CssMediaCondition::Feature(CssMediaFeatureQuery::Width(CssRangeFeature::new(
-        Some(CssQueryComparison::GreaterThanOrEqual),
-        CssQueryLength::try_new(600.0, CssLengthUnit::Px).unwrap(),
-    )));
+    let width = CssMediaCondition::new(
+        CssMediaConditionKind::Feature(CssMediaFeatureQuery::Width(CssRangeFeature::new(
+            Some(CssQueryComparison::GreaterThanOrEqual),
+            CssQueryLength::try_new(600.0, CssLengthUnit::Px).unwrap(),
+        ))),
+        test_media_position(),
+    );
     assert_eq!(CssMediaConditionList::try_new(Vec::new()), None);
     assert_eq!(CssMediaConditionList::try_new(vec![width.clone()]), None);
     assert!(CssMediaConditionList::try_new(vec![width.clone(), width]).is_some());
@@ -5042,7 +5048,10 @@ fn media_query_parser_preserves_typed_query_structure() {
 
     assert_eq!(query.modifier(), Some(CssMediaQueryModifier::Not));
     assert_eq!(query.media_type(), CssMediaType::Screen);
-    let Some(CssMediaCondition::Feature(CssMediaFeatureQuery::Width(width))) = query.condition()
+    let Some(condition) = query.condition() else {
+        panic!("expected width condition");
+    };
+    let CssMediaConditionKind::Feature(CssMediaFeatureQuery::Width(width)) = condition.kind()
     else {
         panic!("expected width condition");
     };
@@ -5057,8 +5066,10 @@ fn media_query_parser_preserves_typed_query_structure() {
 #[test]
 fn media_query_parser_preserves_condition_only_range_structure() {
     let query_list = parse_media_query_list_for_test("(width >= 600px)").unwrap();
-    let [CssMediaQuery::Condition(CssMediaCondition::Feature(CssMediaFeatureQuery::Width(width)))] =
-        query_list.queries()
+    let [CssMediaQuery::Condition(condition)] = query_list.queries() else {
+        panic!("expected one condition-only width query");
+    };
+    let CssMediaConditionKind::Feature(CssMediaFeatureQuery::Width(width)) = condition.kind()
     else {
         panic!("expected one condition-only width query");
     };
@@ -5074,21 +5085,24 @@ fn media_query_parser_preserves_condition_only_range_structure() {
 #[test]
 fn media_query_parser_preserves_discrete_and_condition_list_structure() {
     let query_list = parse_media_query_list_for_test("(hover: hover) and (pointer: fine)").unwrap();
-    let [CssMediaQuery::Condition(CssMediaCondition::And(list))] = query_list.queries() else {
+    let [CssMediaQuery::Condition(condition)] = query_list.queries() else {
+        panic!("expected one condition-only and query");
+    };
+    let CssMediaConditionKind::And(list) = condition.kind() else {
         panic!("expected one condition-only and query");
     };
     let [hover, pointer] = list.conditions() else {
         panic!("expected two conditions");
     };
 
-    assert_eq!(
-        hover,
-        &CssMediaCondition::Feature(CssMediaFeatureQuery::Hover(CssHoverCapability::Hover))
-    );
-    assert_eq!(
-        pointer,
-        &CssMediaCondition::Feature(CssMediaFeatureQuery::Pointer(CssPointerCapability::Fine))
-    );
+    assert!(matches!(
+        hover.kind(),
+        CssMediaConditionKind::Feature(CssMediaFeatureQuery::Hover(CssHoverCapability::Hover))
+    ));
+    assert!(matches!(
+        pointer.kind(),
+        CssMediaConditionKind::Feature(CssMediaFeatureQuery::Pointer(CssPointerCapability::Fine))
+    ));
 }
 
 #[test]
@@ -5098,14 +5112,14 @@ fn media_query_parser_preserves_comma_separated_queries() {
         panic!("expected two media queries");
     };
 
-    assert_eq!(
-        screen,
-        &CssMediaQuery::Typed(CssTypedMediaQuery::new(None, CssMediaType::Screen, None,))
-    );
-    assert_eq!(
-        print,
-        &CssMediaQuery::Typed(CssTypedMediaQuery::new(None, CssMediaType::Print, None,))
-    );
+    let CssMediaQuery::Typed(screen) = screen else {
+        panic!("expected screen query")
+    };
+    let CssMediaQuery::Typed(print) = print else {
+        panic!("expected print query")
+    };
+    assert_eq!(screen.media_type(), CssMediaType::Screen);
+    assert_eq!(print.media_type(), CssMediaType::Print);
 }
 
 #[test]
@@ -5914,8 +5928,11 @@ fn advanced_css_rule_surface_is_structurally_accessible() {
         panic!("expected typed import media query");
     };
     assert_eq!(import_query.media_type(), CssMediaType::Screen);
-    let Some(CssMediaCondition::Feature(CssMediaFeatureQuery::Width(width))) =
-        import_query.condition()
+    let Some(import_condition) = import_query.condition() else {
+        panic!("expected import width condition");
+    };
+    let CssMediaConditionKind::Feature(CssMediaFeatureQuery::Width(width)) =
+        import_condition.kind()
     else {
         panic!("expected import width condition");
     };
@@ -5934,11 +5951,11 @@ fn advanced_css_rule_surface_is_structurally_accessible() {
     assert_eq!(source.url(), "inter.woff2");
     assert_eq!(source.format(), Some(&CssFontFormatHint::Woff2));
 
-    let [
-        CssMediaQuery::Condition(CssMediaCondition::Feature(
-            CssMediaFeatureQuery::PrefersColorScheme(color_scheme),
-        )),
-    ] = media.query().queries()
+    let [CssMediaQuery::Condition(media_condition)] = media.query().queries() else {
+        panic!("expected prefers-color-scheme media condition");
+    };
+    let CssMediaConditionKind::Feature(CssMediaFeatureQuery::PrefersColorScheme(color_scheme)) =
+        media_condition.kind()
     else {
         panic!("expected prefers-color-scheme media condition");
     };

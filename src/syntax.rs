@@ -1609,30 +1609,104 @@ impl CssMediaQueryList {
     }
 }
 
+/// One authored or parser-recovered media-query-list member.
+///
+/// The `Never` branch is parser-owned recovery syntax for a malformed authored member. It is not
+/// publicly constructible and is the only branch for which [`Self::is_guaranteed_false`] is true.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssMediaQuery {
     Condition(CssMediaCondition),
     Typed(CssTypedMediaQuery),
+    Never(CssNeverMediaQuery),
 }
 
+impl CssMediaQuery {
+    /// Returns the first non-trivia position of this authored or recovered query member.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        match self {
+            Self::Condition(condition) => condition.position(),
+            Self::Typed(query) => query.position(),
+            Self::Never(query) => query.position(),
+        }
+    }
+
+    /// Returns whether this member is the parser-owned guaranteed-false recovery sentinel.
+    #[must_use]
+    pub const fn is_guaranteed_false(&self) -> bool {
+        matches!(self, Self::Never(_))
+    }
+}
+
+/// A parser-owned guaranteed-false replacement for one malformed media-query-list member.
+///
+/// Its position is the member's first non-trivia position, or the member end when it contained no
+/// non-trivia token. The complete malformed source unit remains on the paired recovery diagnostic.
+/// Callers cannot construct this recovered state.
+///
+/// ```compile_fail
+/// use surgeist_css::{CssMediaQuery, CssNeverMediaQuery, CssSourcePosition};
+///
+/// fn forge(position: CssSourcePosition) -> CssMediaQuery {
+///     CssMediaQuery::Never(CssNeverMediaQuery { position })
+/// }
+/// ```
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssNeverMediaQuery {
+    position: CssSourcePosition,
+}
+
+impl CssNeverMediaQuery {
+    #[must_use]
+    pub(crate) const fn new(position: CssSourcePosition) -> Self {
+        Self { position }
+    }
+
+    /// Returns the malformed member's first non-trivia position, or its end when empty.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+}
+
+/// A parser-produced typed media query and its exact first non-trivia source position.
+///
+/// Callers can inspect authored semantics but cannot construct or forge parser provenance.
+///
+/// ```compile_fail
+/// use surgeist_css::{CssMediaQueryModifier, CssMediaType, CssSourcePosition, CssTypedMediaQuery};
+///
+/// fn forge(position: CssSourcePosition) -> CssTypedMediaQuery {
+///     CssTypedMediaQuery {
+///         modifier: Some(CssMediaQueryModifier::Only),
+///         media_type: CssMediaType::Screen,
+///         condition: None,
+///         position,
+///     }
+/// }
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssTypedMediaQuery {
     modifier: Option<CssMediaQueryModifier>,
     media_type: CssMediaType,
     condition: Option<CssMediaCondition>,
+    position: CssSourcePosition,
 }
 
 impl CssTypedMediaQuery {
     #[must_use]
-    pub fn new(
+    pub(crate) const fn new(
         modifier: Option<CssMediaQueryModifier>,
         media_type: CssMediaType,
         condition: Option<CssMediaCondition>,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             modifier,
             media_type,
             condition,
+            position,
         }
     }
 
@@ -1650,6 +1724,12 @@ impl CssTypedMediaQuery {
     pub const fn condition(&self) -> Option<&CssMediaCondition> {
         self.condition.as_ref()
     }
+
+    /// Returns the first non-trivia position of the authored typed media query.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1665,8 +1745,47 @@ pub enum CssMediaType {
     Print,
 }
 
+/// A parser-produced authored media condition with exact first non-trivia provenance.
+///
+/// [`Self::kind`] exposes its semantic shape while private fields prevent callers from attaching a
+/// forged source position.
+///
+/// ```compile_fail
+/// use surgeist_css::{CssMediaCondition, CssMediaConditionKind, CssSourcePosition};
+///
+/// fn forge(kind: CssMediaConditionKind, position: CssSourcePosition) -> CssMediaCondition {
+///     CssMediaCondition { kind, position }
+/// }
+/// ```
 #[derive(Clone, Debug, PartialEq)]
-pub enum CssMediaCondition {
+pub struct CssMediaCondition {
+    kind: CssMediaConditionKind,
+    position: CssSourcePosition,
+}
+
+impl CssMediaCondition {
+    #[must_use]
+    pub(crate) const fn new(kind: CssMediaConditionKind, position: CssSourcePosition) -> Self {
+        Self { kind, position }
+    }
+
+    /// Returns the authored condition shape without evaluating it.
+    #[must_use]
+    pub const fn kind(&self) -> &CssMediaConditionKind {
+        &self.kind
+    }
+
+    /// Returns the first non-trivia position of the authored condition.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+}
+
+/// The non-exhaustive authored semantic shape of a positioned media condition.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssMediaConditionKind {
     Feature(CssMediaFeatureQuery),
     Not(Box<CssMediaCondition>),
     And(CssMediaConditionList),
@@ -7813,6 +7932,11 @@ impl CssPseudoSelectorList {
     #[must_use]
     pub(crate) fn new(selectors: Vec<CssSelector>) -> Self {
         debug_assert!(!selectors.is_empty());
+        Self { selectors }
+    }
+
+    #[must_use]
+    pub(crate) const fn new_forgiving(selectors: Vec<CssSelector>) -> Self {
         Self { selectors }
     }
 

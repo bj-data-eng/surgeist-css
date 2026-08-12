@@ -25,7 +25,7 @@ mod variables;
 
 use cssparser::{
     AtRuleParser, CowRcStr, DeclarationParser, Delimiter, ParseError, Parser, ParserInput,
-    ParserState, QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, StyleSheetParser, Token,
+    ParserState, QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, Token,
     match_ignore_ascii_case,
 };
 
@@ -302,6 +302,51 @@ pub(super) fn block_item_diagnostic_from_start(
         return None;
     }
     crate::CssRecoveryDiagnostic::new(error, span, action)
+}
+
+pub(super) fn consume_failed_rule_block(
+    source: &str,
+    input: &mut Parser<'_, '_>,
+    failed: bool,
+) -> bool {
+    let position = input.position().byte_index();
+    let failed_at_block =
+        failed && position > 0 && source.as_bytes().get(position - 1) == Some(&b'{');
+    if failed_at_block {
+        let _: std::result::Result<(), ParseError<'_, ()>> = input.parse_nested_block(|nested| {
+            while nested.next_including_whitespace_and_comments().is_ok() {}
+            Ok(())
+        });
+    }
+    failed_at_block
+}
+
+pub(super) fn structural_rule_diagnostic(
+    source: &str,
+    error: ParseError<'_, Error>,
+    failed_unit: &str,
+    previous_end: usize,
+    unit_end: usize,
+    action: crate::CssRecoveryAction,
+) -> Option<crate::CssRecoveryDiagnostic> {
+    let unit_start = recovery_unit_start(source, previous_end, unit_end, failed_unit);
+    let error = from_rule_parse_error(source, failed_unit, error);
+    let span = crate::CssSourceSpan::new(
+        crate::CssSourcePosition::from_byte_offset_in(source, unit_start),
+        crate::CssSourcePosition::from_byte_offset_in(source, unit_end),
+    )?;
+    if span.start() == span.end() {
+        return None;
+    }
+    crate::CssRecoveryDiagnostic::new(error, span, action)
+}
+
+pub(super) fn structural_recovery_action(failed_unit: &str) -> crate::CssRecoveryAction {
+    if failed_unit.trim_start().starts_with('@') {
+        crate::CssRecoveryAction::DropAtRule
+    } else {
+        crate::CssRecoveryAction::DropQualifiedRule
+    }
 }
 
 pub(super) fn is_declaration_recovery_unit(failed_unit: &str) -> bool {
@@ -637,7 +682,8 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 Ok(vec![CssRule::FontFace(rule)])
             }
             StrictAtRulePrelude::Keyframes(name) => {
-                let rule = parse_keyframes_rule(name, input, start)?;
+                let rule =
+                    parse_keyframes_rule(self.source, name, input, start, &mut self.diagnostics)?;
                 self.mark_non_import_top_level_rule();
                 Ok(vec![CssRule::Keyframes(rule)])
             }
@@ -781,12 +827,36 @@ fn parse_nested_group_rules<'i, 't>(
 ) -> std::result::Result<Recovered<Vec<CssRule>>, ParseError<'i, Error>> {
     let mut rule_parser = StrictRuleParser::nested(source);
     let mut rules = Vec::new();
-    for rule in StyleSheetParser::new(input, &mut rule_parser) {
-        rules.extend(rule.map_err(|(error, _)| error)?);
+    let mut diagnostics = Vec::new();
+    let mut previous_end = input.position().byte_index();
+    {
+        let mut items = RuleBodyParser::new(input, &mut rule_parser);
+        while let Some(item) = items.next() {
+            consume_failed_rule_block(source, items.input, item.is_err());
+            let unit_end = items.input.position().byte_index();
+            diagnostics.append(&mut items.parser.diagnostics);
+            match item {
+                Ok(parsed_rules) => rules.extend(parsed_rules),
+                Err((error, failed_unit)) => {
+                    let action = structural_recovery_action(failed_unit);
+                    if let Some(diagnostic) = structural_rule_diagnostic(
+                        source,
+                        error,
+                        failed_unit,
+                        previous_end,
+                        unit_end,
+                        action,
+                    ) {
+                        diagnostics.push(diagnostic);
+                    }
+                }
+            }
+            previous_end = unit_end;
+        }
     }
     Ok(Recovered {
         syntax: rules,
-        diagnostics: rule_parser.diagnostics,
+        diagnostics,
     })
 }
 
@@ -799,12 +869,36 @@ pub(super) fn parse_scoped_rule_list<'i, 't>(
         diagnostics: Vec::new(),
     };
     let mut rules = Vec::new();
-    for rule in StyleSheetParser::new(input, &mut rule_parser) {
-        rules.extend(rule.map_err(|(error, _)| error)?);
+    let mut diagnostics = Vec::new();
+    let mut previous_end = input.position().byte_index();
+    {
+        let mut items = RuleBodyParser::new(input, &mut rule_parser);
+        while let Some(item) = items.next() {
+            consume_failed_rule_block(source, items.input, item.is_err());
+            let unit_end = items.input.position().byte_index();
+            diagnostics.append(&mut items.parser.diagnostics);
+            match item {
+                Ok(parsed_rules) => rules.extend(parsed_rules),
+                Err((error, failed_unit)) => {
+                    let action = structural_recovery_action(failed_unit);
+                    if let Some(diagnostic) = structural_rule_diagnostic(
+                        source,
+                        error,
+                        failed_unit,
+                        previous_end,
+                        unit_end,
+                        action,
+                    ) {
+                        diagnostics.push(diagnostic);
+                    }
+                }
+            }
+            previous_end = unit_end;
+        }
     }
     Ok(Recovered {
         syntax: CssScopedRuleList::from_rules(rules),
-        diagnostics: rule_parser.diagnostics,
+        diagnostics,
     })
 }
 
@@ -1138,6 +1232,21 @@ impl<'i> QualifiedRuleParser<'i> for ScopedRuleParser<'i> {
             selectors,
             declarations,
         ))])
+    }
+}
+
+impl<'i> DeclarationParser<'i> for ScopedRuleParser<'i> {
+    type Declaration = Vec<CssScopedRule>;
+    type Error = Error;
+}
+
+impl<'i> RuleBodyItemParser<'i, Vec<CssScopedRule>, Error> for ScopedRuleParser<'i> {
+    fn parse_declarations(&self) -> bool {
+        false
+    }
+
+    fn parse_qualified(&self) -> bool {
+        true
     }
 }
 

@@ -1,14 +1,16 @@
 use cssparser::{
     AtRuleParser, CowRcStr, DeclarationParser, ParseError, Parser, ParserState,
-    QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, StyleSheetParser, Token,
-    match_ignore_ascii_case,
+    QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, Token, match_ignore_ascii_case,
 };
 
 use super::values::parse_custom_ident_from_str_at;
-use super::{DeclarationMode, parse_declaration_core};
+use super::{
+    DeclarationMode, block_item_diagnostic, consume_failed_rule_block,
+    is_declaration_recovery_unit, parse_declaration_core, structural_rule_diagnostic,
+};
 use crate::error::{
-    Error, basic, invalid_at_rule_body, invalid_qualified_rule, unsupported_value,
-    unsupported_value_at,
+    Error, basic, invalid_at_rule_body, invalid_at_rule_placement, invalid_qualified_rule,
+    unsupported_value, unsupported_value_at,
 };
 use crate::syntax::*;
 
@@ -35,15 +37,42 @@ pub(super) fn parse_keyframes_name<'i, 't>(
 }
 
 pub(super) fn parse_keyframes_rule<'i, 't>(
+    source: &'i str,
     name: CssKeyframesName,
     input: &mut Parser<'i, 't>,
     start: &ParserState,
+    diagnostics: &mut Vec<crate::CssRecoveryDiagnostic>,
 ) -> std::result::Result<CssKeyframesRule, ParseError<'i, Error>> {
-    let mut parser = KeyframeBlockParser;
+    let mut parser = KeyframeBlockParser {
+        source,
+        diagnostics: Vec::new(),
+    };
     let mut blocks = Vec::new();
-    for block in StyleSheetParser::new(input, &mut parser) {
-        blocks.push(block.map_err(|(error, _)| error)?);
+    let mut previous_end = input.position().byte_index();
+    {
+        let mut items = RuleBodyParser::new(input, &mut parser);
+        while let Some(item) = items.next() {
+            consume_failed_rule_block(source, items.input, item.is_err());
+            let unit_end = items.input.position().byte_index();
+            match item {
+                Ok(block) => blocks.push(block),
+                Err((error, failed_unit)) => {
+                    if let Some(diagnostic) = structural_rule_diagnostic(
+                        source,
+                        error,
+                        failed_unit,
+                        previous_end,
+                        unit_end,
+                        crate::CssRecoveryAction::DropKeyframeBlock,
+                    ) {
+                        items.parser.diagnostics.push(diagnostic);
+                    }
+                }
+            }
+            previous_end = unit_end;
+        }
     }
+    diagnostics.append(&mut parser.diagnostics);
 
     CssKeyframesRule::try_new(
         name,
@@ -60,15 +89,18 @@ pub(super) fn parse_keyframes_rule<'i, 't>(
     })
 }
 
-struct KeyframeBlockParser;
+struct KeyframeBlockParser<'s> {
+    source: &'s str,
+    diagnostics: Vec<crate::CssRecoveryDiagnostic>,
+}
 
-impl<'i> AtRuleParser<'i> for KeyframeBlockParser {
+impl<'i> AtRuleParser<'i> for KeyframeBlockParser<'i> {
     type Prelude = ();
     type AtRule = CssKeyframeBlock;
     type Error = Error;
 }
 
-impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser {
+impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser<'i> {
     type Prelude = CssKeyframeSelectorList;
     type QualifiedRule = CssKeyframeBlock;
     type Error = Error;
@@ -88,8 +120,30 @@ impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser {
     ) -> std::result::Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
         let mut declarations = Vec::new();
         let mut declaration_parser = KeyframeDeclarationParser;
-        for declaration in RuleBodyParser::new(input, &mut declaration_parser) {
-            declarations.push(declaration.map_err(|(error, _)| error)?);
+        let mut items = RuleBodyParser::new(input, &mut declaration_parser);
+        while let Some(item) = items.next() {
+            let position = items.input.position().byte_index();
+            let failed_at_block = item.is_err()
+                && position > 0
+                && self.source.as_bytes().get(position - 1) == Some(&b'{');
+            let unit_end = items.input.position().byte_index();
+            match item {
+                Ok(declaration) => declarations.push(declaration),
+                Err((error, failed_unit))
+                    if is_declaration_recovery_unit(failed_unit) && !failed_at_block =>
+                {
+                    if let Some(diagnostic) = block_item_diagnostic(
+                        self.source,
+                        error,
+                        failed_unit,
+                        unit_end,
+                        crate::CssRecoveryAction::DropDeclaration,
+                    ) {
+                        self.diagnostics.push(diagnostic);
+                    }
+                }
+                Err((error, _)) => return Err(error),
+            }
         }
 
         CssKeyframeBlock::try_new(
@@ -102,11 +156,26 @@ impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser {
         )
         .ok_or_else(|| {
             invalid_qualified_rule(
-                start.source_location(),
+                input.current_source_location(),
                 "baseline.keyframes.block",
                 "a non-empty keyframe block",
             )
         })
+    }
+}
+
+impl<'i> DeclarationParser<'i> for KeyframeBlockParser<'i> {
+    type Declaration = CssKeyframeBlock;
+    type Error = Error;
+}
+
+impl<'i> RuleBodyItemParser<'i, CssKeyframeBlock, Error> for KeyframeBlockParser<'i> {
+    fn parse_declarations(&self) -> bool {
+        false
+    }
+
+    fn parse_qualified(&self) -> bool {
+        true
     }
 }
 
@@ -173,6 +242,18 @@ impl<'i> AtRuleParser<'i> for KeyframeDeclarationParser {
     type Prelude = ();
     type AtRule = CssKeyframeDeclaration;
     type Error = Error;
+
+    fn parse_prelude<'t>(
+        &mut self,
+        name: CowRcStr<'i>,
+        input: &mut Parser<'i, 't>,
+    ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
+        Err(invalid_at_rule_placement(
+            input.current_source_location(),
+            name.as_ref(),
+            "a keyframe declaration list",
+        ))
+    }
 }
 
 impl<'i> QualifiedRuleParser<'i> for KeyframeDeclarationParser {

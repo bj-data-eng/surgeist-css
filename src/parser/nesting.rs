@@ -11,8 +11,9 @@ use super::selectors::{
 };
 use super::{
     CssContainerPrelude, CssScopePrelude, Recovered, StrictDeclarationParser,
-    block_item_diagnostic, is_declaration_recovery_unit, parse_container_prelude,
-    parse_layer_prelude, parse_scope_prelude, parse_scoped_rule_list,
+    block_item_diagnostic, consume_failed_rule_block, is_declaration_recovery_unit,
+    parse_container_prelude, parse_layer_prelude, parse_scope_prelude, parse_scoped_rule_list,
+    structural_recovery_action, structural_rule_diagnostic,
 };
 use crate::error::{
     Error, invalid_at_rule_block, invalid_at_rule_placement, invalid_selector, invalid_syntax,
@@ -33,9 +34,11 @@ pub(super) fn parse_style_rule_block<'i, 't>(
     let parent_selectors = body_parser.parent_selectors.clone();
     let mut rules = Vec::new();
     let mut declaration_buffer = Vec::new();
+    let mut previous_end = input.position().byte_index();
 
     let mut items = RuleBodyParser::new(input, &mut body_parser);
     while let Some(item) = items.next() {
+        let failed_at_block = consume_failed_rule_block(source, items.input, item.is_err());
         let unit_end = items.input.position().byte_index();
         match item {
             Ok(StyleBlockItem::Declaration(declaration)) => {
@@ -45,7 +48,9 @@ pub(super) fn parse_style_rule_block<'i, 't>(
                 flush_declarations(&parent_selectors, &mut declaration_buffer, &mut rules);
                 rules.extend(nested_rules);
             }
-            Err((error, failed_unit)) if is_declaration_recovery_unit(failed_unit) => {
+            Err((error, failed_unit))
+                if is_declaration_recovery_unit(failed_unit) && !failed_at_block =>
+            {
                 if let Some(diagnostic) = block_item_diagnostic(
                     source,
                     error,
@@ -56,8 +61,22 @@ pub(super) fn parse_style_rule_block<'i, 't>(
                     items.parser.diagnostics.push(diagnostic);
                 }
             }
-            Err((error, _)) => return Err(error),
+            Err((error, failed_unit)) => {
+                flush_declarations(&parent_selectors, &mut declaration_buffer, &mut rules);
+                let action = structural_recovery_action(failed_unit);
+                if let Some(diagnostic) = structural_rule_diagnostic(
+                    source,
+                    error,
+                    failed_unit,
+                    previous_end,
+                    unit_end,
+                    action,
+                ) {
+                    items.parser.diagnostics.push(diagnostic);
+                }
+            }
         }
+        previous_end = unit_end;
     }
 
     flush_declarations(&parent_selectors, &mut declaration_buffer, &mut rules);

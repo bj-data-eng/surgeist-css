@@ -925,6 +925,40 @@ fn source_registry_lookups_are_exact_and_preserve_provenance_xor() {
 }
 
 #[test]
+fn source_registry_exposes_scrollbars_level_one_reliable_provenance() {
+    let source = specification_source("R-SCROLLBARS1").expect("Scrollbars 1 source");
+    assert_eq!(source.id().as_str(), "R-SCROLLBARS1");
+    assert_eq!(source.module(), "CSS Scrollbars Styling");
+    assert_eq!(source.level(), "1");
+    assert_eq!(source.tier(), CssSpecificationTier::Snapshot2026Reliable);
+    assert_eq!(
+        source.url(),
+        Some("https://www.w3.org/TR/2021/CR-css-scrollbars-1-20211209/")
+    );
+    assert_eq!(source.repository_provenance(), None);
+
+    assert!(specification_source("r-scrollbars1").is_none());
+    assert!(specification_source("R-SCROLLBARS1 ").is_none());
+}
+
+#[test]
+fn source_registry_exposes_containment_level_three_extension_provenance() {
+    let source = specification_source("X-CONTAIN3").expect("Containment 3 source");
+    assert_eq!(source.id().as_str(), "X-CONTAIN3");
+    assert_eq!(source.module(), "CSS Containment");
+    assert_eq!(source.level(), "3");
+    assert_eq!(source.tier(), CssSpecificationTier::SurgeistExtension);
+    assert_eq!(
+        source.url(),
+        Some("https://www.w3.org/TR/2022/WD-css-contain-3-20220818/")
+    );
+    assert_eq!(source.repository_provenance(), None);
+
+    assert!(specification_source("x-contain3").is_none());
+    assert!(specification_source(" X-CONTAIN3").is_none());
+}
+
+#[test]
 fn exclusion_registry_exposes_named_official_audit_facts() {
     let predecessor = conformance_exclusion("excluded.O-CSS2.property.margin")
         .expect("superseded CSS2 margin definition");

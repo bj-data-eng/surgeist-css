@@ -720,6 +720,14 @@ profile_source!(
     "https://www.w3.org/TR/2026/CRD-mediaqueries-4-20260219/"
 );
 profile_source!(
+    R_SCROLLBARS1,
+    "R-SCROLLBARS1",
+    "CSS Scrollbars Styling",
+    "1",
+    CssSpecificationTier::Snapshot2026Reliable,
+    "https://www.w3.org/TR/2021/CR-css-scrollbars-1-20211209/"
+);
+profile_source!(
     R_GRID1,
     "R-GRID1",
     "CSS Grid Layout",
@@ -910,6 +918,14 @@ profile_source!(
     "1",
     CssSpecificationTier::Snapshot2026Interop,
     "https://www.w3.org/TR/2026/WD-css-nesting-1-20260122/"
+);
+profile_source!(
+    X_CONTAIN3,
+    "X-CONTAIN3",
+    "CSS Containment",
+    "3",
+    CssSpecificationTier::SurgeistExtension,
+    "https://www.w3.org/TR/2022/WD-css-contain-3-20220818/"
 );
 profile_source!(
     X_CONDITIONAL5,
@@ -1142,6 +1158,7 @@ static SPECIFICATION_SOURCES: &[CssSpecificationSource] = &[
     O_EASING1,
     O_COUNTERSTYLES3,
     R_MEDIA4,
+    R_SCROLLBARS1,
     R_GRID1,
     R_GRID2,
     R_CASCADE5,
@@ -1166,6 +1183,7 @@ static SPECIFICATION_SOURCES: &[CssSpecificationSource] = &[
     I_SELECTORS4,
     I_CONTAIN2,
     I_NESTING1,
+    X_CONTAIN3,
     X_CONDITIONAL5,
     X_CASCADE6,
     X_PSEUDO4,

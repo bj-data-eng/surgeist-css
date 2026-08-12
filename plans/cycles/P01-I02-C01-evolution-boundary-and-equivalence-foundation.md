@@ -24,6 +24,13 @@ property name, rule, descriptor, selector, query, value spelling, recovery
 action, diagnostic code, dependency, feature, build script, generator, corpus,
 root/sibling edit, external software, or unsafe.
 
+All committed tests obey the installed Surgeist testing reference: they apply a
+real parser or compiler stimulus and assert public or crate-owned behavior. No
+test reads Rust source, plans, handoffs, review state, command manifests, or code
+shape as proxy evidence. Task and holistic reviewers may inspect implementation
+structure directly; coordinator checks may inspect exact documentation,
+manifest, migration, and safety artifacts outside the Rust test suite.
+
 Tasks are strictly serial. T1 must be independently reviewed and committed while
 production is still the published I01 representation. T2 starts from reviewed
 T1. T3 starts from reviewed T2. T4 starts from reviewed T3. No task may absorb a
@@ -71,30 +78,29 @@ stop/reconcile event rather than a fixture update.
 
 ### T2 Repair Public Enum Evolution Boundaries
 
-- **Files/area:** every owned Rust public enum, rustdoc/compile-fail public tests,
-  and `tests/fixtures/i02-c01-public-enums.tsv`; no parser branch or value
-  representation change.
-- **Outcome:** mechanically inventory every `pub enum` in owned Rust at the T2
-  head by stable `path:item` identity. Exactly `CssImportance` and
-  `CssSupportStatus` are closed; every other public enum is
-  `#[non_exhaustive]`. Nested/public visibility, macro-generated enums, feature-
-  gated public enums, and the enums added later by T3/T4 participate in the
-  final cycle inventory.
-- **Evidence:** a source-structure test compares the hand-authored inventory to
-  owned source in both directions and validates the exact exception set.
-  Crate-root consumer compile-fail doctests prove representative evolving enums
-  cannot be exhaustively matched; positive consumers use wildcards. Closed-enum
-  consumers exhaustively match both `CssImportance` branches and all three
-  `CssSupportStatus` branches. Omission/extra/wrong-exception mutations fail by
-  stable item ID.
-- **RED evidence:** the base source inventory reports every exhaustive evolving
-  enum as a stable failure before attributes are added.
-- **Acceptance:** exact inventory closure, no enum variant/field/parser change,
-  public rustdoc remains warning-clean, the T1 oracle and all I01 tests pass in
-  both feature modes.
+- **Files/area:** every owned Rust public enum and rustdoc/public consumer tests;
+  no parser branch or value representation change and no source-text inventory
+  test or fixture.
+- **Outcome:** exactly `CssImportance` and `CssSupportStatus` are closed; every
+  other public enum at the task head is `#[non_exhaustive]`. The task reviewer
+  inspects the complete owned source set, including nested visibility,
+  macro-generated enums, and feature-gated public enums. Enums added by T3/T4
+  follow the same rule and receive direct review in their owning task range.
+- **Evidence:** external compile-fail doctests prove representative evolving
+  enums cannot be exhaustively matched; positive consumers use wildcards.
+  Closed-enum consumers exhaustively match both `CssImportance` branches and
+  all three `CssSupportStatus` branches. These tests exercise compiler-visible
+  API behavior; they do not parse or count source declarations. Exact complete
+  attribute coverage is implementation-review evidence, not a behavioral-test
+  oracle.
+- **RED evidence:** representative external exhaustive matches compile before
+  the attributes are added and fail to compile afterward for the intended
+  non-exhaustiveness reason.
+- **Acceptance:** task review confirms the exact complete source set and exact
+  two closed exceptions; no enum variant/field/parser change; public rustdoc
+  remains warning-clean; the T1 oracle and all I01 tests pass in both feature
+  modes.
 - **Commands:**
-  `cargo test -p surgeist-css --offline --no-default-features --test public_enum_inventory`;
-  `cargo test -p surgeist-css --offline --no-default-features --features app-strict --test public_enum_inventory`;
   `cargo test -p surgeist-css --offline --no-default-features --test public_surface`;
   `cargo test -p surgeist-css --offline --no-default-features --features app-strict --test public_surface`;
   `cargo test -p surgeist-css --offline --no-default-features --doc`;
@@ -137,10 +143,14 @@ stop/reconcile event rather than a fixture update.
   return `None` from accurately named `i01_subset` without public break.
 - **Test migration:** delete the broad crate-private `CssValue` adapter and its
   manual exhaustive conversion. Tests assert the exact property wrapper or
-  private validated representation. A generated schema inventory proves all
-  179 wrapper/view/property/parser IDs agree; external consumers cover all 179
-  property view branches with wildcards and all three declared-value branches.
-  Compile-fail tests prove private declaration/wrapper construction.
+  private validated representation. The production schema macro generates the
+  coupled property/wrapper/view/parser arms, while an independent 179-property
+  public dispatch vector exercises every branch and asserts its concrete wrapper
+  behavior. External consumers cover all 179 property view branches with
+  wildcards and all three declared-value branches. Compile-fail tests prove
+  private declaration/wrapper construction. Tests do not read Rust source or
+  enforce implementation style through tokens, symbols, counts, or placement;
+  reviewers inspect absence of a replacement broad value bag directly.
 - **RED evidence:** new public consumer/schema tests fail on the old declaration
   enum and absent wrappers/views; a mismatch-construction compile-fail test is
   retained through GREEN.
@@ -169,8 +179,8 @@ stop/reconcile event rather than a fixture update.
 ### T4 Public Migration, Final Inventory, And Cycle Audit
 
 - **Files/area:** README/crate rustdoc only as required by the breaking API,
-  external public consumers, final enum/wrapper inventories, focused C01 audit,
-  and new SHA-free `plans/handoffs/P01-I02-C01-css-evolution-migration.md`.
+  external public consumers, and new SHA-free
+  `plans/handoffs/P01-I02-C01-css-evolution-migration.md`.
 - **Outcome:** document the exact old-to-new declaration matching pattern,
   wrapper authored-text and `i01_subset` semantics, wildcard requirements, the
   two closed enums, and the fact that parsing/recovery is unchanged. The static
@@ -178,20 +188,22 @@ stop/reconcile event rather than a fixture update.
   the 179-wrapper generation rule, all field meanings, and root-owned facade/
   adapter/API-artifact/docs/test/gitlink work. It contains no final/local SHA and
   receives no post-review edit.
-- **Audit:** stable tests name every C01 acceptance predicate, verify exact final
-  public-enum and 179-wrapper inventories, mutation guards, migration
-  completeness/SHA-freedom, T1 oracle completeness, default/feature public
-  consumers, unchanged `Cargo.toml`, I01 catalog/status equality, crate-root
-  unsafe prohibition, and the exact configured command-evidence manifest.
-- **RED evidence:** the audit fails by stable predicate ID before final docs,
-  migration record, and T3-added enum inventory entries exist.
+- **Audit:** the coordinator and task reviewer map every C01 acceptance predicate
+  to exact source, compiler, and behavioral evidence. They directly inspect the
+  exact final public-enum policy, 179-row schema coupling, migration
+  completeness/SHA-freedom, unchanged `Cargo.toml`, crate-root unsafe
+  prohibition, and configured command evidence. Rust tests remain limited to
+  T1 oracle behavior, public consumers, catalog equality, and concrete property
+  dispatch; they do not encode plans, handoffs, completion state, source text,
+  or command manifests.
+- **RED evidence:** public documentation examples and migration deliverables are
+  absent before T4; their deterministic coordinator checks and public consumer
+  commands pass after they are written.
 - **Acceptance:** public examples compile without private modules or Debug/
-  Display control flow; every C01 predicate maps to exact source and behavioral
-  test evidence; no source edit follows holistic review.
+  Display control flow; every C01 predicate maps to exact direct review,
+  compiler, or behavioral evidence; no source edit follows holistic review.
 - **Commands:**
-  `cargo test -p surgeist-css --offline initiative_i02_c01_audit_`;
   `cargo test -p surgeist-css --offline --test i01_c01_observables`;
-  `cargo test -p surgeist-css --offline --test public_enum_inventory`;
   `cargo test -p surgeist-css --offline --test public_surface`;
   `cargo test -p surgeist-css --offline --test conformance_catalog`;
   `cargo test -p surgeist-css --offline --test catalog_inventory`;
@@ -222,7 +234,6 @@ cargo test -p surgeist-css --offline --test i01_c01_observables
 cargo test -p surgeist-css --offline --test public_surface
 cargo test -p surgeist-css --offline --test catalog_inventory
 cargo test -p surgeist-css --offline --test property_schema
-cargo test -p surgeist-css --offline initiative_i02_c01_audit_
 cargo fmt --check
 RUSTDOCFLAGS='-D warnings' cargo doc -p surgeist-css --offline --no-default-features --no-deps
 RUSTDOCFLAGS='-D warnings' cargo doc -p surgeist-css --offline --no-default-features --features app-strict --no-deps
@@ -247,4 +258,6 @@ Stop if T1 cannot finitely encode a required observable, a C01 edit changes
 accepted/recovered language or frozen report semantics, a third closed enum is
 required, a property wrapper cannot preserve coupling/authored inspection, a
 second breaking cycle becomes necessary, or any ownership/safety/dependency/
-external-software boundary would be crossed.
+external-software boundary would be crossed. Also stop if any proposed test uses
+source text, tokens, AST shape, symbols, call sites, code/file/test counts or
+placement, or coordination records as proxy behavioral evidence.

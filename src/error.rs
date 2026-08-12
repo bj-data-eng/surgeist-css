@@ -766,11 +766,10 @@ impl Error {
 
         if let ErrorKind::InvalidAtRuleBody(detail) = &mut self.kind
             && detail.name.as_str() == "at-rule"
-            && let Some((start, name)) = authored_at_rule_before(source, self.position)
+            && let Some((_, name)) = authored_at_rule_before(source, self.position)
         {
             detail.name = CssAtRuleName::new(name);
             detail.production = production_for_at_rule(detail.name.as_str());
-            self.position = CssSourcePosition::from_byte_offset_in(source, start);
         }
         self
     }
@@ -816,9 +815,6 @@ pub(crate) fn from_rule_parse_error(
                 expectation: CssGrammarExpectation::new("a block body for this at-rule"),
                 encountered: None,
             });
-            if let Some(start) = authored_at_rule_start(source, error.position, name) {
-                error.position = CssSourcePosition::from_byte_offset_in(source, start);
-            }
         }
     } else if !unit.contains('{')
         && matches!(
@@ -1458,9 +1454,6 @@ fn previous_authored_token_before(
 fn at_rule_name(kind: &ErrorKind) -> Option<&CssAtRuleName> {
     match kind {
         ErrorKind::InvalidAtRulePlacement(detail) => Some(&detail.name),
-        ErrorKind::InvalidAtRulePrelude(detail) | ErrorKind::InvalidAtRuleBody(detail) => {
-            Some(&detail.name)
-        }
         ErrorKind::UnknownAtRule(detail) => Some(&detail.name),
         ErrorKind::UnsupportedAtRule(detail) => Some(&detail.name),
         _ => None,

@@ -26,7 +26,7 @@ fn error_unknown_and_recognized_unsupported_at_rules_have_distinct_codes() {
 }
 
 #[test]
-fn error_at_rule_placement_prelude_and_body_expose_distinct_details() {
+fn error_at_rule_placement_exposes_expected_context() {
     let placement =
         parse_sheet(".x { width: 1px; } @import 'x.css';").expect_err("late import must fail");
     assert_eq!(placement.code(), CssErrorCode::InvalidAtRulePlacement);
@@ -40,11 +40,14 @@ fn error_at_rule_placement_prelude_and_body_expose_distinct_details() {
         }
         _ => panic!("unexpected error root"),
     }
+}
 
-    let prelude =
+#[test]
+fn error_malformed_at_rule_prelude_reports_responsible_token_position() {
+    let error =
         parse_sheet("@font-face nope {}").expect_err("non-empty font-face prelude must fail");
-    assert_eq!(prelude.code(), CssErrorCode::InvalidAtRulePrelude);
-    match prelude.kind() {
+    assert_eq!(error.code(), CssErrorCode::InvalidAtRulePrelude);
+    match error.kind() {
         ErrorKind::InvalidAtRulePrelude(detail) => {
             assert_eq!(detail.name().as_str(), "font-face");
             assert_eq!(detail.production().as_str(), "baseline.rule.font-face");
@@ -53,10 +56,17 @@ fn error_at_rule_placement_prelude_and_body_expose_distinct_details() {
         }
         _ => panic!("unexpected error root"),
     }
+    let position = error.position();
+    assert_eq!(position.byte_offset().value(), 11);
+    assert_eq!(position.line().value(), 0);
+    assert_eq!(position.column().value(), 11);
+}
 
-    let body = parse_sheet("@media screen;").expect_err("media requires a block");
-    assert_eq!(body.code(), CssErrorCode::InvalidAtRuleBody);
-    match body.kind() {
+#[test]
+fn error_missing_at_rule_body_reports_missing_token_position() {
+    let error = parse_sheet("@media screen;").expect_err("media requires a block");
+    assert_eq!(error.code(), CssErrorCode::InvalidAtRuleBody);
+    match error.kind() {
         ErrorKind::InvalidAtRuleBody(detail) => {
             assert_eq!(detail.name().as_str(), "media");
             assert_eq!(detail.production().as_str(), "baseline.rule.media");
@@ -64,6 +74,10 @@ fn error_at_rule_placement_prelude_and_body_expose_distinct_details() {
         }
         _ => panic!("unexpected error root"),
     }
+    let position = error.position();
+    assert_eq!(position.byte_offset().value(), 14);
+    assert_eq!(position.line().value(), 0);
+    assert_eq!(position.column().value(), 14);
 }
 
 #[test]

@@ -245,6 +245,55 @@ let _ = validate_style_attribute("color: red");
 //! accepted subset and valid-but-unsupported remainder. A diagnostic-free use of
 //! a partial production's accepted subset is still a clean parse.
 //!
+//! The source registry assigns every selected dated specification or preserved
+//! repository baseline a stable [`CssSpecificationSourceId`], module, level, and
+//! [`CssSpecificationTier`]. A tier classifies provenance only; it never implies
+//! parser support. Each source has exactly one immutable specification URL or
+//! repository provenance value. [`specification_source`], [`feature_metadata`],
+//! and [`conformance_exclusion`] use exact, case-sensitive IDs without trimming
+//! or aliasing.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssExclusionReason, CssSpecificationTier, CssSupportStatus,
+//!     conformance_exclusion, feature_metadata, specification_source,
+//! };
+//!
+//! let color = specification_source("O-COLOR4").expect("dated Color 4 source");
+//! assert_eq!(color.tier(), CssSpecificationTier::Snapshot2026Official);
+//! assert!(specification_source("o-color4").is_none());
+//!
+//! let importance = feature_metadata("foundation.declaration.importance")
+//!     .expect("atomic parser-facing record");
+//! assert_eq!(importance.status(), CssSupportStatus::Complete);
+//! assert!(importance.baseline_alias_targets().is_empty());
+//!
+//! let pseudo_elements = feature_metadata("baseline.selector.pseudo-element")
+//!     .expect("preserved aggregate alias");
+//! assert_eq!(
+//!     pseudo_elements.baseline_alias_targets()[0].as_str(),
+//!     "official.selector.generated",
+//! );
+//!
+//! let processing = conformance_exclusion("excluded.O-IMAGES3.processing")
+//!     .expect("official source exclusion");
+//! assert_eq!(
+//!     processing.reason(),
+//!     CssExclusionReason::OutsideAuthoredSyntaxBoundary,
+//! );
+//! ```
+//!
+//! An atomic feature record is parser-facing and has one truthful support
+//! status. The four preserved baseline aggregate aliases remain queryable and
+//! expose immutable atomic target slices, but they do not own parser dispatch.
+//! Private reserved coverage slots describe later grammar boundaries only: they
+//! are not feature records, carry no support status, and do not make their
+//! spellings recognized. [`conformance_exclusions`] records informative,
+//! superseded, and out-of-boundary official source items separately; exclusions
+//! carry no support status and never change parser diagnostics. These metadata
+//! and inventory boundaries do not change accepted CSS, retained syntax,
+//! diagnostics, positions, spans, or recovery actions.
+//!
 //! The optional `app-strict` feature adds `validate_sheet` and
 //! `validate_style_attribute`. Each validator consumes ordinary parsing semantics
 //! and its report, accepts exactly a clean report, and otherwise preserves the

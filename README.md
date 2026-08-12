@@ -97,6 +97,58 @@ CSS custom properties preserve case-sensitive names and authored value text, inc
 
 The independent support catalog reports an exact support status for each bounded I01 production: `Complete`, `Partial`, or `RecognizedUnsupported`. Partial records document both the accepted subset and valid-but-unsupported remainder. A clean use of a partial production's supported subset is accepted; status is metadata about the whole named production, not a parse-result validity flag.
 
+## Conformance sources and atomic records
+
+The conformance source registry assigns every selected dated specification or
+preserved repository baseline a stable `CssSpecificationSourceId`, module,
+level, and `CssSpecificationTier`. The tier classifies provenance only; it does
+not imply parser support. A source has exactly one immutable URL or repository
+provenance value. `specification_source`, `feature_metadata`, and
+`conformance_exclusion` perform exact, case-sensitive lookup without trimming
+or aliasing.
+
+```rust
+use surgeist_css::{
+    CssExclusionReason, CssSpecificationTier, CssSupportStatus,
+    conformance_exclusion, feature_metadata, specification_source,
+};
+
+let color = specification_source("O-COLOR4").expect("dated Color 4 source");
+assert_eq!(color.tier(), CssSpecificationTier::Snapshot2026Official);
+assert!(specification_source("o-color4").is_none());
+
+let importance = feature_metadata("foundation.declaration.importance")
+    .expect("atomic parser-facing record");
+assert_eq!(importance.status(), CssSupportStatus::Complete);
+assert!(importance.baseline_alias_targets().is_empty());
+
+let pseudo_elements = feature_metadata("baseline.selector.pseudo-element")
+    .expect("preserved aggregate alias");
+assert_eq!(
+    pseudo_elements.baseline_alias_targets()[0].as_str(),
+    "official.selector.generated",
+);
+
+let processing = conformance_exclusion("excluded.O-IMAGES3.processing")
+    .expect("official source exclusion");
+assert_eq!(
+    processing.reason(),
+    CssExclusionReason::OutsideAuthoredSyntaxBoundary,
+);
+```
+
+An atomic feature record is parser-facing and carries one truthful
+`CssSupportStatus`. The four preserved baseline aggregate aliases remain
+queryable and expose their immutable atomic target slices, but they do not own
+parser dispatch. A private reserved coverage slot identifies a later grammar
+boundary only: it is not a feature record, has no support status, and does not
+make its spelling recognized. An exclusion is a public source-audit fact for an
+informative, superseded, or out-of-boundary source item; it likewise carries no
+support status and never changes parser diagnostics. Adding registry metadata,
+aliases, reserved slots, exclusions, or implementation inventories does not
+change accepted CSS, retained syntax, diagnostics, positions, spans, or
+recovery actions.
+
 Enable the additive `app-strict` feature to expose `validate_sheet` and `validate_style_attribute`. Each validator consumes ordinary parsing semantics and its report, returns retained syntax only for a clean report, and otherwise returns the complete non-empty diagnostic sequence. The validators do not select a second grammar, and enabling the feature does not change ordinary parsing or recovery.
 
 This crate owns authored CSS syntax, intrinsic grammar validation, recovery boundaries, diagnostics, and support metadata. It does not apply cascade or inheritance, substitute or resolve variables, evaluate queries, match selectors, resolve URLs or resources, perform layout or painting, serialize a CSSOM, or lower CSS into sibling Surgeist types. Root-owned integration owns cross-crate lowering and generated API audit artifacts.

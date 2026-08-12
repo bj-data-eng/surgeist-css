@@ -264,6 +264,13 @@ impl CssTokenSummary {
             authored: token.to_css_string(),
         }
     }
+
+    fn bang() -> Self {
+        Self {
+            kind: CssTokenKind::Delim,
+            authored: "!".to_owned(),
+        }
+    }
 }
 
 const EXPECT_CSS_SYNTAX: CssGrammarExpectation = CssGrammarExpectation::new("valid CSS syntax");
@@ -618,15 +625,9 @@ impl CssPropertyValueError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum CssDeclarationContext {
     OrdinaryKnown(CssKnownProperty),
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "the diagnostic model preserves custom identity before annotation parsing uses it"
-        )
-    )]
     OrdinaryCustom(CssCustomPropertyName),
     Keyframe(CssKnownProperty),
+    KeyframeCustom(CssCustomPropertyName),
     Descriptor {
         at_rule: CssAtRuleName,
         descriptor: CssDescriptorName,
@@ -646,6 +647,8 @@ pub enum CssDeclarationContextRef<'a> {
     CustomProperty(&'a CssCustomPropertyName),
     /// A declaration for a known property inside an authored keyframe.
     Keyframe(CssKnownProperty),
+    /// A case-sensitive custom property declaration inside an authored keyframe.
+    KeyframeCustomProperty(&'a CssCustomPropertyName),
     /// A descriptor declaration owned by an authored at-rule.
     Descriptor {
         /// The decoded authored name of the owning at-rule.
@@ -661,6 +664,9 @@ impl CssDeclarationContext {
             Self::OrdinaryKnown(property) => CssDeclarationContextRef::KnownProperty(*property),
             Self::OrdinaryCustom(property) => CssDeclarationContextRef::CustomProperty(property),
             Self::Keyframe(property) => CssDeclarationContextRef::Keyframe(*property),
+            Self::KeyframeCustom(property) => {
+                CssDeclarationContextRef::KeyframeCustomProperty(property)
+            }
             Self::Descriptor {
                 at_rule,
                 descriptor,
@@ -693,12 +699,6 @@ impl CssDeclarationAnnotationError {
     /// Returns the exact authored annotation token rejected by the grammar.
     pub const fn encountered(&self) -> &CssTokenSummary {
         &self.encountered
-    }
-
-    fn make_keyframe(&mut self) {
-        if let CssDeclarationContext::OrdinaryKnown(property) = self.context {
-            self.context = CssDeclarationContext::Keyframe(property);
-        }
     }
 }
 
@@ -1475,7 +1475,9 @@ pub(crate) fn with_descriptor_context<'i>(
     if matches!(
         error.kind,
         ParseErrorKind::Custom(Error {
-            kind: ErrorKind::UnknownDescriptor(_) | ErrorKind::UnsupportedDescriptor(_),
+            kind: ErrorKind::UnknownDescriptor(_)
+                | ErrorKind::UnsupportedDescriptor(_)
+                | ErrorKind::InvalidDeclarationAnnotation(_),
             ..
         })
     ) {
@@ -1494,64 +1496,59 @@ pub(crate) fn with_descriptor_context<'i>(
     error
 }
 
-pub(crate) fn with_declaration_annotation_context<'i>(
-    mut error: ParseError<'i, Error>,
+pub(crate) fn invalid_known_declaration_annotation<'i>(
+    location: cssparser::SourceLocation,
     property: CssKnownProperty,
     keyframe: bool,
 ) -> ParseError<'i, Error> {
-    let Some(encountered) = take_encountered(&mut error.kind) else {
-        return error;
-    };
-    if encountered.kind != CssTokenKind::Delim || encountered.authored != "!" {
-        return error;
-    }
     let context = if keyframe {
         CssDeclarationContext::Keyframe(property)
     } else {
         CssDeclarationContext::OrdinaryKnown(property)
     };
-    error.kind = ParseErrorKind::Custom(Error::at(
-        error.location,
+    error_at(
+        location,
         ErrorKind::InvalidDeclarationAnnotation(CssDeclarationAnnotationError {
             context,
-            encountered,
+            encountered: CssTokenSummary::bang(),
         }),
-    ));
-    error
+    )
 }
 
-pub(crate) fn with_descriptor_annotation_context<'i>(
-    mut error: ParseError<'i, Error>,
+pub(crate) fn invalid_custom_declaration_annotation<'i>(
+    location: cssparser::SourceLocation,
+    property: &CssCustomPropertyName,
+    keyframe: bool,
+) -> ParseError<'i, Error> {
+    let context = if keyframe {
+        CssDeclarationContext::KeyframeCustom(property.clone())
+    } else {
+        CssDeclarationContext::OrdinaryCustom(property.clone())
+    };
+    error_at(
+        location,
+        ErrorKind::InvalidDeclarationAnnotation(CssDeclarationAnnotationError {
+            context,
+            encountered: CssTokenSummary::bang(),
+        }),
+    )
+}
+
+pub(crate) fn invalid_descriptor_annotation<'i>(
+    location: cssparser::SourceLocation,
     at_rule: &str,
     descriptor: &str,
 ) -> ParseError<'i, Error> {
-    let Some(encountered) = take_encountered(&mut error.kind) else {
-        return error;
-    };
-    if encountered.kind != CssTokenKind::Delim || encountered.authored != "!" {
-        return error;
-    }
-    error.kind = ParseErrorKind::Custom(Error::at(
-        error.location,
+    error_at(
+        location,
         ErrorKind::InvalidDeclarationAnnotation(CssDeclarationAnnotationError {
             context: CssDeclarationContext::Descriptor {
                 at_rule: CssAtRuleName::new(at_rule),
                 descriptor: CssDescriptorName::new(descriptor),
             },
-            encountered,
+            encountered: CssTokenSummary::bang(),
         }),
-    ));
-    error
-}
-
-pub(crate) fn make_keyframe_annotation_context(error: &mut ParseError<'_, Error>) {
-    if let ParseErrorKind::Custom(Error {
-        kind: ErrorKind::InvalidDeclarationAnnotation(detail),
-        ..
-    }) = &mut error.kind
-    {
-        detail.make_keyframe();
-    }
+    )
 }
 
 pub(crate) fn invalid_descriptor_combination<'i>(

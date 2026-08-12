@@ -280,10 +280,14 @@ impl CssKeyframesString {
     }
 }
 
+/// A parser-produced authored keyframe block with a distinct declaration collection.
+///
+/// Its private fields couple validated selectors, keyframe-only declarations, and semantic source
+/// provenance. It does not apply cascade, resolve substitutions, or interpolate animations.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssKeyframeBlock {
     selectors: CssKeyframeSelectorList,
-    declarations: Vec<CssDeclaration>,
+    declarations: CssKeyframeDeclarationList,
     position: CssSourcePosition,
 }
 
@@ -291,7 +295,7 @@ impl CssKeyframeBlock {
     #[must_use]
     pub(crate) fn try_new(
         selectors: CssKeyframeSelectorList,
-        declarations: Vec<CssDeclaration>,
+        declarations: CssKeyframeDeclarationList,
         position: CssSourcePosition,
     ) -> Option<Self> {
         if declarations.is_empty() {
@@ -304,7 +308,7 @@ impl CssKeyframeBlock {
     #[must_use]
     pub(crate) fn new(
         selectors: CssKeyframeSelectorList,
-        declarations: Vec<CssDeclaration>,
+        declarations: CssKeyframeDeclarationList,
         position: CssSourcePosition,
     ) -> Self {
         debug_assert!(!declarations.is_empty());
@@ -321,7 +325,7 @@ impl CssKeyframeBlock {
     }
 
     #[must_use]
-    pub fn declarations(&self) -> &[CssDeclaration] {
+    pub const fn declarations(&self) -> &CssKeyframeDeclarationList {
         &self.declarations
     }
 
@@ -433,27 +437,32 @@ fn keyframe_selectors_have_duplicate_offsets(selectors: &[CssKeyframeSelector]) 
     false
 }
 
+/// The validated semantic aggregate of authored `@font-face` descriptor occurrences.
+///
+/// The required `font-family` and `src` occurrences and every optional occurrence retain their
+/// descriptor-name positions. Construction is crate-private, so callers cannot forge descriptor
+/// provenance or omit required slots. This aggregate does not match or load fonts.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssFontFaceDescriptors {
-    font_family: CssFontFaceFamily,
-    src: CssFontFaceSourceList,
-    font_weight: Option<CssFontFaceWeight>,
-    font_style: Option<CssFontFaceStyle>,
-    font_stretch: Option<CssFontFaceStretch>,
-    font_display: Option<CssFontDisplay>,
-    unicode_range: Option<CssUnicodeRangeList>,
+    font_family: CssDescriptorOccurrence<CssFontFaceFamily>,
+    src: CssDescriptorOccurrence<CssFontFaceSourceList>,
+    font_weight: Option<CssDescriptorOccurrence<CssFontFaceWeight>>,
+    font_style: Option<CssDescriptorOccurrence<CssFontFaceStyle>>,
+    font_stretch: Option<CssDescriptorOccurrence<CssFontFaceStretch>>,
+    font_display: Option<CssDescriptorOccurrence<CssFontDisplay>>,
+    unicode_range: Option<CssDescriptorOccurrence<CssUnicodeRangeList>>,
 }
 
 impl CssFontFaceDescriptors {
     #[must_use]
-    pub fn try_new(
-        font_family: Option<CssFontFaceFamily>,
-        src: Option<CssFontFaceSourceList>,
-        font_weight: Option<CssFontFaceWeight>,
-        font_style: Option<CssFontFaceStyle>,
-        font_stretch: Option<CssFontFaceStretch>,
-        font_display: Option<CssFontDisplay>,
-        unicode_range: Option<CssUnicodeRangeList>,
+    pub(crate) fn try_new(
+        font_family: Option<CssDescriptorOccurrence<CssFontFaceFamily>>,
+        src: Option<CssDescriptorOccurrence<CssFontFaceSourceList>>,
+        font_weight: Option<CssDescriptorOccurrence<CssFontFaceWeight>>,
+        font_style: Option<CssDescriptorOccurrence<CssFontFaceStyle>>,
+        font_stretch: Option<CssDescriptorOccurrence<CssFontFaceStretch>>,
+        font_display: Option<CssDescriptorOccurrence<CssFontDisplay>>,
+        unicode_range: Option<CssDescriptorOccurrence<CssUnicodeRangeList>>,
     ) -> Option<Self> {
         Some(Self {
             font_family: font_family?,
@@ -467,38 +476,87 @@ impl CssFontFaceDescriptors {
     }
 
     #[must_use]
-    pub const fn font_family(&self) -> &CssFontFaceFamily {
+    /// Returns the required authored `font-family` occurrence.
+    pub const fn font_family(&self) -> &CssDescriptorOccurrence<CssFontFaceFamily> {
         &self.font_family
     }
 
     #[must_use]
-    pub const fn src(&self) -> &CssFontFaceSourceList {
+    /// Returns the required authored `src` occurrence.
+    pub const fn src(&self) -> &CssDescriptorOccurrence<CssFontFaceSourceList> {
         &self.src
     }
 
     #[must_use]
-    pub const fn font_weight(&self) -> Option<&CssFontFaceWeight> {
+    /// Returns the optional authored `font-weight` occurrence.
+    pub const fn font_weight(&self) -> Option<&CssDescriptorOccurrence<CssFontFaceWeight>> {
         self.font_weight.as_ref()
     }
 
     #[must_use]
-    pub const fn font_style(&self) -> Option<&CssFontFaceStyle> {
+    /// Returns the optional authored `font-style` occurrence.
+    pub const fn font_style(&self) -> Option<&CssDescriptorOccurrence<CssFontFaceStyle>> {
         self.font_style.as_ref()
     }
 
     #[must_use]
-    pub const fn font_stretch(&self) -> Option<&CssFontFaceStretch> {
+    /// Returns the optional authored `font-stretch` occurrence.
+    pub const fn font_stretch(&self) -> Option<&CssDescriptorOccurrence<CssFontFaceStretch>> {
         self.font_stretch.as_ref()
     }
 
     #[must_use]
-    pub const fn font_display(&self) -> Option<CssFontDisplay> {
-        self.font_display
+    /// Returns the optional authored `font-display` occurrence.
+    pub const fn font_display(&self) -> Option<&CssDescriptorOccurrence<CssFontDisplay>> {
+        self.font_display.as_ref()
     }
 
     #[must_use]
-    pub const fn unicode_range(&self) -> Option<&CssUnicodeRangeList> {
+    /// Returns the optional authored `unicode-range` occurrence.
+    pub const fn unicode_range(&self) -> Option<&CssDescriptorOccurrence<CssUnicodeRangeList>> {
         self.unicode_range.as_ref()
+    }
+}
+
+/// A parser-produced authored `@font-face` descriptor value and its semantic name position.
+///
+/// The private fields preserve the coupling between a validated descriptor value and the source
+/// position of its descriptor-name start. Construction is parser-owned, so callers cannot forge
+/// provenance. This occurrence does not apply descriptor matching or load font resources.
+///
+/// ```compile_fail
+/// use surgeist_css::{CssDescriptorOccurrence, CssFontDisplay};
+/// let _ = CssDescriptorOccurrence { value: CssFontDisplay::Swap, position: todo!() };
+/// ```
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssDescriptorOccurrence<T> {
+    value: T,
+    position: CssSourcePosition,
+}
+
+impl<T> CssDescriptorOccurrence<T> {
+    pub(crate) const fn new(value: T, position: CssSourcePosition) -> Self {
+        Self { value, position }
+    }
+
+    /// Returns the typed authored descriptor value.
+    #[must_use]
+    pub const fn value(&self) -> &T {
+        &self.value
+    }
+
+    /// Returns the semantic source position at the descriptor-name start.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+}
+
+impl<T> std::ops::Deref for CssDescriptorOccurrence<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.value()
     }
 }
 
@@ -1225,10 +1283,14 @@ pub enum CssScopedRule {
     Scope(CssScopeRule),
 }
 
+/// A scoped authored style rule whose declarations passed the ordinary declaration boundary.
+///
+/// The private collection preserves order and importance without applying scope matching, selector
+/// matching, cascade, substitution, or contextual resolution.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssScopedStyleRule {
     selectors: CssScopedStyleSelectorList,
-    declarations: Vec<CssDeclaration>,
+    declarations: CssDeclarationList,
 }
 
 impl CssScopedStyleRule {
@@ -1236,7 +1298,7 @@ impl CssScopedStyleRule {
     #[allow(dead_code)] // Staged for @scope parser construction.
     pub(crate) fn new(
         selectors: CssScopedStyleSelectorList,
-        declarations: Vec<CssDeclaration>,
+        declarations: CssDeclarationList,
     ) -> Self {
         Self {
             selectors,
@@ -1250,7 +1312,7 @@ impl CssScopedStyleRule {
     }
 
     #[must_use]
-    pub fn declarations(&self) -> &[CssDeclaration] {
+    pub const fn declarations(&self) -> &CssDeclarationList {
         &self.declarations
     }
 }
@@ -1900,15 +1962,19 @@ impl CssQueryLength {
     }
 }
 
+/// An authored style rule with an ordered validated ordinary declaration collection.
+///
+/// Declarations retain their importance and semantic positions. This syntax node does not match
+/// selectors, apply cascade, substitute variables, or resolve contextual values.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssStyleRule {
     selector: CssSelector,
-    declarations: Vec<CssDeclaration>,
+    declarations: CssDeclarationList,
 }
 
 impl CssStyleRule {
     #[must_use]
-    pub(crate) fn new(selector: CssSelector, declarations: Vec<CssDeclaration>) -> Self {
+    pub(crate) fn new(selector: CssSelector, declarations: CssDeclarationList) -> Self {
         Self {
             selector,
             declarations,
@@ -1921,37 +1987,133 @@ impl CssStyleRule {
     }
 
     #[must_use]
-    pub fn declarations(&self) -> &[CssDeclaration] {
+    pub const fn declarations(&self) -> &CssDeclarationList {
         &self.declarations
     }
 }
 
-/// A parser-produced declaration in the authored CSS syntax phase.
+/// An ordered parser-produced collection of ordinary authored declarations.
 ///
-/// Its private fields couple a known property to its schema-selected value type, or a custom name
-/// to its authored custom value, and retain the semantic start position. Construction is
-/// parser-owned: callers cannot forge a source position or create a property/value mismatch.
-///
-/// ```compile_fail
-/// use surgeist_css::{CssDeclaredValue, CssKnownDeclaration, CssOpacity};
-/// let opacity = CssOpacity::try_new(0.5).unwrap();
-/// let _ = CssKnownDeclaration::Width(CssDeclaredValue::Value(opacity));
-/// ```
+/// Private construction ensures every element has passed the ordinary declaration boundary and
+/// carries semantic source provenance. The collection is read-only and performs no cascade,
+/// substitution, selector matching, or contextual resolution.
 ///
 /// ```compile_fail
-/// use surgeist_css::CssDeclaration;
-/// let _ = CssDeclaration { body: todo!(), position: todo!() };
+/// use surgeist_css::CssDeclarationList;
+/// let _ = CssDeclarationList { declarations: Vec::new() };
 /// ```
-///
-/// This authored node does not apply importance, cascade, substitution, or contextual resolution.
 #[derive(Clone, Debug, PartialEq)]
-pub struct CssDeclaration {
+pub struct CssDeclarationList {
+    declarations: Vec<CssDeclaration>,
+}
+
+impl CssDeclarationList {
+    pub(crate) const fn new(declarations: Vec<CssDeclaration>) -> Self {
+        Self { declarations }
+    }
+
+    /// Returns the declarations in authored order.
+    #[must_use]
+    pub fn as_slice(&self) -> &[CssDeclaration] {
+        &self.declarations
+    }
+
+    /// Iterates over declarations in authored order.
+    pub fn iter(&self) -> std::slice::Iter<'_, CssDeclaration> {
+        self.declarations.iter()
+    }
+
+    /// Returns the number of declarations.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.declarations.len()
+    }
+
+    /// Returns whether no declarations were retained.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.declarations.is_empty()
+    }
+}
+
+impl std::ops::Deref for CssDeclarationList {
+    type Target = [CssDeclaration];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+/// An ordered parser-produced collection of keyframe declarations.
+///
+/// Its distinct element type makes importance unavailable in keyframe syntax while preserving
+/// property coupling and semantic source positions. Construction is parser-owned; this collection
+/// does not run animation interpolation, cascade, or substitution.
+///
+/// ```compile_fail
+/// use surgeist_css::CssKeyframeDeclarationList;
+/// let _ = CssKeyframeDeclarationList { declarations: Vec::new() };
+/// ```
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssKeyframeDeclarationList {
+    declarations: Vec<CssKeyframeDeclaration>,
+}
+
+impl CssKeyframeDeclarationList {
+    pub(crate) const fn new(declarations: Vec<CssKeyframeDeclaration>) -> Self {
+        Self { declarations }
+    }
+
+    /// Returns keyframe declarations in authored order.
+    #[must_use]
+    pub fn as_slice(&self) -> &[CssKeyframeDeclaration] {
+        &self.declarations
+    }
+
+    /// Iterates over keyframe declarations in authored order.
+    pub fn iter(&self) -> std::slice::Iter<'_, CssKeyframeDeclaration> {
+        self.declarations.iter()
+    }
+
+    /// Returns the number of keyframe declarations.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.declarations.len()
+    }
+
+    /// Returns whether no keyframe declarations were retained.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.declarations.is_empty()
+    }
+}
+
+impl std::ops::Deref for CssKeyframeDeclarationList {
+    type Target = [CssKeyframeDeclaration];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+/// A parser-produced declaration in the authored keyframe syntax phase.
+///
+/// The private fields retain property/value coupling and the property-name position. Keyframe
+/// grammar rejects declaration importance, so this type intentionally has no importance field or
+/// accessor. It does not interpolate, apply, cascade, or resolve the authored value.
+///
+/// ```compile_fail
+/// let sheet = surgeist_css::parse_sheet("@keyframes x { from { opacity: 0 } }").unwrap();
+/// let surgeist_css::CssRule::Keyframes(rule) = &sheet.rules()[0] else { unreachable!() };
+/// let _ = rule.blocks()[0].declarations().as_slice()[0].importance();
+/// ```
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssKeyframeDeclaration {
     body: CssDeclarationBody,
     position: CssSourcePosition,
 }
 
-impl CssDeclaration {
-    #[must_use]
+impl CssKeyframeDeclaration {
     pub(crate) const fn new(body: CssDeclarationBody, position: CssSourcePosition) -> Self {
         Self { body, position }
     }
@@ -1987,6 +2149,116 @@ impl CssDeclaration {
             CssDeclarationBody::Known(known) => CssPropertyNameRef::Known(known.property()),
             CssDeclarationBody::Custom(custom) => CssPropertyNameRef::Custom(custom.name()),
         }
+    }
+
+    /// Returns the semantic source position at the property-name start.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+
+    #[cfg(test)]
+    pub(crate) fn property(&self) -> crate::test_support::CssProperty {
+        crate::test_support::declaration_body_property(&self.body)
+    }
+}
+
+/// The complete importance state of an ordinary authored declaration.
+///
+/// Importance is syntactically recognized at the declaration boundary and is not part of the
+/// property value. Downstream cascade policy may consume it, but this crate does not apply cascade.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum CssImportance {
+    /// No terminal importance annotation was authored.
+    #[default]
+    Normal,
+    /// Exactly one valid terminal `!important` annotation was authored.
+    Important,
+}
+
+/// A parser-produced declaration in the authored CSS syntax phase.
+///
+/// Its private fields couple a known property to its schema-selected value type, or a custom name
+/// to its authored custom value, and retain the semantic start position. Construction is
+/// parser-owned: callers cannot forge a source position or create a property/value mismatch.
+///
+/// ```compile_fail
+/// use surgeist_css::{CssDeclaredValue, CssKnownDeclaration, CssOpacity};
+/// let opacity = CssOpacity::try_new(0.5).unwrap();
+/// let _ = CssKnownDeclaration::Width(CssDeclaredValue::Value(opacity));
+/// ```
+///
+/// ```compile_fail
+/// use surgeist_css::CssDeclaration;
+/// let _ = CssDeclaration { body: todo!(), importance: todo!(), position: todo!() };
+/// ```
+///
+/// This authored node records importance but does not apply cascade, substitution, or contextual
+/// resolution.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssDeclaration {
+    body: CssDeclarationBody,
+    importance: CssImportance,
+    position: CssSourcePosition,
+}
+
+impl CssDeclaration {
+    #[must_use]
+    #[cfg(test)]
+    pub(crate) const fn new(body: CssDeclarationBody, position: CssSourcePosition) -> Self {
+        Self::new_with_importance(body, CssImportance::Normal, position)
+    }
+
+    #[must_use]
+    pub(crate) const fn new_with_importance(
+        body: CssDeclarationBody,
+        importance: CssImportance,
+        position: CssSourcePosition,
+    ) -> Self {
+        Self {
+            body,
+            importance,
+            position,
+        }
+    }
+
+    /// Returns the property-coupled authored body.
+    #[must_use]
+    pub const fn body(&self) -> &CssDeclarationBody {
+        &self.body
+    }
+
+    /// Returns the known-property declaration, or `None` for a custom declaration.
+    #[must_use]
+    pub const fn known(&self) -> Option<&CssKnownDeclaration> {
+        match &self.body {
+            CssDeclarationBody::Known(known) => Some(known),
+            CssDeclarationBody::Custom(_) => None,
+        }
+    }
+
+    /// Returns the custom declaration, or `None` for a known declaration.
+    #[must_use]
+    pub const fn custom(&self) -> Option<&CssCustomDeclaration> {
+        match &self.body {
+            CssDeclarationBody::Known(_) => None,
+            CssDeclarationBody::Custom(custom) => Some(custom),
+        }
+    }
+
+    /// Returns a borrowed semantic property-name view derived from the active body.
+    #[must_use]
+    pub const fn property_name(&self) -> CssPropertyNameRef<'_> {
+        match &self.body {
+            CssDeclarationBody::Known(known) => CssPropertyNameRef::Known(known.property()),
+            CssDeclarationBody::Custom(custom) => CssPropertyNameRef::Custom(custom.name()),
+        }
+    }
+
+    /// Returns the syntactically recognized importance annotation state.
+    #[must_use]
+    pub const fn importance(&self) -> CssImportance {
+        self.importance
     }
 
     /// Returns the semantic source position at the authored property-name start.

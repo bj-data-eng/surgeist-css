@@ -45,7 +45,7 @@ pub(super) fn parse_style_rule_block<'i, 't>(
         for selector in &parent_selectors {
             rules.push(CssRule::Style(CssStyleRule::new(
                 selector.clone(),
-                Vec::new(),
+                CssDeclarationList::new(Vec::new()),
             )));
         }
     }
@@ -65,7 +65,7 @@ fn flush_declarations(
     for selector in parent_selectors {
         rules.push(CssRule::Style(CssStyleRule::new(
             selector.clone(),
-            declaration_buffer.clone(),
+            CssDeclarationList::new(declaration_buffer.clone()),
         )));
     }
     declaration_buffer.clear();

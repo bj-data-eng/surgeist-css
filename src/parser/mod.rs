@@ -24,8 +24,8 @@ mod values;
 mod variables;
 
 use cssparser::{
-    AtRuleParser, CowRcStr, DeclarationParser, ParseError, Parser, ParserInput, ParserState,
-    QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, StyleSheetParser,
+    AtRuleParser, CowRcStr, DeclarationParser, Delimiter, ParseError, Parser, ParserInput,
+    ParserState, QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, StyleSheetParser,
     match_ignore_ascii_case,
 };
 
@@ -55,14 +55,13 @@ use variables::{
 
 use crate::error::{
     Error, Result, basic, from_rule_parse_error, invalid_at_rule_block, invalid_at_rule_placement,
-    invalid_syntax, property_name_error, unsupported_value, with_at_rule_prelude_context,
-    with_declaration_annotation_context, with_media_query_context, with_property_context,
+    invalid_custom_declaration_annotation, invalid_descriptor_annotation,
+    invalid_known_declaration_annotation, invalid_syntax, property_name_error, unsupported_value,
+    with_at_rule_prelude_context, with_media_query_context, with_property_context,
 };
 use crate::properties::{CssOverflowPropertyValue, property_schema};
 use crate::syntax::*;
-use crate::validation::{PropertyNameStatus, classify_property_name, parse_global_keyword};
-
-pub(crate) use crate::validation::property_for_supported_name;
+use crate::validation::parse_global_keyword;
 
 macro_rules! define_property_dispatch {
     ($input:ident;
@@ -846,13 +845,13 @@ impl<'i> QualifiedRuleParser<'i> for ScopedRuleParser {
 
 fn parse_declaration_block<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<Vec<CssDeclaration>, ParseError<'i, Error>> {
+) -> std::result::Result<CssDeclarationList, ParseError<'i, Error>> {
     let mut declarations = Vec::new();
     let mut declaration_parser = StrictDeclarationParser;
     for declaration in RuleBodyParser::new(input, &mut declaration_parser) {
         declarations.push(declaration.map_err(|(error, _)| error)?);
     }
-    Ok(declarations)
+    Ok(CssDeclarationList::new(declarations))
 }
 
 struct StrictDeclarationParser;
@@ -889,89 +888,202 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
         input: &mut Parser<'i, 't>,
         declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
-        let position = crate::source::CssSourcePosition::from_cssparser(
-            declaration_start.position(),
-            declaration_start.source_location(),
-        );
-        if name.starts_with("--") {
-            let Some(custom_name) = parse_custom_property_name(name.as_ref()) else {
-                return Err(property_name_error(
-                    declaration_start.source_location(),
-                    name.as_ref(),
-                ));
-            };
-            let value = parse_custom_property_value(input)
-                .map_err(|error| with_property_context(error, name.as_ref()))?;
-            return Ok(CssDeclaration::new(
-                CssDeclarationBody::Custom(CssCustomDeclaration::new(custom_name, value)),
-                position,
-            ));
-        }
-
-        if let Some(supported_property) = property_for_supported_name(name.as_ref()) {
-            let state = input.state();
-            let (authored, has_substitution) = collect_authored_declaration_value(input)
-                .map_err(|error| with_property_context(error, name.as_ref()))?;
-            if has_substitution {
-                return Ok(CssDeclaration::new(
-                    CssDeclarationBody::Known(CssKnownDeclaration::from_substitution_dependent(
-                        supported_property,
-                        CssSubstitutionDependentValue::new(authored),
-                    )),
-                    position,
-                ));
-            }
-            input.reset(&state);
-        }
-
-        let state = input.state();
-        if let Ok(ident) = input.expect_ident_cloned() {
-            if let Some(keyword) = parse_global_keyword(&ident) {
-                match classify_property_name(name.as_ref()) {
-                    PropertyNameStatus::Supported => {
-                        if !input.is_exhausted() {
-                            return Err(with_property_context(
-                                invalid_syntax(
-                                    input.current_source_location(),
-                                    "CSS global keyword must be the entire declaration value",
-                                ),
-                                name.as_ref(),
-                            ));
-                        }
-                        return Ok(CssDeclaration::new(
-                            CssDeclarationBody::Known(CssKnownDeclaration::from_global(
-                                property_for_supported_name(name.as_ref())
-                                    .expect("supported property has CssKnownProperty"),
-                                keyword,
-                            )),
-                            position,
-                        ));
-                    }
-                    PropertyNameStatus::KnownUnsupported | PropertyNameStatus::Unknown => {
-                        input.reset(&state);
-                        return Err(property_name_error(
-                            declaration_start.source_location(),
-                            name.as_ref(),
-                        ));
-                    }
-                }
-            }
-            input.reset(&state);
-        } else {
-            input.reset(&state);
-        }
-        let known_property =
-            crate::CssKnownProperty::from_name(name.as_ref()).ok_or_else(|| {
-                property_name_error(declaration_start.source_location(), name.as_ref())
-            })?;
-        let declaration = parse_known_property_value(known_property, input)
-            .map_err(|error| with_property_context(error, name.as_ref()))?;
-        input.expect_exhausted().map_err(|error| {
-            with_declaration_annotation_context(error.into(), known_property, false)
-        })?;
-        Ok(CssDeclaration::new(
-            CssDeclarationBody::Known(declaration),
-            position,
+        let parsed =
+            parse_declaration_core(DeclarationMode::Ordinary, name, input, declaration_start)?;
+        Ok(CssDeclaration::new_with_importance(
+            parsed.body,
+            parsed.importance,
+            parsed.position,
         ))
     }
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum DeclarationMode {
+    Ordinary,
+    Keyframe,
+}
+
+pub(super) struct ParsedDeclaration {
+    pub(super) body: CssDeclarationBody,
+    importance: CssImportance,
+    pub(super) position: crate::source::CssSourcePosition,
+}
+
+enum DeclarationBoundaryContext {
+    OrdinaryKnown(crate::CssKnownProperty),
+    OrdinaryCustom(CssCustomPropertyName),
+    KeyframeKnown(crate::CssKnownProperty),
+    KeyframeCustom(CssCustomPropertyName),
+    Descriptor {
+        at_rule: &'static str,
+        descriptor: &'static str,
+    },
+}
+
+pub(super) fn parse_declaration_core<'i, 't>(
+    mode: DeclarationMode,
+    name: CowRcStr<'i>,
+    input: &mut Parser<'i, 't>,
+    declaration_start: &ParserState,
+) -> std::result::Result<ParsedDeclaration, ParseError<'i, Error>> {
+    let position = crate::source::CssSourcePosition::from_cssparser(
+        declaration_start.position(),
+        declaration_start.source_location(),
+    );
+    if name.starts_with("--") {
+        let Some(custom_name) = parse_custom_property_name(name.as_ref()) else {
+            return Err(property_name_error(
+                declaration_start.source_location(),
+                name.as_ref(),
+            ));
+        };
+        let context = match mode {
+            DeclarationMode::Ordinary => {
+                DeclarationBoundaryContext::OrdinaryCustom(custom_name.clone())
+            }
+            DeclarationMode::Keyframe => {
+                DeclarationBoundaryContext::KeyframeCustom(custom_name.clone())
+            }
+        };
+        let (value, importance) = parse_declaration_boundary(input, &context, |input| {
+            parse_custom_property_value(input)
+                .map_err(|error| with_property_context(error, name.as_ref()))
+        })?;
+        return Ok(ParsedDeclaration {
+            body: CssDeclarationBody::Custom(CssCustomDeclaration::new(custom_name, value)),
+            importance,
+            position,
+        });
+    }
+
+    let known_property = crate::CssKnownProperty::from_name(name.as_ref())
+        .ok_or_else(|| property_name_error(declaration_start.source_location(), name.as_ref()))?;
+    let context = match mode {
+        DeclarationMode::Ordinary => DeclarationBoundaryContext::OrdinaryKnown(known_property),
+        DeclarationMode::Keyframe => DeclarationBoundaryContext::KeyframeKnown(known_property),
+    };
+    let (body, importance) = parse_declaration_boundary(input, &context, |input| {
+        parse_known_declaration_body(name.as_ref(), known_property, input)
+    })?;
+    Ok(ParsedDeclaration {
+        body,
+        importance,
+        position,
+    })
+}
+
+fn parse_known_declaration_body<'i, 't>(
+    name: &str,
+    known_property: crate::CssKnownProperty,
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssDeclarationBody, ParseError<'i, Error>> {
+    let state = input.state();
+    let (authored, has_substitution) = collect_authored_declaration_value(input)
+        .map_err(|error| with_property_context(error, name))?;
+    if has_substitution {
+        return Ok(CssDeclarationBody::Known(
+            CssKnownDeclaration::from_substitution_dependent(
+                known_property,
+                CssSubstitutionDependentValue::new(authored),
+            ),
+        ));
+    }
+    input.reset(&state);
+
+    let state = input.state();
+    if let Ok(ident) = input.expect_ident_cloned() {
+        if let Some(keyword) = parse_global_keyword(&ident) {
+            if !input.is_exhausted() {
+                return Err(with_property_context(
+                    invalid_syntax(
+                        input.current_source_location(),
+                        "CSS global keyword must be the entire declaration value",
+                    ),
+                    name,
+                ));
+            }
+            return Ok(CssDeclarationBody::Known(CssKnownDeclaration::from_global(
+                known_property,
+                keyword,
+            )));
+        }
+        input.reset(&state);
+    } else {
+        input.reset(&state);
+    }
+
+    let declaration = parse_known_property_value(known_property, input)
+        .map_err(|error| with_property_context(error, name))?;
+    input
+        .expect_exhausted()
+        .map_err(|error| with_property_context(error.into(), name))?;
+    Ok(CssDeclarationBody::Known(declaration))
+}
+
+fn parse_declaration_boundary<'i, 't, T>(
+    input: &mut Parser<'i, 't>,
+    context: &DeclarationBoundaryContext,
+    parse_value: impl for<'tt> FnOnce(
+        &mut Parser<'i, 'tt>,
+    ) -> std::result::Result<T, ParseError<'i, Error>>,
+) -> std::result::Result<(T, CssImportance), ParseError<'i, Error>> {
+    let value = input.parse_until_before(Delimiter::Bang, parse_value)?;
+    if input.is_exhausted() {
+        return Ok((value, CssImportance::Normal));
+    }
+
+    let bang_location = input.current_source_location();
+    let annotation_valid = input.expect_delim('!').is_ok()
+        && input.expect_ident_matching("important").is_ok()
+        && input.is_exhausted();
+    let ordinary = matches!(
+        context,
+        DeclarationBoundaryContext::OrdinaryKnown(_)
+            | DeclarationBoundaryContext::OrdinaryCustom(_)
+    );
+    if annotation_valid && ordinary {
+        Ok((value, CssImportance::Important))
+    } else {
+        Err(invalid_annotation_for_context(bang_location, context))
+    }
+}
+
+fn invalid_annotation_for_context<'i>(
+    location: cssparser::SourceLocation,
+    context: &DeclarationBoundaryContext,
+) -> ParseError<'i, Error> {
+    match context {
+        DeclarationBoundaryContext::OrdinaryKnown(property) => {
+            invalid_known_declaration_annotation(location, *property, false)
+        }
+        DeclarationBoundaryContext::OrdinaryCustom(property) => {
+            invalid_custom_declaration_annotation(location, property, false)
+        }
+        DeclarationBoundaryContext::KeyframeKnown(property) => {
+            invalid_known_declaration_annotation(location, *property, true)
+        }
+        DeclarationBoundaryContext::KeyframeCustom(property) => {
+            invalid_custom_declaration_annotation(location, property, true)
+        }
+        DeclarationBoundaryContext::Descriptor {
+            at_rule,
+            descriptor,
+        } => invalid_descriptor_annotation(location, at_rule, descriptor),
+    }
+}
+
+pub(super) fn parse_descriptor_boundary<'i, 't, T>(
+    input: &mut Parser<'i, 't>,
+    at_rule: &'static str,
+    descriptor: &'static str,
+    parse_value: impl for<'tt> FnOnce(
+        &mut Parser<'i, 'tt>,
+    ) -> std::result::Result<T, ParseError<'i, Error>>,
+) -> std::result::Result<T, ParseError<'i, Error>> {
+    let context = DeclarationBoundaryContext::Descriptor {
+        at_rule,
+        descriptor,
+    };
+    parse_declaration_boundary(input, &context, parse_value).map(|(value, _)| value)
 }

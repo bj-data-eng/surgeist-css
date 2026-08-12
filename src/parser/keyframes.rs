@@ -4,11 +4,11 @@ use cssparser::{
     match_ignore_ascii_case,
 };
 
-use super::StrictDeclarationParser;
 use super::values::parse_custom_ident_from_str_at;
+use super::{DeclarationMode, parse_declaration_core};
 use crate::error::{
-    Error, basic, invalid_at_rule_body, invalid_qualified_rule, make_keyframe_annotation_context,
-    unsupported_value, unsupported_value_at,
+    Error, basic, invalid_at_rule_body, invalid_qualified_rule, unsupported_value,
+    unsupported_value_at,
 };
 use crate::syntax::*;
 
@@ -94,7 +94,7 @@ impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser {
 
         CssKeyframeBlock::try_new(
             selectors,
-            declarations,
+            CssKeyframeDeclarationList::new(declarations),
             crate::source::CssSourcePosition::from_cssparser(
                 start.position(),
                 start.source_location(),
@@ -171,17 +171,17 @@ struct KeyframeDeclarationParser;
 
 impl<'i> AtRuleParser<'i> for KeyframeDeclarationParser {
     type Prelude = ();
-    type AtRule = CssDeclaration;
+    type AtRule = CssKeyframeDeclaration;
     type Error = Error;
 }
 
 impl<'i> QualifiedRuleParser<'i> for KeyframeDeclarationParser {
     type Prelude = ();
-    type QualifiedRule = CssDeclaration;
+    type QualifiedRule = CssKeyframeDeclaration;
     type Error = Error;
 }
 
-impl<'i> RuleBodyItemParser<'i, CssDeclaration, Error> for KeyframeDeclarationParser {
+impl<'i> RuleBodyItemParser<'i, CssKeyframeDeclaration, Error> for KeyframeDeclarationParser {
     fn parse_declarations(&self) -> bool {
         true
     }
@@ -192,7 +192,7 @@ impl<'i> RuleBodyItemParser<'i, CssDeclaration, Error> for KeyframeDeclarationPa
 }
 
 impl<'i> DeclarationParser<'i> for KeyframeDeclarationParser {
-    type Declaration = CssDeclaration;
+    type Declaration = CssKeyframeDeclaration;
     type Error = Error;
 
     fn parse_value<'t>(
@@ -201,11 +201,8 @@ impl<'i> DeclarationParser<'i> for KeyframeDeclarationParser {
         input: &mut Parser<'i, 't>,
         declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
-        StrictDeclarationParser
-            .parse_value(name, input, declaration_start)
-            .map_err(|mut error| {
-                make_keyframe_annotation_context(&mut error);
-                error
-            })
+        let parsed =
+            parse_declaration_core(DeclarationMode::Keyframe, name, input, declaration_start)?;
+        Ok(CssKeyframeDeclaration::new(parsed.body, parsed.position))
     }
 }

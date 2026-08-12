@@ -339,19 +339,26 @@ fn keyframes_rule(rule: &CssRule) -> &CssKeyframesRule {
     }
 }
 
+fn descriptor_occurrence<T>(value: T) -> CssDescriptorOccurrence<T> {
+    CssDescriptorOccurrence::new(value, source_position(0, 0))
+}
+
 #[test]
 fn keyframes_rule_accessors_expose_authored_structure() {
     let name = CssKeyframesName::Ident(CssCustomIdent::new("fade"));
     let selector = CssKeyframeSelectorList::try_new(vec![CssKeyframeSelector::From]).unwrap();
-    let declaration = CssDeclaration::new(
+    let declaration = CssKeyframeDeclaration::new(
         CssDeclarationBody::Known(CssKnownDeclaration::Opacity(CssDeclaredValue::Value(
             CssOpacity::try_new(0.0).unwrap(),
         ))),
         source_position(1, 1),
     );
-    let block =
-        CssKeyframeBlock::try_new(selector, vec![declaration.clone()], source_position(2, 3))
-            .unwrap();
+    let block = CssKeyframeBlock::try_new(
+        selector,
+        CssKeyframeDeclarationList::new(vec![declaration.clone()]),
+        source_position(2, 3),
+    )
+    .unwrap();
     let rule = CssKeyframesRule::try_new(name, vec![block], source_position(1, 1)).unwrap();
 
     assert_eq!(
@@ -364,7 +371,7 @@ fn keyframes_rule_accessors_expose_authored_structure() {
     };
     assert_eq!(block.position(), source_position(2, 3));
     assert_eq!(block.selectors().selectors(), &[CssKeyframeSelector::From]);
-    assert_eq!(block.declarations(), &[declaration]);
+    assert_eq!(block.declarations().as_slice(), &[declaration]);
     assert_eq!(CssKeyframeSelector::From.offset().value().value(), 0.0);
     assert_eq!(CssKeyframeSelector::To.offset().value().value(), 100.0);
 }
@@ -515,7 +522,7 @@ fn keyframes_rule_parser_rejects_invalid_blocks() {
 fn keyframes_constructors_reject_invalid_states() {
     let location = source_position(1, 1);
     let name = CssKeyframesName::Ident(CssCustomIdent::new("fade"));
-    let declaration = CssDeclaration::new(
+    let declaration = CssKeyframeDeclaration::new(
         CssDeclarationBody::Known(CssKnownDeclaration::Opacity(CssDeclaredValue::Value(
             CssOpacity::try_new(1.0).unwrap(),
         ))),
@@ -537,7 +544,11 @@ fn keyframes_constructors_reject_invalid_states() {
         None
     );
     assert_eq!(
-        CssKeyframeBlock::try_new(from.clone(), Vec::new(), location),
+        CssKeyframeBlock::try_new(
+            from.clone(),
+            CssKeyframeDeclarationList::new(Vec::new()),
+            location,
+        ),
         None
     );
     assert_eq!(
@@ -545,9 +556,18 @@ fn keyframes_constructors_reject_invalid_states() {
         None
     );
 
-    let duplicate_a =
-        CssKeyframeBlock::try_new(from.clone(), vec![declaration.clone()], location).unwrap();
-    let duplicate_b = CssKeyframeBlock::try_new(from, vec![declaration], location).unwrap();
+    let duplicate_a = CssKeyframeBlock::try_new(
+        from.clone(),
+        CssKeyframeDeclarationList::new(vec![declaration.clone()]),
+        location,
+    )
+    .unwrap();
+    let duplicate_b = CssKeyframeBlock::try_new(
+        from,
+        CssKeyframeDeclarationList::new(vec![declaration]),
+        location,
+    )
+    .unwrap();
     assert_eq!(
         CssKeyframesRule::try_new(name, vec![duplicate_a, duplicate_b], location),
         None
@@ -598,7 +618,7 @@ fn layer_rule_models_preserve_authored_statement_and_block_shapes() {
 
     let nested = CssRule::Style(CssStyleRule::new(
         CssSelector::Class("button".to_owned()),
-        Vec::new(),
+        CssDeclarationList::new(Vec::new()),
     ));
     let block_location = source_position(4, 5);
     let named_block = CssLayerBlockRule::new(
@@ -647,7 +667,10 @@ fn scope_rule_model_keeps_scoped_selectors_and_rules_separate() {
         ))),
         source_position(6, 7),
     );
-    let style = CssScopedStyleRule::new(selectors.clone(), vec![declaration.clone()]);
+    let style = CssScopedStyleRule::new(
+        selectors.clone(),
+        CssDeclarationList::new(vec![declaration.clone()]),
+    );
     let scoped_rules = CssScopedRuleList::from_rules(vec![CssScopedRule::Style(style.clone())]);
     let location = source_position(5, 1);
     let scope = CssScopeRule::new(
@@ -664,7 +687,7 @@ fn scope_rule_model_keeps_scoped_selectors_and_rules_separate() {
         &[implicit_selector, relative_selector]
     );
     assert_eq!(style.selectors(), &selectors);
-    assert_eq!(style.declarations(), &[declaration]);
+    assert_eq!(style.declarations().as_slice(), &[declaration]);
     assert_eq!(scope.root(), Some(&root));
     assert_eq!(scope.limit(), Some(&limit));
     assert_eq!(scope.rules(), &scoped_rules);
@@ -722,7 +745,10 @@ fn scoped_group_rule_models_keep_scoped_children() {
             CssSelector::Class("label".to_owned()),
         )])
         .unwrap();
-    let child = CssScopedRule::Style(CssScopedStyleRule::new(child_selector, Vec::new()));
+    let child = CssScopedRule::Style(CssScopedStyleRule::new(
+        child_selector,
+        CssDeclarationList::new(Vec::new()),
+    ));
     let scoped_children = CssScopedRuleList::from_rules(vec![child.clone()]);
     let location = source_position(8, 9);
     let query = CssMediaQueryList::try_new(vec![CssMediaQuery::Typed(CssTypedMediaQuery::new(
@@ -1363,7 +1389,7 @@ fn single_declaration(input: &str) -> CssDeclaration {
         panic!("{input} should parse exactly one rule");
     };
     let rule = style_rule(rule);
-    let [declaration] = rule.declarations() else {
+    let [declaration] = rule.declarations().as_slice() else {
         panic!("{input} should parse exactly one declaration");
     };
     declaration.clone()
@@ -5141,38 +5167,59 @@ fn font_face_descriptor_collection_requires_family_and_src() {
     .unwrap();
 
     assert!(
-        CssFontFaceDescriptors::try_new(Some(family.clone()), None, None, None, None, None, None)
-            .is_none()
+        CssFontFaceDescriptors::try_new(
+            Some(descriptor_occurrence(family.clone())),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .is_none()
     );
     assert!(
-        CssFontFaceDescriptors::try_new(None, Some(src.clone()), None, None, None, None, None)
-            .is_none()
+        CssFontFaceDescriptors::try_new(
+            None,
+            Some(descriptor_occurrence(src.clone())),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .is_none()
     );
 
     let descriptors = CssFontFaceDescriptors::try_new(
-        Some(family.clone()),
-        Some(src.clone()),
-        Some(CssFontFaceWeight::try_range(400.0, 700.0).unwrap()),
-        Some(CssFontFaceStyle::Oblique(Some(
+        Some(descriptor_occurrence(family.clone())),
+        Some(descriptor_occurrence(src.clone())),
+        Some(descriptor_occurrence(
+            CssFontFaceWeight::try_range(400.0, 700.0).unwrap(),
+        )),
+        Some(descriptor_occurrence(CssFontFaceStyle::Oblique(Some(
             CssFontFaceObliqueRange::try_new(-10.0, Some(20.0)).unwrap(),
-        ))),
-        Some(CssFontFaceStretch::try_range_percent(75.0, 125.0).unwrap()),
-        Some(CssFontDisplay::Swap),
-        Some(
+        )))),
+        Some(descriptor_occurrence(
+            CssFontFaceStretch::try_range_percent(75.0, 125.0).unwrap(),
+        )),
+        Some(descriptor_occurrence(CssFontDisplay::Swap)),
+        Some(descriptor_occurrence(
             CssUnicodeRangeList::try_new(vec![CssUnicodeRange::try_new(0, 0x7f).unwrap()]).unwrap(),
-        ),
+        )),
     )
     .unwrap();
 
-    assert_eq!(descriptors.font_family(), &family);
-    assert_eq!(descriptors.src(), &src);
+    assert_eq!(descriptors.font_family().value(), &family);
+    assert_eq!(descriptors.src().value(), &src);
     assert_eq!(
         descriptors.font_weight().unwrap().start().value().value(),
         400.0
     );
     assert!(matches!(
         descriptors.font_style(),
-        Some(CssFontFaceStyle::Oblique(Some(_)))
+        Some(occurrence)
+            if matches!(occurrence.value(), CssFontFaceStyle::Oblique(Some(_)))
     ));
     assert_eq!(
         descriptors
@@ -5184,7 +5231,12 @@ fn font_face_descriptor_collection_requires_family_and_src() {
             .value(),
         125.0
     );
-    assert_eq!(descriptors.font_display(), Some(CssFontDisplay::Swap));
+    assert_eq!(
+        descriptors
+            .font_display()
+            .map(CssDescriptorOccurrence::value),
+        Some(&CssFontDisplay::Swap)
+    );
     assert_eq!(
         descriptors.unicode_range().unwrap().ranges(),
         &[CssUnicodeRange::try_new(0, 0x7f).unwrap()]
@@ -5317,17 +5369,19 @@ fn font_face_numeric_descriptors_enforce_invariants() {
 #[test]
 fn font_face_rule_accessors_expose_authored_structure() {
     let descriptors = CssFontFaceDescriptors::try_new(
-        Some(CssFontFaceFamily::try_new("Avenir Next").unwrap()),
-        Some(
+        Some(descriptor_occurrence(
+            CssFontFaceFamily::try_new("Avenir Next").unwrap(),
+        )),
+        Some(descriptor_occurrence(
             CssFontFaceSourceList::try_new(vec![CssFontFaceSource::Url(
                 CssFontFaceUrlSource::try_new("fonts/avenir.woff2", None, Vec::new()).unwrap(),
             )])
             .unwrap(),
-        ),
+        )),
         None,
-        Some(CssFontFaceStyle::Normal),
+        Some(descriptor_occurrence(CssFontFaceStyle::Normal)),
         None,
-        Some(CssFontDisplay::Auto),
+        Some(descriptor_occurrence(CssFontDisplay::Auto)),
         None,
     )
     .unwrap();
@@ -5378,8 +5432,16 @@ fn font_face_rule_parser_accepts_descriptor_block() {
             .value(),
         700.0
     );
-    assert_eq!(descriptors.font_style(), Some(&CssFontFaceStyle::Normal));
-    assert_eq!(descriptors.font_display(), Some(CssFontDisplay::Swap));
+    assert_eq!(
+        descriptors.font_style().map(CssDescriptorOccurrence::value),
+        Some(&CssFontFaceStyle::Normal)
+    );
+    assert_eq!(
+        descriptors
+            .font_display()
+            .map(CssDescriptorOccurrence::value),
+        Some(&CssFontDisplay::Swap)
+    );
     assert_eq!(
         descriptors.unicode_range().unwrap().ranges(),
         &[
@@ -5437,7 +5499,9 @@ fn font_face_rule_parser_accepts_strict_numeric_ranges() {
     };
 
     let descriptors = font_face_rule(rule).descriptors();
-    let Some(CssFontFaceStyle::Oblique(Some(oblique))) = descriptors.font_style() else {
+    let Some(CssFontFaceStyle::Oblique(Some(oblique))) =
+        descriptors.font_style().map(CssDescriptorOccurrence::value)
+    else {
         panic!("expected oblique range");
     };
     assert_eq!(oblique.start_degrees().value(), -10.0);
@@ -5596,7 +5660,7 @@ fn container_rule_accessors_expose_authored_structure() {
         parse_container_condition_for_test("(inline-size > 30rem)").expect("condition parses");
     let nested = CssRule::Style(CssStyleRule::new(
         CssSelector::Class("card".to_owned()),
-        Vec::new(),
+        CssDeclarationList::new(Vec::new()),
     ));
     let location = source_position(4, 9);
     let rule = CssContainerRule::new(

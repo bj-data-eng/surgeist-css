@@ -166,23 +166,31 @@ impl PartialEq<&CssValue> for CssValue {
 }
 
 pub(crate) fn declaration_property(declaration: &CssDeclaration) -> CssProperty {
+    declaration_body_property(declaration.body())
+}
+
+pub(crate) fn declaration_body_property(body: &CssDeclarationBody) -> CssProperty {
     #[expect(
         unreachable_patterns,
         reason = "crate tests intentionally demonstrate wildcard-compatible public enum matching"
     )]
-    match declaration.property_name() {
-        CssPropertyNameRef::Known(property) => property.into(),
-        CssPropertyNameRef::Custom(name) => CssProperty::Custom(name.clone()),
-        _ => unreachable!("test adapter saw a future property-name branch"),
+    match body {
+        CssDeclarationBody::Known(known) => known.property().into(),
+        CssDeclarationBody::Custom(custom) => CssProperty::Custom(custom.name().clone()),
+        _ => unreachable!("test adapter saw a future declaration-body branch"),
     }
 }
 
 pub(crate) fn declaration_value(declaration: &CssDeclaration) -> CssValue {
+    declaration_body_value(declaration.body())
+}
+
+pub(crate) fn declaration_body_value(body: &CssDeclarationBody) -> CssValue {
     #[expect(
         unreachable_patterns,
         reason = "crate tests intentionally demonstrate wildcard-compatible public enum matching"
     )]
-    match declaration.body() {
+    match body {
         CssDeclarationBody::Known(known) => known_test_value(known),
         CssDeclarationBody::Custom(custom) =>
         {
@@ -2053,7 +2061,7 @@ fn only_declaration(sheet: &CssSheet, input: &str) -> CssDeclaration {
         panic!("{input} should parse exactly one rule");
     };
     let rule = style_rule(rule);
-    let [declaration] = rule.declarations() else {
+    let [declaration] = rule.declarations().as_slice() else {
         panic!("{input} should parse exactly one declaration");
     };
     declaration.clone()

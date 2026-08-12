@@ -9,7 +9,7 @@ fn declarations(source: &str) -> Vec<surgeist_css::CssDeclaration> {
     let [CssRule::Style(rule)] = sheet.rules() else {
         panic!("expected one style rule");
     };
-    rule.declarations().to_vec()
+    rule.declarations().as_slice().to_vec()
 }
 
 fn custom_value(

@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use surgeist_css::{CssErrorCode, CssKnownProperty, CssRule, ErrorKind, parse_sheet};
+use surgeist_css::{
+    CssErrorCode, CssImportance, CssKnownProperty, CssRule, ErrorKind, parse_sheet,
+};
 
 const FROZEN_PROPERTIES: &[&str] = &[
     "all",
@@ -458,6 +460,32 @@ fn property_schema_parser_identity_matches_every_frozen_name() {
             vector.authored_value
         );
 
+        let important_value = if name == "all" {
+            "inherit"
+        } else {
+            vector.authored_value
+        };
+        let important_source = format!(
+            ".test {{ {}: {} !important; }}",
+            name.to_ascii_uppercase(),
+            important_value
+        );
+        let important_sheet = parse_sheet(&important_source).unwrap_or_else(|error| {
+            panic!("`{name}: {important_value} !important` must parse: {error}")
+        });
+        let [CssRule::Style(important_rule)] = important_sheet.rules() else {
+            panic!("`{name}` importance path should produce one style rule");
+        };
+        let [important_declaration] = important_rule.declarations().as_slice() else {
+            panic!("`{name}` importance path should produce one declaration");
+        };
+        assert_eq!(important_declaration.importance(), CssImportance::Important);
+        assert_eq!(
+            important_declaration.known().map(|known| known.property()),
+            CssKnownProperty::from_name(name),
+            "`{name}` importance path diverged from schema identity",
+        );
+
         if name == "all" {
             let error = parse_sheet(&source).expect_err("`all` ordinary value must be rejected");
             assert_eq!(error.code(), CssErrorCode::InvalidPropertyValue);
@@ -480,7 +508,7 @@ fn property_schema_parser_identity_matches_every_frozen_name() {
         let [CssRule::Style(rule)] = sheet.rules() else {
             panic!("`{name}` should produce one style rule");
         };
-        let [declaration] = rule.declarations() else {
+        let [declaration] = rule.declarations().as_slice() else {
             panic!("`{name}` should produce one declaration");
         };
         assert_eq!(

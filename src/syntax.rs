@@ -2021,9 +2021,15 @@ pub enum CssDeclarationBody {
 
 /// A parser-produced authored custom-property declaration.
 ///
-/// Its private fields prevent attaching the custom value to a known property name. T2 preserves
-/// the strict parser's existing authored-value behavior; it does not substitute references,
-/// compute cascade, or validate a post-substitution value.
+/// Its private fields prevent attaching the custom value to a known property name. The parser
+/// retains authored syntax without substituting references, computing cascade, or validating a
+/// post-substitution value.
+///
+/// ```compile_fail
+/// use surgeist_css::CssCustomDeclaration;
+/// let _ = CssCustomDeclaration { name: todo!(), value: todo!() };
+/// ```
+#[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssCustomDeclaration {
     name: CssCustomPropertyName,
@@ -2064,40 +2070,48 @@ pub enum CssPropertyNameRef<'a> {
     Custom(&'a CssCustomPropertyName),
 }
 
+/// A case-sensitive custom-property name in the authored CSS syntax phase.
+///
+/// [`Self::try_new`] accepts one complete authored CSS identifier token beginning with `--`,
+/// including non-ASCII characters and escapes. [`Self::as_str`] returns its decoded semantic
+/// identity, matching names produced by the stylesheet parser; it does not retain the name's
+/// source escape spelling.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct CssCustomPropertyName {
     name: String,
 }
 
 impl CssCustomPropertyName {
+    /// Tokenizes and validates one complete authored custom-property name.
     #[must_use]
     pub fn try_new(name: impl Into<String>) -> Option<Self> {
-        let name = name.into();
-        if is_valid_custom_property_name(&name) {
-            Some(Self::new(name))
-        } else {
-            None
+        let authored = name.into();
+        authored.strip_prefix("--")?;
+        let mut input = cssparser::ParserInput::new(&authored);
+        let mut parser = cssparser::Parser::new(&mut input);
+        let decoded = parser.expect_ident_cloned().ok()?;
+        let token_end = parser.position();
+        parser.expect_exhausted().ok()?;
+        if token_end.byte_index() != authored.len() {
+            return None;
         }
+        Self::from_ident_token(decoded.as_ref())
     }
 
     #[must_use]
-    pub(crate) fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into() }
+    pub(crate) fn from_ident_token(name: &str) -> Option<Self> {
+        name.strip_prefix("--")
+            .filter(|suffix| !suffix.is_empty())
+            .map(|_| Self {
+                name: name.to_owned(),
+            })
     }
 
+    /// Returns the decoded, case-sensitive semantic custom-property name.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.name
     }
-}
-
-fn is_valid_custom_property_name(name: &str) -> bool {
-    name.strip_prefix("--").is_some_and(|suffix| {
-        !suffix.is_empty()
-            && suffix.chars().all(|character| {
-                character == '-' || character == '_' || character.is_alphanumeric()
-            })
-    })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2181,33 +2195,44 @@ impl CssVariableFallback {
     }
 }
 
+/// An exact retained custom-property token stream in the authored CSS syntax phase.
+///
+/// The value can be empty and preserves interior UTF-8 source spelling after parser-owned boundary
+/// trivia removal. It does not substitute variables, expose dependency tokens, compute cascade, or
+/// validate a computed value.
+///
+/// ```compile_fail
+/// use surgeist_css::CssCustomPropertyValue;
+/// fn dependency_tokens(value: &CssCustomPropertyValue) {
+///     let _ = value.references();
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use surgeist_css::CssCustomPropertyValue;
+/// let _ = CssCustomPropertyValue { authored: todo!() };
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssCustomPropertyValue {
     authored: CssAuthoredDeclarationValue,
-    references: Vec<CssVariableReference>,
 }
 
 impl CssCustomPropertyValue {
-    #[allow(dead_code)]
     #[must_use]
-    pub(crate) fn new(
-        authored: CssAuthoredDeclarationValue,
-        references: Vec<CssVariableReference>,
-    ) -> Self {
-        Self {
-            authored,
-            references,
-        }
+    pub(crate) const fn new(authored: CssAuthoredDeclarationValue) -> Self {
+        Self { authored }
     }
 
+    /// Returns the exact retained UTF-8 source after parser-owned boundary trivia removal.
     #[must_use]
     pub fn as_css(&self) -> &str {
         self.authored.as_css()
     }
 
+    /// Returns whether the retained authored token stream is empty.
     #[must_use]
-    pub fn references(&self) -> &[CssVariableReference] {
-        &self.references
+    pub fn is_empty(&self) -> bool {
+        self.authored.as_css().is_empty()
     }
 }
 
@@ -2247,49 +2272,36 @@ impl CssCustomPropertyDeclaredValue {
 
 /// A known property's authored value whose grammar depends on later CSS substitution.
 ///
-/// The complete authored value and parsed variable references remain symbolic. This value does
-/// not promise post-substitution grammar validity, resolve variables, or build a dependency graph.
+/// The complete authored value remains symbolic. This value exposes only its retained CSS text: it
+/// does not promise post-substitution grammar validity, resolve variables, or expose/build a
+/// dependency graph.
+///
+/// ```compile_fail
+/// use surgeist_css::CssSubstitutionDependentValue;
+/// fn dependency_graph(value: &CssSubstitutionDependentValue) {
+///     let _ = value.references();
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use surgeist_css::CssSubstitutionDependentValue;
+/// let _ = CssSubstitutionDependentValue { authored: todo!() };
+/// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssSubstitutionDependentValue {
     authored: CssAuthoredDeclarationValue,
-    references: Vec<CssVariableReference>,
 }
 
 impl CssSubstitutionDependentValue {
-    #[allow(dead_code)]
     #[must_use]
-    pub(crate) fn try_new(
-        authored: CssAuthoredDeclarationValue,
-        references: Vec<CssVariableReference>,
-    ) -> Option<Self> {
-        if references.is_empty() {
-            None
-        } else {
-            Some(Self::new(authored, references))
-        }
+    pub(crate) const fn new(authored: CssAuthoredDeclarationValue) -> Self {
+        Self { authored }
     }
 
-    #[allow(dead_code)]
-    #[must_use]
-    pub(crate) fn new(
-        authored: CssAuthoredDeclarationValue,
-        references: Vec<CssVariableReference>,
-    ) -> Self {
-        debug_assert!(!references.is_empty());
-        Self {
-            authored,
-            references,
-        }
-    }
-
+    /// Returns the complete retained authored declaration value.
     #[must_use]
     pub fn as_css(&self) -> &str {
         self.authored.as_css()
-    }
-
-    #[must_use]
-    pub fn references(&self) -> &[CssVariableReference] {
-        &self.references
     }
 }
 

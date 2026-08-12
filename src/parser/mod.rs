@@ -910,13 +910,13 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
 
         if let Some(supported_property) = property_for_supported_name(name.as_ref()) {
             let state = input.state();
-            let (authored, references) = collect_authored_declaration_value(input)
+            let (authored, has_substitution) = collect_authored_declaration_value(input)
                 .map_err(|error| with_property_context(error, name.as_ref()))?;
-            if !references.is_empty() {
+            if has_substitution {
                 return Ok(CssDeclaration::new(
                     CssDeclarationBody::Known(CssKnownDeclaration::from_substitution_dependent(
                         supported_property,
-                        CssSubstitutionDependentValue::new(authored, references),
+                        CssSubstitutionDependentValue::new(authored),
                     )),
                     position,
                 ));

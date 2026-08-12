@@ -2092,7 +2092,9 @@ mod tests {
         assert_eq!(annotation.encountered().authored(), "!");
 
         let custom = CssDeclarationAnnotationError {
-            context: CssDeclarationContext::OrdinaryCustom(CssCustomPropertyName::new("--theme")),
+            context: CssDeclarationContext::OrdinaryCustom(
+                CssCustomPropertyName::try_new("--theme").unwrap(),
+            ),
             encountered: token.clone(),
         };
         match custom.context() {

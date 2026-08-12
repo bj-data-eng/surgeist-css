@@ -3,17 +3,12 @@ use cssparser::{BasicParseErrorKind, ParseError, Parser, Token};
 use crate::error::{Error, basic, invalid_syntax};
 use crate::syntax::{
     CssAuthoredDeclarationValue, CssCustomPropertyDeclaredValue, CssCustomPropertyName,
-    CssCustomPropertyValue, CssVariableFallback, CssVariableReference,
+    CssCustomPropertyValue,
 };
 use crate::validation::parse_global_keyword;
 
 pub(crate) fn parse_custom_property_name(name: &str) -> Option<CssCustomPropertyName> {
-    let suffix = name.strip_prefix("--")?;
-    if suffix.is_empty() {
-        None
-    } else {
-        Some(CssCustomPropertyName::new(name))
-    }
+    CssCustomPropertyName::from_ident_token(name)
 }
 
 pub(crate) fn parse_custom_property_value<'i, 't>(
@@ -33,28 +28,30 @@ pub(crate) fn parse_custom_property_value<'i, 't>(
     }
     input.reset(&state);
 
-    let (authored, references) = collect_authored_declaration_value(input)?;
+    let (authored, _) = collect_authored_declaration_value(input)?;
     Ok(CssCustomPropertyDeclaredValue::Value(
-        CssCustomPropertyValue::new(authored, references),
+        CssCustomPropertyValue::new(authored),
     ))
 }
 
 pub(crate) fn collect_authored_declaration_value<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> Result<(CssAuthoredDeclarationValue, Vec<CssVariableReference>), ParseError<'i, Error>> {
+) -> Result<(CssAuthoredDeclarationValue, bool), ParseError<'i, Error>> {
     input.skip_whitespace();
     let start = input.position();
-    let mut references = Vec::new();
-    consume_authored_value_tokens(input, &mut references)?;
+    let mut end = start;
+    let mut has_substitution = false;
+    consume_authored_value_tokens(input, &mut has_substitution, &mut end)?;
     Ok((
-        CssAuthoredDeclarationValue::new(input.slice_from(start).trim_end()),
-        references,
+        CssAuthoredDeclarationValue::new(input.slice(start..end)),
+        has_substitution,
     ))
 }
 
 fn consume_authored_value_tokens<'i, 't>(
     input: &mut Parser<'i, 't>,
-    references: &mut Vec<CssVariableReference>,
+    has_substitution: &mut bool,
+    end: &mut cssparser::SourcePosition,
 ) -> Result<(), ParseError<'i, Error>> {
     loop {
         let token = match input.next() {
@@ -72,46 +69,39 @@ fn consume_authored_value_tokens<'i, 't>(
         if let Token::Function(name) = &token
             && name.eq_ignore_ascii_case("var")
         {
-            let reference = input.parse_nested_block(parse_variable_reference)?;
-            references.push(reference);
+            *has_substitution = true;
+            input.parse_nested_block(|input| {
+                parse_variable_reference(input, has_substitution, end)
+            })?;
         } else if is_nested_block_start(&token) {
-            input.parse_nested_block(|input| consume_authored_value_tokens(input, references))?;
+            input.parse_nested_block(|input| {
+                consume_authored_value_tokens(input, has_substitution, end)
+            })?;
         }
+        *end = input.position();
     }
 }
 
 fn parse_variable_reference<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> Result<CssVariableReference, ParseError<'i, Error>> {
+    has_substitution: &mut bool,
+    end: &mut cssparser::SourcePosition,
+) -> Result<(), ParseError<'i, Error>> {
     let name_location = input.current_source_location();
     let name = input.expect_ident_cloned().map_err(basic)?;
-    let Some(name) = parse_custom_property_name(&name) else {
+    if parse_custom_property_name(&name).is_none() {
         return Err(invalid_syntax(
             name_location,
             "`var()` must reference a custom property name",
         ));
-    };
+    }
 
     if input.is_exhausted() {
-        return Ok(CssVariableReference::new(name, None));
+        return Ok(());
     }
 
     input.expect_comma().map_err(basic)?;
-    let fallback = parse_variable_fallback(input)?;
-    Ok(CssVariableReference::new(name, Some(fallback)))
-}
-
-fn parse_variable_fallback<'i, 't>(
-    input: &mut Parser<'i, 't>,
-) -> Result<CssVariableFallback, ParseError<'i, Error>> {
-    input.skip_whitespace();
-    let start = input.position();
-    let mut references = Vec::new();
-    consume_authored_value_tokens(input, &mut references)?;
-    Ok(CssVariableFallback::new(
-        CssAuthoredDeclarationValue::new(input.slice_from(start).trim_end()),
-        references,
-    ))
+    consume_authored_value_tokens(input, has_substitution, end)
 }
 
 fn is_nested_block_start(token: &Token<'_>) -> bool {

@@ -3,20 +3,28 @@ use std::collections::HashMap;
 use cssparser::{ParseError, Parser, Token, match_ignore_ascii_case};
 
 use super::values::{
-    LengthGrammar, next_is_delim, parse_box_size_value, parse_calc_length_with_grammar,
-    parse_custom_ident_from_str_at, parse_length_with_context, parse_positive_integer,
+    LengthGrammar, checked_percentage_value, next_is_delim, parse_box_size_value,
+    parse_calc_length_with_grammar, parse_custom_ident_from_str_at, parse_length_with_context,
+    parse_positive_integer,
 };
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
+use crate::properties::CssGridFlowTolerancePropertyValueRepresentation;
 use crate::syntax::{self, *};
 use crate::validation::{LengthUnitStatus, classify_length_unit, unsupported_keyword_reason};
 
 pub(super) fn parse_grid_flow_tolerance<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssGridFlowTolerance, ParseError<'i, Error>> {
+) -> std::result::Result<CssGridFlowTolerancePropertyValueRepresentation, ParseError<'i, Error>> {
     if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
         return match_ignore_ascii_case! { &ident,
-            "normal" => Ok(CssGridFlowTolerance::Normal),
-            "infinite" => Ok(CssGridFlowTolerance::Infinite),
+            "normal" => Ok(CssGridFlowTolerancePropertyValueRepresentation::new(
+                CssGridFlowToleranceValue::Normal,
+                Some(CssGridFlowTolerance::Normal),
+            )),
+            "infinite" => Ok(CssGridFlowTolerancePropertyValueRepresentation::new(
+                CssGridFlowToleranceValue::Infinite,
+                Some(CssGridFlowTolerance::Infinite),
+            )),
             _ => Err(unsupported_value(
                 input,
                 None,
@@ -25,10 +33,16 @@ pub(super) fn parse_grid_flow_tolerance<'i, 't>(
         };
     }
 
-    match parse_box_size_value(input)? {
-        CssLength::Percent(value) => Ok(CssGridFlowTolerance::Percent(value)),
-        length => Ok(CssGridFlowTolerance::Length(length)),
-    }
+    let length = parse_box_size_value(input)?;
+    let current = CssGridFlowToleranceValue::from_length(length.clone());
+    let i01_subset = match length {
+        CssLength::Percent(value) => CssGridFlowTolerance::Percent(value.value()),
+        length => CssGridFlowTolerance::Length(length),
+    };
+    Ok(CssGridFlowTolerancePropertyValueRepresentation::new(
+        current,
+        Some(i01_subset),
+    ))
 }
 
 pub(super) fn parse_grid_track_list<'i, 't>(
@@ -193,21 +207,22 @@ pub(super) fn parse_grid_track_breadth<'i, 't>(
                 format!("unknown grid track unit `{unit}`"),
             )),
         },
-        Token::Percentage { unit_value, .. } if !unit_value.is_finite() => {
-            Err(unsupported_value_at(
+        Token::Percentage { unit_value, .. } => {
+            let value = checked_percentage_value(
                 location,
-                None,
+                *unit_value,
                 "unsupported non-finite grid track percentage",
-            ))
+            )?;
+            if value < 0.0 {
+                Err(unsupported_value_at(
+                    location,
+                    None,
+                    "unsupported negative grid track percentage",
+                ))
+            } else {
+                Ok(CssGridTrackBreadth::length(CssLength::percent(value)))
+            }
         }
-        Token::Percentage { unit_value, .. } if *unit_value < 0.0 => Err(unsupported_value_at(
-            location,
-            None,
-            "unsupported negative grid track percentage",
-        )),
-        Token::Percentage { unit_value, .. } => Ok(CssGridTrackBreadth::length(
-            CssLength::percent(*unit_value * 100.0),
-        )),
         Token::Number { value, .. } if *value == 0.0 => {
             Ok(CssGridTrackBreadth::length(CssLength::Zero))
         }

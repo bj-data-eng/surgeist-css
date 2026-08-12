@@ -181,6 +181,19 @@ impl LengthGrammar {
     }
 }
 
+pub(super) fn checked_percentage_value<'i>(
+    location: cssparser::SourceLocation,
+    unit_value: f32,
+    non_finite_reason: impl Into<String>,
+) -> std::result::Result<f32, ParseError<'i, Error>> {
+    let value = unit_value * 100.0;
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(unsupported_value_at(location, None, non_finite_reason))
+    }
+}
+
 pub(super) fn parse_length_with<'i, 't>(
     input: &mut Parser<'i, 't>,
     grammar: LengthGrammar,
@@ -215,30 +228,28 @@ pub(super) fn parse_length_with_context<'i, 't>(
                 format!("unknown {context} unit `{unit}`"),
             )),
         },
-        Token::Percentage { unit_value, .. } if !unit_value.is_finite() => {
-            Err(unsupported_value_at(
+        Token::Percentage { unit_value, .. } => {
+            let value = checked_percentage_value(
                 location,
-                None,
+                *unit_value,
                 format!("unsupported non-finite {context} percentage"),
-            ))
+            )?;
+            if grammar.requires_non_negative() && value < 0.0 {
+                Err(unsupported_value_at(
+                    location,
+                    None,
+                    format!("unsupported negative {context} percentage"),
+                ))
+            } else if grammar.allows_percent() {
+                Ok(CssLength::percent(value))
+            } else {
+                Err(unsupported_value_at(
+                    location,
+                    None,
+                    format!("unsupported {context} percentage"),
+                ))
+            }
         }
-        Token::Percentage { unit_value, .. }
-            if grammar.requires_non_negative() && *unit_value < 0.0 =>
-        {
-            Err(unsupported_value_at(
-                location,
-                None,
-                format!("unsupported negative {context} percentage"),
-            ))
-        }
-        Token::Percentage { unit_value, .. } if grammar.allows_percent() => {
-            Ok(CssLength::percent(*unit_value * 100.0))
-        }
-        Token::Percentage { .. } => Err(unsupported_value_at(
-            location,
-            None,
-            format!("unsupported {context} percentage"),
-        )),
         Token::Number { value, .. } if *value == 0.0 => Ok(CssLength::Zero),
         Token::Ident(ident) => match_ignore_ascii_case! { ident,
             "auto" if grammar.allows_auto() => Ok(CssLength::Auto),
@@ -332,26 +343,28 @@ pub(super) fn parse_calc_component<'i, 't>(
                 format!("unknown calc length unit `{unit}`"),
             )),
         },
-        Token::Percentage { unit_value, .. } if !unit_value.is_finite() => Err(
-            unsupported_value_at(location, None, "unsupported non-finite calc percentage"),
-        ),
-        Token::Percentage { unit_value, .. }
-            if grammar.requires_non_negative() && *unit_value < 0.0 =>
-        {
-            Err(unsupported_value_at(
+        Token::Percentage { unit_value, .. } => {
+            let value = checked_percentage_value(
                 location,
-                None,
-                "unsupported negative calc percentage",
-            ))
+                *unit_value,
+                "unsupported non-finite calc percentage",
+            )?;
+            if grammar.requires_non_negative() && value < 0.0 {
+                Err(unsupported_value_at(
+                    location,
+                    None,
+                    "unsupported negative calc percentage",
+                ))
+            } else if grammar.allows_calc_percent() {
+                Ok(CssCalcLength::percent(value))
+            } else {
+                Err(unsupported_value_at(
+                    location,
+                    None,
+                    "unsupported calc percentage",
+                ))
+            }
         }
-        Token::Percentage { unit_value, .. } if grammar.allows_calc_percent() => {
-            Ok(CssCalcLength::percent(*unit_value * 100.0))
-        }
-        Token::Percentage { .. } => Err(unsupported_value_at(
-            location,
-            None,
-            "unsupported calc percentage",
-        )),
         Token::Number { value, .. } if *value == 0.0 => Ok(CssCalcLength::px(0.0)),
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
             input.parse_nested_block(|input| parse_calc_length_with_grammar(input, grammar))

@@ -195,6 +195,119 @@ macro_rules! property_schema {
 
 pub(crate) use property_schema;
 
+macro_rules! define_property_value {
+    (
+        GridFlowTolerance, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct CssGridFlowTolerancePropertyValueRepresentation {
+            current: CssGridFlowToleranceValue,
+            i01_subset: Option<CssGridFlowTolerance>,
+        }
+
+        impl CssGridFlowTolerancePropertyValueRepresentation {
+            #[must_use]
+            pub(crate) const fn new(
+                current: CssGridFlowToleranceValue,
+                i01_subset: Option<CssGridFlowTolerance>,
+            ) -> Self {
+                Self {
+                    current,
+                    i01_subset,
+                }
+            }
+        }
+
+        /// A parser-produced authored ordinary value for `grid-flow-tolerance`.
+        ///
+        /// The current checked value remains distinct from the frozen I01 compatibility payload.
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct CssGridFlowTolerancePropertyValue {
+            authored: CssAuthoredDeclarationValue,
+            representation: CssGridFlowTolerancePropertyValueRepresentation,
+        }
+
+        impl CssGridFlowTolerancePropertyValue {
+            #[must_use]
+            pub(crate) const fn new(
+                authored: CssAuthoredDeclarationValue,
+                representation: CssGridFlowTolerancePropertyValueRepresentation,
+            ) -> Self {
+                Self {
+                    authored,
+                    representation,
+                }
+            }
+
+            /// Returns the exact authored ordinary value slice, excluding boundary trivia and a
+            /// terminal importance annotation.
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            /// Returns the checked current authored value.
+            #[must_use]
+            pub const fn value(&self) -> &CssGridFlowToleranceValue {
+                &self.representation.current
+            }
+
+            /// Returns the frozen I01 compatibility payload when this value belongs to that
+            /// subset.
+            #[must_use]
+            pub const fn i01_subset(&self) -> Option<&CssGridFlowTolerance> {
+                self.representation.i01_subset.as_ref()
+            }
+        }
+    };
+    (
+        $variant:ident, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        #[derive(Clone, Debug, PartialEq)]
+        enum $representation {
+            I01($value),
+        }
+
+        #[doc = concat!("A parser-produced authored ordinary value for `", $canonical, "`.")]
+        ///
+        /// The private representation preserves property coupling while `as_css()` retains the
+        /// exact authored slice and `i01_subset()` exposes only the frozen I01 payload.
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) const fn new(authored: CssAuthoredDeclarationValue, value: $value) -> Self {
+                Self {
+                    authored,
+                    representation: $representation::I01(value),
+                }
+            }
+
+            /// Returns the exact authored ordinary value slice, excluding boundary trivia and a
+            /// terminal importance annotation.
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            /// Returns the property parser's frozen I01 payload when this value belongs to that
+            /// subset.
+            #[must_use]
+            pub const fn i01_subset(&self) -> Option<&$value> {
+                match &self.representation {
+                    $representation::I01(value) => Some(value),
+                }
+            }
+        }
+    };
+}
+
 macro_rules! define_property_identity {
     ($input:ident;
         All, $all_canonical:literal, [$($all_alias:literal),*], $all_stable_id:literal,
@@ -295,53 +408,9 @@ macro_rules! define_property_identity {
             }
         }
 
-        $(
-            #[derive(Clone, Debug, PartialEq)]
-            enum $representation {
-                I01($value),
-            }
-
-            #[doc = concat!(
-                "A parser-produced authored ordinary value for `", $canonical, "`."
-            )]
-            ///
-            /// The private representation preserves property coupling while `as_css()` retains
-            /// the exact authored slice and `i01_subset()` exposes only the frozen I01 payload.
-            #[derive(Clone, Debug, PartialEq)]
-            pub struct $wrapper {
-                authored: CssAuthoredDeclarationValue,
-                representation: $representation,
-            }
-
-            impl $wrapper {
-                #[must_use]
-                pub(crate) const fn new(
-                    authored: CssAuthoredDeclarationValue,
-                    value: $value,
-                ) -> Self {
-                    Self {
-                        authored,
-                        representation: $representation::I01(value),
-                    }
-                }
-
-                /// Returns the exact authored ordinary value slice, excluding boundary trivia and
-                /// a terminal importance annotation.
-                #[must_use]
-                pub fn as_css(&self) -> &str {
-                    self.authored.as_css()
-                }
-
-                /// Returns the property parser's frozen I01 payload when this value belongs to
-                /// that subset.
-                #[must_use]
-                pub const fn i01_subset(&self) -> Option<&$value> {
-                    match &self.representation {
-                        $representation::I01(value) => Some(value),
-                    }
-                }
-            }
-        )*
+        $(define_property_value!(
+            $variant, $canonical, $value, $wrapper, $representation
+        );)*
 
         /// A borrowed property-specific ordinary-value view.
         #[non_exhaustive]

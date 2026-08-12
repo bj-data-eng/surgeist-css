@@ -1,11 +1,12 @@
 use surgeist_css::{
     CssAnimationIterationCount, CssAnimationIterationNumber, CssAspectRatio, CssErrorCode,
     CssFiniteNumber, CssFlexFactor, CssFontFaceObliqueRange, CssFontFaceStretchValue,
-    CssFontFaceWeightValue, CssFontWeightNumber, CssGridFlowTolerance, CssGridRepeatInteger,
-    CssGridTrackBreadth, CssKeyframePercent, CssKnownProperty, CssLength, CssLengthDimension,
-    CssLengthUnit, CssNonNegativeNumber, CssOpacity, CssRatio, CssRecoveryAction, CssResolution,
-    CssResolutionUnit, CssRule, CssScaleValues, CssTime, CssTimeUnit, CssTokenKind, ErrorKind,
-    parse_sheet, parse_style_attribute,
+    CssFontFaceWeightValue, CssFontWeightNumber, CssGridFlowTolerance, CssGridFlowToleranceValue,
+    CssGridRepeatInteger, CssGridTrackBreadth, CssKeyframePercent, CssKnownProperty,
+    CssKnownPropertyValueRef, CssLength, CssLengthDimension, CssLengthUnit, CssNonNegativeNumber,
+    CssOpacity, CssRatio, CssRecoveryAction, CssResolution, CssResolutionUnit, CssRule,
+    CssScaleValues, CssTime, CssTimeUnit, CssTokenKind, ErrorKind, parse_sheet,
+    parse_style_attribute,
 };
 
 #[test]
@@ -66,13 +67,31 @@ fn checked_numeric_constructors_reject_non_finite_values_and_preserve_finite_bou
         f32::MAX
     );
 
-    let percent = CssFiniteNumber::try_new(25.0).unwrap();
-    let grid_tolerance = CssGridFlowTolerance::Percent(percent);
+    let grid_tolerance = CssGridFlowTolerance::Percent(25.0);
     assert!(matches!(
         &grid_tolerance,
-        CssGridFlowTolerance::Percent(value) if value.value() == 25.0
+        CssGridFlowTolerance::Percent(value) if *value == 25.0
     ));
     assert_eq!(format!("{grid_tolerance:?}"), "Percent(25.0)");
+
+    let report = parse_style_attribute("grid-flow-tolerance: 25%");
+    assert!(report.is_clean());
+    let property = report.syntax()[0]
+        .known()
+        .and_then(|known| known.property_value())
+        .expect("parser-produced grid-flow-tolerance value");
+    let CssKnownPropertyValueRef::GridFlowTolerance(value) = property else {
+        panic!("expected grid-flow-tolerance wrapper");
+    };
+    assert_eq!(value.as_css(), "25%");
+    assert!(matches!(
+        value.value(),
+        CssGridFlowToleranceValue::Percent(percent) if percent.value() == 25.0
+    ));
+    assert!(matches!(
+        value.i01_subset(),
+        Some(CssGridFlowTolerance::Percent(percent)) if *percent == 25.0
+    ));
 }
 
 #[test]
@@ -166,5 +185,73 @@ fn non_finite_iteration_parse_retains_sheet_siblings_with_exact_diagnostic() {
             assert_eq!(encountered.authored(), "1e999");
         }
         _ => panic!("expected invalid property value"),
+    }
+}
+
+#[test]
+fn percentage_conversion_overflow_drops_each_declaration_and_retains_siblings() {
+    let cases = [
+        (
+            "grid-flow-tolerance",
+            "3.5e38%",
+            CssKnownProperty::GridFlowTolerance,
+            0,
+        ),
+        (
+            "grid-flow-tolerance",
+            "calc(3.5e38%)",
+            CssKnownProperty::GridFlowTolerance,
+            "calc(".len(),
+        ),
+        (
+            "grid-template-columns",
+            "3.5e38%",
+            CssKnownProperty::GridTemplateColumns,
+            0,
+        ),
+    ];
+
+    for (property, value, expected_property, responsible_offset) in cases {
+        let invalid = format!("{property}: {value};");
+        let source = format!("color: red; {invalid} width: 2px");
+        let report = parse_style_attribute(&source);
+
+        assert_eq!(report.syntax().len(), 2, "source: {source}");
+        let [diagnostic] = report.diagnostics() else {
+            panic!("percentage overflow must produce one diagnostic for {source}");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue
+        );
+        assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+        let value_start = source.find(value).unwrap();
+        assert_eq!(
+            diagnostic.error().position().byte_offset().value(),
+            value_start + responsible_offset
+        );
+        assert_eq!(diagnostic.error().position().line().value(), 0);
+        assert_eq!(
+            diagnostic.error().position().column().value(),
+            (value_start + responsible_offset) as u32
+        );
+        let declaration_start = source.find(&invalid).unwrap();
+        assert_eq!(
+            diagnostic.span().start().byte_offset().value(),
+            declaration_start
+        );
+        assert_eq!(
+            diagnostic.span().end().byte_offset().value(),
+            declaration_start + invalid.len()
+        );
+        match diagnostic.error().kind() {
+            ErrorKind::InvalidPropertyValue(detail) => {
+                assert_eq!(detail.property(), expected_property);
+                let encountered = detail.encountered().expect("overflowing percentage token");
+                assert_eq!(encountered.kind(), CssTokenKind::Percentage);
+                assert_eq!(encountered.authored(), "3.5e38%");
+            }
+            _ => panic!("expected invalid property value"),
+        }
     }
 }

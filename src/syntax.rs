@@ -3613,7 +3613,7 @@ pub enum CssGridFlowTolerance {
     Normal,
     Infinite,
     Length(CssLength),
-    Percent(CssFiniteNumber),
+    Percent(f32),
 }
 
 impl std::fmt::Debug for CssGridFlowTolerance {
@@ -3622,10 +3622,26 @@ impl std::fmt::Debug for CssGridFlowTolerance {
             Self::Normal => formatter.write_str("Normal"),
             Self::Infinite => formatter.write_str("Infinite"),
             Self::Length(value) => formatter.debug_tuple("Length").field(value).finish(),
-            Self::Percent(value) => formatter
-                .debug_tuple("Percent")
-                .field(&value.value())
-                .finish(),
+            Self::Percent(value) => formatter.debug_tuple("Percent").field(value).finish(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssGridFlowToleranceValue {
+    Normal,
+    Infinite,
+    Length(CssLength),
+    Percent(CssFiniteNumber),
+}
+
+impl CssGridFlowToleranceValue {
+    #[must_use]
+    pub(crate) fn from_length(value: CssLength) -> Self {
+        match value {
+            CssLength::Percent(value) => Self::Percent(value),
+            value => Self::Length(value),
         }
     }
 }

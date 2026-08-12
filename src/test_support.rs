@@ -4,9 +4,66 @@ use crate::properties::{
 };
 use crate::syntax::*;
 use crate::{
-    CssDeclaration, CssGlobalKeyword, CssKnownProperty, CssOverflowPropertyValue, CssRule,
-    CssSheet, CssStyleRule, Error, ErrorKind, parse_sheet,
+    CssDeclaration, CssGlobalKeyword, CssKnownProperty, CssOverflowPropertyValue, CssParseReport,
+    CssRule, CssSheet, CssStyleRule, Error, ErrorKind, parse_sheet,
 };
+
+pub(crate) trait CssParseReportTestExt<T> {
+    fn is_ok(&self) -> bool;
+    fn is_err(&self) -> bool;
+    fn unwrap(self) -> T;
+    fn expect(self, message: &str) -> T;
+    fn unwrap_err(self) -> Error;
+    fn expect_err(self, message: &str) -> Error;
+    fn unwrap_or_else<F>(self, operation: F) -> T
+    where
+        F: FnOnce(Error) -> T;
+}
+
+impl<T> CssParseReportTestExt<T> for CssParseReport<T> {
+    fn is_ok(&self) -> bool {
+        self.is_clean()
+    }
+
+    fn is_err(&self) -> bool {
+        !self.is_clean()
+    }
+
+    fn unwrap(self) -> T {
+        self.expect("stylesheet report contained recovery diagnostics")
+    }
+
+    fn expect(self, message: &str) -> T {
+        let (syntax, diagnostics) = self.into_parts();
+        assert!(diagnostics.is_empty(), "{message}: {diagnostics:?}");
+        syntax
+    }
+
+    fn unwrap_err(self) -> Error {
+        self.expect_err("stylesheet report was clean")
+    }
+
+    fn expect_err(self, message: &str) -> Error {
+        let (_, diagnostics) = self.into_parts();
+        diagnostics
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| panic!("{message}"))
+            .error()
+            .clone()
+    }
+
+    fn unwrap_or_else<F>(self, operation: F) -> T
+    where
+        F: FnOnce(Error) -> T,
+    {
+        let (syntax, diagnostics) = self.into_parts();
+        diagnostics
+            .into_iter()
+            .next()
+            .map_or(syntax, |diagnostic| operation(diagnostic.error().clone()))
+    }
+}
 macro_rules! define_test_property {
     ($input:ident; $(
         $variant:ident, $canonical:literal, [$($alias:literal),*], $stable_id:literal,

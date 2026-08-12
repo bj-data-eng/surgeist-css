@@ -23,13 +23,6 @@ pub struct CssParseReport<T> {
 }
 
 impl<T> CssParseReport<T> {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "report construction is consumed by recovery parsing in cycle C03"
-        )
-    )]
     pub(crate) fn new(syntax: T, diagnostics: Vec<CssRecoveryDiagnostic>) -> Self {
         Self {
             syntax,
@@ -137,13 +130,6 @@ pub struct CssRecoveryDiagnostic {
 
 impl CssRecoveryDiagnostic {
     #[must_use]
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "diagnostic construction is consumed by recovery parsing in cycle C03"
-        )
-    )]
     pub(crate) fn new(
         error: Error,
         span: CssSourceSpan,
@@ -263,6 +249,7 @@ mod tests {
     use std::collections::HashSet;
 
     use super::{CssParseReport, CssRecoveryAction, CssRecoveryDiagnostic, CssValidationFailure};
+    use crate::test_support::CssParseReportTestExt;
     use crate::{CssSourcePosition, CssSourceSpan, Error, parse_sheet};
 
     const INVALID_SOURCE: &str = ".x { mystery: 1; }";

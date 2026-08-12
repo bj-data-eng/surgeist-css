@@ -3,9 +3,9 @@ use cssparser::ParserInput;
 use cssparser::{ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
 
 use super::variables::collect_authored_declaration_value;
-use crate::error::{Error, basic, invalid_syntax, unsupported_value_at, with_media_query_context};
 #[cfg(test)]
-use crate::error::{Result as CrateResult, from_parse_error};
+use crate::error::from_parse_error;
+use crate::error::{Error, basic, invalid_syntax, unsupported_value_at, with_media_query_context};
 use crate::syntax::*;
 
 pub(crate) fn parse_media_query_list<'i, 't>(
@@ -24,7 +24,9 @@ pub(crate) fn parse_media_query_list<'i, 't>(
 }
 
 #[cfg(test)]
-pub(crate) fn parse_media_query_list_for_test(source: &str) -> CrateResult<CssMediaQueryList> {
+pub(crate) fn parse_media_query_list_for_test(
+    source: &str,
+) -> std::result::Result<CssMediaQueryList, Error> {
     let mut input = ParserInput::new(source);
     let mut parser = Parser::new(&mut input);
     let list =
@@ -84,7 +86,7 @@ pub(crate) fn parse_container_condition<'i, 't>(
 #[cfg(test)]
 pub(crate) fn parse_container_condition_for_test(
     source: &str,
-) -> CrateResult<CssContainerCondition> {
+) -> std::result::Result<CssContainerCondition, Error> {
     let mut input = ParserInput::new(source);
     let mut parser = Parser::new(&mut input);
     let condition =

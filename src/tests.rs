@@ -46,11 +46,13 @@ fn declaration(input: &str, property: CssProperty) -> CssDeclaration {
         .clone()
 }
 
-fn parse_media_query_list_for_test(input: &str) -> Result<CssMediaQueryList> {
+fn parse_media_query_list_for_test(input: &str) -> std::result::Result<CssMediaQueryList, Error> {
     crate::parser::parse_media_query_list_for_test(input)
 }
 
-fn parse_container_condition_for_test(input: &str) -> Result<CssContainerCondition> {
+fn parse_container_condition_for_test(
+    input: &str,
+) -> std::result::Result<CssContainerCondition, Error> {
     crate::parser::parse_container_condition_for_test(input)
 }
 

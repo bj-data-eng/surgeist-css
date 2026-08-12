@@ -1,3 +1,6 @@
+mod common;
+
+use common::CssParseReportTestExt;
 use surgeist_css::{
     CssDeclarationContextRef, CssErrorCode, CssImportance, CssPropertyNameRef, CssRule,
     CssTokenKind, ErrorKind, parse_sheet,

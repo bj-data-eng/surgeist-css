@@ -1,5 +1,8 @@
 use std::collections::HashSet;
 
+mod common;
+
+use common::CssParseReportTestExt;
 use surgeist_css::{
     CssErrorCode, CssImportance, CssKnownProperty, CssRule, ErrorKind, parse_sheet,
 };

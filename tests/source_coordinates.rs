@@ -1,5 +1,8 @@
 use std::hash::Hash;
 
+mod common;
+
+use common::CssParseReportTestExt;
 use surgeist_css::{
     CssByteOffset, CssLineIndex, CssRule, CssSourcePosition, CssSourceSpan, CssUtf16ColumnIndex,
     parse_sheet,

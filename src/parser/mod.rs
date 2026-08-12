@@ -54,10 +54,11 @@ use variables::{
 };
 
 use crate::error::{
-    Error, Result, basic, from_rule_parse_error, invalid_at_rule_block, invalid_at_rule_placement,
+    Error, basic, from_rule_parse_error, invalid_at_rule_block, invalid_at_rule_placement,
     invalid_custom_declaration_annotation, invalid_descriptor_annotation,
-    invalid_known_declaration_annotation, invalid_syntax, property_name_error, unsupported_value,
-    with_at_rule_prelude_context, with_media_query_context, with_property_context,
+    invalid_encoding_declaration, invalid_known_declaration_annotation, invalid_syntax,
+    normalize_encoding_error, property_name_error, unsupported_value, with_at_rule_prelude_context,
+    with_encoding_declaration_context, with_media_query_context, with_property_context,
 };
 use crate::properties::{CssOverflowPropertyValue, property_schema};
 use crate::syntax::*;
@@ -112,33 +113,134 @@ fn parse_overflow_property<'i, 't>(
     }
 }
 
-pub fn parse_sheet(source: &str) -> Result<CssSheet> {
+/// Parses a UTF-8 stylesheet into valid authored syntax and recovery diagnostics.
+///
+/// The ordinary parser retains valid top-level rules in source order and reports
+/// each discarded top-level rule with its complete balanced source span. A valid
+/// leading legacy `@charset` declaration is metadata only and never decodes the
+/// already-UTF-8 input. Recovery does not apply cascade, substitution, selector
+/// matching, contextual resolution, or resource loading.
+///
+/// ```
+/// use surgeist_css::{CssRecoveryAction, CssRule, parse_sheet};
+///
+/// let report = parse_sheet(
+///     ".before { color: red; } @unknown fn({x;y}); .after { color: blue; }",
+/// );
+/// assert_eq!(report.syntax().rules().len(), 2);
+/// assert!(!report.is_clean());
+/// assert!(matches!(report.syntax().rules()[0], CssRule::Style(_)));
+/// assert!(matches!(
+///     report.diagnostics()[0].action(),
+///     CssRecoveryAction::DropAtRule
+/// ));
+/// ```
+pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
     let mut input = ParserInput::new(source);
     let mut parser = Parser::new(&mut input);
-    let mut rule_parser = StrictRuleParser::top_level();
+    if source.starts_with('\u{feff}') {
+        let _ = parser.next_including_whitespace_and_comments();
+    }
+    let mut rule_parser = StrictRuleParser::top_level(source.len());
     let mut sheet = CssSheet::new();
+    let mut diagnostics = Vec::new();
+    let mut previous_end = parser.position().byte_index();
 
-    for rule in StyleSheetParser::new(&mut parser, &mut rule_parser) {
-        for rule in
-            rule.map_err(|(error, failed_unit)| from_rule_parse_error(source, failed_unit, error))?
-        {
-            sheet.push_rule(rule);
+    {
+        let mut rules = RuleBodyParser::new(&mut parser, &mut rule_parser);
+        while let Some(result) = rules.next() {
+            let position_after_result = rules.input.position().byte_index();
+            if result.is_err()
+                && position_after_result > 0
+                && source.as_bytes().get(position_after_result - 1) == Some(&b'{')
+            {
+                let _: std::result::Result<(), ParseError<'_, ()>> =
+                    rules.input.parse_nested_block(|nested| {
+                        while nested.next_including_whitespace_and_comments().is_ok() {}
+                        Ok(())
+                    });
+            }
+            let unit_end = rules.input.position().byte_index();
+            match result {
+                Ok(parsed_rules) => {
+                    for rule in parsed_rules {
+                        sheet.push_rule(rule);
+                    }
+                }
+                Err((error, failed_unit)) => {
+                    let unit_start =
+                        recovery_unit_start(source, previous_end, unit_end, failed_unit);
+                    let error = from_rule_parse_error(source, failed_unit, error);
+                    let error = if recovery_at_rule_name(failed_unit)
+                        .is_some_and(|name| name.eq_ignore_ascii_case("charset"))
+                    {
+                        normalize_encoding_error(source, unit_start, unit_end, failed_unit, error)
+                    } else {
+                        error
+                    };
+                    let action = if failed_unit.trim_start().starts_with('@') {
+                        crate::CssRecoveryAction::DropAtRule
+                    } else {
+                        crate::CssRecoveryAction::DropQualifiedRule
+                    };
+                    if let Some(span) = crate::CssSourceSpan::new(
+                        crate::CssSourcePosition::from_byte_offset_in(source, unit_start),
+                        crate::CssSourcePosition::from_byte_offset_in(source, unit_end),
+                    ) && let Some(diagnostic) =
+                        crate::CssRecoveryDiagnostic::new(error, span, action)
+                    {
+                        diagnostics.push(diagnostic);
+                    }
+                }
+            }
+            previous_end = unit_end;
         }
     }
 
-    Ok(sheet)
+    if let Some(encoding) = rule_parser.encoding.take() {
+        sheet.set_encoding(encoding);
+    }
+
+    crate::CssParseReport::new(sheet, diagnostics)
+}
+
+fn recovery_unit_start(
+    source: &str,
+    previous_end: usize,
+    unit_end: usize,
+    failed_unit: &str,
+) -> usize {
+    let bounded_end = unit_end.min(source.len());
+    let bounded_start = previous_end.min(bounded_end);
+    source[bounded_start..bounded_end]
+        .find(failed_unit)
+        .map_or(bounded_start, |relative| bounded_start + relative)
+}
+
+fn recovery_at_rule_name(failed_unit: &str) -> Option<&str> {
+    let after_at = failed_unit.trim_start().strip_prefix('@')?;
+    let name_end = after_at
+        .find(|character: char| !character.is_alphanumeric() && character != '-')
+        .unwrap_or(after_at.len());
+    Some(&after_at[..name_end])
 }
 
 struct StrictRuleParser {
     is_top_level: bool,
     imports_allowed: bool,
+    encoding_allowed: bool,
+    source_len: usize,
+    encoding: Option<CssEncodingDeclaration>,
 }
 
 impl StrictRuleParser {
-    const fn top_level() -> Self {
+    const fn top_level(source_len: usize) -> Self {
         Self {
             is_top_level: true,
             imports_allowed: true,
+            encoding_allowed: true,
+            source_len,
+            encoding: None,
         }
     }
 
@@ -146,6 +248,9 @@ impl StrictRuleParser {
         Self {
             is_top_level: false,
             imports_allowed: false,
+            encoding_allowed: false,
+            source_len: usize::MAX,
+            encoding: None,
         }
     }
 
@@ -157,6 +262,7 @@ impl StrictRuleParser {
 }
 
 enum StrictAtRulePrelude {
+    Encoding(String),
     Import(CssImportPrelude),
     Layer(Vec<CssLayerName>),
     FontFace,
@@ -192,6 +298,41 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
         name: CowRcStr<'i>,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
+        if name.eq_ignore_ascii_case("charset") {
+            let encoding_allowed = self.encoding_allowed;
+            self.encoding_allowed = false;
+            if !encoding_allowed {
+                return Err(invalid_encoding_declaration(
+                    input.current_source_location(),
+                ));
+            }
+
+            let prelude_start = input.position();
+            let label = input
+                .expect_string_cloned()
+                .map_err(|error| with_encoding_declaration_context(error.into()))?;
+            let authored = input.slice(prelude_start..input.position());
+            let quote = authored.trim_start().as_bytes().first().copied();
+            if !matches!(quote, Some(b'"')) || label.is_empty() {
+                return Err(with_encoding_declaration_context(
+                    input.new_unexpected_token_error(cssparser::Token::QuotedString(label)),
+                ));
+            }
+            if !input.is_exhausted() {
+                let token = input.next_including_whitespace_and_comments()?.clone();
+                return Err(with_encoding_declaration_context(
+                    input.new_error(cssparser::BasicParseErrorKind::UnexpectedToken(token)),
+                ));
+            }
+            if input.position().byte_index() == self.source_len {
+                return Err(with_encoding_declaration_context(
+                    input.new_error(cssparser::BasicParseErrorKind::EndOfInput),
+                ));
+            }
+            return Ok(StrictAtRulePrelude::Encoding(label.to_string()));
+        }
+
+        self.encoding_allowed = false;
         match_ignore_ascii_case! { &name,
             "import" => {
                 if !self.is_top_level {
@@ -319,6 +460,16 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
         start: &ParserState,
     ) -> std::result::Result<Self::AtRule, ()> {
         match prelude {
+            StrictAtRulePrelude::Encoding(label) => {
+                self.encoding = Some(CssEncodingDeclaration::new(
+                    label,
+                    crate::source::CssSourcePosition::from_cssparser(
+                        start.position(),
+                        start.source_location(),
+                    ),
+                ));
+                Ok(Vec::new())
+            }
             StrictAtRulePrelude::Import(prelude) => Ok(vec![CssRule::Import(CssImportRule::new(
                 prelude.target,
                 prelude.layer,
@@ -354,6 +505,9 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::AtRule, ParseError<'i, Self::Error>> {
         match prelude {
+            StrictAtRulePrelude::Encoding(_) => Err(invalid_encoding_declaration(
+                input.current_source_location(),
+            )),
             StrictAtRulePrelude::Import(_) => Err(invalid_at_rule_block(
                 input,
                 "import",
@@ -442,6 +596,7 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {
         &mut self,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
+        self.encoding_allowed = false;
         parse_rule_selector_list(input)
     }
 
@@ -454,6 +609,21 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser {
         let rules = parse_style_rule_block(selectors, input)?;
         self.mark_non_import_top_level_rule();
         Ok(rules)
+    }
+}
+
+impl<'i> DeclarationParser<'i> for StrictRuleParser {
+    type Declaration = Vec<CssRule>;
+    type Error = Error;
+}
+
+impl<'i> RuleBodyItemParser<'i, Vec<CssRule>, Error> for StrictRuleParser {
+    fn parse_declarations(&self) -> bool {
+        false
+    }
+
+    fn parse_qualified(&self) -> bool {
+        true
     }
 }
 

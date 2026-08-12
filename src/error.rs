@@ -10,11 +10,6 @@ use crate::source::CssSourcePosition;
 use crate::syntax::CssCustomPropertyName;
 use crate::validation::{PropertyNameStatus, classify_property_name, property_for_supported_name};
 
-/// The result of strict CSS parsing with a structured diagnostic on failure.
-///
-/// This alias does not imply browser-style recovery or downstream value resolution.
-pub type Result<T> = std::result::Result<T, Error>;
-
 /// A stable machine-readable diagnostic-phase category for a strict CSS parse failure.
 ///
 /// A code classifies the rejected authored syntax; it does not select recovery policy or
@@ -274,6 +269,8 @@ impl CssTokenSummary {
 }
 
 const EXPECT_CSS_SYNTAX: CssGrammarExpectation = CssGrammarExpectation::new("valid CSS syntax");
+const EXPECT_ENCODING_DECLARATION: CssGrammarExpectation =
+    CssGrammarExpectation::new("a non-empty double-quoted encoding label followed by a semicolon");
 const EXPECT_DECLARATION_VALUE: CssGrammarExpectation =
     CssGrammarExpectation::new("a declaration value");
 const EXPECT_PROPERTY_VALUE: CssGrammarExpectation =
@@ -1028,7 +1025,8 @@ impl Error {
             }
         }
 
-        if let Some(slot) = optional_encountered_mut(&mut self.kind)
+        if !matches!(self.kind, ErrorKind::InvalidEncodingDeclaration(_))
+            && let Some(slot) = optional_encountered_mut(&mut self.kind)
             && slot.is_none()
             && let Some((start, summary)) = previous_authored_token_before(source, self.position)
             && !is_boundary_token(summary.kind)
@@ -1107,6 +1105,68 @@ pub(crate) fn from_rule_parse_error(
             encountered: None,
         });
     }
+    error
+}
+
+pub(crate) fn with_encoding_declaration_context<'i>(
+    mut error: ParseError<'i, Error>,
+) -> ParseError<'i, Error> {
+    let encountered = take_encountered(&mut error.kind);
+    error.kind = ParseErrorKind::Custom(Error::at(
+        error.location,
+        ErrorKind::InvalidEncodingDeclaration(CssEncodingDeclarationError {
+            expectation: EXPECT_ENCODING_DECLARATION,
+            encountered,
+        }),
+    ));
+    error
+}
+
+pub(crate) fn invalid_encoding_declaration<'i>(
+    location: cssparser::SourceLocation,
+) -> ParseError<'i, Error> {
+    error_at(
+        location,
+        ErrorKind::InvalidEncodingDeclaration(CssEncodingDeclarationError {
+            expectation: EXPECT_ENCODING_DECLARATION,
+            encountered: None,
+        }),
+    )
+}
+
+pub(crate) fn normalize_encoding_error(
+    source: &str,
+    unit_start: usize,
+    unit_end: usize,
+    failed_unit: &str,
+    mut error: Error,
+) -> Error {
+    let ErrorKind::InvalidEncodingDeclaration(detail) = &error.kind else {
+        return error;
+    };
+    if let Some(encountered) = &detail.encountered {
+        if let Some((start, summary)) = previous_authored_token_before(source, error.position)
+            && start >= unit_start
+            && start < unit_end
+            && summary.kind == encountered.kind
+        {
+            error.position = CssSourcePosition::from_byte_offset_in(source, start);
+            if let ErrorKind::InvalidEncodingDeclaration(detail) = &mut error.kind {
+                detail.encountered = Some(summary);
+            }
+        }
+        return error;
+    }
+
+    let unit = failed_unit.trim_end();
+    let responsible = if unit.ends_with(';') {
+        unit_start
+    } else if let Some(opening_brace) = source[unit_start..unit_end].find('{') {
+        unit_start + opening_brace
+    } else {
+        unit_end
+    };
+    error.position = CssSourcePosition::from_byte_offset_in(source, responsible);
     error
 }
 

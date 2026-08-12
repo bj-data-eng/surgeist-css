@@ -1,17 +1,16 @@
 #![forbid(unsafe_code)]
-//! Strict CSS ingestion for Surgeist style sheets.
+//! Recovering CSS ingestion for Surgeist style sheets.
 //!
 //! This crate parses CSS syntax into CSS-owned authored syntax values. It is
-//! strict by design: unsupported selectors, at-rules, properties, and values are
-//! errors instead of browser-style recoverable invalid declarations.
+//! strict about retained values: unsupported or malformed top-level rules are
+//! discarded with structured recovery diagnostics rather than represented as
+//! invalid syntax.
 //!
 //! Parse failures expose typed [`ErrorKind`] values, stable [`CssErrorCode`]
 //! roots, and semantic source positions so callers do not parse display text.
-//! Recovery report and diagnostic value types describe the future browser-style
-//! recovery boundary without changing the current strict [`parse_sheet`] entry
-//! point. They retain authored syntax and diagnostic provenance; they do not run
-//! cascade, substitution, selector matching, contextual resolution, or resource
-//! loading.
+//! [`parse_sheet`] returns retained authored syntax and diagnostic provenance in
+//! one report. It does not run cascade, substitution, selector matching,
+//! contextual resolution, or resource loading.
 
 mod error;
 mod parser;
@@ -30,7 +29,7 @@ pub use report::*;
 pub use source::*;
 pub use syntax::*;
 #[cfg(test)]
-pub(crate) use test_support::{CssProperty, CssValue};
+pub(crate) use test_support::{CssParseReportTestExt, CssProperty, CssValue};
 
 #[cfg(test)]
 mod tests;

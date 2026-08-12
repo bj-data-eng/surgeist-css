@@ -224,13 +224,6 @@ pub struct CssSourceSpan {
 
 impl CssSourceSpan {
     #[must_use]
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "span construction is consumed by recovery diagnostics in cycle task T3"
-        )
-    )]
     pub(crate) const fn new(start: CssSourcePosition, end: CssSourcePosition) -> Option<Self> {
         if start.byte_offset.value() <= end.byte_offset.value() {
             Some(Self { start, end })

@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use cssparser::{ParseError, Parser, Token};
+use cssparser::{ParseError, Parser, ParserInput, Token};
 
 use crate::error::{Error, is_nesting_limit_error, nesting_limit};
 
@@ -18,9 +18,9 @@ pub(crate) struct RecoveryState {
 }
 
 impl RecoveryState {
-    pub(super) fn new() -> Self {
+    pub(super) fn at_depth(depth: u32) -> Self {
         Self {
-            depth: Rc::new(Cell::new(0)),
+            depth: Rc::new(Cell::new(depth)),
         }
     }
 
@@ -36,41 +36,43 @@ impl RecoveryState {
 
     pub(super) fn check_component_values<'i>(
         &self,
-        source: &str,
-        input: &mut Parser<'i, '_>,
+        source: &'i str,
+        input: &Parser<'i, '_>,
         enclosing_production: &'static str,
     ) -> Result<(), ParseError<'i, Error>> {
-        let initial = input.state();
-        let result = self.scan_component_values(source, input, enclosing_production);
-        input.reset(&initial);
-        result
+        scan_nested_tokens(
+            source,
+            input.position().byte_index(),
+            self.depth.get(),
+            enclosing_production,
+            ScanBoundary::DeclarationValue,
+        )
     }
 
-    fn scan_component_values<'i>(
+    pub(super) fn check_failed_rule_block<'i>(
         &self,
-        source: &str,
-        input: &mut Parser<'i, '_>,
+        source: &'i str,
+        input: &Parser<'i, '_>,
         enclosing_production: &'static str,
-    ) -> Result<(), ParseError<'i, Error>> {
-        loop {
-            let token_start = input.position().byte_index();
-            let token = match input.next_including_whitespace_and_comments() {
-                Ok(token) => token.clone(),
-                Err(_) => return Ok(()),
-            };
-            if matches!(
-                token,
-                Token::Function(_)
-                    | Token::ParenthesisBlock
-                    | Token::SquareBracketBlock
-                    | Token::CurlyBracketBlock
-            ) {
-                let _guard = self.enter(source, token_start, enclosing_production)?;
-                input.parse_nested_block(|nested| {
-                    self.scan_component_values(source, nested, enclosing_production)
-                })?;
-            }
+    ) -> Option<ParseError<'i, Error>> {
+        let content_start = input.position().byte_index();
+        let opening_offset = content_start.saturating_sub(1);
+        if self.depth.get() >= STRUCTURAL_NESTING_LIMIT {
+            return Some(nesting_limit(
+                source,
+                opening_offset,
+                STRUCTURAL_NESTING_LIMIT,
+                enclosing_production,
+            ));
         }
+        scan_nested_tokens(
+            source,
+            content_start,
+            self.depth.get() + 1,
+            enclosing_production,
+            ScanBoundary::FailedCurlyBlock,
+        )
+        .err()
     }
 
     fn enter<'i>(
@@ -92,6 +94,334 @@ impl RecoveryState {
         Ok(RecoveryDepthGuard {
             depth: Rc::clone(&self.depth),
         })
+    }
+}
+
+const STRUCTURAL_PARSE_CHUNK: usize = 64;
+
+pub(super) struct StructuralPreflight {
+    pub(super) unit_start: usize,
+    pub(super) unit_end: usize,
+    pub(super) parents: Vec<StructuralParent>,
+    pub(super) has_style_parents: bool,
+    pub(super) parent_depth: u32,
+    pub(super) outcome: StructuralPreflightOutcome,
+}
+
+pub(super) enum StructuralPreflightOutcome {
+    Split,
+    NestingLimit {
+        opening_offset: usize,
+        enclosing_production: &'static str,
+    },
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct StructuralParent {
+    pub(super) start: usize,
+    pub(super) kind: GroupKind,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum GroupKind {
+    Layer,
+    Media,
+    Container,
+    Scope,
+    Style,
+    Component,
+    Other,
+}
+
+impl GroupKind {
+    fn production(self) -> &'static str {
+        match self {
+            Self::Layer => "baseline.rule.layer-block",
+            Self::Media => "baseline.rule.media",
+            Self::Container => "baseline.rule.container",
+            Self::Scope => "baseline.rule.scope",
+            Self::Style => "baseline.rule.style",
+            Self::Component => "css.declaration",
+            Self::Other => "css.qualified-rule",
+        }
+    }
+
+    fn can_split(self) -> bool {
+        !matches!(self, Self::Other)
+    }
+}
+
+struct StructuralFrame {
+    block: BlockKind,
+    group: Option<(usize, GroupKind)>,
+}
+
+pub(super) fn preflight_structural_nesting(
+    source: &str,
+    base_depth: u32,
+) -> Option<StructuralPreflight> {
+    // Restarting cssparser at each verified token boundary exposes opening and
+    // closing tokens without calling `parse_nested_block`; comments, strings,
+    // URLs, and escapes therefore keep cssparser's token semantics while this
+    // walk keeps its own heap-backed block stack.
+    let mut offset = 0;
+    let mut frames: Vec<StructuralFrame> = Vec::new();
+    let mut groups: Vec<(usize, GroupKind)> = Vec::new();
+    let mut unit_starts = vec![None];
+    let mut target: Option<StructuralPreflight> = None;
+    let mut target_group_depth = 0;
+
+    while let Some((token_start, token_end, token)) = next_source_token(source, offset) {
+        offset = token_end;
+        if let Some(closing) = closing_block(&token) {
+            if let Some(frame) = frames.pop_if(|frame| frame.block == closing)
+                && frame.group.is_some()
+            {
+                groups.pop();
+                unit_starts.pop();
+                if let Some(parent_start) = unit_starts.last_mut() {
+                    *parent_start = None;
+                }
+                if target.is_some() && groups.len() < target_group_depth {
+                    let mut completed = target.take().expect("target exists");
+                    completed.unit_end = token_end;
+                    return Some(completed);
+                }
+            }
+            continue;
+        }
+
+        let directly_in_group = frames.last().is_none_or(|frame| frame.group.is_some());
+        if directly_in_group && is_ignored_unit_prefix(&token) {
+            continue;
+        }
+        if directly_in_group && matches!(token, Token::Semicolon) {
+            if let Some(unit_start) = unit_starts.last_mut() {
+                *unit_start = None;
+            }
+            continue;
+        }
+        if directly_in_group
+            && unit_starts
+                .last()
+                .is_some_and(|unit_start| unit_start.is_none())
+            && let Some(unit_start) = unit_starts.last_mut()
+        {
+            *unit_start = Some(token_start);
+        }
+
+        let Some(opening) = opening_block(&token) else {
+            continue;
+        };
+        if opening != BlockKind::Curly || !directly_in_group {
+            frames.push(StructuralFrame {
+                block: opening,
+                group: None,
+            });
+            continue;
+        }
+
+        let unit_start = unit_starts
+            .last()
+            .and_then(|unit_start| *unit_start)
+            .unwrap_or(token_start);
+        let group = group_kind(source, unit_start, token_start);
+        if matches!(group, GroupKind::Component) {
+            frames.push(StructuralFrame {
+                block: opening,
+                group: None,
+            });
+            continue;
+        }
+        let global_depth = base_depth.saturating_add(groups.len() as u32 + 1);
+        let split_chain = group.can_split()
+            && groups
+                .iter()
+                .all(|(_, ancestor_group)| ancestor_group.can_split());
+        if target.is_none() && split_chain {
+            let outcome = if global_depth > STRUCTURAL_NESTING_LIMIT {
+                Some(StructuralPreflightOutcome::NestingLimit {
+                    opening_offset: token_start,
+                    enclosing_production: group.production(),
+                })
+            } else if groups.len() + 1 == STRUCTURAL_PARSE_CHUNK {
+                Some(StructuralPreflightOutcome::Split)
+            } else {
+                None
+            };
+            if let Some(outcome) = outcome {
+                target = Some(StructuralPreflight {
+                    unit_start,
+                    unit_end: source.len(),
+                    parents: groups
+                        .iter()
+                        .filter(|(_, kind)| !matches!(kind, GroupKind::Style))
+                        .map(|(start, kind)| StructuralParent {
+                            start: *start,
+                            kind: *kind,
+                        })
+                        .collect(),
+                    has_style_parents: groups
+                        .iter()
+                        .any(|(_, kind)| matches!(kind, GroupKind::Style)),
+                    parent_depth: global_depth.saturating_sub(1),
+                    outcome,
+                });
+                target_group_depth = groups.len() + 1;
+            }
+        }
+
+        groups.push((unit_start, group));
+        unit_starts.push(None);
+        frames.push(StructuralFrame {
+            block: opening,
+            group: Some((unit_start, group)),
+        });
+    }
+
+    target
+}
+
+fn is_ignored_unit_prefix(token: &Token<'_>) -> bool {
+    matches!(
+        token,
+        Token::WhiteSpace(_) | Token::Comment(_) | Token::CDO | Token::CDC
+    )
+}
+
+fn group_kind(source: &str, unit_start: usize, opening_offset: usize) -> GroupKind {
+    let Some(prelude) = source.get(unit_start..opening_offset) else {
+        return GroupKind::Other;
+    };
+    let trimmed = prelude.trim_start();
+    let Some(after_at) = trimmed.strip_prefix('@') else {
+        return if looks_like_custom_declaration(trimmed) {
+            GroupKind::Component
+        } else {
+            GroupKind::Style
+        };
+    };
+    let name_end = after_at
+        .find(|character: char| !character.is_alphanumeric() && character != '-')
+        .unwrap_or(after_at.len());
+    match after_at
+        .get(..name_end)
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "layer" => GroupKind::Layer,
+        "media" => GroupKind::Media,
+        "container" => GroupKind::Container,
+        "scope" => GroupKind::Scope,
+        _ => GroupKind::Other,
+    }
+}
+
+fn looks_like_custom_declaration(prelude: &str) -> bool {
+    let mut input = ParserInput::new(prelude);
+    let mut parser = Parser::new(&mut input);
+    parser
+        .expect_ident_cloned()
+        .ok()
+        .is_some_and(|name| name.starts_with("--") && parser.expect_colon().is_ok())
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum BlockKind {
+    Parenthesis,
+    Square,
+    Curly,
+}
+
+#[derive(Clone, Copy)]
+enum ScanBoundary {
+    DeclarationValue,
+    FailedCurlyBlock,
+}
+
+fn scan_nested_tokens<'i>(
+    source: &'i str,
+    start: usize,
+    base_depth: u32,
+    enclosing_production: &'static str,
+    boundary: ScanBoundary,
+) -> Result<(), ParseError<'i, Error>> {
+    let mut offset = start.min(source.len());
+    let mut blocks = Vec::new();
+    while let Some((token_start, token_end, token)) = next_source_token(source, offset) {
+        offset = token_end;
+        if let Some(closing) = closing_block(&token) {
+            if blocks.last() == Some(&closing) {
+                blocks.pop();
+                continue;
+            }
+            if blocks.is_empty()
+                && matches!(boundary, ScanBoundary::FailedCurlyBlock)
+                && closing == BlockKind::Curly
+            {
+                return Ok(());
+            }
+            if blocks.is_empty()
+                && matches!(boundary, ScanBoundary::DeclarationValue)
+                && closing == BlockKind::Curly
+            {
+                return Ok(());
+            }
+            continue;
+        }
+        if blocks.is_empty()
+            && matches!(boundary, ScanBoundary::DeclarationValue)
+            && matches!(token, Token::Semicolon)
+        {
+            return Ok(());
+        }
+        if let Some(opening) = opening_block(&token) {
+            let nested_depth = base_depth.saturating_add(blocks.len() as u32);
+            if nested_depth >= STRUCTURAL_NESTING_LIMIT {
+                return Err(nesting_limit(
+                    source,
+                    token_start,
+                    STRUCTURAL_NESTING_LIMIT,
+                    enclosing_production,
+                ));
+            }
+            blocks.push(opening);
+        }
+    }
+    Ok(())
+}
+
+fn next_source_token<'i>(source: &'i str, offset: usize) -> Option<(usize, usize, Token<'i>)> {
+    let remaining = source.get(offset..)?;
+    if remaining.is_empty() {
+        return None;
+    }
+    let mut input = ParserInput::new(remaining);
+    let mut parser = Parser::new(&mut input);
+    let token = parser
+        .next_including_whitespace_and_comments()
+        .ok()?
+        .clone();
+    let token_end = offset.saturating_add(parser.position().byte_index());
+    (token_end > offset).then_some((offset, token_end, token))
+}
+
+fn opening_block(token: &Token<'_>) -> Option<BlockKind> {
+    match token {
+        Token::Function(_) | Token::ParenthesisBlock => Some(BlockKind::Parenthesis),
+        Token::SquareBracketBlock => Some(BlockKind::Square),
+        Token::CurlyBracketBlock => Some(BlockKind::Curly),
+        _ => None,
+    }
+}
+
+fn closing_block(token: &Token<'_>) -> Option<BlockKind> {
+    match token {
+        Token::CloseParenthesis => Some(BlockKind::Parenthesis),
+        Token::CloseSquareBracket => Some(BlockKind::Square),
+        Token::CloseCurlyBracket => Some(BlockKind::Curly),
+        _ => None,
     }
 }
 

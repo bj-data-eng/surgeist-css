@@ -7,7 +7,8 @@ use super::recovery::{RecoveryLoopOutcome, RecoveryProgress, RecoveryState};
 use super::values::parse_custom_ident_from_str_at;
 use super::{
     DeclarationMode, block_item_diagnostic, consume_failed_rule_block,
-    is_declaration_recovery_unit, parse_declaration_core, structural_rule_diagnostic,
+    is_declaration_recovery_unit, parse_declaration_core, structural_recovery_production,
+    structural_rule_diagnostic,
 };
 use crate::error::{
     Error, basic, invalid_at_rule_body, invalid_at_rule_placement, invalid_qualified_rule,
@@ -59,13 +60,23 @@ pub(super) fn parse_keyframes_rule<'i, 't>(
             let Some(item) = items.next() else {
                 break;
             };
-            consume_failed_rule_block(source, items.input, item.is_err());
+            let failed_block_error = item.as_ref().err().and_then(|(_, failed_unit)| {
+                consume_failed_rule_block(
+                    source,
+                    items.input,
+                    true,
+                    &items.parser.recovery,
+                    structural_recovery_production(failed_unit),
+                )
+                .1
+            });
             let retained = item.is_ok();
             let progress_outcome = progress.finish(items.input, retained);
             let unit_end = items.input.position().byte_index();
             match item {
                 Ok(block) => blocks.push(block),
                 Err((error, failed_unit)) => {
+                    let error = failed_block_error.unwrap_or(error);
                     if let Some(diagnostic) = structural_rule_diagnostic(
                         source,
                         error,

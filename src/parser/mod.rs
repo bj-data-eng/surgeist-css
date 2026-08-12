@@ -44,7 +44,10 @@ pub(crate) use queries::parse_container_condition_for_test;
 #[cfg(test)]
 pub(crate) use queries::parse_media_query_list_for_test;
 use queries::{parse_container_condition, parse_media_query_list};
-use recovery::{RecoveryLoopOutcome, RecoveryProgress, RecoveryState, recovery_action_for_error};
+use recovery::{
+    GroupKind, RecoveryLoopOutcome, RecoveryProgress, RecoveryState, StructuralParent,
+    StructuralPreflightOutcome, preflight_structural_nesting, recovery_action_for_error,
+};
 use selectors::{
     parse_rule_selector_list, parse_scope_boundary_selector_list, parse_scoped_style_selector_list,
 };
@@ -142,77 +145,395 @@ fn parse_overflow_property<'i, 't>(
 /// ));
 /// ```
 pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
-    if parser_stack_requires_headroom(source) {
-        return parse_sheet_with_bounded_stack(source);
-    }
-    parse_sheet_inner(source)
+    parse_sheet_bounded(source, 0)
 }
 
-const PARSER_STACK_SIZE: usize = 32 * 1024 * 1024;
+fn parse_sheet_bounded(source: &str, base_depth: u32) -> crate::CssParseReport<CssSheet> {
+    let Some(preflight) = preflight_structural_nesting(source, base_depth) else {
+        return parse_sheet_inner(source, RecoveryState::at_depth(base_depth));
+    };
+    let masked = mask_source_span(source, preflight.unit_start, preflight.unit_end);
+    // Parse at most one bounded structural chunk at a time. Same-length masks
+    // retain original byte/line coordinates, and the completed child syntax is
+    // spliced back into its parser-produced enclosing groups.
+    let outer = parse_sheet_bounded(&masked, base_depth);
+    let (outer_sheet, mut diagnostics) = outer.into_parts();
 
-fn parse_sheet_with_bounded_stack(source: &str) -> crate::CssParseReport<CssSheet> {
-    std::thread::scope(|scope| {
-        let spawned = std::thread::Builder::new()
-            .name("surgeist-css-parser".to_owned())
-            .stack_size(PARSER_STACK_SIZE)
-            .spawn_scoped(scope, || {
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| parse_sheet_inner(source)))
-            });
-        match spawned {
-            Ok(handle) => match handle.join() {
-                Ok(Ok(report)) => report,
-                Ok(Err(_)) | Err(_) => panic_free_parser_fallback(source),
-            },
-            Err(_) => panic_free_parser_fallback(source),
+    match preflight.outcome {
+        StructuralPreflightOutcome::Split => {
+            let isolated = isolate_source_span(source, preflight.unit_start, preflight.unit_end);
+            let child = parse_sheet_bounded(&isolated, preflight.parent_depth);
+            let (child_sheet, mut child_diagnostics) = child.into_parts();
+            diagnostics.append(&mut child_diagnostics);
+            let sheet = splice_preflight_rules(
+                &outer_sheet,
+                &preflight.parents,
+                preflight.unit_start,
+                preflight.has_style_parents,
+                child_sheet.rules().to_vec(),
+            );
+            crate::CssParseReport::new(sheet, diagnostics)
         }
-    })
-}
-
-fn panic_free_parser_fallback(source: &str) -> crate::CssParseReport<CssSheet> {
-    let mut diagnostics = Vec::new();
-    if !source.is_empty() {
-        let parse_error = crate::error::nesting_limit(
-            source,
-            0,
-            recovery::STRUCTURAL_NESTING_LIMIT,
-            "css.stylesheet",
-        );
-        let error = from_parse_error(source, parse_error);
-        if let Some(span) = crate::CssSourceSpan::new(
-            crate::CssSourcePosition::from_byte_offset_in(source, 0),
-            crate::CssSourcePosition::from_byte_offset_in(source, source.len()),
-        ) && let Some(diagnostic) = crate::CssRecoveryDiagnostic::new(
-            error,
-            span,
-            crate::CssRecoveryAction::StopAtNestingLimit,
-        ) {
-            diagnostics.push(diagnostic);
-        }
-    }
-    crate::CssParseReport::new(CssSheet::new(), diagnostics)
-}
-
-fn parser_stack_requires_headroom(source: &str) -> bool {
-    let mut openings = 0_u32;
-    for byte in source.bytes() {
-        if matches!(byte, b'(' | b'[' | b'{') {
-            openings = openings.saturating_add(1);
-            if openings > 32 {
-                return true;
+        StructuralPreflightOutcome::NestingLimit {
+            opening_offset,
+            enclosing_production,
+        } => {
+            let error = from_parse_error(
+                source,
+                crate::error::nesting_limit(
+                    source,
+                    opening_offset,
+                    recovery::STRUCTURAL_NESTING_LIMIT,
+                    enclosing_production,
+                ),
+            );
+            if let Some(span) = crate::CssSourceSpan::new(
+                crate::CssSourcePosition::from_byte_offset_in(source, preflight.unit_start),
+                crate::CssSourcePosition::from_byte_offset_in(source, preflight.unit_end),
+            ) && let Some(diagnostic) = crate::CssRecoveryDiagnostic::new(
+                error,
+                span,
+                crate::CssRecoveryAction::StopAtNestingLimit,
+            ) {
+                diagnostics.push(diagnostic);
             }
+            crate::CssParseReport::new(outer_sheet, diagnostics)
         }
     }
-    false
 }
 
-fn parse_sheet_inner(source: &str) -> crate::CssParseReport<CssSheet> {
+fn mask_source_span(source: &str, start: usize, end: usize) -> String {
+    let mut masked = source.as_bytes().to_vec();
+    for byte in masked
+        .get_mut(start.min(source.len())..end.min(source.len()))
+        .into_iter()
+        .flatten()
+    {
+        if !matches!(*byte, b'\n' | b'\r' | b'\x0c') {
+            *byte = b' ';
+        }
+    }
+    String::from_utf8(masked).expect("ASCII masking preserves UTF-8")
+}
+
+fn isolate_source_span(source: &str, start: usize, end: usize) -> String {
+    let mut isolated = source.as_bytes().to_vec();
+    for (offset, byte) in isolated.iter_mut().enumerate() {
+        if (offset < start || offset >= end) && !matches!(*byte, b'\n' | b'\r' | b'\x0c') {
+            *byte = b' ';
+        }
+    }
+    String::from_utf8(isolated).expect("ASCII masking preserves UTF-8")
+}
+
+fn splice_preflight_rules(
+    sheet: &CssSheet,
+    parents: &[StructuralParent],
+    child_start: usize,
+    has_style_parents: bool,
+    child_rules: Vec<CssRule>,
+) -> CssSheet {
+    let rules = splice_rule_list(
+        sheet.rules(),
+        parents,
+        child_start,
+        has_style_parents,
+        child_rules,
+    );
+    let mut rebuilt = CssSheet::new();
+    if let Some(encoding) = sheet.encoding().cloned() {
+        rebuilt.set_encoding(encoding);
+    }
+    for rule in rules {
+        rebuilt.push_rule(rule);
+    }
+    rebuilt
+}
+
+fn splice_rule_list(
+    rules: &[CssRule],
+    parents: &[StructuralParent],
+    child_start: usize,
+    has_style_parents: bool,
+    child_rules: Vec<CssRule>,
+) -> Vec<CssRule> {
+    if parents.is_empty() {
+        let mut combined = rules.to_vec();
+        if has_style_parents
+            && let Some(index) = combined.iter().rposition(
+                |rule| matches!(rule, CssRule::Style(rule) if rule.declarations().is_empty()),
+            )
+        {
+            combined.remove(index);
+        }
+        let insertion = combined
+            .iter()
+            .position(|rule| rule_start(rule) > child_start)
+            .unwrap_or(combined.len());
+        combined.splice(insertion..insertion, child_rules);
+        return combined;
+    }
+    let parent = &parents[0];
+    rules
+        .iter()
+        .cloned()
+        .map(|rule| {
+            if rule_start(&rule) != parent.start {
+                return rule;
+            }
+            if matches!(parent.kind, GroupKind::Scope)
+                && let CssRule::Scope(scope) = rule
+            {
+                let scoped_children = child_rules
+                    .clone()
+                    .into_iter()
+                    .filter_map(into_scoped_rule)
+                    .collect();
+                let rebuilt = splice_scoped_rule_list(
+                    scope.rules().rules(),
+                    &parents[1..],
+                    child_start,
+                    has_style_parents,
+                    scoped_children,
+                );
+                return CssRule::Scope(CssScopeRule::new(
+                    scope.root().cloned(),
+                    scope.limit().cloned(),
+                    CssScopedRuleList::from_rules(rebuilt),
+                    scope.position(),
+                ));
+            }
+            let nested = group_rules(&rule).unwrap_or_default();
+            let rebuilt = splice_rule_list(
+                nested,
+                &parents[1..],
+                child_start,
+                has_style_parents,
+                child_rules.clone(),
+            );
+            rebuild_group_rule(rule, rebuilt)
+        })
+        .collect()
+}
+
+fn splice_scoped_rule_list(
+    rules: &[CssScopedRule],
+    parents: &[StructuralParent],
+    child_start: usize,
+    has_style_parents: bool,
+    child_rules: Vec<CssScopedRule>,
+) -> Vec<CssScopedRule> {
+    if parents.is_empty() {
+        let mut combined = rules.to_vec();
+        if has_style_parents
+            && let Some(index) = combined.iter().rposition(
+                |rule| matches!(rule, CssScopedRule::Style(rule) if rule.declarations().is_empty()),
+            )
+        {
+            combined.remove(index);
+        }
+        let insertion = combined
+            .iter()
+            .position(|rule| scoped_rule_start(rule) > child_start)
+            .unwrap_or(combined.len());
+        combined.splice(insertion..insertion, child_rules);
+        return combined;
+    }
+    let parent = &parents[0];
+    rules
+        .iter()
+        .cloned()
+        .map(|rule| {
+            if scoped_rule_start(&rule) != parent.start {
+                return rule;
+            }
+            let nested = scoped_group_rules(&rule).unwrap_or_default();
+            let rebuilt = splice_scoped_rule_list(
+                nested,
+                &parents[1..],
+                child_start,
+                has_style_parents,
+                child_rules.clone(),
+            );
+            rebuild_scoped_group_rule(rule, rebuilt)
+        })
+        .collect()
+}
+
+fn scoped_group_rules(rule: &CssScopedRule) -> Option<&[CssScopedRule]> {
+    match rule {
+        CssScopedRule::Media(rule) => Some(rule.rules().rules()),
+        CssScopedRule::Container(rule) => Some(rule.rules().rules()),
+        CssScopedRule::LayerBlock(rule) => Some(rule.rules().rules()),
+        CssScopedRule::Scope(rule) => Some(rule.rules().rules()),
+        _ => None,
+    }
+}
+
+fn rebuild_scoped_group_rule(rule: CssScopedRule, rules: Vec<CssScopedRule>) -> CssScopedRule {
+    let rules = CssScopedRuleList::from_rules(rules);
+    match rule {
+        CssScopedRule::Media(rule) => CssScopedRule::Media(CssScopedMediaRule::new(
+            rule.query().clone(),
+            rules,
+            rule.position(),
+        )),
+        CssScopedRule::Container(rule) => CssScopedRule::Container(CssScopedContainerRule::new(
+            rule.name().cloned(),
+            rule.condition().clone(),
+            rules,
+            rule.position(),
+        )),
+        CssScopedRule::LayerBlock(rule) => CssScopedRule::LayerBlock(CssScopedLayerBlockRule::new(
+            rule.name().cloned(),
+            rules,
+            rule.position(),
+        )),
+        CssScopedRule::Scope(rule) => CssScopedRule::Scope(CssScopeRule::new(
+            rule.root().cloned(),
+            rule.limit().cloned(),
+            rules,
+            rule.position(),
+        )),
+        _ => rule,
+    }
+}
+
+fn into_scoped_rule(rule: CssRule) -> Option<CssScopedRule> {
+    match rule {
+        CssRule::Style(rule) => {
+            let selectors =
+                CssScopedStyleSelectorList::try_new(vec![CssScopedStyleSelector::Selector(
+                    rule.selector().clone(),
+                )])?;
+            Some(CssScopedRule::Style(CssScopedStyleRule::new(
+                selectors,
+                rule.declarations().clone(),
+            )))
+        }
+        CssRule::LayerStatement(rule) => Some(CssScopedRule::LayerStatement(
+            CssScopedLayerStatementRule::new(rule.names().clone(), rule.position()),
+        )),
+        CssRule::LayerBlock(rule) => Some(CssScopedRule::LayerBlock(CssScopedLayerBlockRule::new(
+            rule.name().cloned(),
+            CssScopedRuleList::from_rules(
+                rule.rules()
+                    .iter()
+                    .cloned()
+                    .filter_map(into_scoped_rule)
+                    .collect(),
+            ),
+            rule.position(),
+        ))),
+        CssRule::Media(rule) => Some(CssScopedRule::Media(CssScopedMediaRule::new(
+            rule.query().clone(),
+            CssScopedRuleList::from_rules(
+                rule.rules()
+                    .iter()
+                    .cloned()
+                    .filter_map(into_scoped_rule)
+                    .collect(),
+            ),
+            rule.position(),
+        ))),
+        CssRule::Container(rule) => Some(CssScopedRule::Container(CssScopedContainerRule::new(
+            rule.name().cloned(),
+            rule.condition().clone(),
+            CssScopedRuleList::from_rules(
+                rule.rules()
+                    .iter()
+                    .cloned()
+                    .filter_map(into_scoped_rule)
+                    .collect(),
+            ),
+            rule.position(),
+        ))),
+        CssRule::Scope(rule) => Some(CssScopedRule::Scope(rule)),
+        CssRule::Import(_) | CssRule::FontFace(_) | CssRule::Keyframes(_) => None,
+    }
+}
+
+fn scoped_rule_start(rule: &CssScopedRule) -> usize {
+    match rule {
+        CssScopedRule::Style(rule) => {
+            return rule
+                .declarations()
+                .first()
+                .map_or(usize::MAX, |declaration| {
+                    declaration.position().byte_offset().value()
+                });
+        }
+        CssScopedRule::Media(rule) => rule.position(),
+        CssScopedRule::Container(rule) => rule.position(),
+        CssScopedRule::LayerStatement(rule) => rule.position(),
+        CssScopedRule::LayerBlock(rule) => rule.position(),
+        CssScopedRule::Scope(rule) => rule.position(),
+    }
+    .byte_offset()
+    .value()
+}
+
+fn group_rules(rule: &CssRule) -> Option<&[CssRule]> {
+    match rule {
+        CssRule::LayerBlock(rule) => Some(rule.rules()),
+        CssRule::Media(rule) => Some(rule.rules()),
+        CssRule::Container(rule) => Some(rule.rules()),
+        _ => None,
+    }
+}
+
+fn rebuild_group_rule(rule: CssRule, rules: Vec<CssRule>) -> CssRule {
+    match rule {
+        CssRule::LayerBlock(rule) => CssRule::LayerBlock(CssLayerBlockRule::new(
+            rule.name().cloned(),
+            rules,
+            rule.position(),
+        )),
+        CssRule::Media(rule) => CssRule::Media(CssMediaRule::new(
+            rule.query().clone(),
+            rules,
+            rule.position(),
+        )),
+        CssRule::Container(rule) => CssRule::Container(CssContainerRule::new(
+            rule.name().cloned(),
+            rule.condition().clone(),
+            rules,
+            rule.position(),
+        )),
+        _ => rule,
+    }
+}
+
+fn rule_start(rule: &CssRule) -> usize {
+    match rule {
+        CssRule::Import(rule) => rule.position(),
+        CssRule::LayerStatement(rule) => rule.position(),
+        CssRule::LayerBlock(rule) => rule.position(),
+        CssRule::FontFace(rule) => rule.position(),
+        CssRule::Keyframes(rule) => rule.position(),
+        CssRule::Style(rule) => {
+            return rule
+                .declarations()
+                .first()
+                .map_or(usize::MAX, |declaration| {
+                    declaration.position().byte_offset().value()
+                });
+        }
+        CssRule::Media(rule) => rule.position(),
+        CssRule::Container(rule) => rule.position(),
+        CssRule::Scope(rule) => rule.position(),
+    }
+    .byte_offset()
+    .value()
+}
+
+fn parse_sheet_inner(source: &str, recovery: RecoveryState) -> crate::CssParseReport<CssSheet> {
     let mut input = ParserInput::new(source);
     let mut parser = Parser::new(&mut input);
     if source.starts_with('\u{feff}') {
         let _ = parser.next_including_whitespace_and_comments();
     }
-    let recovery = RecoveryState::new();
-    let mut rule_parser = StrictRuleParser::top_level(source, recovery);
+    let mut rule_parser = StrictRuleParser::top_level(source, recovery.clone());
     let mut sheet = CssSheet::new();
     let mut diagnostics = Vec::new();
     let mut previous_end = parser.position().byte_index();
@@ -233,18 +554,16 @@ fn parse_sheet_inner(source: &str) -> crate::CssParseReport<CssSheet> {
             let Some(result) = rules.next() else {
                 break;
             };
-            let position_after_result = rules.input.position().byte_index();
-            if result.is_err()
-                && position_after_result > 0
-                && position_after_result < source.len()
-                && source.as_bytes().get(position_after_result - 1) == Some(&b'{')
-            {
-                let _: std::result::Result<(), ParseError<'_, ()>> =
-                    rules.input.parse_nested_block(|nested| {
-                        while nested.next_including_whitespace_and_comments().is_ok() {}
-                        Ok(())
-                    });
-            }
+            let failed_block_error = result.as_ref().err().and_then(|(_, failed_unit)| {
+                consume_failed_rule_block(
+                    source,
+                    rules.input,
+                    true,
+                    &recovery,
+                    structural_recovery_production(failed_unit),
+                )
+                .1
+            });
             let retained = result.is_ok();
             let progress_outcome = progress.finish(rules.input, retained);
             let unit_end = rules.input.position().byte_index();
@@ -256,6 +575,7 @@ fn parse_sheet_inner(source: &str) -> crate::CssParseReport<CssSheet> {
                     }
                 }
                 Err((error, failed_unit)) => {
+                    let error = failed_block_error.unwrap_or(error);
                     let unit_start =
                         recovery_unit_start(source, previous_end, unit_end, failed_unit);
                     let ordinary_action = if failed_unit.trim_start().starts_with('@') {
@@ -384,23 +704,27 @@ pub(super) fn block_item_diagnostic_from_start(
     crate::CssRecoveryDiagnostic::new(error, span, action)
 }
 
-pub(super) fn consume_failed_rule_block(
-    source: &str,
-    input: &mut Parser<'_, '_>,
+pub(super) fn consume_failed_rule_block<'i, 't>(
+    source: &'i str,
+    input: &mut Parser<'i, 't>,
     failed: bool,
-) -> bool {
+    recovery: &RecoveryState,
+    enclosing_production: &'static str,
+) -> (bool, Option<ParseError<'i, Error>>) {
     let position = input.position().byte_index();
     let failed_at_block = failed
         && position > 0
         && position < source.len()
         && source.as_bytes().get(position - 1) == Some(&b'{');
     if failed_at_block {
+        let nesting_error = recovery.check_failed_rule_block(source, input, enclosing_production);
         let _: std::result::Result<(), ParseError<'_, ()>> = input.parse_nested_block(|nested| {
             while nested.next_including_whitespace_and_comments().is_ok() {}
             Ok(())
         });
+        return (true, nesting_error);
     }
-    failed_at_block
+    (false, None)
 }
 
 pub(super) fn structural_rule_diagnostic(
@@ -429,6 +753,14 @@ pub(super) fn structural_recovery_action(failed_unit: &str) -> crate::CssRecover
         crate::CssRecoveryAction::DropAtRule
     } else {
         crate::CssRecoveryAction::DropQualifiedRule
+    }
+}
+
+pub(super) fn structural_recovery_production(failed_unit: &str) -> &'static str {
+    if failed_unit.trim_start().starts_with('@') {
+        "css.at-rule"
+    } else {
+        "css.qualified-rule"
     }
 }
 
@@ -960,7 +1292,16 @@ fn parse_nested_group_rules<'i, 't>(
             let Some(item) = items.next() else {
                 break;
             };
-            consume_failed_rule_block(source, items.input, item.is_err());
+            let failed_block_error = item.as_ref().err().and_then(|(_, failed_unit)| {
+                consume_failed_rule_block(
+                    source,
+                    items.input,
+                    true,
+                    &items.parser.recovery,
+                    structural_recovery_production(failed_unit),
+                )
+                .1
+            });
             let retained = item.is_ok();
             let progress_outcome = progress.finish(items.input, retained);
             let unit_end = items.input.position().byte_index();
@@ -968,6 +1309,7 @@ fn parse_nested_group_rules<'i, 't>(
             match item {
                 Ok(parsed_rules) => rules.extend(parsed_rules),
                 Err((error, failed_unit)) => {
+                    let error = failed_block_error.unwrap_or(error);
                     let action = structural_recovery_action(failed_unit);
                     if let Some(diagnostic) = structural_rule_diagnostic(
                         source,
@@ -1013,7 +1355,16 @@ pub(super) fn parse_scoped_rule_list<'i, 't>(
             let Some(item) = items.next() else {
                 break;
             };
-            consume_failed_rule_block(source, items.input, item.is_err());
+            let failed_block_error = item.as_ref().err().and_then(|(_, failed_unit)| {
+                consume_failed_rule_block(
+                    source,
+                    items.input,
+                    true,
+                    &items.parser.recovery,
+                    structural_recovery_production(failed_unit),
+                )
+                .1
+            });
             let retained = item.is_ok();
             let progress_outcome = progress.finish(items.input, retained);
             let unit_end = items.input.position().byte_index();
@@ -1021,6 +1372,7 @@ pub(super) fn parse_scoped_rule_list<'i, 't>(
             match item {
                 Ok(parsed_rules) => rules.extend(parsed_rules),
                 Err((error, failed_unit)) => {
+                    let error = failed_block_error.unwrap_or(error);
                     let action = structural_recovery_action(failed_unit);
                     if let Some(diagnostic) = structural_rule_diagnostic(
                         source,

@@ -14,7 +14,7 @@ use super::{
     CssContainerPrelude, CssScopePrelude, Recovered, StrictDeclarationParser,
     block_item_diagnostic, consume_failed_rule_block, is_declaration_recovery_unit,
     parse_container_prelude, parse_layer_prelude, parse_scope_prelude, parse_scoped_rule_list,
-    structural_recovery_action, structural_rule_diagnostic,
+    structural_recovery_action, structural_recovery_production, structural_rule_diagnostic,
 };
 use crate::error::{
     Error, invalid_at_rule_block, invalid_at_rule_placement, invalid_selector, invalid_syntax,
@@ -45,7 +45,19 @@ pub(super) fn parse_style_rule_block<'i, 't>(
         let Some(item) = items.next() else {
             break;
         };
-        let failed_at_block = consume_failed_rule_block(source, items.input, item.is_err());
+        let (failed_at_block, failed_block_error) = item
+            .as_ref()
+            .err()
+            .map(|(_, failed_unit)| {
+                consume_failed_rule_block(
+                    source,
+                    items.input,
+                    true,
+                    &items.parser.recovery,
+                    structural_recovery_production(failed_unit),
+                )
+            })
+            .unwrap_or((false, None));
         let retained = item.is_ok();
         let progress_outcome = progress.finish(items.input, retained);
         let unit_end = items.input.position().byte_index();
@@ -71,6 +83,7 @@ pub(super) fn parse_style_rule_block<'i, 't>(
                 }
             }
             Err((error, failed_unit)) => {
+                let error = failed_block_error.unwrap_or(error);
                 flush_declarations(&parent_selectors, &mut declaration_buffer, &mut rules);
                 let action = structural_recovery_action(failed_unit);
                 if let Some(diagnostic) = structural_rule_diagnostic(

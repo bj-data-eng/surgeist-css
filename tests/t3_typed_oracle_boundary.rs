@@ -191,6 +191,31 @@ fn function_spans(code: &str) -> Vec<Span> {
     spans
 }
 
+fn function_headers(code: &str) -> Vec<&str> {
+    let bytes = code.as_bytes();
+    let mut headers = Vec::new();
+    let mut index = 0usize;
+    while let Some(relative) = code[index..].find("fn ") {
+        let start = index + relative;
+        if start != 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_') {
+            index = start + 3;
+            continue;
+        }
+        let tail = &code[start..];
+        let body = tail.find('{');
+        let declaration = tail.find(';');
+        let end = match (body, declaration) {
+            (Some(body), Some(declaration)) => body.min(declaration),
+            (Some(body), None) => body,
+            (None, Some(declaration)) => declaration,
+            (None, None) => break,
+        };
+        headers.push(&code[start..start + end]);
+        index = start + end + 1;
+    }
+    headers
+}
+
 fn braced_type_spans(code: &str) -> Vec<Span> {
     let mut spans = Vec::new();
     for marker in ["enum ", "struct ", "trait "] {
@@ -220,6 +245,129 @@ fn braced_type_spans(code: &str) -> Vec<Span> {
         }
     }
     spans
+}
+
+fn impl_spans(code: &str) -> Vec<Span> {
+    let bytes = code.as_bytes();
+    let mut spans = Vec::new();
+    let mut index = 0usize;
+    while let Some(relative) = code[index..].find("impl") {
+        let start = index + relative;
+        let prefix_is_identifier =
+            start != 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_');
+        let suffix = start + "impl".len();
+        let suffix_is_identifier = bytes
+            .get(suffix)
+            .is_some_and(|byte| byte.is_ascii_alphanumeric() || *byte == b'_');
+        if prefix_is_identifier || suffix_is_identifier {
+            index = suffix;
+            continue;
+        }
+        let Some(relative_open) = code[start..].find('{') else {
+            break;
+        };
+        let body = balanced_span(code, start + relative_open);
+        spans.push(Span {
+            start,
+            end: body.end,
+        });
+        index = body.end;
+    }
+    spans
+}
+
+fn returns_unit_or_never(header: &str) -> bool {
+    let Some((_, return_type)) = header.split_once("->") else {
+        return true;
+    };
+    let return_type = return_type
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+    matches!(return_type.as_str(), "()" | "!")
+        || return_type.starts_with("()where")
+        || return_type.starts_with("!where")
+}
+
+fn has_typed_property_value_ref_closure(code: &str) -> bool {
+    let compact = code
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+    let marker = "CssKnownPropertyValueRef";
+    let mut offset = 0usize;
+    while let Some(relative) = compact[offset..].find(marker) {
+        let start = offset + relative;
+        let boundary = compact[..start]
+            .rfind([';', '{', '}'])
+            .map_or(0, |boundary| boundary + 1);
+        let prefix = &compact[boundary..start];
+        let tail = &compact[start + marker.len()..];
+        let end = tail.find([';', '{', '}']).unwrap_or(tail.len());
+        let typed_parameter = prefix
+            .rfind('|')
+            .is_some_and(|pipe| prefix[pipe + 1..].ends_with(':'))
+            && tail[..end].contains('|');
+        let typed_return = prefix
+            .rfind("->")
+            .is_some_and(|arrow| prefix[..arrow].matches('|').count() >= 2);
+        if typed_parameter || typed_return {
+            return true;
+        }
+        offset = start + marker.len();
+    }
+    false
+}
+
+fn assert_property_value_ref_boundaries(path: &str, source: &str) {
+    let code = rust_code_without_comments_or_literals(source);
+    let compact = code
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect::<String>();
+    for implementation in impl_spans(&code) {
+        let implementation = &code[implementation.start..implementation.end];
+        let header = &implementation[..implementation.find('{').expect("impl body")];
+        assert!(
+            !header.contains("CssKnownPropertyValueRef"),
+            "{path} implements a reusable conversion for the heterogeneous property view"
+        );
+    }
+    assert!(
+        !has_typed_property_value_ref_closure(&code),
+        "{path} contains a typed property-value-ref closure"
+    );
+    for header in function_headers(&code) {
+        if !header.contains("CssKnownPropertyValueRef") {
+            continue;
+        }
+        assert!(
+            returns_unit_or_never(header),
+            "{path} property-value-ref function must return unit or never: {}",
+            header.trim()
+        );
+    }
+    for function in function_spans(&code) {
+        let function = &code[function.start..function.end];
+        let header_end = function.find('{').expect("function body");
+        let header = &function[..header_end];
+        if !header.contains("CssKnownPropertyValueRef") {
+            continue;
+        }
+        assert!(
+            !function.contains("to_string")
+                && !function.contains("to_owned")
+                && !function.contains("format!"),
+            "{path} contains a reusable property-to-payload conversion"
+        );
+    }
+    assert!(
+        !compact.contains("implFrom<CssKnownPropertyValueRef")
+            && !compact.contains("implTryFrom<CssKnownPropertyValueRef")
+            && !compact.contains("From<&CssKnownPropertyValueRef")
+            && !compact.contains("TryFrom<&CssKnownPropertyValueRef"),
+        "{path} converts the heterogeneous property view"
+    );
 }
 
 fn string_literal_spans(source: &str) -> Vec<Span> {
@@ -364,10 +512,28 @@ fn property_value_ref_functions_are_assertion_only_and_return_unit() {
 }
 
 #[test]
+fn renamed_property_value_ref_inspector_returning_text_is_rejected() {
+    let mutation = r#"
+        fn inspect(value: CssKnownPropertyValueRef<'_>) -> &str {
+            match value {
+                CssKnownPropertyValueRef::Display(value) => value.as_css(),
+                _ => "future",
+            }
+        }
+    "#;
+    assert!(
+        std::panic::catch_unwind(|| assert_property_value_ref_boundaries("mutation.rs", mutation))
+            .is_err(),
+        "a renamed heterogeneous view-to-text inspector must be rejected"
+    );
+}
+
+#[test]
 fn migrated_helpers_have_no_generic_debug_or_broad_value_proxy() {
     for path in MIGRATED_HELPER_PATHS {
         let source = source(path);
         let code = rust_code_without_comments_or_literals(&source);
+        assert_property_value_ref_boundaries(path, &source);
         let mut debug_offset = 0usize;
         while let Some(relative) = code[debug_offset..].find("Debug") {
             let offset = debug_offset + relative;
@@ -386,38 +552,6 @@ fn migrated_helpers_have_no_generic_debug_or_broad_value_proxy() {
                 !is_broad_css_value_type(definition),
                 "{path} contains a structurally broad CSS value proxy: {}",
                 definition[..definition.find('{').expect("type body")].trim()
-            );
-        }
-        let compact = code
-            .chars()
-            .filter(|character| !character.is_whitespace())
-            .collect::<String>();
-        assert!(
-            !compact.contains("implFrom<CssKnownPropertyValueRef")
-                && !compact.contains("implTryFrom<CssKnownPropertyValueRef")
-                && !compact.contains("From<&CssKnownPropertyValueRef")
-                && !compact.contains("TryFrom<&CssKnownPropertyValueRef"),
-            "{path} converts the heterogeneous property view"
-        );
-        for function in function_spans(&code) {
-            let function = &code[function.start..function.end];
-            let header_end = function.find('{').expect("function body");
-            let header = &function[..header_end];
-            if !header.contains("CssKnownPropertyValueRef") {
-                continue;
-            }
-            let return_type = header.split_once("->").map(|(_, value)| value.trim());
-            assert!(
-                return_type.is_none_or(|return_type| {
-                    !return_type.starts_with('(') && !return_type.contains("String")
-                }),
-                "{path} collapses a property value ref into a tuple or owned string"
-            );
-            assert!(
-                !function.contains("to_string")
-                    && !function.contains("to_owned")
-                    && !function.contains("format!"),
-                "{path} contains a reusable property-to-payload conversion"
             );
         }
     }

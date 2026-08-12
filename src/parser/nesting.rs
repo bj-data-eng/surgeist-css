@@ -444,7 +444,7 @@ impl<'i> DeclarationParser<'i> for NestedStyleRuleParser<'i> {
         declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
         let mut declaration_parser =
-            StrictDeclarationParser::new(self.source, self.recovery.clone());
+            StrictDeclarationParser::new(self.source, self.recovery.clone(), false);
         declaration_parser
             .parse_value(name, input, declaration_start)
             .map(Box::new)

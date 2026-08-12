@@ -170,6 +170,82 @@ pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
     parse_sheet_bounded(source, 0, BoundedParseContext::Sheet)
 }
 
+/// Parses a UTF-8 style attribute into valid ordinary declarations and recovery diagnostics.
+///
+/// The parser accepts an empty declaration list and an optional final semicolon. Each invalid
+/// declaration candidate is discarded independently, so later valid declarations remain
+/// eligible. Retained declarations use the same property, custom-property, substitution, and
+/// importance grammar as declarations in ordinary style-rule blocks. At-rules, qualified rules,
+/// and other non-declaration input never produce a rule node from this front door.
+///
+/// ```
+/// use surgeist_css::{CssPropertyNameRef, CssRecoveryAction, parse_style_attribute};
+///
+/// let report = parse_style_attribute("color: red; @unknown x; width: 2px !important;");
+/// assert_eq!(report.syntax().len(), 2);
+/// assert!(matches!(
+///     report.syntax()[1].property_name(),
+///     CssPropertyNameRef::Known(property) if property.canonical_name() == "width"
+/// ));
+/// assert!(matches!(
+///     report.diagnostics()[0].action(),
+///     CssRecoveryAction::DropDeclaration
+/// ));
+/// ```
+#[must_use]
+pub fn parse_style_attribute(source: &str) -> crate::CssParseReport<CssDeclarationList> {
+    if recovery::maximum_nested_depth(source) > recovery::DIRECT_PARSE_DEPTH {
+        return std::thread::scope(|scope| {
+            let parser = std::thread::Builder::new()
+                .name("surgeist-css-bounded-style-attribute-parser".to_owned())
+                .stack_size(16 * 1024 * 1024)
+                .spawn_scoped(scope, || parse_style_attribute_inner(source));
+            match parser {
+                Ok(parser) => match parser.join() {
+                    Ok(report) => report,
+                    Err(panic) => std::panic::resume_unwind(panic),
+                },
+                Err(_) => parse_style_attribute_inner(source),
+            }
+        });
+    }
+    parse_style_attribute_inner(source)
+}
+
+fn parse_style_attribute_inner(source: &str) -> crate::CssParseReport<CssDeclarationList> {
+    let recovery = RecoveryState::at_depth(source, 0, StyleContextCaptures::default());
+    let mut input = ParserInput::new(source);
+    let mut parser = Parser::new(&mut input);
+    let recovered = parse_declaration_list(
+        source,
+        &mut parser,
+        recovery.clone(),
+        DeclarationListContext::StyleAttribute,
+    );
+    let (syntax, mut diagnostics) = match recovered {
+        Ok(recovered) => (recovered.syntax, recovered.diagnostics),
+        Err(error) => {
+            let error = from_parse_error(source, error);
+            let diagnostics = crate::CssSourceSpan::new(
+                crate::CssSourcePosition::from_byte_offset_in(source, 0),
+                crate::CssSourcePosition::from_byte_offset_in(source, source.len()),
+            )
+            .and_then(|span| {
+                crate::CssRecoveryDiagnostic::new(
+                    error,
+                    span,
+                    crate::CssRecoveryAction::DropDeclaration,
+                )
+            })
+            .into_iter()
+            .collect();
+            (CssDeclarationList::new(Vec::new()), diagnostics)
+        }
+    };
+    diagnostics.extend(recovery.take_implicit_closure_diagnostics(source));
+    crate::CssParseReport::new(syntax, diagnostics)
+}
+
 #[derive(Clone)]
 enum BoundedParseContext {
     Sheet,
@@ -842,6 +918,41 @@ fn discard_malformed_top_level_token(
                     error,
                     span,
                     crate::CssRecoveryAction::DropQualifiedRule,
+                );
+            }
+            Ok(_) | Err(_) => {
+                input.reset(&state);
+                return None;
+            }
+        }
+    }
+}
+
+fn discard_malformed_style_attribute_token(
+    source: &str,
+    input: &mut Parser<'_, '_>,
+) -> Option<crate::CssRecoveryDiagnostic> {
+    loop {
+        let state = input.state();
+        let token_start = input.position().byte_index();
+        match input.next_including_whitespace_and_comments() {
+            Ok(Token::WhiteSpace(_) | Token::Comment(_)) => {}
+            Ok(
+                token @ (Token::CloseParenthesis
+                | Token::CloseSquareBracket
+                | Token::CloseCurlyBracket),
+            ) => {
+                let token = token.clone();
+                let token_end = input.position().byte_index();
+                let error = crate::error::unexpected_token_at(source, token_start, &token);
+                let span = crate::CssSourceSpan::new(
+                    crate::CssSourcePosition::from_byte_offset_in(source, token_start),
+                    crate::CssSourcePosition::from_byte_offset_in(source, token_end),
+                )?;
+                return crate::CssRecoveryDiagnostic::new(
+                    error,
+                    span,
+                    crate::CssRecoveryAction::DropDeclaration,
                 );
             }
             Ok(_) | Err(_) => {
@@ -2042,21 +2153,70 @@ fn parse_declaration_block<'i, 't>(
     input: &mut Parser<'i, 't>,
     recovery: RecoveryState,
 ) -> std::result::Result<Recovered<CssDeclarationList>, ParseError<'i, Error>> {
+    parse_declaration_list(source, input, recovery, DeclarationListContext::Block)
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum DeclarationListContext {
+    Block,
+    StyleAttribute,
+}
+
+fn parse_declaration_list<'i, 't>(
+    source: &'i str,
+    input: &mut Parser<'i, 't>,
+    recovery: RecoveryState,
+    context: DeclarationListContext,
+) -> std::result::Result<Recovered<CssDeclarationList>, ParseError<'i, Error>> {
     let mut declarations = Vec::new();
     let mut diagnostics = Vec::new();
-    let mut declaration_parser = StrictDeclarationParser::new(source, recovery);
+    let mut declaration_parser = StrictDeclarationParser::new(
+        source,
+        recovery.clone(),
+        context == DeclarationListContext::StyleAttribute,
+    );
     let mut items = RuleBodyParser::new(input, &mut declaration_parser);
+    let mut previous_end = items.input.position().byte_index();
     loop {
         let progress = RecoveryProgress::record(items.input);
+        if context == DeclarationListContext::StyleAttribute
+            && let Some(diagnostic) = discard_malformed_style_attribute_token(source, items.input)
+        {
+            previous_end = diagnostic.span().end().byte_offset().value();
+            diagnostics.push(diagnostic);
+            if progress.finish(items.input, false) == RecoveryLoopOutcome::Terminated {
+                break;
+            }
+            continue;
+        }
         let Some(item) = items.next() else {
             break;
         };
+        let (failed_at_block, failed_block_error) =
+            if context == DeclarationListContext::StyleAttribute {
+                item.as_ref()
+                    .err()
+                    .map(|(_, _)| {
+                        consume_failed_rule_block(
+                            source,
+                            items.input,
+                            true,
+                            &recovery,
+                            "css.declaration",
+                        )
+                    })
+                    .unwrap_or((false, None))
+            } else {
+                (false, None)
+            };
         let retained = item.is_ok();
         let progress_outcome = progress.finish(items.input, retained);
         let unit_end = items.input.position().byte_index();
         match item {
             Ok(declaration) => declarations.push(declaration),
-            Err((error, failed_unit)) if is_declaration_recovery_unit(failed_unit) => {
+            Err((error, failed_unit))
+                if is_declaration_recovery_unit(failed_unit) && !failed_at_block =>
+            {
                 if let Some(diagnostic) = block_item_diagnostic(
                     source,
                     error,
@@ -2067,8 +2227,22 @@ fn parse_declaration_block<'i, 't>(
                     diagnostics.push(diagnostic);
                 }
             }
+            Err((error, failed_unit)) if context == DeclarationListContext::StyleAttribute => {
+                let error = failed_block_error.unwrap_or(error);
+                let unit_start = recovery_unit_start(source, previous_end, unit_end, failed_unit);
+                if let Some(diagnostic) = block_item_diagnostic_from_start(
+                    source,
+                    error,
+                    unit_start,
+                    unit_end,
+                    crate::CssRecoveryAction::DropDeclaration,
+                ) {
+                    diagnostics.push(diagnostic);
+                }
+            }
             Err((error, _)) => return Err(error),
         }
+        previous_end = unit_end;
         if progress_outcome == RecoveryLoopOutcome::Terminated {
             break;
         }
@@ -2082,11 +2256,20 @@ fn parse_declaration_block<'i, 't>(
 pub(super) struct StrictDeclarationParser<'s> {
     source: &'s str,
     recovery: RecoveryState,
+    parse_non_declarations: bool,
 }
 
 impl<'s> StrictDeclarationParser<'s> {
-    pub(super) fn new(source: &'s str, recovery: RecoveryState) -> Self {
-        Self { source, recovery }
+    pub(super) fn new(
+        source: &'s str,
+        recovery: RecoveryState,
+        parse_non_declarations: bool,
+    ) -> Self {
+        Self {
+            source,
+            recovery,
+            parse_non_declarations,
+        }
     }
 }
 
@@ -2108,7 +2291,7 @@ impl<'i> RuleBodyItemParser<'i, CssDeclaration, Error> for StrictDeclarationPars
     }
 
     fn parse_qualified(&self) -> bool {
-        false
+        self.parse_non_declarations
     }
 }
 

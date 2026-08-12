@@ -8,9 +8,9 @@
 //!
 //! Parse failures expose typed [`ErrorKind`] values, stable [`CssErrorCode`]
 //! roots, and semantic source positions so callers do not parse display text.
-//! [`parse_sheet`] returns retained authored syntax and diagnostic provenance in
-//! one report. It does not run cascade, substitution, selector matching,
-//! contextual resolution, or resource loading.
+//! [`parse_sheet`] and [`parse_style_attribute`] return retained authored syntax
+//! and diagnostic provenance in one report. They do not run cascade,
+//! substitution, selector matching, contextual resolution, or resource loading.
 
 mod error;
 mod parser;
@@ -23,7 +23,7 @@ mod test_support;
 mod validation;
 
 pub use error::*;
-pub use parser::parse_sheet;
+pub use parser::{parse_sheet, parse_style_attribute};
 pub use properties::{CssKnownDeclaration, CssKnownProperty, CssOverflowPropertyValue};
 pub use report::*;
 pub use source::*;

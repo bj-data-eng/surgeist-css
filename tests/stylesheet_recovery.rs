@@ -57,6 +57,26 @@ fn stylesheet_recovery_empty_input_returns_clean_empty_report_and_parts() {
 }
 
 #[test]
+fn stylesheet_recovery_top_level_cdo_is_silent_before_and_between_valid_rules() {
+    let source = "<!-- .before { color: red; } <!-- .after { color: blue; }";
+
+    let report = parse_sheet(source);
+
+    assert_eq!(style_rule_names(&report), ["before", "after"]);
+    assert!(report.is_clean());
+}
+
+#[test]
+fn stylesheet_recovery_top_level_cdc_is_silent_before_and_between_valid_rules() {
+    let source = "--> .before { color: red; } --> .after { color: blue; }";
+
+    let report = parse_sheet(source);
+
+    assert_eq!(style_rule_names(&report), ["before", "after"]);
+    assert!(report.is_clean());
+}
+
+#[test]
 fn stylesheet_recovery_unknown_block_at_rule_keeps_surrounding_rules_and_balanced_span() {
     let failed = "@mystery one(foo; bar) { nested: {x; y}; }";
     let source = format!(".before {{ color: red; }} {failed} .after {{ color: blue; }}");

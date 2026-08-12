@@ -25,7 +25,7 @@ mod variables;
 
 use cssparser::{
     AtRuleParser, CowRcStr, DeclarationParser, Delimiter, ParseError, Parser, ParserInput,
-    ParserState, QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, StyleSheetParser,
+    ParserState, QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, StyleSheetParser, Token,
     match_ignore_ascii_case,
 };
 
@@ -148,7 +148,11 @@ pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
 
     {
         let mut rules = RuleBodyParser::new(&mut parser, &mut rule_parser);
-        while let Some(result) = rules.next() {
+        loop {
+            skip_top_level_legacy_tokens(rules.input);
+            let Some(result) = rules.next() else {
+                break;
+            };
             let position_after_result = rules.input.position().byte_index();
             if result.is_err()
                 && position_after_result > 0
@@ -202,6 +206,19 @@ pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
     }
 
     crate::CssParseReport::new(sheet, diagnostics)
+}
+
+fn skip_top_level_legacy_tokens(input: &mut Parser<'_, '_>) {
+    loop {
+        let state = input.state();
+        match input.next_including_whitespace_and_comments() {
+            Ok(Token::WhiteSpace(_) | Token::Comment(_) | Token::CDO | Token::CDC) => {}
+            Ok(_) | Err(_) => {
+                input.reset(&state);
+                break;
+            }
+        }
+    }
 }
 
 fn recovery_unit_start(

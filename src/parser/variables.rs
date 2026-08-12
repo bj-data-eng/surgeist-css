@@ -2,8 +2,8 @@ use cssparser::{BasicParseErrorKind, ParseError, Parser, Token};
 
 use crate::error::{Error, basic, invalid_syntax};
 use crate::syntax::{
-    CssAuthoredDeclarationValue, CssCustomPropertyName, CssCustomPropertyValue, CssValue,
-    CssVariableFallback, CssVariableReference,
+    CssAuthoredDeclarationValue, CssCustomPropertyDeclaredValue, CssCustomPropertyName,
+    CssCustomPropertyValue, CssVariableFallback, CssVariableReference,
 };
 use crate::validation::parse_global_keyword;
 
@@ -18,13 +18,13 @@ pub(crate) fn parse_custom_property_name(name: &str) -> Option<CssCustomProperty
 
 pub(crate) fn parse_custom_property_value<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> Result<CssValue, ParseError<'i, Error>> {
+) -> Result<CssCustomPropertyDeclaredValue, ParseError<'i, Error>> {
     let state = input.state();
     if let Ok(ident) = input.expect_ident_cloned()
         && let Some(keyword) = parse_global_keyword(&ident)
     {
         if input.is_exhausted() {
-            return Ok(CssValue::GlobalKeyword(keyword));
+            return Ok(CssCustomPropertyDeclaredValue::Global(keyword));
         }
         return Err(invalid_syntax(
             input.current_source_location(),
@@ -34,9 +34,9 @@ pub(crate) fn parse_custom_property_value<'i, 't>(
     input.reset(&state);
 
     let (authored, references) = collect_authored_declaration_value(input)?;
-    Ok(CssValue::CustomProperty(CssCustomPropertyValue::new(
-        authored, references,
-    )))
+    Ok(CssCustomPropertyDeclaredValue::Value(
+        CssCustomPropertyValue::new(authored, references),
+    ))
 }
 
 pub(crate) fn collect_authored_declaration_value<'i, 't>(

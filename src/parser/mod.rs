@@ -65,21 +65,29 @@ use crate::validation::{PropertyNameStatus, classify_property_name, parse_global
 pub(crate) use crate::validation::property_for_supported_name;
 
 macro_rules! define_property_dispatch {
-    ($input:ident; $(
+    ($input:ident;
+        All, $all_canonical:literal, [$($all_alias:literal),*], $all_stable_id:literal,
+        $all_value:ty, $all_parser:ident, $all_dispatch:block;
+        $(
         $variant:ident, $canonical:literal, [$($alias:literal),*], $stable_id:literal,
         $value:ty, $parser:ident, $dispatch:block;
     )*) => {
         fn parse_known_property_value<'i, 't>(
             property: crate::CssKnownProperty,
             $input: &mut Parser<'i, 't>,
-        ) -> std::result::Result<(CssProperty, CssValue), ParseError<'i, Error>> {
-            let value = match property {
+        ) -> std::result::Result<CssKnownDeclaration, ParseError<'i, Error>> {
+            match property {
+                crate::CssKnownProperty::All => {
+                    let _authored_value_type = std::marker::PhantomData::<$all_value>;
+                    let keyword = $all_dispatch;
+                    Ok(CssKnownDeclaration::All(CssAllDeclaredValue::Global(keyword)))
+                }
                 $(crate::CssKnownProperty::$variant => {
                     let _authored_value_type = std::marker::PhantomData::<$value>;
-                    $dispatch
+                    let value = $dispatch;
+                    Ok(CssKnownDeclaration::$variant(CssDeclaredValue::Value(value)))
                 },)*
-            };
-            Ok((property.into(), value))
+            }
         }
     };
 }
@@ -102,10 +110,6 @@ fn parse_overflow_property<'i, 't>(
     match parse_overflow_value(input)? {
         CssValue::Overflow(value) => Ok(CssOverflowPropertyValue::Single(value)),
         CssValue::OverflowAxes(value) => Ok(CssOverflowPropertyValue::Pair(value)),
-        _ => Err(invalid_syntax(
-            input.current_source_location(),
-            "overflow parser returned a non-overflow authored value",
-        )),
     }
 }
 
@@ -899,8 +903,7 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             let value = parse_custom_property_value(input)
                 .map_err(|error| with_property_context(error, name.as_ref()))?;
             return Ok(CssDeclaration::new(
-                CssProperty::Custom(custom_name),
-                value,
+                CssDeclarationBody::Custom(CssCustomDeclaration::new(custom_name, value)),
                 position,
             ));
         }
@@ -911,9 +914,9 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
                 .map_err(|error| with_property_context(error, name.as_ref()))?;
             if !references.is_empty() {
                 return Ok(CssDeclaration::new(
-                    supported_property,
-                    CssValue::VariableDependent(CssVariableDependentValue::new(
-                        authored, references,
+                    CssDeclarationBody::Known(CssKnownDeclaration::from_substitution_dependent(
+                        supported_property,
+                        CssSubstitutionDependentValue::new(authored, references),
                     )),
                     position,
                 ));
@@ -936,9 +939,11 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
                             ));
                         }
                         return Ok(CssDeclaration::new(
-                            property_for_supported_name(name.as_ref())
-                                .expect("supported property has CssProperty"),
-                            CssValue::GlobalKeyword(keyword),
+                            CssDeclarationBody::Known(CssKnownDeclaration::from_global(
+                                property_for_supported_name(name.as_ref())
+                                    .expect("supported property has CssKnownProperty"),
+                                keyword,
+                            )),
                             position,
                         ));
                     }
@@ -959,12 +964,14 @@ impl<'i> DeclarationParser<'i> for StrictDeclarationParser {
             crate::CssKnownProperty::from_name(name.as_ref()).ok_or_else(|| {
                 property_name_error(declaration_start.source_location(), name.as_ref())
             })?;
-        let result = parse_known_property_value(known_property, input)
+        let declaration = parse_known_property_value(known_property, input)
             .map_err(|error| with_property_context(error, name.as_ref()))?;
-        let (property, value) = result;
         input.expect_exhausted().map_err(|error| {
-            with_declaration_annotation_context(error.into(), property.clone(), false)
+            with_declaration_annotation_context(error.into(), known_property, false)
         })?;
-        Ok(CssDeclaration::new(property, value, position))
+        Ok(CssDeclaration::new(
+            CssDeclarationBody::Known(declaration),
+            position,
+        ))
     }
 }

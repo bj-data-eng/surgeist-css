@@ -30,7 +30,7 @@ fn declaration_value(input: &str, property: CssProperty) -> CssValue {
     style_rule(&sheet.rules()[0])
         .declarations()
         .iter()
-        .find(|declaration| declaration.property() == &property)
+        .find(|declaration| declaration.property() == property)
         .unwrap()
         .value()
         .clone()
@@ -41,7 +41,7 @@ fn declaration(input: &str, property: CssProperty) -> CssDeclaration {
     style_rule(&sheet.rules()[0])
         .declarations()
         .iter()
-        .find(|declaration| declaration.property() == &property)
+        .find(|declaration| declaration.property() == property)
         .unwrap()
         .clone()
 }
@@ -344,8 +344,9 @@ fn keyframes_rule_accessors_expose_authored_structure() {
     let name = CssKeyframesName::Ident(CssCustomIdent::new("fade"));
     let selector = CssKeyframeSelectorList::try_new(vec![CssKeyframeSelector::From]).unwrap();
     let declaration = CssDeclaration::new(
-        CssProperty::Opacity,
-        CssValue::Opacity(CssOpacity::try_new(0.0).unwrap()),
+        CssDeclarationBody::Known(CssKnownDeclaration::Opacity(CssDeclaredValue::Value(
+            CssOpacity::try_new(0.0).unwrap(),
+        ))),
         source_position(1, 1),
     );
     let block =
@@ -515,8 +516,9 @@ fn keyframes_constructors_reject_invalid_states() {
     let location = source_position(1, 1);
     let name = CssKeyframesName::Ident(CssCustomIdent::new("fade"));
     let declaration = CssDeclaration::new(
-        CssProperty::Opacity,
-        CssValue::Opacity(CssOpacity::try_new(1.0).unwrap()),
+        CssDeclarationBody::Known(CssKnownDeclaration::Opacity(CssDeclaredValue::Value(
+            CssOpacity::try_new(1.0).unwrap(),
+        ))),
         location,
     );
     let from = CssKeyframeSelectorList::try_new(vec![CssKeyframeSelector::From]).unwrap();
@@ -640,8 +642,9 @@ fn scope_rule_model_keeps_scoped_selectors_and_rules_separate() {
     ])
     .unwrap();
     let declaration = CssDeclaration::new(
-        CssProperty::Color,
-        CssValue::Color(CssColor::Rgba(CssRgbaColor::try_new(0, 0, 0, 1.0).unwrap())),
+        CssDeclarationBody::Known(CssKnownDeclaration::Color(CssDeclaredValue::Value(
+            CssColor::Rgba(CssRgbaColor::try_new(0, 0, 0, 1.0).unwrap()),
+        ))),
         source_position(6, 7),
     );
     let style = CssScopedStyleRule::new(selectors.clone(), vec![declaration.clone()]);
@@ -1839,7 +1842,7 @@ fn public_api_exposes_generated_content_list_style_and_counter_values() {
     let content = style
         .declarations()
         .iter()
-        .find(|declaration| declaration.property() == &CssProperty::Content)
+        .find(|declaration| declaration.property() == CssProperty::Content)
         .unwrap();
     let CssValue::Content(CssContent::Items(content_list)) = content.value() else {
         panic!("expected content item list");
@@ -1879,7 +1882,7 @@ fn public_api_exposes_generated_content_list_style_and_counter_values() {
     let list_style = style
         .declarations()
         .iter()
-        .find(|declaration| declaration.property() == &CssProperty::ListStyle)
+        .find(|declaration| declaration.property() == CssProperty::ListStyle)
         .unwrap();
     let CssValue::ListStyle(list_style) = list_style.value() else {
         panic!("expected list-style shorthand");
@@ -1899,7 +1902,7 @@ fn public_api_exposes_generated_content_list_style_and_counter_values() {
     let counter_reset = style
         .declarations()
         .iter()
-        .find(|declaration| declaration.property() == &CssProperty::CounterReset)
+        .find(|declaration| declaration.property() == CssProperty::CounterReset)
         .unwrap();
     let CssValue::CounterChanges(CssCounterChanges::Changes(changes)) = counter_reset.value()
     else {
@@ -1996,11 +1999,11 @@ fn variable_dependent_value_constructor_requires_references() {
     let reference =
         CssVariableReference::new(CssCustomPropertyName::try_new("--space").unwrap(), None);
     let value =
-        CssVariableDependentValue::try_new(authored.clone(), vec![reference.clone()]).unwrap();
+        CssSubstitutionDependentValue::try_new(authored.clone(), vec![reference.clone()]).unwrap();
     assert_eq!(value.as_css(), "var(--space)");
     assert_eq!(value.references(), &[reference]);
     assert_eq!(
-        CssVariableDependentValue::try_new(authored, Vec::new()),
+        CssSubstitutionDependentValue::try_new(authored, Vec::new()),
         None
     );
 }
@@ -4524,7 +4527,10 @@ fn coverage_global_keyword_cases_derive_from_supported_property_metadata() {
     assert_eq!(cases.len(), supported_properties.len());
     for (case, supported_property) in cases.iter().zip(supported_properties) {
         assert_eq!(case.property_name, supported_property.name);
-        assert_eq!(case.expected_property, supported_property.property);
+        assert_eq!(
+            case.expected_property.known(),
+            Some(supported_property.known_property)
+        );
     }
 }
 
@@ -7844,7 +7850,7 @@ fn rejects_non_global_all_values_with_typed_unsupported_value() {
         let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
             panic!("unexpected error kind: {:?}", error.kind());
         };
-        assert_eq!(detail.property(), &CssProperty::All);
+        assert_eq!(detail.property(), CssKnownProperty::All);
     }
 }
 
@@ -7865,7 +7871,7 @@ fn unsupported_display_keyword_is_typed_with_property_context() {
     let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
         panic!("unexpected error kind: {:?}", error.kind());
     };
-    assert_eq!(detail.property(), &CssProperty::Display);
+    assert_eq!(detail.property(), CssKnownProperty::Display);
 }
 
 #[test]
@@ -7875,7 +7881,7 @@ fn unsupported_overflow_keyword_is_typed_with_property_context() {
     let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
         panic!("unexpected error kind: {:?}", error.kind());
     };
-    assert_eq!(detail.property(), &CssProperty::Overflow);
+    assert_eq!(detail.property(), CssKnownProperty::Overflow);
 }
 
 #[test]
@@ -7885,7 +7891,7 @@ fn unsupported_position_keyword_is_typed_with_property_context() {
     let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
         panic!("unexpected error kind: {:?}", error.kind());
     };
-    assert_eq!(detail.property(), &CssProperty::Position);
+    assert_eq!(detail.property(), CssKnownProperty::Position);
 }
 
 #[test]
@@ -7895,7 +7901,7 @@ fn unsupported_alignment_keyword_is_typed_with_property_context() {
     let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
         panic!("unexpected error kind: {:?}", error.kind());
     };
-    assert_eq!(detail.property(), &CssProperty::AlignItems);
+    assert_eq!(detail.property(), CssKnownProperty::AlignItems);
 }
 
 #[test]
@@ -8045,7 +8051,7 @@ fn unknown_dimension_units_are_reported_as_unknown_units() {
     let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
         panic!("unexpected error kind: {:?}", error.kind());
     };
-    assert_eq!(detail.property(), &CssProperty::Width);
+    assert_eq!(detail.property(), CssKnownProperty::Width);
 }
 
 #[test]
@@ -8055,7 +8061,7 @@ fn unknown_calc_dimension_units_are_reported_as_unknown_units() {
     let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
         panic!("unexpected error kind: {:?}", error.kind());
     };
-    assert_eq!(detail.property(), &CssProperty::Width);
+    assert_eq!(detail.property(), CssKnownProperty::Width);
 }
 
 #[test]
@@ -8520,7 +8526,7 @@ fn parses_every_task_5_supported_property_name() {
         assert!(
             declarations
                 .iter()
-                .any(|declaration| declaration.property() == &property),
+                .any(|declaration| declaration.property() == property),
             "missing parsed declaration for {property:?}",
         );
     }
@@ -9014,7 +9020,7 @@ fn parses_every_task_6_supported_property_name() {
         assert!(
             declarations
                 .iter()
-                .any(|declaration| declaration.property() == &property),
+                .any(|declaration| declaration.property() == property),
             "missing parsed declaration for {property:?}",
         );
     }
@@ -9498,7 +9504,7 @@ fn parses_every_task_2_supported_property_name() {
         assert!(
             declarations
                 .iter()
-                .any(|declaration| declaration.property() == &property),
+                .any(|declaration| declaration.property() == property),
             "missing parsed declaration for {property:?}",
         );
     }
@@ -9773,7 +9779,7 @@ fn parses_every_task_4_supported_property_name() {
         assert!(
             declarations
                 .iter()
-                .any(|declaration| declaration.property() == &property),
+                .any(|declaration| declaration.property() == property),
             "missing parsed declaration for {property:?}",
         );
     }

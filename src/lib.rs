@@ -25,10 +25,12 @@ mod validation;
 
 pub use error::*;
 pub use parser::parse_sheet;
-pub use properties::{CssKnownProperty, CssProperty};
+pub use properties::{CssKnownDeclaration, CssKnownProperty, CssOverflowPropertyValue};
 pub use report::*;
 pub use source::*;
 pub use syntax::*;
+#[cfg(test)]
+pub(crate) use test_support::{CssProperty, CssValue};
 
 #[cfg(test)]
 mod tests;

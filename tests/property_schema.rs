@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use surgeist_css::{CssErrorCode, CssKnownProperty, CssProperty, CssRule, ErrorKind, parse_sheet};
+use surgeist_css::{CssErrorCode, CssKnownProperty, CssRule, ErrorKind, parse_sheet};
 
 const FROZEN_PROPERTIES: &[&str] = &[
     "all",
@@ -467,8 +467,7 @@ fn property_schema_parser_identity_matches_every_frozen_name() {
                     error.kind()
                 );
             };
-            assert_eq!(detail.property(), &CssProperty::All);
-            assert_eq!(detail.property().known(), Some(CssKnownProperty::All));
+            assert_eq!(detail.property(), CssKnownProperty::All);
             continue;
         }
 
@@ -485,7 +484,7 @@ fn property_schema_parser_identity_matches_every_frozen_name() {
             panic!("`{name}` should produce one declaration");
         };
         assert_eq!(
-            declaration.property().known(),
+            declaration.known().map(|known| known.property()),
             CssKnownProperty::from_name(name),
             "`{name}` parser identity diverged from schema lookup",
         );

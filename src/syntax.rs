@@ -1,10 +1,9 @@
 //! Authored CSS syntax values produced by this crate's parser.
 //!
-//! [`CssValue`] represents CSS-owned authored syntax for declarations this
-//! parser currently supports. It must not grow into a broad cross-property
-//! validation bag: property-specific parsers in this crate decide which value
-//! forms are accepted for each declaration, and downstream crates own their own
-//! normalization and validation phases.
+//! Property-coupled declarations represent CSS-owned authored syntax without a
+//! broad property/value cross product. Property-specific parsers decide which
+//! value forms are accepted, while downstream crates own normalization,
+//! substitution, cascade, and contextual resolution.
 //!
 //! Successful declarations carry their authored source location so downstream
 //! adapters can report validation failures at the declaration site without
@@ -12,7 +11,8 @@
 
 use std::collections::HashMap;
 
-pub(crate) use crate::properties::CssProperty;
+pub(crate) use crate::properties::CssKnownDeclaration;
+use crate::properties::CssKnownProperty;
 use crate::source::CssSourcePosition;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -1926,41 +1926,142 @@ impl CssStyleRule {
     }
 }
 
+/// A parser-produced declaration in the authored CSS syntax phase.
+///
+/// Its private fields couple a known property to its schema-selected value type, or a custom name
+/// to its authored custom value, and retain the semantic start position. Construction is
+/// parser-owned: callers cannot forge a source position or create a property/value mismatch.
+///
+/// ```compile_fail
+/// use surgeist_css::{CssDeclaredValue, CssKnownDeclaration, CssOpacity};
+/// let opacity = CssOpacity::try_new(0.5).unwrap();
+/// let _ = CssKnownDeclaration::Width(CssDeclaredValue::Value(opacity));
+/// ```
+///
+/// ```compile_fail
+/// use surgeist_css::CssDeclaration;
+/// let _ = CssDeclaration { body: todo!(), position: todo!() };
+/// ```
+///
+/// This authored node does not apply importance, cascade, substitution, or contextual resolution.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssDeclaration {
-    property: CssProperty,
-    value: CssValue,
+    body: CssDeclarationBody,
     position: CssSourcePosition,
 }
 
 impl CssDeclaration {
     #[must_use]
-    pub(crate) const fn new(
-        property: CssProperty,
-        value: CssValue,
-        position: CssSourcePosition,
-    ) -> Self {
-        Self {
-            property,
-            value,
-            position,
+    pub(crate) const fn new(body: CssDeclarationBody, position: CssSourcePosition) -> Self {
+        Self { body, position }
+    }
+
+    /// Returns the property-coupled authored body.
+    #[must_use]
+    pub const fn body(&self) -> &CssDeclarationBody {
+        &self.body
+    }
+
+    /// Returns the known-property declaration, or `None` for a custom declaration.
+    #[must_use]
+    pub const fn known(&self) -> Option<&CssKnownDeclaration> {
+        match &self.body {
+            CssDeclarationBody::Known(known) => Some(known),
+            CssDeclarationBody::Custom(_) => None,
         }
     }
 
+    /// Returns the custom declaration, or `None` for a known declaration.
     #[must_use]
-    pub const fn property(&self) -> &CssProperty {
-        &self.property
+    pub const fn custom(&self) -> Option<&CssCustomDeclaration> {
+        match &self.body {
+            CssDeclarationBody::Known(_) => None,
+            CssDeclarationBody::Custom(custom) => Some(custom),
+        }
     }
 
+    /// Returns a borrowed semantic property-name view derived from the active body.
     #[must_use]
-    pub const fn value(&self) -> &CssValue {
-        &self.value
+    pub const fn property_name(&self) -> CssPropertyNameRef<'_> {
+        match &self.body {
+            CssDeclarationBody::Known(known) => CssPropertyNameRef::Known(known.property()),
+            CssDeclarationBody::Custom(custom) => CssPropertyNameRef::Custom(custom.name()),
+        }
     }
 
+    /// Returns the semantic source position at the authored property-name start.
     #[must_use]
     pub const fn position(&self) -> CssSourcePosition {
         self.position
     }
+
+    #[cfg(test)]
+    pub(crate) fn property(&self) -> crate::test_support::CssProperty {
+        crate::test_support::declaration_property(self)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn value(&self) -> crate::test_support::CssValue {
+        crate::test_support::declaration_value(self)
+    }
+}
+
+/// The authored body of a declaration, split between known and custom property invariants.
+///
+/// Known values are coupled to their schema identity; custom values remain attached to their
+/// case-sensitive custom name. This syntax does not perform cascade or substitution.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssDeclarationBody {
+    /// A schema-recognized property carrying only its property-specific declared value.
+    Known(CssKnownDeclaration),
+    /// A case-sensitive custom property carrying its current authored value representation.
+    Custom(CssCustomDeclaration),
+}
+
+/// A parser-produced authored custom-property declaration.
+///
+/// Its private fields prevent attaching the custom value to a known property name. T2 preserves
+/// the strict parser's existing authored-value behavior; it does not substitute references,
+/// compute cascade, or validate a post-substitution value.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCustomDeclaration {
+    name: CssCustomPropertyName,
+    value: CssCustomPropertyDeclaredValue,
+}
+
+impl CssCustomDeclaration {
+    pub(crate) const fn new(
+        name: CssCustomPropertyName,
+        value: CssCustomPropertyDeclaredValue,
+    ) -> Self {
+        Self { name, value }
+    }
+
+    /// Returns the case-sensitive validated custom property name.
+    #[must_use]
+    pub const fn name(&self) -> &CssCustomPropertyName {
+        &self.name
+    }
+
+    /// Returns the preserved authored custom-property value.
+    #[must_use]
+    pub const fn value(&self) -> &CssCustomPropertyDeclaredValue {
+        &self.value
+    }
+}
+
+/// A borrowed authored property-name view derived from a declaration body.
+///
+/// The known branch uses canonical generated identity; the custom branch preserves its
+/// case-sensitive name. The view stores no parallel identity and performs no cascade lookup.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CssPropertyNameRef<'a> {
+    /// A canonical schema-generated known property identity.
+    Known(CssKnownProperty),
+    /// A borrowed case-sensitive custom property name.
+    Custom(&'a CssCustomPropertyName),
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -2110,13 +2211,51 @@ impl CssCustomPropertyValue {
     }
 }
 
+/// A custom property's declared value in the authored CSS syntax phase.
+///
+/// The branches preserve the strict parser's existing distinction between authored token text
+/// and a whole-value CSS-wide keyword. This value remains attached to a validated custom name and
+/// does not perform substitution, cascade, or post-substitution validation.
+#[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CssVariableDependentValue {
+pub enum CssCustomPropertyDeclaredValue {
+    /// Preserved authored custom-property token text.
+    Value(CssCustomPropertyValue),
+    /// A whole-value CSS-wide keyword.
+    Global(CssGlobalKeyword),
+}
+
+impl CssCustomPropertyDeclaredValue {
+    /// Returns the preserved authored custom-property value when present.
+    #[must_use]
+    pub const fn value(&self) -> Option<&CssCustomPropertyValue> {
+        match self {
+            Self::Value(value) => Some(value),
+            Self::Global(_) => None,
+        }
+    }
+
+    /// Returns the symbolic CSS-wide keyword when present.
+    #[must_use]
+    pub const fn global(&self) -> Option<CssGlobalKeyword> {
+        match self {
+            Self::Value(_) => None,
+            Self::Global(keyword) => Some(*keyword),
+        }
+    }
+}
+
+/// A known property's authored value whose grammar depends on later CSS substitution.
+///
+/// The complete authored value and parsed variable references remain symbolic. This value does
+/// not promise post-substitution grammar validity, resolve variables, or build a dependency graph.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssSubstitutionDependentValue {
     authored: CssAuthoredDeclarationValue,
     references: Vec<CssVariableReference>,
 }
 
-impl CssVariableDependentValue {
+impl CssSubstitutionDependentValue {
     #[allow(dead_code)]
     #[must_use]
     pub(crate) fn try_new(
@@ -2154,127 +2293,111 @@ impl CssVariableDependentValue {
     }
 }
 
+/// A CSS-wide keyword retained in the authored declaration phase.
+///
+/// It remains symbolic and does not apply inheritance, cascade, or revert behavior.
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CssGlobalKeyword {
+    /// The authored `inherit` keyword.
     Inherit,
+    /// The authored `initial` keyword.
     Initial,
+    /// The authored `unset` keyword.
     Unset,
+    /// The authored `revert` keyword.
     Revert,
+    /// The authored `revert-layer` keyword.
     RevertLayer,
 }
 
+/// A property-specific declared value in the authored CSS syntax phase.
+///
+/// `Value` contains only the type selected by the active known-declaration variant. Global and
+/// substitution-dependent syntax remain symbolic. These views do not apply cascade, perform
+/// substitution, or contextually resolve the value.
+#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
-pub enum CssValue {
-    GlobalKeyword(CssGlobalKeyword),
-    CustomProperty(CssCustomPropertyValue),
-    VariableDependent(CssVariableDependentValue),
-    Display(CssDisplay),
-    BoxSizing(CssBoxSizing),
-    Position(CssLayoutPosition),
-    Direction(CssDirection),
+pub enum CssDeclaredValue<T> {
+    /// A value accepted by the property's typed authored grammar.
+    Value(T),
+    /// A whole-value CSS-wide keyword.
+    Global(CssGlobalKeyword),
+    /// Authored syntax whose grammar depends on later substitution.
+    SubstitutionDependent(CssSubstitutionDependentValue),
+}
+
+impl<T> CssDeclaredValue<T> {
+    /// Returns the property-specific typed value when present.
+    #[must_use]
+    pub const fn value(&self) -> Option<&T> {
+        match self {
+            Self::Value(value) => Some(value),
+            Self::Global(_) | Self::SubstitutionDependent(_) => None,
+        }
+    }
+
+    /// Returns the symbolic CSS-wide keyword when present.
+    #[must_use]
+    pub const fn global(&self) -> Option<CssGlobalKeyword> {
+        match self {
+            Self::Global(keyword) => Some(*keyword),
+            Self::Value(_) | Self::SubstitutionDependent(_) => None,
+        }
+    }
+
+    /// Returns the substitution-dependent authored value when present.
+    #[must_use]
+    pub const fn substitution_dependent(&self) -> Option<&CssSubstitutionDependentValue> {
+        match self {
+            Self::SubstitutionDependent(value) => Some(value),
+            Self::Value(_) | Self::Global(_) => None,
+        }
+    }
+}
+
+/// The authored declared-value domain for the `all` property.
+///
+/// Unlike ordinary known properties, `all` has no typed-value branch: it can retain only a
+/// CSS-wide keyword or syntax whose grammar depends on later substitution. It does not apply
+/// cascade, perform substitution, or resolve the resulting values.
+#[non_exhaustive]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssAllDeclaredValue {
+    /// A whole-value CSS-wide keyword.
+    Global(CssGlobalKeyword),
+    /// Authored syntax whose validity depends on later substitution.
+    SubstitutionDependent(CssSubstitutionDependentValue),
+}
+
+// Kept crate-private for the existing overflow shorthand parser's two-result helper. This is not
+// a declaration value bag and cannot be paired with a property.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum CssOverflowParsedValue {
     Overflow(CssOverflow),
     OverflowAxes(CssOverflowAxes),
-    FlexDirection(CssFlexDirection),
-    FlexWrap(CssFlexWrap),
-    Float(CssFloat),
-    Clear(CssClear),
-    Alignment(CssAlignment),
-    AlignItems(CssAlignItems),
-    PlaceAlignment(CssPlaceAlignment),
-    Visibility(CssVisibility),
-    Content(CssContent),
-    ContentVisibility(CssContentVisibility),
-    ListStyleType(CssListStyleType),
-    ListStylePosition(CssListStylePosition),
-    ListStyleImage(CssListStyleImage),
-    ListStyle(CssListStyle),
-    CounterChanges(CssCounterChanges),
-    Length(CssLength),
-    GridFlowTolerance(CssGridFlowTolerance),
-    GridTrackList(CssGridTrackList),
-    GridTemplateAreas(CssGridTemplateAreas),
-    GridTemplate(CssGridTemplate),
-    GridAutoFlow(CssGridAutoFlow),
-    GridLine(CssGridLine),
-    GridLineRange(CssGridLineRange),
-    GridArea(CssGridArea),
-    Grid(CssGrid),
-    WritingMode(CssWritingMode),
-    TextAlign(CssTextAlign),
-    TextAlignLast(CssTextAlignLast),
-    TextIndent(CssTextIndent),
-    VerticalAlign(CssVerticalAlign),
-    FontFamily(CssFontFamilyList),
-    Font(CssFont),
-    FontWeight(CssFontWeight),
-    FontStyle(CssFontStyle),
-    FontStretch(CssFontStretch),
-    FontVariant(CssFontVariant),
-    FontFeatureSettings(CssFontFeatureSettings),
-    LetterSpacing(CssLetterSpacing),
-    TextWrap(CssTextWrap),
-    WhiteSpace(CssWhiteSpace),
-    WordBreak(CssWordBreak),
-    OverflowWrap(CssOverflowWrap),
-    TextOverflow(CssTextOverflow),
-    TextDecoration(CssTextDecoration),
-    TextDecorationLine(CssTextDecorationLine),
-    TextDecorationColor(CssColor),
-    TextDecorationStyle(CssTextDecorationStyle),
-    TextDecorationThickness(CssTextDecorationThickness),
-    TextTransform(CssTextTransform),
-    Edges(CssEdges),
-    Color(CssColor),
-    ZIndex(CssZIndex),
-    BoxDecorationBreak(CssBoxDecorationBreak),
-    Border(CssBorder),
-    BorderStyle(CssBorderStyle),
-    BorderStyles(CssBorderStyles),
-    BackgroundImage(CssImageLayerList),
-    BackgroundPosition(CssPositionList),
-    BackgroundSize(CssBackgroundSizeList),
-    BackgroundRepeat(CssBackgroundRepeatList),
-    BackgroundBox(CssBackgroundBox),
-    BackgroundAttachment(CssBackgroundAttachmentList),
-    BorderRadius(CssBorderRadii),
-    CornerRadius(CssCornerRadius),
-    BoxShadow(CssBoxShadow),
-    Opacity(CssOpacity),
-    FlexGrow(CssFlexFactor),
-    FlexShrink(CssFlexFactor),
-    Order(CssOrder),
-    Flex(CssFlex),
-    AspectRatio(CssAspectRatio),
-    ScrollbarWidth(CssScrollbarWidth),
-    Cursor(CssCursor),
-    PointerEvents(CssPointerEvents),
-    UserSelect(CssUserSelect),
-    Outline(CssOutline),
-    OutlineColor(CssColor),
-    OutlineStyle(CssOutlineStyle),
-    OutlineWidth(CssOutlineWidth),
-    Transform(CssTransform),
-    TransformOrigin(CssPosition),
-    Translate(CssTranslate),
-    Rotate(CssRotate),
-    Scale(CssScale),
-    Filter(CssFilter),
-    ClipPath(CssClipPath),
-    Mask(CssMaskList),
-    MaskImage(CssImageLayerList),
-    MaskSize(CssBackgroundSizeList),
-    MaskPosition(CssPositionList),
-    MaskRepeat(CssBackgroundRepeatList),
-    TransitionProperty(CssTransitionPropertyList),
-    TimeList(CssTimeList),
-    EasingList(CssEasingList),
-    Transition(CssTransitionList),
-    AnimationName(CssAnimationNameList),
-    AnimationIterationCount(CssAnimationIterationCountList),
-    AnimationDirection(CssAnimationDirectionList),
-    AnimationFillMode(CssAnimationFillModeList),
-    AnimationPlayState(CssAnimationPlayStateList),
-    Animation(CssAnimationList),
+}
+
+pub(crate) use CssOverflowParsedValue as CssValue;
+
+impl CssAllDeclaredValue {
+    /// Returns the symbolic CSS-wide keyword when present.
+    #[must_use]
+    pub const fn global(&self) -> Option<CssGlobalKeyword> {
+        match self {
+            Self::Global(keyword) => Some(*keyword),
+            Self::SubstitutionDependent(_) => None,
+        }
+    }
+
+    /// Returns the substitution-dependent authored value when present.
+    #[must_use]
+    pub const fn substitution_dependent(&self) -> Option<&CssSubstitutionDependentValue> {
+        match self {
+            Self::Global(_) => None,
+            Self::SubstitutionDependent(value) => Some(value),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -1,5 +1,5 @@
 use surgeist_css::{
-    CssDeclarationContextRef, CssErrorCode, CssProperty, CssTokenKind, ErrorKind, parse_sheet,
+    CssDeclarationContextRef, CssErrorCode, CssKnownProperty, CssTokenKind, ErrorKind, parse_sheet,
 };
 
 #[test]
@@ -246,7 +246,7 @@ fn error_property_descriptor_color_and_annotation_roots_expose_all_fields() {
         ErrorKind::InvalidDeclarationAnnotation(detail) => {
             match detail.context() {
                 CssDeclarationContextRef::KnownProperty(property) => {
-                    assert_eq!(property, &CssProperty::Width);
+                    assert_eq!(property, CssKnownProperty::Width);
                 }
                 _ => panic!("unexpected declaration context"),
             }
@@ -264,7 +264,7 @@ fn error_invalid_property_value_retains_canonical_property_and_authored_token() 
     assert_eq!(error.code(), CssErrorCode::InvalidPropertyValue);
     match error.kind() {
         ErrorKind::InvalidPropertyValue(detail) => {
-            assert_eq!(detail.property(), &CssProperty::Width);
+            assert_eq!(detail.property(), CssKnownProperty::Width);
             assert_eq!(
                 detail.expectation().as_str(),
                 "a value accepted by the property's grammar"
@@ -284,7 +284,7 @@ fn error_property_value_at_bounded_end_uses_absent_encountered_token() {
     assert_eq!(error.code(), CssErrorCode::InvalidPropertyValue);
     match error.kind() {
         ErrorKind::InvalidPropertyValue(detail) => {
-            assert_eq!(detail.property(), &CssProperty::Width);
+            assert_eq!(detail.property(), CssKnownProperty::Width);
             assert!(detail.encountered().is_none());
         }
         _ => panic!("unexpected error root"),

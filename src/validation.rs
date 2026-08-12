@@ -1,4 +1,4 @@
-use crate::{CssGlobalKeyword, CssLengthUnit, CssProperty};
+use crate::{CssGlobalKeyword, CssKnownProperty, CssLengthUnit};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum LengthUnitStatus {
@@ -15,8 +15,8 @@ pub(crate) enum PropertyNameStatus {
 
 const KNOWN_UNSUPPORTED_PROPERTY_NAMES: &[&str] = &[];
 
-pub(crate) fn property_for_supported_name(name: &str) -> Option<CssProperty> {
-    crate::CssKnownProperty::from_name(name).map(Into::into)
+pub(crate) fn property_for_supported_name(name: &str) -> Option<CssKnownProperty> {
+    CssKnownProperty::from_name(name)
 }
 
 pub(crate) fn classify_property_name(name: &str) -> PropertyNameStatus {

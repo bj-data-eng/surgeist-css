@@ -5,8 +5,9 @@ use cssparser::{
     Token,
 };
 
+use crate::properties::CssKnownProperty;
 use crate::source::CssSourcePosition;
-use crate::syntax::{CssCustomPropertyName, CssProperty};
+use crate::syntax::CssCustomPropertyName;
 use crate::validation::{PropertyNameStatus, classify_property_name, property_for_supported_name};
 
 /// The result of strict CSS parsing with a structured diagnostic on failure.
@@ -589,7 +590,7 @@ impl CssUnsupportedPropertyError {
 /// value does not substitute variables, resolve context, compute cascade, or recover the value.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssPropertyValueError {
-    property: CssProperty,
+    property: CssKnownProperty,
     expectation: CssGrammarExpectation,
     encountered: Option<CssTokenSummary>,
 }
@@ -597,8 +598,8 @@ pub struct CssPropertyValueError {
 impl CssPropertyValueError {
     #[must_use]
     /// Returns the canonical property whose value grammar rejected the authored syntax.
-    pub const fn property(&self) -> &CssProperty {
-        &self.property
+    pub const fn property(&self) -> CssKnownProperty {
+        self.property
     }
 
     #[must_use]
@@ -616,8 +617,16 @@ impl CssPropertyValueError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum CssDeclarationContext {
-    Ordinary(CssProperty),
-    Keyframe(CssProperty),
+    OrdinaryKnown(CssKnownProperty),
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "the diagnostic model preserves custom identity before annotation parsing uses it"
+        )
+    )]
+    OrdinaryCustom(CssCustomPropertyName),
+    Keyframe(CssKnownProperty),
     Descriptor {
         at_rule: CssAtRuleName,
         descriptor: CssDescriptorName,
@@ -632,11 +641,11 @@ enum CssDeclarationContext {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CssDeclarationContextRef<'a> {
     /// A declaration for a known ordinary property.
-    KnownProperty(&'a CssProperty),
+    KnownProperty(CssKnownProperty),
     /// A declaration for a case-sensitive authored custom property.
     CustomProperty(&'a CssCustomPropertyName),
     /// A declaration for a known property inside an authored keyframe.
-    Keyframe(&'a CssProperty),
+    Keyframe(CssKnownProperty),
     /// A descriptor declaration owned by an authored at-rule.
     Descriptor {
         /// The decoded authored name of the owning at-rule.
@@ -649,11 +658,9 @@ pub enum CssDeclarationContextRef<'a> {
 impl CssDeclarationContext {
     const fn as_ref(&self) -> CssDeclarationContextRef<'_> {
         match self {
-            Self::Ordinary(CssProperty::Custom(property)) => {
-                CssDeclarationContextRef::CustomProperty(property)
-            }
-            Self::Ordinary(property) => CssDeclarationContextRef::KnownProperty(property),
-            Self::Keyframe(property) => CssDeclarationContextRef::Keyframe(property),
+            Self::OrdinaryKnown(property) => CssDeclarationContextRef::KnownProperty(*property),
+            Self::OrdinaryCustom(property) => CssDeclarationContextRef::CustomProperty(property),
+            Self::Keyframe(property) => CssDeclarationContextRef::Keyframe(*property),
             Self::Descriptor {
                 at_rule,
                 descriptor,
@@ -689,8 +696,8 @@ impl CssDeclarationAnnotationError {
     }
 
     fn make_keyframe(&mut self) {
-        if let CssDeclarationContext::Ordinary(property) = &self.context {
-            self.context = CssDeclarationContext::Keyframe(property.clone());
+        if let CssDeclarationContext::OrdinaryKnown(property) = self.context {
+            self.context = CssDeclarationContext::Keyframe(property);
         }
     }
 }
@@ -1489,7 +1496,7 @@ pub(crate) fn with_descriptor_context<'i>(
 
 pub(crate) fn with_declaration_annotation_context<'i>(
     mut error: ParseError<'i, Error>,
-    property: CssProperty,
+    property: CssKnownProperty,
     keyframe: bool,
 ) -> ParseError<'i, Error> {
     let Some(encountered) = take_encountered(&mut error.kind) else {
@@ -1501,7 +1508,7 @@ pub(crate) fn with_declaration_annotation_context<'i>(
     let context = if keyframe {
         CssDeclarationContext::Keyframe(property)
     } else {
-        CssDeclarationContext::Ordinary(property)
+        CssDeclarationContext::OrdinaryKnown(property)
     };
     error.kind = ParseErrorKind::Custom(Error::at(
         error.location,
@@ -1950,7 +1957,7 @@ mod tests {
             ),
             (
                 ErrorKind::InvalidPropertyValue(CssPropertyValueError {
-                    property: CssProperty::Width,
+                    property: CssKnownProperty::Width,
                     expectation: EXPECT_PROPERTY_VALUE,
                     encountered: None,
                 }),
@@ -1958,7 +1965,7 @@ mod tests {
             ),
             (
                 ErrorKind::InvalidDeclarationAnnotation(CssDeclarationAnnotationError {
-                    context: CssDeclarationContext::Ordinary(CssProperty::Width),
+                    context: CssDeclarationContext::OrdinaryKnown(CssKnownProperty::Width),
                     encountered: token.clone(),
                 }),
                 CssErrorCode::InvalidDeclarationAnnotation,
@@ -2085,9 +2092,7 @@ mod tests {
         assert_eq!(annotation.encountered().authored(), "!");
 
         let custom = CssDeclarationAnnotationError {
-            context: CssDeclarationContext::Ordinary(CssProperty::Custom(
-                CssCustomPropertyName::new("--theme"),
-            )),
+            context: CssDeclarationContext::OrdinaryCustom(CssCustomPropertyName::new("--theme")),
             encountered: token.clone(),
         };
         match custom.context() {
@@ -2098,12 +2103,12 @@ mod tests {
         }
 
         let keyframe = CssDeclarationAnnotationError {
-            context: CssDeclarationContext::Keyframe(CssProperty::Opacity),
+            context: CssDeclarationContext::Keyframe(CssKnownProperty::Opacity),
             encountered: token,
         };
         match keyframe.context() {
             CssDeclarationContextRef::Keyframe(property) => {
-                assert_eq!(property, &CssProperty::Opacity);
+                assert_eq!(property, CssKnownProperty::Opacity);
             }
             _ => panic!("wrong keyframe context"),
         }

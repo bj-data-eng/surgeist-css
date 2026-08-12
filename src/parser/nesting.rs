@@ -28,6 +28,9 @@ pub(super) fn parse_style_rule_block<'i, 't>(
     input: &mut Parser<'i, 't>,
     recovery: RecoveryState,
 ) -> std::result::Result<Recovered<Vec<CssRule>>, ParseError<'i, Error>> {
+    let content_start = input.position().byte_index();
+    let suppress_preflight_placeholder =
+        recovery.record_style_context(content_start, &parent_selectors);
     let mut body_parser = NestedStyleRuleParser {
         source,
         parent_selectors,
@@ -105,7 +108,7 @@ pub(super) fn parse_style_rule_block<'i, 't>(
     }
 
     flush_declarations(&parent_selectors, &mut declaration_buffer, &mut rules);
-    if rules.is_empty() {
+    if rules.is_empty() && !suppress_preflight_placeholder {
         for selector in &parent_selectors {
             rules.push(CssRule::Style(CssStyleRule::new(
                 selector.clone(),

@@ -1,9 +1,10 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use cssparser::{ParseError, Parser, ParserInput, Token};
 
 use crate::error::{Error, is_nesting_limit_error, nesting_limit};
+use crate::syntax::CssSelector;
 
 pub(super) const STRUCTURAL_NESTING_LIMIT: u32 = 256;
 
@@ -15,13 +16,23 @@ pub(super) const STRUCTURAL_NESTING_LIMIT: u32 = 256;
 #[derive(Clone)]
 pub(crate) struct RecoveryState {
     depth: Rc<Cell<u32>>,
+    style_context_captures: StyleContextCaptures,
 }
 
 impl RecoveryState {
-    pub(super) fn at_depth(depth: u32) -> Self {
+    pub(super) fn at_depth(depth: u32, style_context_captures: StyleContextCaptures) -> Self {
         Self {
             depth: Rc::new(Cell::new(depth)),
+            style_context_captures,
         }
+    }
+
+    pub(super) fn record_style_context(
+        &self,
+        content_start: usize,
+        selectors: &[CssSelector],
+    ) -> bool {
+        self.style_context_captures.record(content_start, selectors)
     }
 
     pub(super) fn enter_rule_block<'i>(
@@ -97,13 +108,60 @@ impl RecoveryState {
     }
 }
 
+#[derive(Clone, Default)]
+pub(super) struct StyleContextCaptures {
+    entries: Rc<RefCell<Vec<StyleContextCapture>>>,
+}
+
+struct StyleContextCapture {
+    content_start: usize,
+    selectors: Option<Vec<CssSelector>>,
+}
+
+impl StyleContextCaptures {
+    pub(super) fn register(&self, content_start: usize) {
+        let mut entries = self.entries.borrow_mut();
+        if entries
+            .iter()
+            .all(|entry| entry.content_start != content_start)
+        {
+            entries.push(StyleContextCapture {
+                content_start,
+                selectors: None,
+            });
+        }
+    }
+
+    fn record(&self, content_start: usize, selectors: &[CssSelector]) -> bool {
+        let mut entries = self.entries.borrow_mut();
+        let Some(entry) = entries
+            .iter_mut()
+            .find(|entry| entry.content_start == content_start)
+        else {
+            return false;
+        };
+        if entry.selectors.is_none() {
+            entry.selectors = Some(selectors.to_vec());
+        }
+        true
+    }
+
+    pub(super) fn selectors(&self, content_start: usize) -> Option<Vec<CssSelector>> {
+        self.entries
+            .borrow()
+            .iter()
+            .find(|entry| entry.content_start == content_start)
+            .and_then(|entry| entry.selectors.clone())
+    }
+}
+
 const STRUCTURAL_PARSE_CHUNK: usize = 64;
 
 pub(super) struct StructuralPreflight {
     pub(super) unit_start: usize,
     pub(super) unit_end: usize,
     pub(super) parents: Vec<StructuralParent>,
-    pub(super) has_style_parents: bool,
+    pub(super) style_context_starts: Vec<usize>,
     pub(super) parent_depth: u32,
     pub(super) outcome: StructuralPreflightOutcome,
 }
@@ -156,9 +214,17 @@ struct StructuralFrame {
     group: Option<(usize, GroupKind)>,
 }
 
+#[derive(Clone)]
+struct StructuralGroup {
+    start: usize,
+    kind: GroupKind,
+    style_context_starts: Vec<usize>,
+}
+
 pub(super) fn preflight_structural_nesting(
     source: &str,
     base_depth: u32,
+    root_style_context: bool,
 ) -> Option<StructuralPreflight> {
     // Restarting cssparser at each verified token boundary exposes opening and
     // closing tokens without calling `parse_nested_block`; comments, strings,
@@ -166,7 +232,7 @@ pub(super) fn preflight_structural_nesting(
     // walk keeps its own heap-backed block stack.
     let mut offset = 0;
     let mut frames: Vec<StructuralFrame> = Vec::new();
-    let mut groups: Vec<(usize, GroupKind)> = Vec::new();
+    let mut groups: Vec<StructuralGroup> = Vec::new();
     let mut unit_starts = vec![None];
     let mut target: Option<StructuralPreflight> = None;
     let mut target_group_depth = 0;
@@ -234,10 +300,12 @@ pub(super) fn preflight_structural_nesting(
             continue;
         }
         let global_depth = base_depth.saturating_add(groups.len() as u32 + 1);
-        let split_chain = group.can_split()
-            && groups
-                .iter()
-                .all(|(_, ancestor_group)| ancestor_group.can_split());
+        let split_chain =
+            group.can_split() && groups.iter().all(|ancestor| ancestor.kind.can_split());
+        let style_context_starts = groups
+            .last()
+            .map(|parent| parent.style_context_starts.clone())
+            .unwrap_or_else(|| root_style_context.then_some(0).into_iter().collect());
         if target.is_none() && split_chain {
             let outcome = if global_depth > STRUCTURAL_NESTING_LIMIT {
                 Some(StructuralPreflightOutcome::NestingLimit {
@@ -255,15 +323,13 @@ pub(super) fn preflight_structural_nesting(
                     unit_end: source.len(),
                     parents: groups
                         .iter()
-                        .filter(|(_, kind)| !matches!(kind, GroupKind::Style))
-                        .map(|(start, kind)| StructuralParent {
-                            start: *start,
-                            kind: *kind,
+                        .filter(|parent| !matches!(parent.kind, GroupKind::Style))
+                        .map(|parent| StructuralParent {
+                            start: parent.start,
+                            kind: parent.kind,
                         })
                         .collect(),
-                    has_style_parents: groups
-                        .iter()
-                        .any(|(_, kind)| matches!(kind, GroupKind::Style)),
+                    style_context_starts: style_context_starts.clone(),
                     parent_depth: global_depth.saturating_sub(1),
                     outcome,
                 });
@@ -271,7 +337,31 @@ pub(super) fn preflight_structural_nesting(
             }
         }
 
-        groups.push((unit_start, group));
+        let child_style_context_starts = match group {
+            GroupKind::Style => {
+                let mut starts = style_context_starts;
+                starts.push(token_end);
+                starts
+            }
+            GroupKind::Layer | GroupKind::Media | GroupKind::Container
+                if !style_context_starts.is_empty() =>
+            {
+                let mut starts = style_context_starts;
+                starts.push(token_end);
+                starts
+            }
+            GroupKind::Layer
+            | GroupKind::Media
+            | GroupKind::Container
+            | GroupKind::Scope
+            | GroupKind::Component
+            | GroupKind::Other => Vec::new(),
+        };
+        groups.push(StructuralGroup {
+            start: unit_start,
+            kind: group,
+            style_context_starts: child_style_context_starts,
+        });
         unit_starts.push(None);
         frames.push(StructuralFrame {
             block: opening,

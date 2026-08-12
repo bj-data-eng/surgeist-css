@@ -1,7 +1,7 @@
 use surgeist_css::{
     CssAllDeclaredValue, CssCustomPropertyDeclaredValue, CssCustomPropertyName, CssDeclaredValue,
     CssErrorCode, CssGlobalKeyword, CssKnownDeclaration, CssKnownProperty, CssPropertyNameRef,
-    CssRule, ErrorKind, parse_sheet,
+    CssRule, CssTokenKind, ErrorKind, parse_sheet,
 };
 
 fn declarations(source: &str) -> Vec<surgeist_css::CssDeclaration> {
@@ -171,6 +171,74 @@ fn authored_declaration_substitution_accepts_fallback_unusable_after_substitutio
         panic!("expected substitution-dependent all declaration");
     };
     assert_eq!(value.as_css(), "VAR(--mode, definitely-not-a-global)");
+}
+
+#[test]
+fn authored_declaration_rejects_top_level_semicolon_in_variable_fallback() {
+    let source = ".x { width: var(--x, ;); }";
+    let error = parse_sheet(source).expect_err("top-level fallback semicolon must be rejected");
+
+    assert_eq!(error.code(), CssErrorCode::InvalidPropertyValue);
+    assert_eq!(
+        error.position().byte_offset().value(),
+        source.find(';').unwrap()
+    );
+    assert_eq!(error.position().line().value(), 0);
+    assert_eq!(
+        error.position().column().value(),
+        u32::try_from(source.find(';').unwrap()).unwrap()
+    );
+    let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
+        panic!("expected structured property-value error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::Width);
+    assert_eq!(
+        detail.expectation().as_str(),
+        "a value accepted by the property's grammar"
+    );
+    let token = detail.encountered().expect("semicolon token");
+    assert_eq!(token.kind(), CssTokenKind::Semicolon);
+    assert_eq!(token.authored(), ";");
+}
+
+#[test]
+fn authored_declaration_rejects_top_level_bang_in_variable_fallback() {
+    let source = ".x { width: var(--x, !); }";
+    let error = parse_sheet(source).expect_err("top-level fallback bang must be rejected");
+
+    assert_eq!(error.code(), CssErrorCode::InvalidPropertyValue);
+    assert_eq!(
+        error.position().byte_offset().value(),
+        source.find('!').unwrap()
+    );
+    assert_eq!(error.position().line().value(), 0);
+    assert_eq!(
+        error.position().column().value(),
+        u32::try_from(source.find('!').unwrap()).unwrap()
+    );
+    let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
+        panic!("expected structured property-value error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::Width);
+    assert_eq!(
+        detail.expectation().as_str(),
+        "a value accepted by the property's grammar"
+    );
+    let token = detail.encountered().expect("bang token");
+    assert_eq!(token.kind(), CssTokenKind::Delim);
+    assert_eq!(token.authored(), "!");
+}
+
+#[test]
+fn authored_declaration_retains_balanced_fallback_with_nested_restricted_tokens() {
+    let declarations = declarations(".x { width: var(--x, fn(; !)); }");
+    let Some(CssKnownDeclaration::Width(CssDeclaredValue::SubstitutionDependent(value))) =
+        declarations[0].known()
+    else {
+        panic!("expected substitution-dependent width");
+    };
+
+    assert_eq!(value.as_css(), "var(--x, fn(; !))");
 }
 
 #[test]

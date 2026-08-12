@@ -53,7 +53,18 @@ fn consume_authored_value_tokens<'i, 't>(
     has_substitution: &mut bool,
     end: &mut cssparser::SourcePosition,
 ) -> Result<(), ParseError<'i, Error>> {
+    consume_authored_value_tokens_with_restrictions(input, has_substitution, end, false)
+}
+
+fn consume_authored_value_tokens_with_restrictions<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    has_substitution: &mut bool,
+    end: &mut cssparser::SourcePosition,
+    reject_fallback_top_level_tokens: bool,
+) -> Result<(), ParseError<'i, Error>> {
     loop {
+        input.skip_whitespace();
+        let token_location = input.current_source_location();
         let token = match input.next() {
             Ok(token) => token.clone(),
             Err(error) => {
@@ -63,6 +74,11 @@ fn consume_authored_value_tokens<'i, 't>(
                 };
             }
         };
+        if reject_fallback_top_level_tokens
+            && matches!(&token, Token::Semicolon | Token::Delim('!'))
+        {
+            return Err(token_location.new_unexpected_token_error(token));
+        }
         if token.is_parse_error() {
             return Err(input.new_unexpected_token_error(token));
         }
@@ -101,7 +117,7 @@ fn parse_variable_reference<'i, 't>(
     }
 
     input.expect_comma().map_err(basic)?;
-    consume_authored_value_tokens(input, has_substitution, end)
+    consume_authored_value_tokens_with_restrictions(input, has_substitution, end, true)
 }
 
 fn is_nested_block_start(token: &Token<'_>) -> bool {

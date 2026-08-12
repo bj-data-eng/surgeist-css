@@ -235,8 +235,9 @@ impl<'i> DeclarationParser<'i> for FontFaceDescriptorParser<'i> {
         input: &mut Parser<'i, 't>,
         declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
-        self.recovery
-            .check_component_values(self.source, input, "css.descriptor")?;
+        let implicit_closures =
+            self.recovery
+                .check_component_values(self.source, input, "css.descriptor")?;
         let location = declaration_start.source_location();
         let position = crate::source::CssSourcePosition::from_cssparser(
             declaration_start.position(),
@@ -301,6 +302,7 @@ impl<'i> DeclarationParser<'i> for FontFaceDescriptorParser<'i> {
             })
         })()
         .map_err(|error| with_descriptor_context(error, "font-face", name.as_ref()))?;
+        self.recovery.retain_component_closures(implicit_closures);
         Ok(result)
     }
 }

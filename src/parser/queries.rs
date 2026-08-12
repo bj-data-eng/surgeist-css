@@ -4,7 +4,11 @@ use cssparser::{
     BasicParseErrorKind, Delimiter, ParseError, Parser, ToCss, Token, match_ignore_ascii_case,
 };
 
-use super::recovery::{comma_member_span, first_non_trivia_position};
+#[cfg(test)]
+use super::recovery::StyleContextCaptures;
+use super::recovery::{
+    RecoveryState, comma_member_span, first_non_trivia_position, recovery_action_for_error,
+};
 use super::variables::collect_authored_declaration_value;
 use crate::error::{
     Error, basic, from_parse_error, invalid_syntax, unsupported_value_at, with_media_query_context,
@@ -15,12 +19,20 @@ pub(crate) fn parse_media_query_list<'i, 't>(
     source: &str,
     input: &mut Parser<'i, 't>,
     diagnostics: &mut Vec<crate::CssRecoveryDiagnostic>,
+    recovery: &RecoveryState,
 ) -> std::result::Result<CssMediaQueryList, ParseError<'i, Error>> {
     let mut queries = Vec::new();
     let mut preceding_comma = None;
     loop {
         let member_start = input.position().byte_index();
-        let result = input.parse_until_before(Delimiter::Comma, parse_media_query);
+        let result = input.parse_until_before(Delimiter::Comma, |member| {
+            let _ = recovery.check_specialized_components(
+                source,
+                member,
+                "baseline.media.query-list",
+            )?;
+            parse_media_query(member)
+        });
         let member_end = input.position().byte_index();
         let comma_start = member_end;
         let following_comma = match input.next().cloned() {
@@ -38,7 +50,15 @@ pub(crate) fn parse_media_query_list<'i, 't>(
         match result {
             Ok(query) => queries.push(query),
             Err(error) => {
-                let error = with_media_query_context(error, None);
+                let action = recovery_action_for_error(
+                    &error,
+                    crate::CssRecoveryAction::ReplaceMediaQueryWithNever,
+                );
+                let error = if action == crate::CssRecoveryAction::StopAtNestingLimit {
+                    error
+                } else {
+                    with_media_query_context(error, None)
+                };
                 let Some(span) = comma_member_span(
                     source,
                     member_start,
@@ -53,11 +73,8 @@ pub(crate) fn parse_media_query_list<'i, 't>(
                 }
                 let position = first_non_trivia_position(source, member_start, member_end);
                 let error = from_parse_error(source, error);
-                let Some(diagnostic) = crate::CssRecoveryDiagnostic::new(
-                    error,
-                    span,
-                    crate::CssRecoveryAction::ReplaceMediaQueryWithNever,
-                ) else {
+                let Some(diagnostic) = crate::CssRecoveryDiagnostic::new(error, span, action)
+                else {
                     return Err(with_media_query_context(
                         invalid_syntax(
                             input.current_source_location(),
@@ -86,7 +103,8 @@ pub(crate) fn parse_media_query_list_for_test(
     let mut input = ParserInput::new(source);
     let mut parser = Parser::new(&mut input);
     let mut diagnostics = Vec::new();
-    let list = parse_media_query_list(source, &mut parser, &mut diagnostics)
+    let recovery = RecoveryState::at_depth(source, 0, StyleContextCaptures::default());
+    let list = parse_media_query_list(source, &mut parser, &mut diagnostics, &recovery)
         .map_err(|error| from_parse_error(source, error))?;
     if let Some(diagnostic) = diagnostics.into_iter().next() {
         return Err(diagnostic.error().clone());

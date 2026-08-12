@@ -2,24 +2,36 @@ use cssparser::{
     BasicParseErrorKind, Delimiter, ParseError, Parser, ToCss, Token, match_ignore_ascii_case,
 };
 
-use super::recovery::comma_member_span;
+use super::recovery::{RecoveryState, comma_member_span, recovery_action_for_error};
 use crate::error::{Error, from_parse_error, invalid_selector, selector_basic};
 use crate::syntax::*;
 
 pub(super) struct SelectorRecovery<'a> {
     source: &'a str,
     diagnostics: &'a mut Vec<crate::CssRecoveryDiagnostic>,
+    state: RecoveryState,
 }
 
 impl<'a> SelectorRecovery<'a> {
     pub(super) fn new(
         source: &'a str,
         diagnostics: &'a mut Vec<crate::CssRecoveryDiagnostic>,
+        state: RecoveryState,
     ) -> Self {
         Self {
             source,
             diagnostics,
+            state,
         }
+    }
+
+    pub(super) fn check_depth<'i, 't>(
+        &self,
+        input: &Parser<'i, 't>,
+    ) -> std::result::Result<(), ParseError<'i, Error>> {
+        self.state
+            .check_specialized_components(self.source, input, "baseline.selector.complex")
+            .map(|_| ())
     }
 
     fn drop_forgiving_member(
@@ -30,6 +42,8 @@ impl<'a> SelectorRecovery<'a> {
         following_comma: Option<(usize, usize)>,
         preceding_comma: Option<(usize, usize)>,
     ) {
+        let action =
+            recovery_action_for_error(&error, crate::CssRecoveryAction::DropSelectorListItem);
         let error = from_parse_error(self.source, error);
         let Some(span) = comma_member_span(
             self.source,
@@ -40,11 +54,7 @@ impl<'a> SelectorRecovery<'a> {
         ) else {
             return;
         };
-        if let Some(diagnostic) = crate::CssRecoveryDiagnostic::new(
-            error,
-            span,
-            crate::CssRecoveryAction::DropSelectorListItem,
-        ) {
+        if let Some(diagnostic) = crate::CssRecoveryDiagnostic::new(error, span, action) {
             self.diagnostics.push(diagnostic);
         }
     }
@@ -54,6 +64,7 @@ pub(super) fn parse_rule_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
     recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<Vec<CssSelector>, ParseError<'i, Error>> {
+    recovery.check_depth(input)?;
     let mut selectors = Vec::new();
     loop {
         selectors.push(parse_rule_selector(input, recovery)?);
@@ -69,6 +80,7 @@ pub(super) fn parse_scope_boundary_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
     recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssScopeSelectorList, ParseError<'i, Error>> {
+    recovery.check_depth(input)?;
     let selectors = parse_rule_selector_list_with_options(
         input,
         SelectorParseOptions::scope_boundary(),
@@ -82,6 +94,7 @@ pub(super) fn parse_scoped_style_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
     recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<CssScopedStyleSelectorList, ParseError<'i, Error>> {
+    recovery.check_depth(input)?;
     let mut selectors = Vec::new();
     loop {
         selectors.push(parse_scoped_style_selector(input, recovery)?);
@@ -755,72 +768,24 @@ fn parse_pseudo_class_with_options<'i, 't>(
 ) -> std::result::Result<CssPseudoClass, ParseError<'i, Error>> {
     let state = input.state();
     match input.next() {
-        Ok(Token::Ident(name)) => match_ignore_ascii_case! { &name,
-            "root" => Ok(CssPseudoClass::Root),
-            "scope" => Ok(CssPseudoClass::Scope),
-            "hover" => Ok(CssPseudoClass::Hover),
-            "active" => Ok(CssPseudoClass::Active),
-            "focus" => Ok(CssPseudoClass::Focus),
-            "focus-visible" => Ok(CssPseudoClass::FocusVisible),
-            "focus-within" => Ok(CssPseudoClass::FocusWithin),
-            "disabled" => Ok(CssPseudoClass::Disabled),
-            "enabled" => Ok(CssPseudoClass::Enabled),
-            "checked" => Ok(CssPseudoClass::Checked),
-            "required" => Ok(CssPseudoClass::Required),
-            "optional" => Ok(CssPseudoClass::Optional),
-            "valid" => Ok(CssPseudoClass::Valid),
-            "invalid" => Ok(CssPseudoClass::Invalid),
-            "placeholder-shown" => Ok(CssPseudoClass::PlaceholderShown),
-            "first-child" => Ok(CssPseudoClass::FirstChild),
-            "last-child" => Ok(CssPseudoClass::LastChild),
-            "only-child" => Ok(CssPseudoClass::OnlyChild),
-            "empty" => Ok(CssPseudoClass::Empty),
-            "first-of-type" => Ok(CssPseudoClass::FirstOfType),
-            "last-of-type" => Ok(CssPseudoClass::LastOfType),
-            "only-of-type" => Ok(CssPseudoClass::OnlyOfType),
-            "modal" => Ok(CssPseudoClass::Modal),
-            "fullscreen" => Ok(CssPseudoClass::Fullscreen),
-            "popover-open" => Ok(CssPseudoClass::PopoverOpen),
-            "default" => Ok(CssPseudoClass::Default),
-            "indeterminate" => Ok(CssPseudoClass::Indeterminate),
-            "read-only" => Ok(CssPseudoClass::ReadOnly),
-            "read-write" => Ok(CssPseudoClass::ReadWrite),
-            "in-range" => Ok(CssPseudoClass::InRange),
-            "out-of-range" => Ok(CssPseudoClass::OutOfRange),
-            _ => {
-                let message = format!("unsupported pseudo-class `:{name}`");
-                Err(invalid_selector(input, message))
-            }
-        },
+        Ok(Token::Ident(name)) => {
+            let name = name.clone();
+            parse_named_pseudo_class(name.as_ref(), input)
+        }
         Ok(Token::Function(name)) => {
             let name = name.clone();
-            input.parse_nested_block(|input| {
-                let pseudo_class = match_ignore_ascii_case! { &name,
-                    "nth-child" => {
-                        CssPseudoClass::NthChild(parse_nth_child_pattern(input, options, recovery)?)
-                    },
-                    "nth-last-child" => {
-                        CssPseudoClass::NthLastChild(parse_nth_child_pattern(input, options, recovery)?)
-                    },
-                    "nth-of-type" => CssPseudoClass::NthOfType(parse_nth_pattern(input)?),
-                    "nth-last-of-type" => {
-                        CssPseudoClass::NthLastOfType(parse_nth_pattern(input)?)
-                    },
-                    "not" => CssPseudoClass::Not(parse_pseudo_selector_list_with_options(input, options.without_pseudo_elements(), recovery)?),
-                    "is" => CssPseudoClass::Is(parse_forgiving_pseudo_selector_list(input, options.without_pseudo_elements(), recovery)?),
-                    "where" => CssPseudoClass::Where(parse_forgiving_pseudo_selector_list(input, options.without_pseudo_elements(), recovery)?),
-                    "has" if options.allow_has => CssPseudoClass::Has(parse_has_relative_selector_list(input, recovery)?),
-                    "has" => {
-                        return Err(invalid_selector(input, "nested `:has()` is unsupported"));
-                    },
-                    _ => {
-                        let message = format!("unsupported pseudo-class `:{name}(`");
-                        return Err(invalid_selector(input, message));
-                    }
-                };
-                input.expect_exhausted().map_err(selector_basic)?;
-                Ok(pseudo_class)
-            })
+            let mut depth = recovery.state.enter_component_block(
+                recovery.source,
+                input,
+                "baseline.selector.complex",
+            )?;
+            let result = input.parse_nested_block(|input| {
+                parse_function_pseudo_class(name.as_ref(), input, options, recovery)
+            });
+            if result.is_ok() {
+                depth.retain();
+            }
+            result
         }
         Ok(token) => {
             let message = format!("unsupported pseudo-class `:{}`", token.to_css_string());
@@ -832,6 +797,70 @@ fn parse_pseudo_class_with_options<'i, 't>(
         ),
         Err(error) => Err(selector_basic(error)),
     }
+}
+
+#[inline(never)]
+fn parse_named_pseudo_class<'i>(
+    name: &str,
+    input: &Parser<'i, '_>,
+) -> std::result::Result<CssPseudoClass, ParseError<'i, Error>> {
+    match_ignore_ascii_case! { name,
+        "root" => Ok(CssPseudoClass::Root),
+        "scope" => Ok(CssPseudoClass::Scope),
+        "hover" => Ok(CssPseudoClass::Hover),
+        "active" => Ok(CssPseudoClass::Active),
+        "focus" => Ok(CssPseudoClass::Focus),
+        "focus-visible" => Ok(CssPseudoClass::FocusVisible),
+        "focus-within" => Ok(CssPseudoClass::FocusWithin),
+        "disabled" => Ok(CssPseudoClass::Disabled),
+        "enabled" => Ok(CssPseudoClass::Enabled),
+        "checked" => Ok(CssPseudoClass::Checked),
+        "required" => Ok(CssPseudoClass::Required),
+        "optional" => Ok(CssPseudoClass::Optional),
+        "valid" => Ok(CssPseudoClass::Valid),
+        "invalid" => Ok(CssPseudoClass::Invalid),
+        "placeholder-shown" => Ok(CssPseudoClass::PlaceholderShown),
+        "first-child" => Ok(CssPseudoClass::FirstChild),
+        "last-child" => Ok(CssPseudoClass::LastChild),
+        "only-child" => Ok(CssPseudoClass::OnlyChild),
+        "empty" => Ok(CssPseudoClass::Empty),
+        "first-of-type" => Ok(CssPseudoClass::FirstOfType),
+        "last-of-type" => Ok(CssPseudoClass::LastOfType),
+        "only-of-type" => Ok(CssPseudoClass::OnlyOfType),
+        "modal" => Ok(CssPseudoClass::Modal),
+        "fullscreen" => Ok(CssPseudoClass::Fullscreen),
+        "popover-open" => Ok(CssPseudoClass::PopoverOpen),
+        "default" => Ok(CssPseudoClass::Default),
+        "indeterminate" => Ok(CssPseudoClass::Indeterminate),
+        "read-only" => Ok(CssPseudoClass::ReadOnly),
+        "read-write" => Ok(CssPseudoClass::ReadWrite),
+        "in-range" => Ok(CssPseudoClass::InRange),
+        "out-of-range" => Ok(CssPseudoClass::OutOfRange),
+        _ => Err(invalid_selector(input, format!("unsupported pseudo-class `:{name}`"))),
+    }
+}
+
+#[inline(never)]
+fn parse_function_pseudo_class<'i, 't>(
+    name: &str,
+    input: &mut Parser<'i, 't>,
+    options: SelectorParseOptions,
+    recovery: &mut SelectorRecovery<'_>,
+) -> std::result::Result<CssPseudoClass, ParseError<'i, Error>> {
+    let pseudo_class = match_ignore_ascii_case! { name,
+        "nth-child" => CssPseudoClass::NthChild(parse_nth_child_pattern(input, options, recovery)?),
+        "nth-last-child" => CssPseudoClass::NthLastChild(parse_nth_child_pattern(input, options, recovery)?),
+        "nth-of-type" => CssPseudoClass::NthOfType(parse_nth_pattern(input)?),
+        "nth-last-of-type" => CssPseudoClass::NthLastOfType(parse_nth_pattern(input)?),
+        "not" => CssPseudoClass::Not(parse_pseudo_selector_list_with_options(input, options.without_pseudo_elements(), recovery)?),
+        "is" => CssPseudoClass::Is(parse_forgiving_pseudo_selector_list(input, options.without_pseudo_elements(), recovery)?),
+        "where" => CssPseudoClass::Where(parse_forgiving_pseudo_selector_list(input, options.without_pseudo_elements(), recovery)?),
+        "has" if options.allow_has => CssPseudoClass::Has(parse_has_relative_selector_list(input, recovery)?),
+        "has" => return Err(invalid_selector(input, "nested `:has()` is unsupported")),
+        _ => return Err(invalid_selector(input, format!("unsupported pseudo-class `:{name}(`"))),
+    };
+    input.expect_exhausted().map_err(selector_basic)?;
+    Ok(pseudo_class)
 }
 
 fn parse_pseudo_selector_list_with_options<'i, 't>(

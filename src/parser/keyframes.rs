@@ -142,7 +142,7 @@ impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser<'i> {
         start: &ParserState,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
-        let _depth =
+        let mut depth =
             self.recovery
                 .enter_rule_block(self.source, input, "baseline.keyframes.block")?;
         let mut declarations = Vec::new();
@@ -185,7 +185,7 @@ impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser<'i> {
             }
         }
 
-        CssKeyframeBlock::try_new(
+        let result = CssKeyframeBlock::try_new(
             selectors,
             CssKeyframeDeclarationList::new(declarations),
             crate::source::CssSourcePosition::from_cssparser(
@@ -199,7 +199,11 @@ impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser<'i> {
                 "baseline.keyframes.block",
                 "a non-empty keyframe block",
             )
-        })
+        });
+        if result.is_ok() {
+            depth.retain();
+        }
+        result
     }
 }
 
@@ -324,10 +328,12 @@ impl<'i> DeclarationParser<'i> for KeyframeDeclarationParser<'i> {
         input: &mut Parser<'i, 't>,
         declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
-        self.recovery
-            .check_component_values(self.source, input, "css.declaration")?;
+        let implicit_closures =
+            self.recovery
+                .check_component_values(self.source, input, "css.declaration")?;
         let parsed =
             parse_declaration_core(DeclarationMode::Keyframe, name, input, declaration_start)?;
+        self.recovery.retain_component_closures(implicit_closures);
         Ok(CssKeyframeDeclaration::new(parsed.body, parsed.position))
     }
 }

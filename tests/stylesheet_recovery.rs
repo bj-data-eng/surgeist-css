@@ -112,23 +112,35 @@ fn stylesheet_recovery_empty_input_returns_clean_empty_report_and_parts() {
 }
 
 #[test]
-fn stylesheet_recovery_top_level_cdo_is_silent_before_and_between_valid_rules() {
+fn stylesheet_recovery_top_level_cdo_is_reported_before_and_between_valid_rules() {
     let source = "<!-- .before { color: red; } <!-- .after { color: blue; }";
 
     let report = parse_sheet(source);
 
     assert_eq!(style_rule_names(&report), ["before", "after"]);
-    assert!(report.is_clean());
+    assert_eq!(report.diagnostics().len(), 2);
+    for (diagnostic, start) in report.diagnostics().iter().zip([0, 29]) {
+        assert_eq!(diagnostic.action(), CssRecoveryAction::IgnoreLegacyToken);
+        assert_eq!(diagnostic.error().code(), CssErrorCode::UnexpectedToken);
+        assert_eq!(diagnostic.span().start().byte_offset().value(), start);
+        assert_eq!(diagnostic.span().end().byte_offset().value(), start + 4);
+    }
 }
 
 #[test]
-fn stylesheet_recovery_top_level_cdc_is_silent_before_and_between_valid_rules() {
+fn stylesheet_recovery_top_level_cdc_is_reported_before_and_between_valid_rules() {
     let source = "--> .before { color: red; } --> .after { color: blue; }";
 
     let report = parse_sheet(source);
 
     assert_eq!(style_rule_names(&report), ["before", "after"]);
-    assert!(report.is_clean());
+    assert_eq!(report.diagnostics().len(), 2);
+    for (diagnostic, start) in report.diagnostics().iter().zip([0, 28]) {
+        assert_eq!(diagnostic.action(), CssRecoveryAction::IgnoreLegacyToken);
+        assert_eq!(diagnostic.error().code(), CssErrorCode::UnexpectedToken);
+        assert_eq!(diagnostic.span().start().byte_offset().value(), start);
+        assert_eq!(diagnostic.span().end().byte_offset().value(), start + 3);
+    }
 }
 
 #[test]
@@ -242,10 +254,16 @@ fn stylesheet_recovery_unmatched_root_closing_brace_makes_following_encoding_non
 }
 
 #[test]
-fn stylesheet_recovery_trivia_and_legacy_tokens_alone_remain_clean() {
+fn stylesheet_recovery_trivia_and_legacy_tokens_alone_report_each_legacy_token() {
     let report = parse_sheet(" \n/**/ <!-- --> \t");
 
-    assert!(report.is_clean());
+    assert_eq!(report.diagnostics().len(), 2);
+    assert!(
+        report
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.action() == CssRecoveryAction::IgnoreLegacyToken)
+    );
     assert!(report.syntax().rules().is_empty());
     assert!(report.syntax().encoding().is_none());
 }

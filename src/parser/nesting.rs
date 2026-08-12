@@ -202,8 +202,12 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
         match_ignore_ascii_case! { &name,
             "media" => {
-                let query =
-                    parse_media_query_list(self.source, input, &mut self.diagnostics)?;
+                let query = parse_media_query_list(
+                    self.source,
+                    input,
+                    &mut self.diagnostics,
+                    &self.recovery,
+                )?;
                 if !input.is_exhausted() {
                     return Err(with_media_query_context(
                         invalid_syntax(
@@ -248,7 +252,12 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
                 })?,
             )),
             "scope" => Ok(NestedStyleAtRulePrelude::Scope(
-                parse_scope_prelude(self.source, input, &mut self.diagnostics).map_err(|error| {
+                parse_scope_prelude(
+                    self.source,
+                    input,
+                    &mut self.diagnostics,
+                    &self.recovery,
+                ).map_err(|error| {
                     with_at_rule_prelude_context(
                         error,
                         "scope",
@@ -290,7 +299,7 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
         start: &ParserState,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::AtRule, ParseError<'i, Self::Error>> {
-        let _depth = self
+        let mut depth = self
             .recovery
             .enter_rule_block(self.source, input, prelude.production())?;
         let position = crate::source::CssSourcePosition::from_cssparser(
@@ -363,6 +372,7 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
                 ))
             }
         };
+        depth.retain();
         Ok(StyleBlockItem::NestedRules(vec![rule]))
     }
 }
@@ -376,7 +386,8 @@ impl<'i> QualifiedRuleParser<'i> for NestedStyleRuleParser<'i> {
         &mut self,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
-        let mut recovery = SelectorRecovery::new(self.source, &mut self.diagnostics);
+        let mut recovery =
+            SelectorRecovery::new(self.source, &mut self.diagnostics, self.recovery.clone());
         parse_nested_selector_list(input, &mut recovery)
     }
 
@@ -386,9 +397,9 @@ impl<'i> QualifiedRuleParser<'i> for NestedStyleRuleParser<'i> {
         start: &ParserState,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
-        let _depth = self
-            .recovery
-            .enter_rule_block(self.source, input, "baseline.rule.style")?;
+        let mut depth =
+            self.recovery
+                .enter_rule_block(self.source, input, "baseline.rule.style")?;
         let mut flattened_selectors = Vec::new();
         for parent_selector in &self.parent_selectors {
             for nested_selector in &nested_selectors {
@@ -407,6 +418,7 @@ impl<'i> QualifiedRuleParser<'i> for NestedStyleRuleParser<'i> {
             self.recovery.clone(),
         )?;
         self.diagnostics.extend(recovered.diagnostics);
+        depth.retain();
         Ok(StyleBlockItem::NestedRules(recovered.syntax))
     }
 }
@@ -489,6 +501,7 @@ fn parse_nested_selector_list<'i, 't>(
     input: &mut Parser<'i, 't>,
     recovery: &mut SelectorRecovery<'_>,
 ) -> std::result::Result<Vec<NestedSelector>, ParseError<'i, Error>> {
+    recovery.check_depth(input)?;
     let mut selectors = Vec::new();
     loop {
         selectors.push(parse_nested_selector(input, recovery)?);

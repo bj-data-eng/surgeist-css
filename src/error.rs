@@ -1106,6 +1106,25 @@ pub(crate) fn nesting_limit<'i>(
     }
 }
 
+pub(crate) fn implicit_eof(source: &str) -> Error {
+    Error {
+        kind: ErrorKind::UnexpectedEnd(CssUnexpectedEndError {
+            expectation: EXPECT_CSS_SYNTAX,
+        }),
+        position: CssSourcePosition::from_byte_offset_in(source, source.len()),
+    }
+}
+
+pub(crate) fn unexpected_token_at(source: &str, byte_offset: usize, token: &Token<'_>) -> Error {
+    Error {
+        kind: ErrorKind::UnexpectedToken(CssUnexpectedTokenError {
+            expectation: EXPECT_CSS_SYNTAX,
+            encountered: CssTokenSummary::from_token(token),
+        }),
+        position: CssSourcePosition::from_byte_offset_in(source, byte_offset),
+    }
+}
+
 pub(crate) fn from_rule_parse_error(
     source: &str,
     failed_unit: &str,

@@ -8,6 +8,179 @@ use crate::source::CssSourcePosition;
 use crate::syntax::CssSelector;
 
 pub(super) const STRUCTURAL_NESTING_LIMIT: u32 = 256;
+pub(super) const DIRECT_PARSE_DEPTH: u32 = 128;
+
+pub(super) fn maximum_nested_depth(source: &str) -> u32 {
+    scan_delimiters(source, 0).maximum
+}
+
+pub(super) struct SpecializedEofLimit {
+    pub(super) unit_start: usize,
+    pub(super) opening_offset: usize,
+    pub(super) enclosing_production: &'static str,
+}
+
+pub(super) fn preflight_specialized_eof_limit(
+    source: &str,
+    base_depth: u32,
+) -> Option<SpecializedEofLimit> {
+    let scan = scan_delimiters(source, base_depth);
+    let target = scan.eof_limit?;
+    let prefix = source
+        .get(target.unit_start..target.opening_offset)
+        .unwrap_or_default()
+        .trim_start();
+    let is_media = prefix
+        .strip_prefix('@')
+        .is_some_and(|value| value.trim_start().starts_with("media"));
+    if target
+        .first_root_curly
+        .is_some_and(|curly| curly < target.opening_offset)
+        && !is_media
+    {
+        return None;
+    }
+    Some(SpecializedEofLimit {
+        unit_start: target.unit_start,
+        opening_offset: target.opening_offset,
+        enclosing_production: if is_media {
+            "baseline.media.query-list"
+        } else {
+            "baseline.selector.complex"
+        },
+    })
+}
+
+struct DelimiterScan {
+    maximum: u32,
+    unclosed: Vec<usize>,
+    eof_limit: Option<DelimiterLimitTarget>,
+}
+
+struct DelimiterLimitTarget {
+    unit_start: usize,
+    opening_offset: usize,
+    first_root_curly: Option<usize>,
+}
+
+fn scan_delimiters(source: &str, base_depth: u32) -> DelimiterScan {
+    let bytes = source.as_bytes();
+    let mut index = 0;
+    let mut blocks: Vec<(BlockKind, usize)> = Vec::new();
+    let mut maximum = base_depth;
+    let mut unit_start = None;
+    let mut first_root_curly = None;
+    let mut target = None;
+
+    while index < bytes.len() {
+        if bytes[index] == b'/' && bytes.get(index + 1) == Some(&b'*') {
+            index += 2;
+            while index < bytes.len()
+                && !(bytes[index] == b'*' && bytes.get(index + 1) == Some(&b'/'))
+            {
+                index += 1;
+            }
+            index = (index + 2).min(bytes.len());
+            continue;
+        }
+        if matches!(bytes[index], b'\'' | b'"') {
+            let quote = bytes[index];
+            index += 1;
+            while index < bytes.len() {
+                if bytes[index] == b'\\' {
+                    index = (index + 2).min(bytes.len());
+                } else if bytes[index] == quote {
+                    index += 1;
+                    break;
+                } else if matches!(bytes[index], b'\n' | b'\r' | b'\x0c') {
+                    break;
+                } else {
+                    index += 1;
+                }
+            }
+            continue;
+        }
+        if bytes[index] == b'\\' {
+            index = (index + 2).min(bytes.len());
+            continue;
+        }
+        if blocks.is_empty() && !bytes[index].is_ascii_whitespace() {
+            if bytes[index] == b';' {
+                unit_start = None;
+                first_root_curly = None;
+                index += 1;
+                continue;
+            }
+            unit_start.get_or_insert(index);
+        }
+
+        let opening = match bytes[index] {
+            b'(' => Some(BlockKind::Parenthesis),
+            b'[' => Some(BlockKind::Square),
+            b'{' => Some(BlockKind::Curly),
+            _ => None,
+        };
+        if let Some(opening) = opening {
+            let opening_offset = if opening == BlockKind::Parenthesis {
+                function_token_start(bytes, index)
+            } else {
+                index
+            };
+            if blocks.is_empty() && opening == BlockKind::Curly {
+                first_root_curly = Some(index);
+            }
+            let depth = base_depth.saturating_add(blocks.len() as u32);
+            if target.is_none() && depth >= STRUCTURAL_NESTING_LIMIT {
+                target = Some(DelimiterLimitTarget {
+                    unit_start: unit_start.unwrap_or(opening_offset),
+                    opening_offset,
+                    first_root_curly,
+                });
+            }
+            blocks.push((opening, opening_offset));
+            maximum = maximum.max(base_depth.saturating_add(blocks.len() as u32));
+            index += 1;
+            continue;
+        }
+
+        let closing = match bytes[index] {
+            b')' => Some(BlockKind::Parenthesis),
+            b']' => Some(BlockKind::Square),
+            b'}' => Some(BlockKind::Curly),
+            _ => None,
+        };
+        if let Some(closing) = closing
+            && blocks.last().is_some_and(|(kind, _)| *kind == closing)
+        {
+            blocks.pop();
+            if blocks.is_empty() {
+                unit_start = None;
+                first_root_curly = None;
+                target = None;
+            }
+        }
+        index += 1;
+    }
+
+    DelimiterScan {
+        maximum,
+        unclosed: blocks.into_iter().map(|(_, offset)| offset).collect(),
+        eof_limit: target,
+    }
+}
+
+fn function_token_start(source: &[u8], opening_parenthesis: usize) -> usize {
+    let mut start = opening_parenthesis;
+    while start > 0
+        && matches!(
+            source[start - 1],
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_'
+        )
+    {
+        start -= 1;
+    }
+    start
+}
 
 /// Parser-owned algorithm state shared by structural and component-value paths.
 ///
@@ -18,13 +191,21 @@ pub(super) const STRUCTURAL_NESTING_LIMIT: u32 = 256;
 pub(crate) struct RecoveryState {
     depth: Rc<Cell<u32>>,
     style_context_captures: StyleContextCaptures,
+    implicit_openings: Rc<Vec<usize>>,
+    retained_implicit_openings: Rc<RefCell<Vec<usize>>>,
 }
 
 impl RecoveryState {
-    pub(super) fn at_depth(depth: u32, style_context_captures: StyleContextCaptures) -> Self {
+    pub(super) fn at_depth(
+        source: &str,
+        depth: u32,
+        style_context_captures: StyleContextCaptures,
+    ) -> Self {
         Self {
             depth: Rc::new(Cell::new(depth)),
             style_context_captures,
+            implicit_openings: Rc::new(unclosed_openings(source)),
+            retained_implicit_openings: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
@@ -48,19 +229,114 @@ impl RecoveryState {
         self.enter(source, opening_offset, enclosing_production)
     }
 
+    pub(super) fn enter_component_block<'i>(
+        &self,
+        source: &str,
+        input: &Parser<'i, '_>,
+        enclosing_production: &'static str,
+    ) -> Result<RecoveryDepthGuard, ParseError<'i, Error>> {
+        let opening_offset = input.position().byte_index().saturating_sub(1);
+        self.enter(source, opening_offset, enclosing_production)
+    }
+
     pub(super) fn check_component_values<'i>(
         &self,
         source: &'i str,
         input: &Parser<'i, '_>,
         enclosing_production: &'static str,
-    ) -> Result<(), ParseError<'i, Error>> {
-        scan_nested_tokens(
+    ) -> Result<Vec<usize>, ParseError<'i, Error>> {
+        let start = input.position().byte_index();
+        if let Some(target) = source
+            .get(start..)
+            .map(|remaining| scan_delimiters(remaining, self.depth.get()))
+            .and_then(|scan| scan.eof_limit)
+        {
+            return Err(nesting_limit(
+                source,
+                start.saturating_add(target.opening_offset),
+                STRUCTURAL_NESTING_LIMIT,
+                enclosing_production,
+            ));
+        }
+        let _ = scan_nested_tokens(
             source,
-            input.position().byte_index(),
+            start,
             self.depth.get(),
             enclosing_production,
             ScanBoundary::DeclarationValue,
-        )
+        )?;
+        Ok(self
+            .implicit_openings
+            .iter()
+            .rev()
+            .copied()
+            .filter(|opening| *opening >= start)
+            .collect())
+    }
+
+    pub(super) fn check_specialized_components<'i>(
+        &self,
+        source: &str,
+        input: &Parser<'i, '_>,
+        enclosing_production: &'static str,
+    ) -> Result<Vec<usize>, ParseError<'i, Error>> {
+        let start = input.position().byte_index();
+        if let Some(target) = source
+            .get(start..)
+            .map(|remaining| scan_delimiters(remaining, self.depth.get()))
+            .and_then(|scan| scan.eof_limit)
+        {
+            return Err(nesting_limit(
+                source,
+                start.saturating_add(target.opening_offset),
+                STRUCTURAL_NESTING_LIMIT,
+                enclosing_production,
+            ));
+        }
+        let _ = scan_nested_tokens(
+            source,
+            start,
+            self.depth.get(),
+            enclosing_production,
+            ScanBoundary::SpecializedPrelude,
+        )?;
+        Ok(self
+            .implicit_openings
+            .iter()
+            .rev()
+            .copied()
+            .filter(|opening| *opening >= start)
+            .collect())
+    }
+
+    pub(super) fn retain_component_closures(&self, openings: Vec<usize>) {
+        let mut retained = self.retained_implicit_openings.borrow_mut();
+        for opening in openings {
+            if self.implicit_openings.contains(&opening) && !retained.contains(&opening) {
+                retained.push(opening);
+            }
+        }
+    }
+
+    pub(super) fn take_implicit_closure_diagnostics(
+        &self,
+        source: &str,
+    ) -> Vec<crate::CssRecoveryDiagnostic> {
+        let eof = CssSourcePosition::from_byte_offset_in(source, source.len());
+        let Some(span) = crate::CssSourceSpan::new(eof, eof) else {
+            return Vec::new();
+        };
+        self.retained_implicit_openings
+            .borrow_mut()
+            .drain(..)
+            .filter_map(|_| {
+                crate::CssRecoveryDiagnostic::new(
+                    crate::error::implicit_eof(source),
+                    span,
+                    crate::CssRecoveryAction::RetainWithImplicitClosure,
+                )
+            })
+            .collect()
     }
 
     pub(super) fn check_failed_rule_block<'i>(
@@ -107,6 +383,10 @@ impl RecoveryState {
         self.depth.set(depth + 1);
         Ok(RecoveryDepthGuard {
             depth: Rc::clone(&self.depth),
+            opening_offset,
+            implicit_openings: Rc::clone(&self.implicit_openings),
+            retained_implicit_openings: Rc::clone(&self.retained_implicit_openings),
+            retained: false,
         })
     }
 }
@@ -442,21 +722,22 @@ enum BlockKind {
 enum ScanBoundary {
     DeclarationValue,
     FailedCurlyBlock,
+    SpecializedPrelude,
 }
 
 fn scan_nested_tokens<'i>(
-    source: &'i str,
+    source: &str,
     start: usize,
     base_depth: u32,
     enclosing_production: &'static str,
     boundary: ScanBoundary,
-) -> Result<(), ParseError<'i, Error>> {
+) -> Result<Vec<usize>, ParseError<'i, Error>> {
     let mut offset = start.min(source.len());
-    let mut blocks = Vec::new();
+    let mut blocks: Vec<(BlockKind, usize)> = Vec::new();
     while let Some((token_start, token_end, token)) = next_source_token(source, offset) {
         offset = token_end;
         if let Some(closing) = closing_block(&token) {
-            if blocks.last() == Some(&closing) {
+            if blocks.last().is_some_and(|(kind, _)| *kind == closing) {
                 blocks.pop();
                 continue;
             }
@@ -464,13 +745,13 @@ fn scan_nested_tokens<'i>(
                 && matches!(boundary, ScanBoundary::FailedCurlyBlock)
                 && closing == BlockKind::Curly
             {
-                return Ok(());
+                return Ok(Vec::new());
             }
             if blocks.is_empty()
                 && matches!(boundary, ScanBoundary::DeclarationValue)
                 && closing == BlockKind::Curly
             {
-                return Ok(());
+                return Ok(Vec::new());
             }
             continue;
         }
@@ -478,7 +759,13 @@ fn scan_nested_tokens<'i>(
             && matches!(boundary, ScanBoundary::DeclarationValue)
             && matches!(token, Token::Semicolon)
         {
-            return Ok(());
+            return Ok(Vec::new());
+        }
+        if blocks.is_empty()
+            && matches!(boundary, ScanBoundary::SpecializedPrelude)
+            && matches!(token, Token::Semicolon | Token::CurlyBracketBlock)
+        {
+            return Ok(Vec::new());
         }
         if let Some(opening) = opening_block(&token) {
             let nested_depth = base_depth.saturating_add(blocks.len() as u32);
@@ -490,10 +777,18 @@ fn scan_nested_tokens<'i>(
                     enclosing_production,
                 ));
             }
-            blocks.push(opening);
+            blocks.push((opening, token_start));
         }
     }
-    Ok(())
+    Ok(blocks
+        .into_iter()
+        .rev()
+        .map(|(_, opening)| opening)
+        .collect())
+}
+
+fn unclosed_openings(source: &str) -> Vec<usize> {
+    scan_delimiters(source, 0).unclosed
 }
 
 fn next_source_token<'i>(source: &'i str, offset: usize) -> Option<(usize, usize, Token<'i>)> {
@@ -531,10 +826,26 @@ fn closing_block(token: &Token<'_>) -> Option<BlockKind> {
 
 pub(super) struct RecoveryDepthGuard {
     depth: Rc<Cell<u32>>,
+    opening_offset: usize,
+    implicit_openings: Rc<Vec<usize>>,
+    retained_implicit_openings: Rc<RefCell<Vec<usize>>>,
+    retained: bool,
+}
+
+impl RecoveryDepthGuard {
+    pub(super) fn retain(&mut self) {
+        self.retained = true;
+    }
 }
 
 impl Drop for RecoveryDepthGuard {
     fn drop(&mut self) {
+        if self.retained && self.implicit_openings.contains(&self.opening_offset) {
+            let mut retained = self.retained_implicit_openings.borrow_mut();
+            if !retained.contains(&self.opening_offset) {
+                retained.push(self.opening_offset);
+            }
+        }
         self.depth.set(self.depth.get().saturating_sub(1));
     }
 }
@@ -643,7 +954,14 @@ pub(super) fn comma_member_span(
 mod tests {
     use cssparser::{Parser, ParserInput};
 
-    use super::{RecoveryLoopOutcome, RecoveryProgress};
+    use super::{RecoveryLoopOutcome, RecoveryProgress, unclosed_openings};
+
+    #[test]
+    fn implicit_closure_scan_ignores_delimiters_in_strings_and_comments() {
+        let source = ".x{--v:f(\") }\"/* ] } */x";
+
+        assert_eq!(unclosed_openings(source), [2, 7]);
+    }
 
     #[test]
     fn structural_recovery_zero_progress_failure_advances_one_token() {

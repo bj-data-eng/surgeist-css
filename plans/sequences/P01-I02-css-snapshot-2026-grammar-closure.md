@@ -3,9 +3,9 @@
 ## 1. Authority And Sequencing Rules
 
 This sequence implements the reviewed P01-I02 specification at SHA-256
-`36a007fe2099fe6442fe940558c61e102a8dbd871de32e59838d003fce3aaa76`
+`c965dfedc08adf8648ef005f1b4f3a981f7e1ebf9fd904980b403d041c90792a`
 and its official ledger at SHA-256
-`02955c03b5cc404aeb6e6a1724402d570d1736d06ccef74dc631084540188116`.
+`09ecbf2dcaafbd402b24642f1244ce0be3568fd8a85b993c0218e2e7c0deac6d`.
 It is subordinate to reviewed P01 semantic SHA-256
 `e290a7fef9bf6b6e9bde764140e5f7fac34156bb8f644d999e6bba58dc92ca2b`.
 The published I01 base is

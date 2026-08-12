@@ -6,7 +6,7 @@
 | --- | --- |
 | Cycle ID | `P01-I01-C05` |
 | Owning repository | `surgeist-css` |
-| Status | `reviewed` |
+| Status | `in_progress` |
 | Cycle base | `ccf80046fadcb4ad38ef228f63e0f51a993d369d` |
 | Reviewed specification | `plans/specs/P01-I01-browser-recovery-authored-api-foundation.md`, SHA-256 `76b76a50a613aea26e1b790749a780f7d05efdfe57711c6b8dbf9a9fca2359d7`, sections 1 through 14, primarily 9, 11, 12.4, 12.5, 13 findings 2.18, 2.21, and 2.24, and initiative acceptance |
 | Reviewed sequence | `plans/sequences/P01-I01-browser-recovery-authored-api-foundation.md`, SHA-256 `f3a65df04c5c5a4f6f02212fe4d69959b75bba1cdcf2fd12e5bfb012f2c4ec94`, entry `I01-C05 Catalog, Public Evidence, And Candidate Closure` |

@@ -3,7 +3,7 @@
 ## 1. Authority And Sequencing Rules
 
 This sequence implements the reviewed P01-I02 specification at SHA-256
-`b861cc0df4d3d1d03f857d7ea4ff47e7f64faeaf20d1dc549614c14d3b186d49`
+`cd6f00a46ab4c5eeccf1a0c2e312eb329d1c365fdb30b4fd99cae0cdd3ddaec8`
 and its official ledger at SHA-256
 `02955c03b5cc404aeb6e6a1724402d570d1736d06ccef74dc631084540188116`.
 It is subordinate to reviewed P01 semantic SHA-256
@@ -29,17 +29,19 @@ plan and the canonical Surgeist workflow.
 - **Prerequisite/entry:** published I01 `bc5394f`; reviewed P01 reconciliation
   `e290a7f...`; reviewed I02 spec/ledger; no I02 grammar edit has begun.
 
-Freeze and review the complete I01 observable fixture before representation
-edits. Apply the one authorized public break: all evolving public enums become
+Freeze and review the hand-authored I01 behavioral corpus before representation
+edits. It records public parser inputs and observables without test-owner names,
+source-test counts, or coordination state. Apply the one authorized public break:
+all evolving public enums become
 non-exhaustive, the two closed exceptions remain closed, `CssKnownDeclaration`
 becomes private-field/coupled, the 179 generated property wrappers and borrowed
 views expose typed/global/substitution branches exactly, and the broad test-only
 `CssValue` adapter is retired. Add the SHA-free I02 migration record. Prove the
-entire finite I01 observable oracle and both feature matrices unchanged.
+entire retained I01 behavioral corpus and both feature matrices unchanged.
 
 Exit: the only breaking I02 candidate is published; subsequent cycles are
 additive against this surface. **Handoff:** full affected-enum/wrapper inventory,
-observable-fixture identity, API migration, task/cycle reviews, matrix, cleanup,
+behavioral-corpus revision, API migration, task/cycle reviews, matrix, cleanup,
 and published/read-back C01 SHA.
 
 ### I02-C02 Source Registry, Atomic Catalog, And Inventory Architecture
@@ -50,10 +52,13 @@ and published/read-back C01 SHA.
   evidence clean; repaired public evolution surface is frozen.
 
 Implement the dated source/tier registry, exclusions, baseline aggregate aliases,
-official source-audit ledger tests, and independent kind-specific implementation
-inventories. Migrate the exact 219 I01 records without changing parsing, and add
-empty/additive official slots only when their parser/vector owner is explicit.
-Establish three-way catalog/implementation/vector mutation guards for every kind.
+and independent kind-specific implementation inventories. Reconcile the official
+ledger directly against dated sources, the public catalog, implementation
+ownership, and independently authored public-parser behavioral cases. Migrate
+the exact 219 I01 records without changing parsing, and add empty/additive
+official slots only when their implementation owner and future behavioral
+evidence boundary are explicit. No Rust test compares owner sets/counts or uses
+catalog/implementation/vector mutations as completeness evidence.
 
 Exit: every existing parser path has one atomic owner; all 162/167 ledger units
 have source, kind, intended owner, and a current truthful disposition. Only
@@ -61,8 +66,8 @@ already implemented/evidenced base productions may be `Complete`; unimplemented
 official parser-facing rows remain `Partial` or `RecognizedUnsupported` until
 their owning later cycle promotes them with grammar, independent vectors,
 consumer evidence, and review. **Handoff:** exact source/catalog/inventory/vector
-counts, alias/exclusion audit, review/matrix/cleanup, and published/read-back C02
-SHA.
+reconciliation, alias/exclusion audit, review/matrix/cleanup, and
+published/read-back C02 SHA.
 
 ### I02-C03 Finite Numeric, Timing, And Typed Math Foundation
 
@@ -267,8 +272,10 @@ reviews/matrix/cleanup, and published/read-back C13 SHA.
 Complete Flexbox 1, Multicolumn 1, and any official property ledger row not
 closed by C03-C13. Reconcile exact 162 property and 167 non-property totals,
 all exclusions and 219 baseline rows, statuses, sources, implementations, and
-independent vectors. Close finding 2.2 and run the stable-ID I02 initiative audit,
-public docs/consumer/doctest closure, and SHA-free final migration/handoff note.
+independent vectors. Close finding 2.2 and run the I02 acceptance mapping through
+direct review, behavioral evidence, public docs/consumer/doctest closure, and a
+SHA-free final migration/handoff note; no Rust test encodes initiative or command
+state.
 
 Exit: all fourteen I02 findings are closed, every official parser-facing row is
 Complete, preserved extensions are truthful, and the immutable I02 candidate is
@@ -279,12 +286,12 @@ cleanup, then published/read-back I02 SHA and root-only actions.
 
 ## 3. Cross-Cycle Invariants
 
-Every cycle preserves the I01 observable fixture, all prior completed I02
-vectors, parser progress/depth guarantees, diagnostic ordering and coordinates,
-custom/substitution authored text, declaration importance, parser-owned valid
-states, and ordinary/`app-strict` parity. Catalog status moves only with the
-grammar, implementation inventory, independent vectors, public consumer
-evidence, and task review in the same cycle.
+Every cycle preserves the I01 behavioral corpus's authored inputs and public
+observables, all prior completed I02 vectors, parser progress/depth guarantees,
+diagnostic ordering and coordinates, custom/substitution authored text,
+declaration importance, parser-owned valid states, and ordinary/`app-strict`
+parity. Catalog status moves only with the grammar, implementation inventory,
+independent vectors, public consumer evidence, and task review in the same cycle.
 
 No cycle may change a dated source, ledger count, stable ID meaning, exclusion,
 or baseline-alias target without reconciling and re-reviewing the I02

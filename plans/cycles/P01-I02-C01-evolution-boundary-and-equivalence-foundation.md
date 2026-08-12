@@ -9,9 +9,9 @@
 | Status | `in_progress` |
 | Cycle base | `57b71354e83f70ff0665241eedfebe269f754fa4` |
 | Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `e290a7fef9bf6b6e9bde764140e5f7fac34156bb8f644d999e6bba58dc92ca2b`, especially P01.9 |
-| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `b861cc0df4d3d1d03f857d7ea4ff47e7f64faeaf20d1dc549614c14d3b186d49`, sections 1-3, 10, and 12.1 |
+| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `cd6f00a46ab4c5eeccf1a0c2e312eb329d1c365fdb30b4fd99cae0cdd3ddaec8`, sections 1-3, 10, and 12.1 |
 | Reviewed ledger | `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256 `02955c03b5cc404aeb6e6a1724402d570d1736d06ccef74dc631084540188116`, I01/base identity only; no ledger grammar/status change in C01 |
-| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `cd037ef80427fa5e378b634268ed135ba0f8e80ac0c8f0de5796a3ec59c14c5c`, entry `I02-C01` |
+| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `1e1750cc0d21b9b08bee0f084c5b28c943c0a15949c2618bcce387c73c57ef7b`, entry `I02-C01` |
 | Bounded outcome | Freeze a finite public I01 report oracle, perform the one authorized I02 public evolution/declaration representation repair without changing accepted/recovered input semantics, and publish a clean migration foundation for additive grammar cycles. |
 
 ## 2. Boundary, Compatibility, And Order
@@ -42,26 +42,25 @@ stop/reconcile event rather than a fixture update.
 ### T1 Freeze The I01 Observable Equivalence Oracle
 
 - **Files/area:** new `tests/fixtures/i01-c01-observables.tsv`, a new focused
-  integration test and only narrowly required test-manifest modules; no
-  production source or existing expectation edits.
-- **Outcome:** hand-author the exact finite case union required by specification
-  3.2: all 219 catalog positive/boundary identities, every case from the I01
-  focused integration files named in the static I01 migration trace, and the
-  default/`app-strict` public-surface cases. Stable case IDs point back to their
-  owning test/vector identity. Every TSV row fixes entry point, feature mode,
-  authored input, clean state, ordered retained rule/property stable IDs,
-  retained authored value slice and importance where applicable, and every
-  ordered diagnostic's code, `ErrorKind` root, stable payload identity,
-  byte/line/UTF-16 position, complete span endpoints, and recovery action.
+  integration test; no production source or existing expectation edits.
+- **Outcome:** hand-author the finite behavioral corpus required by specification
+  3.2 before representation edits. Every TSV row fixes a stable scenario label,
+  entry point, feature mode, authored input, clean state, ordered retained
+  rule/property stable IDs, retained authored value slice and importance where
+  applicable, and every ordered diagnostic's code, `ErrorKind` root, stable
+  payload identity, byte/line/UTF-16 position, complete span endpoints, and
+  recovery action. The corpus contains no test-owner/name mapping or test,
+  execution, or comparison counts.
 - **Independence and format:** the fixture is not emitted by the parser or
-  generated from catalog/parser tables. A hand-authored manifest maps the exact
-  source case IDs to fixture rows. The reader rejects unknown columns, duplicate
-  IDs, malformed escapes, absent required observables, and noncanonical order.
-  Mutation tests remove one case, one observable field, and one repeated
-  diagnostic and must fail with the responsible case ID.
-- **RED evidence:** focused tests first fail because the fixture/manifest and
-  reader are absent; a deliberately incomplete fixture proves exact-union and
-  mutation failures before the completed fixture is installed.
+  generated from catalog/parser tables. The reader rejects unknown columns,
+  duplicate scenario labels, malformed escapes, absent required observables,
+  invalid field values, retained/authored declaration mismatches, and
+  noncanonical order. Malformed-schema checks remain within the declared fixture
+  contract; no source/test manifest, identity fingerprint, or coordinated
+  omission meta-test exists.
+- **RED evidence:** focused tests first fail because the fixture and reader are
+  absent; a malformed fixture proves schema/required-observable
+  rejection before the completed corpus is installed.
 - **Acceptance:** every row passes against the unmodified I01 public front door
   in its recorded feature mode; default and `app-strict` cases agree on ordinary
   report observables; full existing tests remain unchanged and green; the diff

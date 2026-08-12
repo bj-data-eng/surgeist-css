@@ -151,19 +151,21 @@ root follow-up.
 
 The finite C01 equivalence oracle is a tracked, hand-authored
 `tests/fixtures/i01-c01-observables.tsv` created and independently reviewed from
-the published base before representation edits. Its case set is exactly the
-union of the 219 catalog positive/boundary cases, all cases in the I01 focused
-integration files named by `plans/handoffs/P01-I01-css-migration.md`, and the
-default/`app-strict` public-surface cases. Each row fixes case ID, entry point,
-feature mode, authored input, clean state, ordered retained rule/property IDs,
-retained authored value text and importance where applicable, and every ordered
+the published base before representation edits. It is a behavioral corpus, not
+a source-test inventory: it contains no test owner/name mapping, test count,
+placement assertion, execution/comparison counter, plan state, or coordination
+manifest. Each row fixes a stable scenario label, entry point, feature mode,
+authored input, clean state, ordered retained rule/property IDs, retained
+authored value text and importance where applicable, and every ordered
 diagnostic's code/root/stable payload identity/byte-line-column position/span/
-action. A manifest test proves the union is exact and mutation guards reject an
-omitted case or observable field. C01 compares the post-repair public report to
-every row in both feature modes; the only allowed difference is the documented
-compile-time API shape. The complete pre-existing default and `app-strict` I01
-test matrices also remain green. A second required breaking change stops I02
-and returns to P01.
+action. The fixture reader validates this declared data schema; each applicable
+row is applied to the public parser and compared field-for-field. Malformed
+fixture-schema and missing-observable checks are permitted, but no test infers
+completeness from source/test identity or counts. C01 compares the post-repair
+public report to every retained row in both feature modes; the only allowed
+difference is the documented compile-time API shape. The complete pre-existing
+default and `app-strict` I01 behavioral matrices also remain green. A second
+required breaking change stops I02 and returns to P01.
 
 ## 4. Conformance Profile And Catalog
 
@@ -308,10 +310,14 @@ its I01 accepted/boundary behavior, preventing a source/tier lie.
 Every implementation-owning module exposes a crate-private stable-ID inventory
 for its kind. Properties continue through `property_schema!`; rules,
 descriptors, selectors, media types/features, qualified rules, and shared values
-gain their own implementation inventories. Separately hand-authored tests own
-positive/negative/recovery vectors. Tests compare catalog, implementation, and
-vector IDs bidirectionally by kind with omission/extra/duplicate/status mutation
-guards. No one owner generates either of the other two.
+gain their own implementation inventories. Separately hand-authored behavioral
+cases exercise positive, negative, and recovery outcomes through the public
+parser and may assert the public metadata associated with their explicit stable
+ID. Rust tests do not compare catalog, implementation, and test-vector owner
+sets/counts or use omission/extra/duplicate/status mutations as completeness
+proxies. The coordinator and reviewers reconcile the official ledger, public
+catalog, implementation ownership, and behavioral evidence directly. No one
+owner generates either of the other two.
 
 At initiative completion:
 
@@ -488,9 +494,12 @@ clean reports, the breaking C01 declaration/value migration, selectors,
 namespaces, rules/descriptors, queries, calculations, and property-specific
 inspection. They reiterate the excluded downstream semantics.
 
-I01 audit tests remain baseline-preservation evidence. Add an I02 audit whose
-stable predicate/finding IDs map every acceptance item to exact source plus a
-passing behavioral/artifact test and exact configured command manifest.
+I01 behavioral tests remain baseline-preservation evidence. At I02 completion,
+the coordinator and reviewers map every acceptance item to direct source
+inspection, compiler-visible API evidence, behavioral tests, or deterministic
+checks of declared product artifacts as appropriate. No Rust test encodes an
+initiative predicate, plan/task/review/publication state, command manifest, or
+source/code shape as completion evidence.
 
 ## 11. Finding Closure Matrix
 
@@ -522,8 +531,11 @@ I02 is complete only when all predicates hold:
 1. C01 performs the exact one-time section 3.2 break before grammar work and a
    superseding migration record covers every affected public type/root action.
 2. Every official source item is exactly one Complete parser-facing row or one
-   justified exclusion; every parser-facing row has one kind/source/tier,
-   implementation record, and independent vector owner.
+   justified exclusion; every parser-facing row has one kind/source/tier, a
+   reviewed implementation mapping, and independently authored public-parser
+   behavioral evidence. Completeness is reconciled directly from the ledger and
+   owning artifacts, not inferred by a Rust test from owner identity sets or
+   counts.
 3. The exact 219-row I01 feature baseline remains classified and its accepted
    vectors do not regress; extension status and provenance are truthful.
 4. All fourteen allocated findings in section 11 have implemented source and
@@ -536,7 +548,7 @@ I02 is complete only when all predicates hold:
 7. Public docs and consumers expose the complete official grammar and exact
    metadata/recovery/downstream boundaries without relying on private modules.
 8. Default and `app-strict` check/test/doctest/Clippy matrices, focused catalog
-   and initiative audits, warning-denied rustdoc, formatting, diff checks,
+   and behavioral suites, warning-denied rustdoc, formatting, diff checks,
    dependency/feature checks, no-unsafe scans, process hygiene, and `cargo clean`
    all pass.
 9. Every cycle and the exact initiative receive fresh independent review; the

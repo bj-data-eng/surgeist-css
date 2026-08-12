@@ -1,5 +1,6 @@
 use surgeist_css::{
-    CssErrorCode, CssPropertyNameRef, CssRecoveryAction, CssRule, CssScopedRule, parse_sheet,
+    CssErrorCode, CssPropertyNameRef, CssRecoveryAction, CssRule, CssScopedRule, ErrorKind,
+    parse_sheet,
 };
 
 fn property_names(declarations: &surgeist_css::CssDeclarationList) -> Vec<&str> {
@@ -153,11 +154,21 @@ fn block_item_recovery_nested_and_scoped_style_lists_own_declaration_recovery() 
     let nested_source =
         ".host { color: red; & .child { width: 1px; bad: fn(a;b); height: 2px; } opacity: 1; }";
     let nested = parse_sheet(nested_source);
-    assert_eq!(nested.diagnostics().len(), 1);
-    assert_eq!(
-        nested.diagnostics()[0].action(),
-        CssRecoveryAction::DropDeclaration
+    let [nested_diagnostic] = nested.diagnostics() else {
+        panic!("expected exactly one nested declaration diagnostic");
+    };
+    assert_drop(
+        nested_source,
+        nested_diagnostic,
+        "bad: fn(a;b);",
+        CssErrorCode::UnknownProperty,
+        CssRecoveryAction::DropDeclaration,
+        nested_source.find("bad").unwrap(),
     );
+    let ErrorKind::UnknownProperty(nested_detail) = nested_diagnostic.error().kind() else {
+        panic!("expected nested unknown-property detail");
+    };
+    assert_eq!(nested_detail.name().as_str(), "bad");
     let nested_declarations: Vec<Vec<&str>> = nested
         .syntax()
         .rules()
@@ -181,11 +192,21 @@ fn block_item_recovery_nested_and_scoped_style_lists_own_declaration_recovery() 
         panic!("expected retained scoped style rule");
     };
     assert_eq!(property_names(style.declarations()), ["color", "width"]);
-    assert_eq!(scoped.diagnostics().len(), 1);
-    assert_eq!(
-        scoped.diagnostics()[0].action(),
-        CssRecoveryAction::DropDeclaration
+    let [scoped_diagnostic] = scoped.diagnostics() else {
+        panic!("expected exactly one scoped declaration diagnostic");
+    };
+    assert_drop(
+        scoped_source,
+        scoped_diagnostic,
+        "bad: x;",
+        CssErrorCode::UnknownProperty,
+        CssRecoveryAction::DropDeclaration,
+        scoped_source.find("bad").unwrap(),
     );
+    let ErrorKind::UnknownProperty(scoped_detail) = scoped_diagnostic.error().kind() else {
+        panic!("expected scoped unknown-property detail");
+    };
+    assert_eq!(scoped_detail.name().as_str(), "bad");
 }
 
 #[test]

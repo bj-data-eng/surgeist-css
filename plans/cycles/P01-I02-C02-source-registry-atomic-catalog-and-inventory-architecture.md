@@ -9,9 +9,9 @@
 | Status | `in_progress` |
 | Cycle base | `606ae77156d3085b6a8a551bc1f8d50c3ab885df` |
 | Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `e290a7fef9bf6b6e9bde764140e5f7fac34156bb8f644d999e6bba58dc92ca2b`, especially P01.9 |
-| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `36a007fe2099fe6442fe940558c61e102a8dbd871de32e59838d003fce3aaa76`, sections 4, 10, and 12.2-12.3 |
-| Reviewed ledger | `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256 `02955c03b5cc404aeb6e6a1724402d570d1736d06ccef74dc631084540188116`, sections 1-5 |
-| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `1933abba1e5291a47a4b2075b675341ab4f0034eb2216a9409089bb7d77fe18f`, entry `I02-C02` |
+| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `c965dfedc08adf8648ef005f1b4f3a981f7e1ebf9fd904980b403d041c90792a`, sections 4, 10, and 12.2-12.3 |
+| Reviewed ledger | `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256 `09ecbf2dcaafbd402b24642f1244ce0be3568fd8a85b993c0218e2e7c0deac6d`, sections 1-5 |
+| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `106618c1eda854c74bc60b7a9156018908ed0c1490ba64bb730a35cdc9d72e73`, entry `I02-C02` |
 | Bounded outcome | Publish the immutable source registry, atomic baseline catalog, official coverage/exclusion slots, and one-owner implementation inventories required for later additive grammar cycles without changing accepted or recovered CSS. |
 
 ## 2. Boundary, Impacts, And Resolved Architecture
@@ -227,6 +227,10 @@ All owned Rust remains free of `unsafe`.
   accessors. Complete 162/167 unit coverage, predecessor/exclusion equations,
   uniqueness, and lack of overlap are direct coordinator/task-review evidence,
   never a Rust owner-set/count/mutation test.
+- **RED evidence:** not applicable: private reconciliation metadata changes no
+  behavior. Establish parser, source/exclusion lookup, and C01 fixture suites as
+  green characterization; direct ledger/source inspection proves the records
+  absent. Structural absence must not become a Rust behavioral test.
 - **Acceptance:** direct reconciliation accounts for every ledger row with the
   exact dated source, kind, production, owner, future cycle when reserved, and
   truthful current disposition; public feature lookup exposes no reserved or
@@ -264,6 +268,10 @@ All owned Rust remains free of `unsafe`.
   recovery evidence. A case names its stable ID and authored input, calls a
   public parser, and asserts returned syntax or complete structured diagnostics;
   it does not identify a source file/test owner or participate in a set join.
+- **RED evidence:** not applicable to the private owner-inventory refactor;
+  establish affected parser cases and the C01 fixture as green characterization.
+  If an atomic case is absent, add authored CSS before the inventory edit and
+  prove its parser outcome; inventory absence, counts, or joins are never oracles.
 - **Acceptance:** direct review proves every active atomic parser path has one
   owning inventory entry and no alias/reserved/excluded entry does; explicit
   parser cases support every status claim; no inventory generates or validates
@@ -309,6 +317,10 @@ All owned Rust remains free of `unsafe`.
   source IDs, aliases, exclusions, and absence of placeholders/workflow state.
   Direct coordinator/task review—not a Rust meta-test—performs the final ledger,
   catalog, owner, and case reconciliation.
+- **RED evidence:** not applicable to this documentation-only task. Direct
+  artifact comparison establishes the gap; deterministic writing checks,
+  compiling public examples, and unchanged parser behavior prove acceptance,
+  never an artificial failing test or documentation-substring oracle.
 - **Acceptance:** repository-wide tests obey `testing.md`; public examples compile
   using crate-root APIs; exact C01 fixture SHA and parser reports are unchanged;
   docs make no Complete claim for a reserved slot; root follow-up is explicit.

@@ -39,10 +39,11 @@ commands use offline mode. No external software acquisition is authorized.
 
 | Area | C04 classification |
 | --- | --- |
-| Public API | Additive: media `Never` state and queries, style-attribute report API, and feature-gated sheet/style validators. Ordinary sheet signatures remain final. |
+| Public API | Breaking/additive: migrate media condition/query values to parser-positioned private-field models so every query can expose exact provenance; add `Never`, style-attribute reports, and feature-gated validators. Ordinary sheet signatures remain final. |
 | Dependencies/features | No dependency delta; add exactly `default = []` and `app-strict = []`. |
 | Generated artifacts | None; root-owned API artifacts remain untouched. |
 | Docs/examples | Rustdoc/doctests for all specialized states/actions and both feature modes; README product closure remains C05. |
+| MSRV | No leaf `rust-version` is introduced; edition remains 2024. |
 | Root follow-up | None until the final C05 candidate. |
 | Unsafe | Existing prohibition remains absolute. |
 
@@ -59,14 +60,31 @@ commands use offline mode. No external software acquisition is authorized.
   `ReplaceMediaQueryWithNever` diagnostic. `CssMediaQuery` exposes the exact
   non-exhaustive Condition/Typed/Never shape, `position()`, and
   `is_guaranteed_false()` semantics.
+- **Positioned media model:** the baseline unit-heavy public
+  `CssMediaCondition` enum becomes a private-field parser-produced
+  `CssMediaCondition { kind, position }` with `kind()` and `position()`;
+  `CssMediaConditionKind` is the public non-exhaustive semantic union of the
+  former condition variants. `CssTypedMediaQuery` likewise stores its parser-
+  produced first-nontrivia position privately and exposes `position()`.
+  `CssMediaCondition::position()` likewise means the first non-trivia token of
+  the condition production, including a leading logical operator when it owns
+  the condition.
+  `CssMediaQuery::position()` delegates to Condition/Typed/Never, and no public
+  constructor can forge any position. This intentional breaking migration is
+  the minimum C04 provenance change and does not reinterpret condition grammar.
 - **RED evidence:** independent comma-list tables first show parent abort.
   Vectors cover first/middle/last/only/empty forgiving members, nested balanced
   commas, `:not()`/ordinary selector rejection, and malformed/empty media
-  members between valid members with Unicode positions.
+  members between valid members with Unicode positions. Separate exact vectors
+  assert first-nontrivia positions and `CssMediaQuery::position()` delegation
+  for a condition-only query (including a leading logical operator), a typed
+  query with modifier/media type, and a `Never` member; at least one uses a
+  preceding supplementary Unicode scalar to distinguish byte and UTF-16 units.
 - **Acceptance:** recovery never crosses a comma member; selector survivors and
   `Never` sentinels preserve authored order; exact error/position/full member
   span/action/order is asserted; a clean parse never constructs `Never`; no
-  public sentinel constructor exists.
+  public sentinel constructor exists. Condition, typed, and Never positions all
+  match the first-nontrivia rule and their delegated query position exactly.
 - **Commands:** `cargo test -p surgeist-css --offline specialized_list_`;
   `cargo test -p surgeist-css --offline --test specialized_list_recovery`;
   `cargo check -p surgeist-css --offline`.

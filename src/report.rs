@@ -110,9 +110,10 @@ pub enum CssRecoveryAction {
 /// A structured parse error, its recovery-unit span, and the action taken.
 ///
 /// This diagnostic-phase value has private fields. Crate-owned checked
-/// construction requires the already-valid error position to lie within the
-/// already-valid inclusive-start/exclusive-end span, permitting equality with
-/// the end for missing-token and zero-width diagnostics. The value reports a
+/// construction requires `span.start() <= error.position() <= span.end()` by
+/// byte offset, even though the already-valid span is
+/// inclusive-start/exclusive-end. Equality at the end and zero-width spans are
+/// permitted for missing-token and EOF provenance. The value reports a
 /// completed recovery decision; it does not execute recovery, retain invalid
 /// authored nodes, log, validate, cascade, or resolve syntax.
 ///

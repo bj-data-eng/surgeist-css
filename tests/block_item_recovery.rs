@@ -1,6 +1,6 @@
 use surgeist_css::{
-    CssErrorCode, CssPropertyNameRef, CssRecoveryAction, CssRule, CssScopedRule, ErrorKind,
-    parse_sheet,
+    CssDeclarationContextRef, CssErrorCode, CssPropertyNameRef, CssRecoveryAction, CssRule,
+    CssScopedRule, CssTokenKind, ErrorKind, parse_sheet,
 };
 
 fn property_names(declarations: &surgeist_css::CssDeclarationList) -> Vec<&str> {
@@ -75,6 +75,39 @@ fn block_item_recovery_declaration_error_classes_retain_ordered_siblings() {
             responsible,
         );
     }
+}
+
+#[test]
+fn block_item_recovery_invalid_custom_annotation_retains_ordered_siblings_and_context() {
+    let unit = "--Accent: ready !oops;";
+    let source = format!(".x {{ color: red; {unit} width: 2px; }}");
+    let report = parse_sheet(&source);
+
+    let [CssRule::Style(rule)] = report.syntax().rules() else {
+        panic!("expected retained style rule");
+    };
+    assert_eq!(property_names(rule.declarations()), ["color", "width"]);
+
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected exactly one custom declaration diagnostic");
+    };
+    assert_drop(
+        &source,
+        diagnostic,
+        unit,
+        CssErrorCode::InvalidDeclarationAnnotation,
+        CssRecoveryAction::DropDeclaration,
+        source.find('!').expect("first responsible bang"),
+    );
+    let ErrorKind::InvalidDeclarationAnnotation(detail) = diagnostic.error().kind() else {
+        panic!("expected invalid declaration annotation detail");
+    };
+    let CssDeclarationContextRef::CustomProperty(name) = detail.context() else {
+        panic!("expected custom-property declaration context");
+    };
+    assert_eq!(name.as_str(), "--Accent");
+    assert_eq!(detail.encountered().kind(), CssTokenKind::Delim);
+    assert_eq!(detail.encountered().authored(), "!");
 }
 
 #[test]

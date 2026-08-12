@@ -2,7 +2,8 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssDeclarationContextRef, CssErrorCode, CssKnownProperty, CssTokenKind, ErrorKind, parse_sheet,
+    CssDeclarationContextRef, CssErrorCode, CssKnownProperty, CssRecoveryAction, CssTokenKind,
+    ErrorKind, parse_sheet, parse_style_attribute,
 };
 
 #[test]
@@ -331,4 +332,82 @@ fn error_public_non_exhaustive_kinds_are_matched_with_wildcards() {
         _ => "different extensible root",
     };
     assert_eq!(expectation, "a supported selector");
+}
+
+#[test]
+fn typed_calculation_type_error_has_exact_non_bmp_coordinates_span_and_recovery() {
+    let source = "--😀: 1; opacity: calc(1px + 2px); color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("the invalid typed calculation must recover exactly once");
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    assert_eq!(diagnostic.error().position().byte_offset().value(), 25);
+    assert_eq!(diagnostic.error().position().line().value(), 0);
+    assert_eq!(diagnostic.error().position().column().value(), 23);
+    assert_eq!(diagnostic.span().start().byte_offset().value(), 11);
+    assert_eq!(diagnostic.span().start().column().value(), 9);
+    assert_eq!(diagnostic.span().end().byte_offset().value(), 37);
+    assert_eq!(diagnostic.span().end().column().value(), 35);
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected structured property-value error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::Opacity);
+    let encountered = detail.encountered().expect("responsible typed leaf");
+    assert_eq!(encountered.kind(), CssTokenKind::Dimension);
+    assert_eq!(encountered.authored(), "1px");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation must reject recovered typed calculation input");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
+fn typed_calculation_operator_and_divisor_errors_retain_later_siblings() {
+    for (source, property, authored, kind) in [
+        (
+            "width: calc(1px * 2px); color: red",
+            CssKnownProperty::Width,
+            "*",
+            CssTokenKind::Delim,
+        ),
+        (
+            "order: calc(1 / 0); color: red",
+            CssKnownProperty::Order,
+            "/",
+            CssTokenKind::Delim,
+        ),
+        (
+            "width: calc(1px / 1px); color: red",
+            CssKnownProperty::Width,
+            "/",
+            CssTokenKind::Delim,
+        ),
+    ] {
+        let report = parse_style_attribute(source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{source}: expected one diagnostic");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue
+        );
+        assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("{source}: expected property-value detail");
+        };
+        assert_eq!(detail.property(), property, "{source}");
+        let encountered = detail.encountered().expect("responsible operator");
+        assert_eq!(encountered.authored(), authored, "{source}");
+        assert_eq!(encountered.kind(), kind, "{source}");
+    }
 }

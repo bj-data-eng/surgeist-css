@@ -1,9 +1,12 @@
 use surgeist_css::{
-    CssAngleCalculation, CssAngleUnit, CssCalculationExpressionRef, CssCalculationType,
-    CssCalculationValueRef, CssErrorCode, CssFrequencyCalculation, CssFrequencyUnit,
-    CssIntegerCalculation, CssKnownProperty, CssLengthCalculation, CssLengthUnit,
-    CssNumberCalculation, CssPercentageCalculation, CssRecoveryAction, CssTimeCalculation,
-    CssTimeUnit, CssTokenKind, ErrorKind, parse_style_attribute,
+    CssAngleCalculation, CssAngleUnit, CssAspectRatioValue, CssCalcLength,
+    CssCalculationExpressionRef, CssCalculationProductOperator, CssCalculationType,
+    CssCalculationValueRef, CssErrorCode, CssFlexValue, CssFrequencyCalculation, CssFrequencyUnit,
+    CssGridFlowToleranceValue, CssIntegerCalculation, CssIntegerValue, CssKnownProperty,
+    CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthUnit,
+    CssNonNegativeNumberValue, CssNumberCalculation, CssOpacityValue, CssPercentageCalculation,
+    CssPositiveNumber, CssPositiveNumberValue, CssRecoveryAction, CssTimeCalculation, CssTimeUnit,
+    CssTokenKind, CssZIndexValue, ErrorKind, parse_style_attribute,
 };
 
 #[test]
@@ -186,4 +189,208 @@ fn existing_calc_consumer_preserves_exact_depth_boundary_and_later_sibling() {
         diagnostic.error().position().byte_offset().value(),
         first_over_limit
     );
+}
+
+#[test]
+fn typed_length_consumer_exposes_products_and_preserves_simple_sum_compatibility() {
+    let report =
+        parse_style_attribute("width: calc(1px + 2%); height: calc((1px + 2%) * 3); color: red");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let width = report.syntax()[0].known().expect("known width");
+    let CssKnownPropertyValueRef::Width(width) = width.property_value().unwrap() else {
+        panic!("expected width wrapper");
+    };
+    let CssLength::Calc(CssCalcLength::Sum(terms)) = width.i01_subset().unwrap() else {
+        panic!("the frozen simple sum must keep its exact I01 projection");
+    };
+    assert_eq!(terms.len(), 2);
+
+    let height = report.syntax()[1].known().expect("known height");
+    let CssKnownPropertyValueRef::Height(height) = height.property_value().unwrap() else {
+        panic!("expected height wrapper");
+    };
+    let CssLength::Calc(CssCalcLength::Typed(calculation)) = height.i01_subset().unwrap() else {
+        panic!("new length syntax must use the additive typed compatibility branch");
+    };
+    assert_eq!(
+        calculation.result_type(),
+        CssCalculationType::LengthPercentage
+    );
+    let CssCalculationExpressionRef::Product(product) = calculation.expression() else {
+        panic!("expected typed length product");
+    };
+    assert_eq!(product.len(), 2);
+    assert_eq!(
+        product.factor(1).unwrap().operator(),
+        Some(CssCalculationProductOperator::Multiply)
+    );
+    assert!(matches!(
+        product.factor(0).unwrap().expression(),
+        CssCalculationExpressionRef::Group(_)
+    ));
+}
+
+#[test]
+fn scalar_property_accessors_distinguish_literals_from_deferred_calculations() {
+    let source = concat!(
+        "opacity: calc(-1 * 2); ",
+        "flex-grow: calc(-1 + 2); ",
+        "flex-shrink: calc((3 / 2)); ",
+        "order: calc(2 * 3); ",
+        "z-index: calc((4 + 1)); ",
+        "aspect-ratio: calc(-1 * 2); ",
+        "flex: calc(2 * 3) calc(-1 + 2) calc((10px * 2)); ",
+        "grid-flow-tolerance: calc((5% + 1px) * 2)"
+    );
+    let report = parse_style_attribute(source);
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::Opacity(value) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected opacity wrapper");
+    };
+    assert!(matches!(value.value(), CssOpacityValue::Calculation(_)));
+    assert!(value.i01_subset().is_none());
+
+    let CssKnownPropertyValueRef::FlexGrow(value) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected flex-grow wrapper");
+    };
+    assert!(matches!(
+        value.factor(),
+        CssNonNegativeNumberValue::Calculation(_)
+    ));
+    assert!(value.i01_subset().is_none());
+
+    let CssKnownPropertyValueRef::FlexShrink(value) = report.syntax()[2]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected flex-shrink wrapper");
+    };
+    assert!(matches!(
+        value.factor(),
+        CssNonNegativeNumberValue::Calculation(_)
+    ));
+
+    let CssKnownPropertyValueRef::Order(value) = report.syntax()[3]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected order wrapper");
+    };
+    assert!(matches!(value.value(), CssIntegerValue::Calculation(_)));
+
+    let CssKnownPropertyValueRef::ZIndex(value) = report.syntax()[4]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected z-index wrapper");
+    };
+    assert!(matches!(
+        value.value(),
+        CssZIndexValue::Integer(CssIntegerValue::Calculation(_))
+    ));
+
+    let CssKnownPropertyValueRef::AspectRatio(value) = report.syntax()[5]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected aspect-ratio wrapper");
+    };
+    let CssAspectRatioValue::Calculation(calculation) = value.ratio() else {
+        panic!("expected deferred aspect-ratio calculation");
+    };
+    assert!(matches!(
+        calculation.expression(),
+        CssCalculationExpressionRef::Product(_)
+    ));
+    assert!(value.i01_subset().is_none());
+
+    let CssKnownPropertyValueRef::Flex(value) = report.syntax()[6]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected flex wrapper");
+    };
+    let CssFlexValue::Components(components) = value.value() else {
+        panic!("expected flex components");
+    };
+    assert!(matches!(
+        components.grow(),
+        CssNonNegativeNumberValue::Calculation(_)
+    ));
+    assert!(matches!(
+        components.shrink(),
+        Some(CssNonNegativeNumberValue::Calculation(_))
+    ));
+    assert!(matches!(
+        components.basis(),
+        Some(CssLength::Calc(CssCalcLength::Typed(_)))
+    ));
+    assert!(value.i01_subset().is_none());
+
+    let CssKnownPropertyValueRef::GridFlowTolerance(value) = report.syntax()[7]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected grid-flow-tolerance wrapper");
+    };
+    assert!(matches!(
+        value.value(),
+        CssGridFlowToleranceValue::Length(CssLength::Calc(CssCalcLength::Typed(_)))
+    ));
+    assert!(value.i01_subset().is_none());
+}
+
+#[test]
+fn positive_number_model_checks_literals_while_calculation_range_stays_authored() {
+    assert!(CssPositiveNumber::try_new(0.0).is_none());
+    assert!(CssPositiveNumber::try_new(-1.0).is_none());
+    assert!(CssPositiveNumber::try_new(f32::INFINITY).is_none());
+    let literal = CssPositiveNumber::try_new(0.25).expect("finite positive literal");
+    assert_eq!(literal.value(), 0.25);
+    assert!(matches!(
+        CssPositiveNumberValue::Literal(literal),
+        CssPositiveNumberValue::Literal(value) if value.value() == 0.25
+    ));
+
+    let calculation = CssNumberCalculation::try_literal(-2.0).expect("finite authored number");
+    assert!(matches!(
+        CssPositiveNumberValue::Calculation(calculation),
+        CssPositiveNumberValue::Calculation(value)
+            if matches!(
+                value.expression(),
+                CssCalculationExpressionRef::Value(CssCalculationValueRef::Number(number))
+                    if number.value() == -2.0
+            )
+    ));
+
+    let literal_report = parse_style_attribute("aspect-ratio: 0; color: red");
+    assert_eq!(literal_report.syntax().len(), 1);
+    assert_eq!(literal_report.diagnostics().len(), 1);
+    let calculation_report = parse_style_attribute("aspect-ratio: calc(-1 * 2); color: red");
+    assert!(calculation_report.is_clean());
+    assert_eq!(calculation_report.syntax().len(), 2);
 }

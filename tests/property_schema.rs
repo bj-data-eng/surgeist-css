@@ -552,3 +552,95 @@ fn explicit_property_dispatch_cases_preserve_ordinary_and_important_behavior() {
         );
     }
 }
+
+#[test]
+fn typed_length_calculations_are_accepted_by_the_exact_current_consumer_set() {
+    for (property, value) in [
+        ("width", "calc((1px + 2%) * 3)"),
+        ("height", "calc((1px + 2%) * 3)"),
+        ("min-width", "calc((1px + 2%) * 3)"),
+        ("min-height", "calc((1px + 2%) * 3)"),
+        ("max-width", "calc((1px + 2%) * 3)"),
+        ("max-height", "calc((1px + 2%) * 3)"),
+        ("flex-basis", "calc((1px + 2%) * 3)"),
+        ("gap", "calc((1px + 2%) * 3)"),
+        ("row-gap", "calc((1px + 2%) * 3)"),
+        ("column-gap", "calc((1px + 2%) * 3)"),
+        ("grid-template-rows", "calc((1px + 2%) * 3)"),
+        ("grid-template-columns", "calc((1px + 2%) * 3)"),
+        ("grid-auto-rows", "calc((1px + 2%) * 3)"),
+        ("grid-auto-columns", "calc((1px + 2%) * 3)"),
+        ("font-size", "calc((1px + 2%) * 3)"),
+        ("line-height", "calc((1px + 2%) * 3)"),
+        (
+            "font",
+            "italic calc((10px + 2%) * 2)/calc((1px + 2%) * 3) serif",
+        ),
+        ("text-indent", "calc((1px + 2%) * 3) hanging"),
+        ("vertical-align", "calc((1px + 2%) * 3)"),
+        ("letter-spacing", "calc((1px + 2em) * 3)"),
+        ("text-decoration", "underline calc((1px + 2%) * 3)"),
+        ("text-decoration-thickness", "calc((1px + 2%) * 3)"),
+        ("inset", "calc((1px + 2%) * 3)"),
+        ("top", "calc((1px + 2%) * 3)"),
+        ("right", "calc((1px + 2%) * 3)"),
+        ("bottom", "calc((1px + 2%) * 3)"),
+        ("left", "calc((1px + 2%) * 3)"),
+        ("margin", "calc((1px + 2%) * 3)"),
+        ("margin-top", "calc((1px + 2%) * 3)"),
+        ("margin-right", "calc((1px + 2%) * 3)"),
+        ("margin-bottom", "calc((1px + 2%) * 3)"),
+        ("margin-left", "calc((1px + 2%) * 3)"),
+        ("padding", "calc((-1px + 2%) * 3)"),
+        ("padding-top", "calc((-1px + 2%) * 3)"),
+        ("padding-right", "calc((-1px + 2%) * 3)"),
+        ("padding-bottom", "calc((-1px + 2%) * 3)"),
+        ("padding-left", "calc((-1px + 2%) * 3)"),
+        ("border", "solid calc((-1px + 2px) * 3)"),
+        ("border-top", "solid calc((-1px + 2px) * 3)"),
+        ("border-right", "solid calc((-1px + 2px) * 3)"),
+        ("border-bottom", "solid calc((-1px + 2px) * 3)"),
+        ("border-left", "solid calc((-1px + 2px) * 3)"),
+        ("border-width", "calc((-1px + 2px) * 3)"),
+        ("border-top-width", "calc((-1px + 2px) * 3)"),
+        ("border-right-width", "calc((-1px + 2px) * 3)"),
+        ("border-bottom-width", "calc((-1px + 2px) * 3)"),
+        ("border-left-width", "calc((-1px + 2px) * 3)"),
+        ("border-radius", "calc((-1px + 2%) * 3)"),
+        ("border-top-left-radius", "calc((-1px + 2%) * 3)"),
+        ("border-top-right-radius", "calc((-1px + 2%) * 3)"),
+        ("border-bottom-right-radius", "calc((-1px + 2%) * 3)"),
+        ("border-bottom-left-radius", "calc((-1px + 2%) * 3)"),
+        ("box-shadow", "calc((1px + 2px) * 3) 2px"),
+        ("outline", "solid calc((-1px + 2px) * 3)"),
+        ("outline-width", "calc((-1px + 2px) * 3)"),
+        ("background-position", "calc((1px + 2%) * 3) top"),
+        ("background-size", "calc((-1px + 2%) * 3) auto"),
+        ("mask-position", "calc((1px + 2%) * 3) top"),
+        ("mask-size", "calc((-1px + 2%) * 3) auto"),
+        ("transform-origin", "calc((1px + 2%) * 3) top"),
+        ("translate", "calc((1px + 2%) * 3)"),
+    ] {
+        let source = format!("{property}: {value}");
+        let report = parse_style_attribute(&source);
+        assert!(report.is_clean(), "{source}: {:?}", report.diagnostics());
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        assert_eq!(
+            report.syntax()[0].known().unwrap().property(),
+            CssKnownProperty::from_name(property).unwrap(),
+            "{source}",
+        );
+    }
+
+    for source in [
+        "transform: translate(calc((1px + 2%) * 3))",
+        "clip-path: polygon(calc((1px + 2%) * 3) 0px, 1px 1px)",
+    ] {
+        let report = parse_style_attribute(source);
+        assert!(
+            !report.is_clean(),
+            "later function grammar changed: {source}"
+        );
+        assert!(report.syntax().is_empty(), "{source}");
+    }
+}

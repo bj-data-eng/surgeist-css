@@ -3,7 +3,7 @@ use crate::test_support::{
     AcceptedDeclarationCase, AcceptedValueCase, ExpectedErrorKind, RejectedDeclarationCase,
     RejectedSheetCase, accepted_declaration_cases, assert_accepts_declarations,
     assert_accepts_value_cases, assert_rejects_declarations, assert_rejects_sheets,
-    assert_sheet_rejected, parse_single_declaration, parse_single_declaration_value,
+    assert_sheet_rejected, parse_single_declaration,
 };
 
 fn source_position(line: u32, column: u32) -> CssSourcePosition {
@@ -29,17 +29,6 @@ fn style_rule(rule: &CssRule) -> &CssStyleRule {
     }
 }
 
-fn declaration_value(input: &str, property: CssProperty) -> CssValue {
-    let sheet = parse_sheet(input).unwrap();
-    style_rule(&sheet.rules()[0])
-        .declarations()
-        .iter()
-        .find(|declaration| declaration.property() == property)
-        .unwrap()
-        .value()
-        .clone()
-}
-
 fn declaration(input: &str, property: CssProperty) -> CssDeclaration {
     let sheet = parse_sheet(input).unwrap();
     style_rule(&sheet.rules()[0])
@@ -48,6 +37,67 @@ fn declaration(input: &str, property: CssProperty) -> CssDeclaration {
         .find(|declaration| declaration.property() == property)
         .unwrap()
         .clone()
+}
+
+macro_rules! declaration_value {
+    ($input:expr, $variant:ident) => {{
+        let declaration = declaration($input, CssProperty::$variant);
+        let value = declaration
+            .known()
+            .and_then(|known| known.property_value())
+            .expect("ordinary declaration value");
+        let CssKnownPropertyValueRef::$variant(value) = value else {
+            panic!("property wrapper did not match requested property");
+        };
+        value.i01_subset().expect("I01 property payload").clone()
+    }};
+}
+
+macro_rules! single_declaration_value {
+    ($property_name:expr, $variant:ident, $authored_value:expr) => {{
+        let declaration = parse_single_declaration($property_name, $authored_value);
+        let value = declaration
+            .known()
+            .and_then(|known| known.property_value())
+            .expect("ordinary declaration value");
+        let CssKnownPropertyValueRef::$variant(value) = value else {
+            panic!("property wrapper did not match requested property");
+        };
+        value.i01_subset().expect("I01 property payload").clone()
+    }};
+}
+
+macro_rules! declaration_payload {
+    ($declaration:expr, $variant:ident) => {{
+        let declaration = &$declaration;
+        let value = declaration
+            .known()
+            .and_then(|known| known.property_value())
+            .expect("ordinary declaration value");
+        let CssKnownPropertyValueRef::$variant(value) = value else {
+            panic!("property wrapper did not match requested property");
+        };
+        value.i01_subset().expect("I01 property payload").clone()
+    }};
+}
+
+macro_rules! declaration_global {
+    ($input:expr, $variant:ident) => {{
+        let declaration = declaration($input, CssProperty::$variant);
+        declaration
+            .known()
+            .and_then(|known| known.global())
+            .expect("global declaration value")
+    }};
+}
+
+fn custom_property_value(declaration: &CssDeclaration) -> &CssCustomPropertyValue {
+    declaration
+        .custom()
+        .expect("custom declaration")
+        .value()
+        .value()
+        .expect("authored custom property value")
 }
 
 fn parse_media_query_list_for_test(input: &str) -> std::result::Result<CssMediaQueryList, Error> {
@@ -135,45 +185,24 @@ fn parses_cssparser_color_absolute_forms() {
 
     for (value, expected_kind) in cases {
         let css = format!(".panel {{ color: {value}; }}");
-        let value = declaration_value(&css, CssProperty::Color);
-        let CssValue::Color(color) = value else {
-            panic!("{css} should parse as a color");
-        };
+        let value = declaration_value!(&css, Color);
+        let color = value;
         assert_eq!(color.kind_name(), expected_kind, "{css}");
     }
 }
 
 #[test]
 fn parses_css_system_colors_symbolically() {
-    let CssValue::Color(color) =
-        declaration_value(".panel { color: CanvasText; }", CssProperty::Color)
-    else {
-        panic!("expected color");
-    };
+    let color = declaration_value!(".panel { color: CanvasText; }", Color);
     assert_eq!(color, CssColor::System(CssSystemColor::CanvasText));
 
-    let CssValue::Color(color) = declaration_value(
-        ".panel { background-color: Canvas; }",
-        CssProperty::BackgroundColor,
-    ) else {
-        panic!("expected color");
-    };
+    let color = declaration_value!(".panel { background-color: Canvas; }", BackgroundColor);
     assert_eq!(color, CssColor::System(CssSystemColor::Canvas));
 
-    let CssValue::Color(color) = declaration_value(
-        ".panel { border-color: AccentColor; }",
-        CssProperty::BorderColor,
-    ) else {
-        panic!("expected color");
-    };
+    let color = declaration_value!(".panel { border-color: AccentColor; }", BorderColor);
     assert_eq!(color, CssColor::System(CssSystemColor::AccentColor));
 
-    let CssValue::OutlineColor(color) = declaration_value(
-        ".panel { outline-color: HighlightText; }",
-        CssProperty::OutlineColor,
-    ) else {
-        panic!("expected outline color");
-    };
+    let color = declaration_value!(".panel { outline-color: HighlightText; }", OutlineColor);
     assert_eq!(color, CssColor::System(CssSystemColor::HighlightText));
 }
 
@@ -185,9 +214,9 @@ fn rejects_unknown_system_color_like_identifiers() {
 
 #[test]
 fn parses_color_mix_symbolically() {
-    let CssValue::Color(CssColor::ColorMix(mix)) = declaration_value(
+    let CssColor::ColorMix(mix) = declaration_value!(
         ".panel { color: color-mix(in oklch, red 40%, blue); }",
-        CssProperty::Color,
+        Color
     ) else {
         panic!("expected color-mix");
     };
@@ -205,9 +234,9 @@ fn parses_color_mix_symbolically() {
 
 #[test]
 fn parses_color_mix_with_hue_interpolation() {
-    let CssValue::Color(CssColor::ColorMix(mix)) = declaration_value(
+    let CssColor::ColorMix(mix) = declaration_value!(
         ".panel { color: color-mix(in lch longer hue, red, blue 25%); }",
-        CssProperty::Color,
+        Color
     ) else {
         panic!("expected color-mix");
     };
@@ -230,10 +259,9 @@ fn rejects_invalid_color_mix_forms_strictly() {
 
 #[test]
 fn parses_relative_colors_symbolically() {
-    let CssValue::Color(CssColor::Relative(relative)) = declaration_value(
-        ".panel { color: rgb(from red r g b / alpha); }",
-        CssProperty::Color,
-    ) else {
+    let CssColor::Relative(relative) =
+        declaration_value!(".panel { color: rgb(from red r g b / alpha); }", Color)
+    else {
         panic!("expected relative color");
     };
 
@@ -246,9 +274,9 @@ fn parses_relative_colors_symbolically() {
 
 #[test]
 fn parses_relative_oklch_with_component_expressions() {
-    let CssValue::Color(CssColor::Relative(relative)) = declaration_value(
+    let CssColor::Relative(relative) = declaration_value!(
         ".panel { color: oklch(from red l c calc(h + 20deg) / 80%); }",
-        CssProperty::Color,
+        Color
     ) else {
         panic!("expected relative color");
     };
@@ -274,11 +302,7 @@ fn rejects_invalid_relative_color_forms_strictly() {
 
 #[test]
 fn rgba_hex_alpha_preserves_channels() {
-    let CssValue::Color(color) =
-        declaration_value(".panel { color: #11223344; }", CssProperty::Color)
-    else {
-        panic!("expected color");
-    };
+    let color = declaration_value!(".panel { color: #11223344; }", Color);
     let rgba = color.as_rgba().unwrap();
     assert_eq!((rgba.red(), rgba.green(), rgba.blue()), (0x11, 0x22, 0x33));
     assert!((rgba.alpha() - (0x44 as f32 / 255.0)).abs() < 0.0001);
@@ -353,12 +377,8 @@ fn descriptor_occurrence<T>(value: T) -> CssDescriptorOccurrence<T> {
 fn keyframes_rule_accessors_expose_authored_structure() {
     let name = CssKeyframesName::Ident(CssCustomIdent::new("fade"));
     let selector = CssKeyframeSelectorList::try_new(vec![CssKeyframeSelector::From]).unwrap();
-    let declaration = CssKeyframeDeclaration::new(
-        CssDeclarationBody::Known(CssKnownDeclaration::Opacity(CssDeclaredValue::Value(
-            CssOpacity::try_new(0.0).unwrap(),
-        ))),
-        source_position(1, 1),
-    );
+    let keyframes = parse_sheet("@keyframes fade { from { opacity: 0; } }").unwrap();
+    let declaration = keyframes_rule(&keyframes.rules()[0]).blocks()[0].declarations()[0].clone();
     let block = CssKeyframeBlock::try_new(
         selector,
         CssKeyframeDeclarationList::new(vec![declaration.clone()]),
@@ -447,17 +467,13 @@ fn keyframes_rule_parser_accepts_string_names_and_selector_lists() {
     assert_eq!(declarations[0].property(), &CssProperty::AnimationName);
     assert_eq!(declarations[1].property(), &CssProperty::Animation);
 
-    let CssValue::AnimationName(names) = declarations[0].value() else {
-        panic!("expected animation-name value");
-    };
+    let names = declaration_payload!(declarations[0], AnimationName);
     assert_eq!(
         names.names(),
         &[CssAnimationName::String(CssKeyframesString::new("fade in"))]
     );
 
-    let CssValue::Animation(animations) = declarations[1].value() else {
-        panic!("expected animation shorthand value");
-    };
+    let animations = declaration_payload!(declarations[1], Animation);
     assert_eq!(
         animations.items()[0].name(),
         Some(&CssAnimationName::String(CssKeyframesString::new(
@@ -528,12 +544,8 @@ fn keyframes_rule_parser_rejects_invalid_blocks() {
 fn keyframes_constructors_reject_invalid_states() {
     let location = source_position(1, 1);
     let name = CssKeyframesName::Ident(CssCustomIdent::new("fade"));
-    let declaration = CssKeyframeDeclaration::new(
-        CssDeclarationBody::Known(CssKnownDeclaration::Opacity(CssDeclaredValue::Value(
-            CssOpacity::try_new(1.0).unwrap(),
-        ))),
-        location,
-    );
+    let parsed = parse_sheet("@keyframes fade { from { opacity: 1; } }").unwrap();
+    let declaration = keyframes_rule(&parsed.rules()[0]).blocks()[0].declarations()[0].clone();
     let from = CssKeyframeSelectorList::try_new(vec![CssKeyframeSelector::From]).unwrap();
 
     assert_eq!(CssKeyframesString::try_new(""), None);
@@ -670,12 +682,7 @@ fn scope_rule_model_keeps_scoped_selectors_and_rules_separate() {
         relative_selector.clone(),
     ])
     .unwrap();
-    let declaration = CssDeclaration::new(
-        CssDeclarationBody::Known(CssKnownDeclaration::Color(CssDeclaredValue::Value(
-            CssColor::Rgba(CssRgbaColor::try_new(0, 0, 0, 1.0).unwrap()),
-        ))),
-        source_position(6, 7),
-    );
+    let declaration = parse_single_declaration("color", "rgba(0, 0, 0, 1)");
     let style = CssScopedStyleRule::new(
         selectors.clone(),
         CssDeclarationList::new(vec![declaration.clone()]),
@@ -1421,7 +1428,10 @@ fn easing_arguments(css: &str) -> CssEasingArguments {
 fn background_color_preserves_authored_property_identity() {
     let declaration = single_declaration(".panel { background-color: black; }");
     assert_eq!(declaration.property(), &CssProperty::BackgroundColor);
-    assert_eq!(declaration.value(), &CssValue::Color(CssColor::BLACK));
+    assert_eq!(
+        declaration_payload!(declaration, BackgroundColor),
+        CssColor::BLACK
+    );
 }
 
 #[test]
@@ -1498,26 +1508,17 @@ fn list_counter_and_content_models_preserve_authored_shapes() {
         list_style.image(),
         Some(CssListStyleImage::Url(_))
     ));
+    assert_eq!(list_style.clone(), list_style);
     assert_eq!(
-        CssValue::ListStyle(list_style.clone()),
-        CssValue::ListStyle(list_style)
-    );
-    assert_eq!(
-        CssValue::ListStyleType(CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
+        CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
             CssBuiltInCounterStyle::DecimalLeadingZero,
-        ))),
-        CssValue::ListStyleType(CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
+        )),
+        CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
             CssBuiltInCounterStyle::DecimalLeadingZero,
-        )))
+        ))
     );
-    assert_eq!(
-        CssValue::ListStylePosition(CssListStylePosition::Outside),
-        CssValue::ListStylePosition(CssListStylePosition::Outside)
-    );
-    assert_eq!(
-        CssValue::ListStyleImage(CssListStyleImage::None),
-        CssValue::ListStyleImage(CssListStyleImage::None)
-    );
+    assert_eq!(CssListStylePosition::Outside, CssListStylePosition::Outside);
+    assert_eq!(CssListStyleImage::None, CssListStyleImage::None);
 
     let counter_change = CssCounterChange::new(counter_name.clone(), Some(4));
     assert_eq!(counter_change.name(), &counter_name);
@@ -1525,21 +1526,12 @@ fn list_counter_and_content_models_preserve_authored_shapes() {
     let changes = CssCounterChangeList::try_new(vec![counter_change]).unwrap();
     assert_eq!(changes.changes().len(), 1);
     assert!(matches!(
-        CssValue::CounterChanges(CssCounterChanges::Changes(changes)),
-        CssValue::CounterChanges(CssCounterChanges::Changes(_))
+        CssCounterChanges::Changes(changes),
+        CssCounterChanges::Changes(_)
     ));
-    assert!(matches!(
-        CssValue::CounterChanges(CssCounterChanges::None),
-        CssValue::CounterChanges(CssCounterChanges::None)
-    ));
-    assert!(matches!(
-        CssValue::Content(CssContent::Normal),
-        CssValue::Content(CssContent::Normal)
-    ));
-    assert!(matches!(
-        CssValue::Content(CssContent::None),
-        CssValue::Content(CssContent::None)
-    ));
+    assert!(matches!(CssCounterChanges::None, CssCounterChanges::None));
+    assert!(matches!(CssContent::Normal, CssContent::Normal));
+    assert!(matches!(CssContent::None, CssContent::None));
     assert!(matches!(
         CssCounterChanges::Changes(
             CssCounterChangeList::try_new(vec![CssCounterChange::new(counter_name, None),])
@@ -1625,92 +1617,88 @@ fn counter_style_name_constructor_uses_counter_style_ident_rules() {
 #[test]
 fn parses_generated_content_values_symbolically() {
     let cases = [
-        (
-            "content normal",
-            "normal",
-            CssValue::Content(CssContent::Normal),
-        ),
-        ("content none", "none", CssValue::Content(CssContent::None)),
+        ("content normal", "normal", CssContent::Normal),
+        ("content none", "none", CssContent::None),
         (
             "content string",
             "\"Chapter \"",
-            CssValue::Content(CssContent::Items(
+            CssContent::Items(
                 CssContentList::try_new(vec![CssContentItem::String(
                     CssContentString::try_new("Chapter ").unwrap(),
                 )])
                 .unwrap(),
-            )),
+            ),
         ),
         (
             "content url",
             "url(marker.svg)",
-            CssValue::Content(CssContent::Items(
+            CssContent::Items(
                 CssContentList::try_new(vec![CssContentItem::Url(
                     CssUrl::try_new("marker.svg").unwrap(),
                 )])
                 .unwrap(),
-            )),
+            ),
         ),
         (
             "content counter",
             "counter(section)",
-            CssValue::Content(CssContent::Items(
+            CssContent::Items(
                 CssContentList::try_new(vec![CssContentItem::Counter(CssCounterFunction::new(
                     CssCounterName::try_new("section").unwrap(),
                     None,
                 ))])
                 .unwrap(),
-            )),
+            ),
         ),
         (
             "content counter with style",
             "counter(section, upper-roman)",
-            CssValue::Content(CssContent::Items(
+            CssContent::Items(
                 CssContentList::try_new(vec![CssContentItem::Counter(CssCounterFunction::new(
                     CssCounterName::try_new("section").unwrap(),
                     Some(CssCounterStyle::BuiltIn(CssBuiltInCounterStyle::UpperRoman)),
                 ))])
                 .unwrap(),
-            )),
+            ),
         ),
         (
             "content counters",
             "counters(section, \".\")",
-            CssValue::Content(CssContent::Items(
+            CssContent::Items(
                 CssContentList::try_new(vec![CssContentItem::Counters(CssCountersFunction::new(
                     CssCounterName::try_new("section").unwrap(),
                     CssContentString::try_new(".").unwrap(),
                     None,
                 ))])
                 .unwrap(),
-            )),
+            ),
         ),
         (
             "content counters with style",
             "counters(section, \".\", lower-alpha)",
-            CssValue::Content(CssContent::Items(
+            CssContent::Items(
                 CssContentList::try_new(vec![CssContentItem::Counters(CssCountersFunction::new(
                     CssCounterName::try_new("section").unwrap(),
                     CssContentString::try_new(".").unwrap(),
                     Some(CssCounterStyle::BuiltIn(CssBuiltInCounterStyle::LowerAlpha)),
                 ))])
                 .unwrap(),
-            )),
+            ),
         ),
         (
             "content attr",
             "attr(data-label)",
-            CssValue::Content(CssContent::Items(
+            CssContent::Items(
                 CssContentList::try_new(vec![CssContentItem::Attr(
                     CssAttributeName::try_new("data-label").unwrap(),
                 )])
                 .unwrap(),
-            )),
+            ),
         ),
         (
             "content quote keywords",
             "open-quote close-quote no-open-quote no-close-quote",
-            CssValue::Content(CssContent::Items(
+            CssContent::Items(
                 CssContentList::try_new(vec![
                     CssContentItem::OpenQuote,
                     CssContentItem::CloseQuote,
@@ -1718,12 +1706,12 @@ fn parses_generated_content_values_symbolically() {
                     CssContentItem::NoCloseQuote,
                 ])
                 .unwrap(),
-            )),
+            ),
         ),
     ];
 
     for (label, authored_value, expected_value) in cases {
-        let actual = parse_single_declaration_value("content", authored_value);
+        let actual = single_declaration_value!("content", Content, authored_value);
         assert_eq!(actual, expected_value, "{label}");
     }
 }
@@ -1731,39 +1719,30 @@ fn parses_generated_content_values_symbolically() {
 #[test]
 fn parses_list_style_longhands_and_shorthand_symbolically() {
     assert_eq!(
-        parse_single_declaration_value("list-style-type", "square"),
-        CssValue::ListStyleType(CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
-            CssBuiltInCounterStyle::Square,
-        )))
+        single_declaration_value!("list-style-type", ListStyleType, "square"),
+        CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(CssBuiltInCounterStyle::Square,))
     );
     assert_eq!(
-        parse_single_declaration_value("list-style-type", "custom-counter"),
-        CssValue::ListStyleType(CssListStyleType::CounterStyle(CssCounterStyle::Named(
+        single_declaration_value!("list-style-type", ListStyleType, "custom-counter"),
+        CssListStyleType::CounterStyle(CssCounterStyle::Named(
             CssCounterStyleName::try_new("custom-counter").unwrap(),
-        )))
-    );
-    assert_eq!(
-        parse_single_declaration_value("list-style-type", "\"*\""),
-        CssValue::ListStyleType(CssListStyleType::String(
-            CssContentString::try_new("*").unwrap(),
         ))
     );
     assert_eq!(
-        parse_single_declaration_value("list-style-position", "inside"),
-        CssValue::ListStylePosition(CssListStylePosition::Inside)
+        single_declaration_value!("list-style-type", ListStyleType, "\"*\""),
+        CssListStyleType::String(CssContentString::try_new("*").unwrap(),)
     );
     assert_eq!(
-        parse_single_declaration_value("list-style-image", "url(marker.svg)"),
-        CssValue::ListStyleImage(CssListStyleImage::Url(
-            CssUrl::try_new("marker.svg").unwrap(),
-        ))
+        single_declaration_value!("list-style-position", ListStylePosition, "inside"),
+        CssListStylePosition::Inside
+    );
+    assert_eq!(
+        single_declaration_value!("list-style-image", ListStyleImage, "url(marker.svg)"),
+        CssListStyleImage::Url(CssUrl::try_new("marker.svg").unwrap(),)
     );
 
-    let CssValue::ListStyle(list_style) =
-        parse_single_declaration_value("list-style", "url(marker.svg) inside square")
-    else {
-        panic!("list-style shorthand should parse");
-    };
+    let list_style =
+        single_declaration_value!("list-style", ListStyle, "url(marker.svg) inside square");
     assert_eq!(
         list_style.style_type(),
         Some(&CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
@@ -1778,29 +1757,18 @@ fn parses_list_style_longhands_and_shorthand_symbolically() {
         ))
     );
 
-    let CssValue::ListStyle(list_style) =
-        parse_single_declaration_value("list-style", "none inside")
-    else {
-        panic!("list-style shorthand should parse");
-    };
+    let list_style = single_declaration_value!("list-style", ListStyle, "none inside");
     assert_eq!(list_style.style_type(), Some(&CssListStyleType::None));
     assert_eq!(list_style.image(), Some(&CssListStyleImage::None));
     assert_eq!(list_style.position(), Some(CssListStylePosition::Inside));
 
-    let CssValue::ListStyle(list_style) = parse_single_declaration_value("list-style", "none")
-    else {
-        panic!("list-style shorthand should parse");
-    };
+    let list_style = single_declaration_value!("list-style", ListStyle, "none");
     assert_eq!(list_style.style_type(), Some(&CssListStyleType::None));
     assert_eq!(list_style.image(), Some(&CssListStyleImage::None));
     assert_eq!(list_style.position(), None);
 
     for authored_value in ["square none", "none square"] {
-        let CssValue::ListStyle(list_style) =
-            parse_single_declaration_value("list-style", authored_value)
-        else {
-            panic!("{authored_value} should parse as list-style shorthand");
-        };
+        let list_style = single_declaration_value!("list-style", ListStyle, authored_value);
         assert_eq!(
             list_style.style_type(),
             Some(&CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
@@ -1817,11 +1785,7 @@ fn parses_list_style_longhands_and_shorthand_symbolically() {
     }
 
     for authored_value in ["url(marker.svg) none", "none url(marker.svg)"] {
-        let CssValue::ListStyle(list_style) =
-            parse_single_declaration_value("list-style", authored_value)
-        else {
-            panic!("{authored_value} should parse as list-style shorthand");
-        };
+        let list_style = single_declaration_value!("list-style", ListStyle, authored_value);
         assert_eq!(
             list_style.style_type(),
             Some(&CssListStyleType::None),
@@ -1841,14 +1805,26 @@ fn parses_list_style_longhands_and_shorthand_symbolically() {
 #[test]
 fn parses_counter_change_values_symbolically() {
     assert_eq!(
-        parse_single_declaration_value("counter-reset", "none"),
-        CssValue::CounterChanges(CssCounterChanges::None)
+        single_declaration_value!("counter-reset", CounterReset, "none"),
+        CssCounterChanges::None
     );
 
     for property in ["counter-reset", "counter-increment", "counter-set"] {
-        let CssValue::CounterChanges(CssCounterChanges::Changes(changes)) =
-            parse_single_declaration_value(property, "section 2 page -1 item")
-        else {
+        let value = match property {
+            "counter-reset" => {
+                single_declaration_value!("counter-reset", CounterReset, "section 2 page -1 item")
+            }
+            "counter-increment" => single_declaration_value!(
+                "counter-increment",
+                CounterIncrement,
+                "section 2 page -1 item"
+            ),
+            "counter-set" => {
+                single_declaration_value!("counter-set", CounterSet, "section 2 page -1 item")
+            }
+            _ => unreachable!(),
+        };
+        let CssCounterChanges::Changes(changes) = value else {
             panic!("{property} should parse counter changes");
         };
         assert_eq!(changes.changes().len(), 3, "{property}");
@@ -1880,7 +1856,7 @@ fn public_api_exposes_generated_content_list_style_and_counter_values() {
         .iter()
         .find(|declaration| declaration.property() == CssProperty::Content)
         .unwrap();
-    let CssValue::Content(CssContent::Items(content_list)) = content.value() else {
+    let CssContent::Items(content_list) = declaration_payload!(*content, Content) else {
         panic!("expected content item list");
     };
     let [
@@ -1920,9 +1896,7 @@ fn public_api_exposes_generated_content_list_style_and_counter_values() {
         .iter()
         .find(|declaration| declaration.property() == CssProperty::ListStyle)
         .unwrap();
-    let CssValue::ListStyle(list_style) = list_style.value() else {
-        panic!("expected list-style shorthand");
-    };
+    let list_style = declaration_payload!(*list_style, ListStyle);
     assert_eq!(
         list_style.style_type(),
         Some(&CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
@@ -1940,7 +1914,7 @@ fn public_api_exposes_generated_content_list_style_and_counter_values() {
         .iter()
         .find(|declaration| declaration.property() == CssProperty::CounterReset)
         .unwrap();
-    let CssValue::CounterChanges(CssCounterChanges::Changes(changes)) = counter_reset.value()
+    let CssCounterChanges::Changes(changes) = declaration_payload!(*counter_reset, CounterReset)
     else {
         panic!("expected counter change list");
     };
@@ -2040,9 +2014,7 @@ fn parses_custom_property_declarations_as_authored_syntax() {
         declaration.property(),
         &CssProperty::Custom(CssCustomPropertyName::try_new("--BrandColor").unwrap())
     );
-    let CssValue::CustomProperty(value) = declaration.value() else {
-        panic!("expected custom property value");
-    };
+    let value = custom_property_value(&declaration);
     assert_eq!(value.as_css(), "#fff");
     assert!(!value.is_empty());
 }
@@ -2051,33 +2023,25 @@ fn parses_custom_property_declarations_as_authored_syntax() {
 fn custom_value_preserves_nested_variable_fallback_authored_css() {
     let declaration =
         single_declaration(".theme { --gap: var(--space, calc(1px + var(--fallback))); }");
-    let CssValue::CustomProperty(value) = declaration.value() else {
-        panic!("expected custom property value");
-    };
+    let value = custom_property_value(&declaration);
     assert_eq!(value.as_css(), "var(--space, calc(1px + var(--fallback)))");
 }
 
 #[test]
 fn custom_value_preserves_variable_fallback_authored_css() {
     let declaration = single_declaration(".theme { --gap: var(--space, 8px); }");
-    let CssValue::CustomProperty(value) = declaration.value() else {
-        panic!("expected custom property value");
-    };
+    let value = custom_property_value(&declaration);
     assert_eq!(value.as_css(), "var(--space, 8px)");
 }
 
 #[test]
 fn custom_values_accept_plain_and_empty_variable_fallback_forms() {
     let declaration = single_declaration(".theme { --gap: var(--space); }");
-    let CssValue::CustomProperty(value) = declaration.value() else {
-        panic!("expected custom property value");
-    };
+    let value = custom_property_value(&declaration);
     assert_eq!(value.as_css(), "var(--space)");
 
     let declaration = single_declaration(".theme { --gap: var(--empty,); }");
-    let CssValue::CustomProperty(value) = declaration.value() else {
-        panic!("expected custom property value");
-    };
+    let value = custom_property_value(&declaration);
     assert_eq!(value.as_css(), "var(--empty,)");
 }
 
@@ -2085,9 +2049,11 @@ fn custom_values_accept_plain_and_empty_variable_fallback_forms() {
 fn supported_properties_accept_variable_dependent_values_symbolically() {
     let declaration = single_declaration(".panel { gap: var(--space, 8px); }");
     assert_eq!(declaration.property(), &CssProperty::Gap);
-    let CssValue::VariableDependent(value) = declaration.value() else {
-        panic!("expected variable dependent value");
-    };
+    let value = declaration
+        .known()
+        .unwrap()
+        .substitution_dependent()
+        .expect("expected variable dependent value");
     assert_eq!(value.as_css(), "var(--space, 8px)");
 }
 
@@ -2095,9 +2061,11 @@ fn supported_properties_accept_variable_dependent_values_symbolically() {
 fn supported_properties_accept_embedded_variable_dependent_values_symbolically() {
     let declaration = single_declaration(".panel { width: calc(var(--w) + 1px); }");
     assert_eq!(declaration.property(), &CssProperty::Width);
-    let CssValue::VariableDependent(value) = declaration.value() else {
-        panic!("expected variable dependent value");
-    };
+    let value = declaration
+        .known()
+        .unwrap()
+        .substitution_dependent()
+        .expect("expected variable dependent value");
     assert_eq!(value.as_css(), "calc(var(--w) + 1px)");
 }
 
@@ -2105,9 +2073,11 @@ fn supported_properties_accept_embedded_variable_dependent_values_symbolically()
 fn variable_dependent_values_skip_post_substitution_validation() {
     let declaration = single_declaration(".panel { color: var(--brand, 8px); }");
     assert_eq!(declaration.property(), &CssProperty::Color);
-    let CssValue::VariableDependent(value) = declaration.value() else {
-        panic!("expected variable dependent value");
-    };
+    let value = declaration
+        .known()
+        .unwrap()
+        .substitution_dependent()
+        .expect("expected variable dependent value");
     assert_eq!(value.as_css(), "var(--brand, 8px)");
 }
 
@@ -3775,8 +3745,8 @@ fn practical_pseudo_class_matrix_accepts_supported_and_rejects_unsupported_forms
 fn custom_property_with_var_remains_custom_property_value() {
     let declaration = single_declaration(".theme { --gap: var(--space, 8px); }");
     assert!(matches!(
-        declaration.value(),
-        CssValue::CustomProperty(value)
+        custom_property_value(&declaration),
+        value
             if value.as_css() == "var(--space, 8px)"
     ));
 }
@@ -3789,9 +3759,7 @@ fn unknown_property_with_var_rejects() {
 #[test]
 fn custom_property_values_validate_nested_variable_syntax() {
     let declaration = single_declaration(".theme { --gap: calc(1px + var(--space)); }");
-    let CssValue::CustomProperty(value) = declaration.value() else {
-        panic!("expected custom property value");
-    };
+    let value = custom_property_value(&declaration);
     assert_eq!(value.as_css(), "calc(1px + var(--space))");
 }
 
@@ -3806,8 +3774,12 @@ fn rejects_malformed_variable_references() {
 #[test]
 fn custom_property_global_keyword_must_be_whole_value() {
     assert_eq!(
-        single_declaration(".theme { --gap: inherit; }").value(),
-        &CssValue::GlobalKeyword(CssGlobalKeyword::Inherit)
+        single_declaration(".theme { --gap: inherit; }")
+            .custom()
+            .unwrap()
+            .value()
+            .global(),
+        Some(CssGlobalKeyword::Inherit)
     );
     assert!(parse_sheet(".theme { --gap: inherit 1px; }").is_err());
 }
@@ -3842,411 +3814,579 @@ fn rejects_malformed_custom_property_names() {
     assert!(parse_sheet(".theme { --bad name: 1px; }").is_err());
 }
 
-fn assert_global_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::GlobalKeyword(_)));
+fn assert_display_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Display(_)));
 }
 
-fn assert_display_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Display(_)));
+fn assert_box_sizing_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::BoxSizing(_)));
 }
 
-fn assert_box_sizing_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BoxSizing(_)));
+fn assert_position_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Position(_)));
 }
 
-fn assert_position_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Position(_)));
+fn assert_direction_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Direction(_)));
 }
 
-fn assert_direction_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Direction(_)));
-}
-
-fn assert_overflow_value(value: &CssValue) {
+fn assert_overflow_value(value: CssKnownPropertyValueRef<'_>) {
     assert!(matches!(
         value,
-        CssValue::Overflow(_) | CssValue::OverflowAxes(_)
+        CssKnownPropertyValueRef::Overflow(_)
+            | CssKnownPropertyValueRef::OverflowX(_)
+            | CssKnownPropertyValueRef::OverflowY(_)
     ));
 }
 
-fn assert_flex_direction_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::FlexDirection(_)));
+fn assert_flex_direction_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::FlexDirection(_)));
+}
+
+fn assert_flex_wrap_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::FlexWrap(_)));
+}
+
+fn assert_float_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Float(_)));
+}
+
+fn assert_clear_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Clear(_)));
+}
+
+fn assert_alignment_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::AlignContent(_)
+            | CssKnownPropertyValueRef::JustifyContent(_)
+            | CssKnownPropertyValueRef::JustifyTracks(_)
+            | CssKnownPropertyValueRef::AlignTracks(_)
+    ));
+}
+
+fn assert_align_items_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::AlignItems(_)
+            | CssKnownPropertyValueRef::AlignSelf(_)
+            | CssKnownPropertyValueRef::JustifyItems(_)
+            | CssKnownPropertyValueRef::JustifySelf(_)
+    ));
+}
+
+fn assert_place_alignment_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::PlaceContent(_)
+            | CssKnownPropertyValueRef::PlaceItems(_)
+            | CssKnownPropertyValueRef::PlaceSelf(_)
+    ));
+}
+
+fn assert_visibility_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Visibility(_)));
+}
+
+fn assert_content_visibility_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::ContentVisibility(_)
+    ));
+}
+
+fn assert_length_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::Width(_)
+            | CssKnownPropertyValueRef::Height(_)
+            | CssKnownPropertyValueRef::MinWidth(_)
+            | CssKnownPropertyValueRef::MinHeight(_)
+            | CssKnownPropertyValueRef::MaxWidth(_)
+            | CssKnownPropertyValueRef::MaxHeight(_)
+            | CssKnownPropertyValueRef::FlexBasis(_)
+            | CssKnownPropertyValueRef::Gap(_)
+            | CssKnownPropertyValueRef::RowGap(_)
+            | CssKnownPropertyValueRef::ColumnGap(_)
+            | CssKnownPropertyValueRef::FontSize(_)
+            | CssKnownPropertyValueRef::LineHeight(_)
+            | CssKnownPropertyValueRef::Top(_)
+            | CssKnownPropertyValueRef::Right(_)
+            | CssKnownPropertyValueRef::Bottom(_)
+            | CssKnownPropertyValueRef::Left(_)
+            | CssKnownPropertyValueRef::MarginTop(_)
+            | CssKnownPropertyValueRef::MarginRight(_)
+            | CssKnownPropertyValueRef::MarginBottom(_)
+            | CssKnownPropertyValueRef::MarginLeft(_)
+            | CssKnownPropertyValueRef::PaddingTop(_)
+            | CssKnownPropertyValueRef::PaddingRight(_)
+            | CssKnownPropertyValueRef::PaddingBottom(_)
+            | CssKnownPropertyValueRef::PaddingLeft(_)
+            | CssKnownPropertyValueRef::BorderTopWidth(_)
+            | CssKnownPropertyValueRef::BorderRightWidth(_)
+            | CssKnownPropertyValueRef::BorderBottomWidth(_)
+            | CssKnownPropertyValueRef::BorderLeftWidth(_)
+    ));
 }
 
-fn assert_flex_wrap_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::FlexWrap(_)));
+fn assert_edges_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::Inset(_)
+            | CssKnownPropertyValueRef::Margin(_)
+            | CssKnownPropertyValueRef::Padding(_)
+            | CssKnownPropertyValueRef::BorderWidth(_)
+    ));
 }
 
-fn assert_float_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Float(_)));
+fn assert_color_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::Color(_)
+            | CssKnownPropertyValueRef::Background(_)
+            | CssKnownPropertyValueRef::BackgroundColor(_)
+            | CssKnownPropertyValueRef::BorderColor(_)
+            | CssKnownPropertyValueRef::BorderTopColor(_)
+            | CssKnownPropertyValueRef::BorderRightColor(_)
+            | CssKnownPropertyValueRef::BorderBottomColor(_)
+            | CssKnownPropertyValueRef::BorderLeftColor(_)
+    ));
 }
 
-fn assert_clear_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Clear(_)));
+fn assert_border_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::Border(_)
+            | CssKnownPropertyValueRef::BorderTop(_)
+            | CssKnownPropertyValueRef::BorderRight(_)
+            | CssKnownPropertyValueRef::BorderBottom(_)
+            | CssKnownPropertyValueRef::BorderLeft(_)
+    ));
 }
 
-fn assert_alignment_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Alignment(_)));
+fn assert_border_style_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::BorderTopStyle(_)
+            | CssKnownPropertyValueRef::BorderRightStyle(_)
+            | CssKnownPropertyValueRef::BorderBottomStyle(_)
+            | CssKnownPropertyValueRef::BorderLeftStyle(_)
+    ));
 }
 
-fn assert_align_items_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::AlignItems(_)));
+fn assert_border_styles_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::BorderStyle(_)));
 }
 
-fn assert_place_alignment_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::PlaceAlignment(_)));
+fn assert_border_radius_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::BorderRadius(_)));
 }
 
-fn assert_visibility_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Visibility(_)));
+fn assert_corner_radius_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::BorderTopLeftRadius(_)
+            | CssKnownPropertyValueRef::BorderTopRightRadius(_)
+            | CssKnownPropertyValueRef::BorderBottomRightRadius(_)
+            | CssKnownPropertyValueRef::BorderBottomLeftRadius(_)
+    ));
 }
 
-fn assert_content_visibility_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::ContentVisibility(_)));
+fn assert_box_shadow_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::BoxShadow(_)));
 }
 
-fn assert_length_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Length(_)));
+fn assert_opacity_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Opacity(_)));
 }
 
-fn assert_edges_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Edges(_)));
+fn assert_flex_grow_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::FlexGrow(_)));
 }
 
-fn assert_color_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Color(_)));
+fn assert_flex_shrink_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::FlexShrink(_)));
 }
 
-fn assert_border_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Border(_)));
+fn assert_aspect_ratio_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::AspectRatio(_)));
 }
 
-fn assert_border_style_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BorderStyle(_)));
+fn assert_scrollbar_width_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::ScrollbarWidth(_)));
 }
 
-fn assert_border_styles_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BorderStyles(_)));
+fn assert_order_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Order(_)));
 }
 
-fn assert_border_radius_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BorderRadius(_)));
+fn assert_flex_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Flex(_)));
 }
 
-fn assert_corner_radius_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::CornerRadius(_)));
+fn assert_z_index_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::ZIndex(_)));
 }
 
-fn assert_box_shadow_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BoxShadow(_)));
+fn assert_box_decoration_break_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::BoxDecorationBreak(_)
+    ));
 }
 
-fn assert_opacity_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Opacity(_)));
+fn assert_grid_flow_tolerance_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::GridFlowTolerance(_)
+    ));
 }
 
-fn assert_flex_grow_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::FlexGrow(_)));
+fn assert_grid_track_list_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::GridTemplateRows(_)
+            | CssKnownPropertyValueRef::GridTemplateColumns(_)
+            | CssKnownPropertyValueRef::GridAutoRows(_)
+            | CssKnownPropertyValueRef::GridAutoColumns(_)
+    ));
 }
 
-fn assert_flex_shrink_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::FlexShrink(_)));
+fn assert_grid_template_areas_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::GridTemplateAreas(_)
+    ));
 }
 
-fn assert_aspect_ratio_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::AspectRatio(_)));
+fn assert_grid_template_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::GridTemplate(_)));
 }
 
-fn assert_scrollbar_width_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::ScrollbarWidth(_)));
+fn assert_grid_auto_flow_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::GridAutoFlow(_)));
 }
 
-fn assert_order_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Order(_)));
+fn assert_grid_line_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::GridRowStart(_)
+            | CssKnownPropertyValueRef::GridRowEnd(_)
+            | CssKnownPropertyValueRef::GridColumnStart(_)
+            | CssKnownPropertyValueRef::GridColumnEnd(_)
+    ));
 }
 
-fn assert_flex_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Flex(_)));
+fn assert_grid_line_range_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::GridRow(_) | CssKnownPropertyValueRef::GridColumn(_)
+    ));
 }
 
-fn assert_z_index_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::ZIndex(_)));
+fn assert_grid_area_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::GridArea(_)));
 }
 
-fn assert_box_decoration_break_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BoxDecorationBreak(_)));
+fn assert_grid_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Grid(_)));
 }
 
-fn assert_grid_flow_tolerance_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::GridFlowTolerance(_)));
+fn assert_writing_mode_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::WritingMode(_)));
 }
 
-fn assert_grid_track_list_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::GridTrackList(_)));
+fn assert_text_align_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::TextAlign(_)));
 }
 
-fn assert_grid_template_areas_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::GridTemplateAreas(_)));
+fn assert_text_align_last_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::TextAlignLast(_)));
 }
 
-fn assert_grid_template_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::GridTemplate(_)));
+fn assert_text_indent_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::TextIndent(_)));
 }
 
-fn assert_grid_auto_flow_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::GridAutoFlow(_)));
+fn assert_vertical_align_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::VerticalAlign(_)));
 }
 
-fn assert_grid_line_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::GridLine(_)));
+fn assert_font_family_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::FontFamily(_)));
 }
 
-fn assert_grid_line_range_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::GridLineRange(_)));
+fn assert_font_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Font(_)));
 }
 
-fn assert_grid_area_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::GridArea(_)));
+fn assert_font_weight_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::FontWeight(_)));
 }
 
-fn assert_grid_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Grid(_)));
+fn assert_font_style_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::FontStyle(_)));
 }
 
-fn assert_writing_mode_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::WritingMode(_)));
+fn assert_font_stretch_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::FontStretch(_)));
 }
 
-fn assert_text_align_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TextAlign(_)));
+fn assert_font_variant_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::FontVariant(_)));
 }
 
-fn assert_text_align_last_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TextAlignLast(_)));
+fn assert_font_feature_settings_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::FontFeatureSettings(_)
+    ));
 }
 
-fn assert_text_indent_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TextIndent(_)));
+fn assert_letter_spacing_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::LetterSpacing(_)));
 }
 
-fn assert_vertical_align_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::VerticalAlign(_)));
+fn assert_text_wrap_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::TextWrap(_)));
 }
 
-fn assert_font_family_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::FontFamily(_)));
+fn assert_white_space_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::WhiteSpace(_)));
 }
 
-fn assert_font_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Font(_)));
+fn assert_word_break_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::WordBreak(_)));
 }
 
-fn assert_font_weight_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::FontWeight(_)));
+fn assert_overflow_wrap_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::OverflowWrap(_)));
 }
 
-fn assert_font_style_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::FontStyle(_)));
+fn assert_text_overflow_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::TextOverflow(_)));
 }
 
-fn assert_font_stretch_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::FontStretch(_)));
+fn assert_text_decoration_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::TextDecoration(_)));
 }
 
-fn assert_font_variant_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::FontVariant(_)));
+fn assert_text_decoration_line_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::TextDecorationLine(_)
+    ));
 }
 
-fn assert_font_feature_settings_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::FontFeatureSettings(_)));
+fn assert_text_decoration_color_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::TextDecorationColor(_)
+    ));
 }
 
-fn assert_letter_spacing_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::LetterSpacing(_)));
+fn assert_text_decoration_style_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::TextDecorationStyle(_)
+    ));
 }
 
-fn assert_text_wrap_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TextWrap(_)));
+fn assert_text_decoration_thickness_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::TextDecorationThickness(_)
+    ));
 }
 
-fn assert_white_space_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::WhiteSpace(_)));
+fn assert_text_transform_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::TextTransform(_)));
 }
 
-fn assert_word_break_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::WordBreak(_)));
+fn assert_background_image_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::BackgroundImage(_)
+    ));
 }
 
-fn assert_overflow_wrap_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::OverflowWrap(_)));
+fn assert_background_position_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::BackgroundPosition(_)
+    ));
 }
 
-fn assert_text_overflow_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TextOverflow(_)));
+fn assert_background_size_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::BackgroundSize(_)));
 }
 
-fn assert_text_decoration_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TextDecoration(_)));
+fn assert_background_repeat_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::BackgroundRepeat(_)
+    ));
 }
 
-fn assert_text_decoration_line_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TextDecorationLine(_)));
+fn assert_background_box_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::BackgroundOrigin(_) | CssKnownPropertyValueRef::BackgroundClip(_)
+    ));
 }
 
-fn assert_text_decoration_color_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TextDecorationColor(_)));
+fn assert_background_attachment_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::BackgroundAttachment(_)
+    ));
 }
 
-fn assert_text_decoration_style_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TextDecorationStyle(_)));
+fn assert_cursor_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Cursor(_)));
 }
 
-fn assert_text_decoration_thickness_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TextDecorationThickness(_)));
+fn assert_pointer_events_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::PointerEvents(_)));
 }
 
-fn assert_text_transform_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TextTransform(_)));
+fn assert_user_select_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::UserSelect(_)));
 }
 
-fn assert_background_image_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BackgroundImage(_)));
+fn assert_outline_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Outline(_)));
 }
 
-fn assert_background_position_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BackgroundPosition(_)));
+fn assert_outline_color_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::OutlineColor(_)));
 }
 
-fn assert_background_size_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BackgroundSize(_)));
+fn assert_outline_style_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::OutlineStyle(_)));
 }
 
-fn assert_background_repeat_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BackgroundRepeat(_)));
+fn assert_outline_width_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::OutlineWidth(_)));
 }
 
-fn assert_background_box_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BackgroundBox(_)));
+fn assert_transform_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Transform(_)));
 }
 
-fn assert_background_attachment_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::BackgroundAttachment(_)));
+fn assert_transform_origin_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::TransformOrigin(_)
+    ));
 }
 
-fn assert_cursor_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Cursor(_)));
+fn assert_translate_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Translate(_)));
 }
 
-fn assert_pointer_events_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::PointerEvents(_)));
+fn assert_rotate_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Rotate(_)));
 }
 
-fn assert_user_select_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::UserSelect(_)));
+fn assert_scale_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Scale(_)));
 }
 
-fn assert_outline_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Outline(_)));
+fn assert_filter_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::Filter(_) | CssKnownPropertyValueRef::BackdropFilter(_)
+    ));
 }
 
-fn assert_outline_color_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::OutlineColor(_)));
+fn assert_clip_path_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::ClipPath(_)));
 }
 
-fn assert_outline_style_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::OutlineStyle(_)));
+fn assert_mask_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Mask(_)));
 }
 
-fn assert_outline_width_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::OutlineWidth(_)));
+fn assert_mask_image_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::MaskImage(_)));
 }
 
-fn assert_transform_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Transform(_)));
+fn assert_mask_size_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::MaskSize(_)));
 }
 
-fn assert_transform_origin_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TransformOrigin(_)));
+fn assert_mask_position_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::MaskPosition(_)));
 }
 
-fn assert_translate_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Translate(_)));
+fn assert_mask_repeat_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::MaskRepeat(_)));
 }
 
-fn assert_rotate_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Rotate(_)));
+fn assert_transition_property_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::TransitionProperty(_)
+    ));
 }
 
-fn assert_scale_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Scale(_)));
+fn assert_time_list_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::TransitionDuration(_)
+            | CssKnownPropertyValueRef::TransitionDelay(_)
+            | CssKnownPropertyValueRef::AnimationDuration(_)
+            | CssKnownPropertyValueRef::AnimationDelay(_)
+    ));
 }
 
-fn assert_filter_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Filter(_)));
+fn assert_easing_list_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::TransitionTimingFunction(_)
+            | CssKnownPropertyValueRef::AnimationTimingFunction(_)
+    ));
 }
 
-fn assert_clip_path_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::ClipPath(_)));
+fn assert_transition_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Transition(_)));
 }
 
-fn assert_mask_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Mask(_)));
+fn assert_animation_name_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::AnimationName(_)));
 }
 
-fn assert_mask_image_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::MaskImage(_)));
+fn assert_animation_iteration_count_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::AnimationIterationCount(_)
+    ));
 }
 
-fn assert_mask_size_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::MaskSize(_)));
+fn assert_animation_direction_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::AnimationDirection(_)
+    ));
 }
 
-fn assert_mask_position_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::MaskPosition(_)));
+fn assert_animation_fill_mode_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::AnimationFillMode(_)
+    ));
 }
 
-fn assert_mask_repeat_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::MaskRepeat(_)));
+fn assert_animation_play_state_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(
+        value,
+        CssKnownPropertyValueRef::AnimationPlayState(_)
+    ));
 }
 
-fn assert_transition_property_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TransitionProperty(_)));
-}
-
-fn assert_time_list_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::TimeList(_)));
-}
-
-fn assert_easing_list_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::EasingList(_)));
-}
-
-fn assert_transition_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Transition(_)));
-}
-
-fn assert_animation_name_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::AnimationName(_)));
-}
-
-fn assert_animation_iteration_count_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::AnimationIterationCount(_)));
-}
-
-fn assert_animation_direction_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::AnimationDirection(_)));
-}
-
-fn assert_animation_fill_mode_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::AnimationFillMode(_)));
-}
-
-fn assert_animation_play_state_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::AnimationPlayState(_)));
-}
-
-fn assert_animation_value(value: &CssValue) {
-    assert!(matches!(value, CssValue::Animation(_)));
+fn assert_animation_value(value: CssKnownPropertyValueRef<'_>) {
+    assert!(matches!(value, CssKnownPropertyValueRef::Animation(_)));
 }
 
 macro_rules! value_case {
@@ -4396,8 +4536,11 @@ fn property_specific_rejection_probe(property_name: &str) -> &'static str {
 fn strict_declaration_case_helpers_accept_and_reject_cases() {
     assert_accepts_declarations(&accepted_declaration_cases()[..3]);
     assert_eq!(
-        parse_single_declaration_value("display", "inherit"),
-        CssValue::GlobalKeyword(CssGlobalKeyword::Inherit)
+        parse_single_declaration("display", "inherit")
+            .known()
+            .and_then(|known| known.global())
+            .unwrap(),
+        CssGlobalKeyword::Inherit
     );
 
     assert_rejects_declarations(&[
@@ -4740,24 +4883,30 @@ fn rejection_negative_numbers_and_public_constructor_invariants_matrix() {
 #[test]
 fn numeric_properties_use_property_specific_authored_models() {
     assert_eq!(
-        single_declaration(".panel { opacity: 0.5; }").value(),
-        &CssValue::Opacity(CssOpacity::try_new(0.5).unwrap())
+        declaration_payload!(single_declaration(".panel { opacity: 0.5; }"), Opacity),
+        CssOpacity::try_new(0.5).unwrap()
     );
     assert_eq!(
-        single_declaration(".panel { flex-grow: 2; }").value(),
-        &CssValue::FlexGrow(CssFlexFactor::try_new(2.0).unwrap())
+        declaration_payload!(single_declaration(".panel { flex-grow: 2; }"), FlexGrow),
+        CssFlexFactor::try_new(2.0).unwrap()
     );
     assert_eq!(
-        single_declaration(".panel { flex-shrink: 0; }").value(),
-        &CssValue::FlexShrink(CssFlexFactor::try_new(0.0).unwrap())
+        declaration_payload!(single_declaration(".panel { flex-shrink: 0; }"), FlexShrink),
+        CssFlexFactor::try_new(0.0).unwrap()
     );
     assert_eq!(
-        single_declaration(".panel { aspect-ratio: 1.5; }").value(),
-        &CssValue::AspectRatio(CssAspectRatio::try_new(1.5).unwrap())
+        declaration_payload!(
+            single_declaration(".panel { aspect-ratio: 1.5; }"),
+            AspectRatio
+        ),
+        CssAspectRatio::try_new(1.5).unwrap()
     );
     assert_eq!(
-        single_declaration(".panel { scrollbar-width: thin; }").value(),
-        &CssValue::ScrollbarWidth(CssScrollbarWidth::Thin)
+        declaration_payload!(
+            single_declaration(".panel { scrollbar-width: thin; }"),
+            ScrollbarWidth
+        ),
+        CssScrollbarWidth::Thin
     );
     assert_eq!(CssOpacity::try_new(0.5).unwrap().value(), 0.5);
     assert_eq!(CssFlexFactor::try_new(2.0).unwrap().value(), 2.0);
@@ -6241,84 +6390,81 @@ fn acceptance_css_wide_global_keyword_matrix_accepts_supported_globals() {
             property_name: "all",
             authored_value: "inherit",
             expected_property: CssProperty::All,
-            expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Inherit),
+            expected_global: CssGlobalKeyword::Inherit,
         },
         AcceptedDeclarationCase {
             label: "all initial",
             property_name: "all",
             authored_value: "initial",
             expected_property: CssProperty::All,
-            expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Initial),
+            expected_global: CssGlobalKeyword::Initial,
         },
         AcceptedDeclarationCase {
             label: "all unset",
             property_name: "all",
             authored_value: "unset",
             expected_property: CssProperty::All,
-            expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Unset),
+            expected_global: CssGlobalKeyword::Unset,
         },
         AcceptedDeclarationCase {
             label: "all revert",
             property_name: "all",
             authored_value: "revert",
             expected_property: CssProperty::All,
-            expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Revert),
+            expected_global: CssGlobalKeyword::Revert,
         },
         AcceptedDeclarationCase {
             label: "all revert-layer",
             property_name: "all",
             authored_value: "revert-layer",
             expected_property: CssProperty::All,
-            expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::RevertLayer),
+            expected_global: CssGlobalKeyword::RevertLayer,
         },
         AcceptedDeclarationCase {
             label: "display global initial",
             property_name: "display",
             authored_value: "initial",
             expected_property: CssProperty::Display,
-            expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Initial),
+            expected_global: CssGlobalKeyword::Initial,
         },
         AcceptedDeclarationCase {
             label: "width global unset",
             property_name: "width",
             authored_value: "unset",
             expected_property: CssProperty::Width,
-            expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Unset),
+            expected_global: CssGlobalKeyword::Unset,
         },
         AcceptedDeclarationCase {
             label: "color global revert",
             property_name: "color",
             authored_value: "revert",
             expected_property: CssProperty::Color,
-            expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::Revert),
+            expected_global: CssGlobalKeyword::Revert,
         },
         AcceptedDeclarationCase {
             label: "animation global revert-layer",
             property_name: "animation",
             authored_value: "revert-layer",
             expected_property: CssProperty::Animation,
-            expected_value: CssValue::GlobalKeyword(CssGlobalKeyword::RevertLayer),
+            expected_global: CssGlobalKeyword::RevertLayer,
+        },
+        AcceptedDeclarationCase {
+            label: "background-color global inherit preserves authored property",
+            property_name: "background-color",
+            authored_value: "inherit",
+            expected_property: CssProperty::BackgroundColor,
+            expected_global: CssGlobalKeyword::Inherit,
+        },
+        AcceptedDeclarationCase {
+            label: "mask global unset",
+            property_name: "mask",
+            authored_value: "unset",
+            expected_property: CssProperty::Mask,
+            expected_global: CssGlobalKeyword::Unset,
         },
     ];
 
     assert_accepts_declarations(&cases);
-
-    assert_accepts_value_cases(&[
-        value_case!(
-            "background-color global inherit preserves authored property",
-            "background-color",
-            "inherit",
-            CssProperty::BackgroundColor,
-            assert_global_value
-        ),
-        value_case!(
-            "mask global unset",
-            "mask",
-            "unset",
-            CssProperty::Mask,
-            assert_global_value
-        ),
-    ]);
 }
 
 #[test]
@@ -7602,10 +7748,10 @@ fn acceptance_interaction_effect_mask_transition_animation_matrix_accepts_suppor
 
 #[test]
 fn parses_calc_width_as_css_calc_length() {
-    let value = declaration_value(".panel { width: calc(20px + 10%); }", CssProperty::Width);
+    let value = declaration_value!(".panel { width: calc(20px + 10%); }", Width);
 
     match value {
-        CssValue::Length(CssLength::Calc(calc)) => {
+        CssLength::Calc(calc) => {
             assert!(calc.uses_percentage());
             assert_eq!(calc.to_css_string(), "calc(20px + 10%)");
         }
@@ -7615,13 +7761,10 @@ fn parses_calc_width_as_css_calc_length() {
 
 #[test]
 fn parses_nested_calc_width_with_subtraction_as_css_syntax() {
-    let value = declaration_value(
-        ".panel { width: calc(100% - calc(12px + 3%)); }",
-        CssProperty::Width,
-    );
+    let value = declaration_value!(".panel { width: calc(100% - calc(12px + 3%)); }", Width);
 
     match value {
-        CssValue::Length(CssLength::Calc(calc)) => {
+        CssLength::Calc(calc) => {
             assert!(calc.uses_percentage());
             assert_eq!(calc.to_css_string(), "calc(100% - calc(12px + 3%))");
         }
@@ -7631,13 +7774,10 @@ fn parses_nested_calc_width_with_subtraction_as_css_syntax() {
 
 #[test]
 fn exposes_nested_calc_terms_structurally() {
-    let value = declaration_value(
-        ".panel { width: calc(100% - calc(12px + 3%)); }",
-        CssProperty::Width,
-    );
+    let value = declaration_value!(".panel { width: calc(100% - calc(12px + 3%)); }", Width);
 
     let calc = match value {
-        CssValue::Length(CssLength::Calc(calc)) => calc,
+        CssLength::Calc(calc) => calc,
         other => panic!("expected nested calc length, got {other:?}"),
     };
 
@@ -7690,13 +7830,10 @@ fn parses_supported_length_units_as_authored_dimensions() {
     ];
 
     for (authored, expected_value, expected_unit) in cases {
-        let value = declaration_value(
-            &format!(".panel {{ width: {authored}; }}"),
-            CssProperty::Width,
-        );
+        let value = declaration_value!(&format!(".panel {{ width: {authored}; }}"), Width);
 
         match value {
-            CssValue::Length(CssLength::Dimension(length)) => {
+            CssLength::Dimension(length) => {
                 assert_eq!(length.value(), expected_value);
                 assert_eq!(length.unit(), expected_unit);
                 assert_eq!(length.to_css_string(), authored);
@@ -7721,12 +7858,12 @@ fn parses_supported_calc_length_units_as_authored_dimensions() {
     ];
 
     for (authored, expected_value, expected_unit) in cases {
-        let value = declaration_value(
+        let value = declaration_value!(
             &format!(".panel {{ width: calc({authored} + 2px); }}"),
-            CssProperty::Width,
+            Width
         );
 
-        let CssValue::Length(CssLength::Calc(CssCalcLength::Sum(terms))) = value else {
+        let CssLength::Calc(CssCalcLength::Sum(terms)) = value else {
             panic!("expected calc length for {authored}");
         };
         assert_eq!(terms.len(), 2);
@@ -7750,8 +7887,8 @@ fn unit_matrix_accepts_every_supported_length_unit_in_ordinary_length_contexts()
 
         assert_eq!(declaration.property(), &CssProperty::Width);
         assert_eq!(
-            declaration.value(),
-            &CssValue::Length(CssLength::dimension(1.0, unit)),
+            declaration_payload!(declaration, Width),
+            CssLength::dimension(1.0, unit),
             "{authored} should preserve its supported length unit",
         );
     }
@@ -7764,7 +7901,7 @@ fn unit_matrix_accepts_every_supported_length_unit_in_calc_contexts() {
         let declaration = parse_single_declaration("width", &authored);
 
         assert_eq!(declaration.property(), &CssProperty::Width);
-        let CssValue::Length(CssLength::Calc(CssCalcLength::Sum(terms))) = declaration.value()
+        let CssLength::Calc(CssCalcLength::Sum(terms)) = declaration_payload!(declaration, Width)
         else {
             panic!("{authored} should parse as a calc length");
         };
@@ -7861,28 +7998,28 @@ fn typo_property_has_unknown_property_error_kind() {
 #[test]
 fn parses_global_keywords_for_different_value_domains() {
     assert_eq!(
-        declaration_value(".panel { width: inherit; }", CssProperty::Width),
-        CssValue::GlobalKeyword(CssGlobalKeyword::Inherit)
+        declaration_global!(".panel { width: inherit; }", Width),
+        CssGlobalKeyword::Inherit
     );
     assert_eq!(
-        declaration_value(".panel { display: initial; }", CssProperty::Display),
-        CssValue::GlobalKeyword(CssGlobalKeyword::Initial)
+        declaration_global!(".panel { display: initial; }", Display),
+        CssGlobalKeyword::Initial
     );
     assert_eq!(
-        declaration_value(".panel { color: unset; }", CssProperty::Color),
-        CssValue::GlobalKeyword(CssGlobalKeyword::Unset)
+        declaration_global!(".panel { color: unset; }", Color),
+        CssGlobalKeyword::Unset
     );
 }
 
 #[test]
 fn parses_newer_global_keywords_as_authored_syntax() {
     assert_eq!(
-        declaration_value(".panel { padding: revert; }", CssProperty::Padding),
-        CssValue::GlobalKeyword(CssGlobalKeyword::Revert)
+        declaration_global!(".panel { padding: revert; }", Padding),
+        CssGlobalKeyword::Revert
     );
     assert_eq!(
-        declaration_value(".panel { margin: revert-layer; }", CssProperty::Margin),
-        CssValue::GlobalKeyword(CssGlobalKeyword::RevertLayer)
+        declaration_global!(".panel { margin: revert-layer; }", Margin),
+        CssGlobalKeyword::RevertLayer
     );
 }
 
@@ -7898,8 +8035,8 @@ fn parses_all_property_global_keywords_as_authored_syntax() {
 
     for (authored, expected) in cases {
         assert_eq!(
-            declaration_value(&format!(".panel {{ all: {authored}; }}"), CssProperty::All,),
-            CssValue::GlobalKeyword(expected)
+            declaration_global!(&format!(".panel {{ all: {authored}; }}"), All),
+            expected
         );
     }
 }
@@ -7969,103 +8106,76 @@ fn unsupported_alignment_keyword_is_typed_with_property_context() {
 #[test]
 fn parses_position_float_clear_visibility_values() {
     assert_eq!(
-        declaration_value(".panel { position: static; }", CssProperty::Position),
-        CssValue::Position(CssLayoutPosition::Static)
+        declaration_value!(".panel { position: static; }", Position),
+        CssLayoutPosition::Static
     );
     assert_eq!(
-        declaration_value(".panel { position: fixed; }", CssProperty::Position),
-        CssValue::Position(CssLayoutPosition::Fixed)
+        declaration_value!(".panel { position: fixed; }", Position),
+        CssLayoutPosition::Fixed
     );
     assert_eq!(
-        declaration_value(".panel { position: sticky; }", CssProperty::Position),
-        CssValue::Position(CssLayoutPosition::Sticky)
+        declaration_value!(".panel { position: sticky; }", Position),
+        CssLayoutPosition::Sticky
     );
     assert_eq!(
-        declaration_value(".panel { float: left; }", CssProperty::Float),
-        CssValue::Float(CssFloat::Left)
+        declaration_value!(".panel { float: left; }", Float),
+        CssFloat::Left
     );
     assert_eq!(
-        declaration_value(".panel { clear: both; }", CssProperty::Clear),
-        CssValue::Clear(CssClear::Both)
+        declaration_value!(".panel { clear: both; }", Clear),
+        CssClear::Both
     );
     assert_eq!(
-        declaration_value(".panel { visibility: collapse; }", CssProperty::Visibility),
-        CssValue::Visibility(CssVisibility::Collapse)
+        declaration_value!(".panel { visibility: collapse; }", Visibility),
+        CssVisibility::Collapse
     );
     assert_eq!(
-        declaration_value(
-            ".panel { content-visibility: auto; }",
-            CssProperty::ContentVisibility
-        ),
-        CssValue::ContentVisibility(CssContentVisibility::Auto)
+        declaration_value!(".panel { content-visibility: auto; }", ContentVisibility),
+        CssContentVisibility::Auto
     );
 }
 
 #[test]
 fn parses_content_alignment_and_place_shorthands() {
     assert_eq!(
-        declaration_value(
-            ".panel { align-content: space-between; }",
-            CssProperty::AlignContent
-        ),
-        CssValue::Alignment(CssAlignment::SpaceBetween)
+        declaration_value!(".panel { align-content: space-between; }", AlignContent),
+        CssAlignment::SpaceBetween
     );
     assert_eq!(
-        declaration_value(
-            ".panel { justify-content: safe center; }",
-            CssProperty::JustifyContent
-        ),
-        CssValue::Alignment(CssAlignment::SafeCenter)
+        declaration_value!(".panel { justify-content: safe center; }", JustifyContent),
+        CssAlignment::SafeCenter
     );
     assert_eq!(
-        declaration_value(
-            ".panel { align-items: first baseline; }",
-            CssProperty::AlignItems
-        ),
-        CssValue::AlignItems(CssAlignItems::FirstBaseline)
+        declaration_value!(".panel { align-items: first baseline; }", AlignItems),
+        CssAlignItems::FirstBaseline
     );
     assert_eq!(
-        declaration_value(
-            ".panel { place-content: center end; }",
-            CssProperty::PlaceContent
-        ),
-        CssValue::PlaceAlignment(CssPlaceAlignment::content(
-            CssAlignment::Center,
-            CssAlignment::End
-        ))
+        declaration_value!(".panel { place-content: center end; }", PlaceContent),
+        CssPlaceAlignment::content(CssAlignment::Center, CssAlignment::End)
     );
     assert_eq!(
-        declaration_value(".panel { place-items: stretch; }", CssProperty::PlaceItems),
-        CssValue::PlaceAlignment(CssPlaceAlignment::items_all(CssAlignItems::Stretch))
+        declaration_value!(".panel { place-items: stretch; }", PlaceItems),
+        CssPlaceAlignment::items_all(CssAlignItems::Stretch)
     );
     assert_eq!(
-        declaration_value(".panel { place-self: end center; }", CssProperty::PlaceSelf),
-        CssValue::PlaceAlignment(CssPlaceAlignment::items(
-            CssAlignItems::End,
-            CssAlignItems::Center
-        ))
+        declaration_value!(".panel { place-self: end center; }", PlaceSelf),
+        CssPlaceAlignment::items(CssAlignItems::End, CssAlignItems::Center)
     );
 }
 
 #[test]
 fn preserves_explicit_safe_alignment_values() {
     assert_eq!(
-        declaration_value(".panel { align-items: safe end; }", CssProperty::AlignItems),
-        CssValue::AlignItems(CssAlignItems::SafeEnd)
+        declaration_value!(".panel { align-items: safe end; }", AlignItems),
+        CssAlignItems::SafeEnd
     );
     assert_eq!(
-        declaration_value(
-            ".panel { align-self: safe flex-end; }",
-            CssProperty::AlignSelf
-        ),
-        CssValue::AlignItems(CssAlignItems::SafeFlexEnd)
+        declaration_value!(".panel { align-self: safe flex-end; }", AlignSelf),
+        CssAlignItems::SafeFlexEnd
     );
     assert_eq!(
-        declaration_value(
-            ".panel { justify-content: safe center; }",
-            CssProperty::JustifyContent
-        ),
-        CssValue::Alignment(CssAlignment::SafeCenter)
+        declaration_value!(".panel { justify-content: safe center; }", JustifyContent),
+        CssAlignment::SafeCenter
     );
 }
 
@@ -8142,13 +8252,13 @@ fn selector_missing_class_name_has_typed_error_kind() {
 
 #[test]
 fn grid_flow_tolerance_calc_is_preserved_as_css_syntax() {
-    let value = declaration_value(
+    let value = declaration_value!(
         ".panel { grid-flow-tolerance: calc(8px + 2%); }",
-        CssProperty::GridFlowTolerance,
+        GridFlowTolerance
     );
 
     match value {
-        CssValue::GridFlowTolerance(CssGridFlowTolerance::Length(CssLength::Calc(calc))) => {
+        CssGridFlowTolerance::Length(CssLength::Calc(calc)) => {
             assert!(calc.uses_percentage());
             assert_eq!(calc.to_css_string(), "calc(8px + 2%)");
         }
@@ -8165,13 +8275,7 @@ fn rejects_unknown_calc_functions() {
 #[test]
 fn parses_calc_in_edge_shorthands() {
     let sheet = parse_sheet(".panel { margin: calc(4px + 1%) 2px; }").unwrap();
-    let edges = match declaration_value(
-        ".panel { margin: calc(4px + 1%) 2px; }",
-        CssProperty::Margin,
-    ) {
-        CssValue::Edges(edges) => edges,
-        other => panic!("expected edges, got {other:?}"),
-    };
+    let edges = declaration_value!(".panel { margin: calc(4px + 1%) 2px; }", Margin);
 
     match &edges.top {
         CssLength::Calc(calc) => {
@@ -8195,15 +8299,15 @@ fn parses_calc_in_edge_shorthands() {
 
 #[test]
 fn parses_authored_normal_gap_without_canonicalizing_it() {
-    let value = declaration_value(".panel { gap: normal; }", CssProperty::Gap);
-    assert_eq!(value, CssValue::Length(CssLength::Normal));
+    let value = declaration_value!(".panel { gap: normal; }", Gap);
+    assert_eq!(value, CssLength::Normal);
 }
 
 #[test]
 fn parses_authored_calc_gap_without_canonicalizing_it() {
-    let value = declaration_value(".panel { gap: calc(8px + 2%); }", CssProperty::Gap);
+    let value = declaration_value!(".panel { gap: calc(8px + 2%); }", Gap);
     match value {
-        CssValue::Length(CssLength::Calc(calc)) => {
+        CssLength::Calc(calc) => {
             assert!(calc.uses_percentage());
             assert_eq!(calc.to_css_string(), "calc(8px + 2%)");
         }
@@ -8232,120 +8336,88 @@ fn rejects_font_size_auto() {
 #[test]
 fn parses_typography_and_text_keyword_families() {
     assert_eq!(
-        declaration_value(
-            ".panel { writing-mode: vertical-rl; }",
-            CssProperty::WritingMode,
-        ),
-        CssValue::WritingMode(CssWritingMode::VerticalRl)
+        declaration_value!(".panel { writing-mode: vertical-rl; }", WritingMode),
+        CssWritingMode::VerticalRl
     );
     assert_eq!(
-        declaration_value(".panel { text-align: start; }", CssProperty::TextAlign),
-        CssValue::TextAlign(CssTextAlign::Start)
+        declaration_value!(".panel { text-align: start; }", TextAlign),
+        CssTextAlign::Start
     );
     assert_eq!(
-        declaration_value(
-            ".panel { text-align-last: justify; }",
-            CssProperty::TextAlignLast,
-        ),
-        CssValue::TextAlignLast(CssTextAlignLast::Justify)
+        declaration_value!(".panel { text-align-last: justify; }", TextAlignLast),
+        CssTextAlignLast::Justify
     );
     assert_eq!(
-        declaration_value(".panel { text-wrap: balance; }", CssProperty::TextWrap),
-        CssValue::TextWrap(CssTextWrap::Balance)
+        declaration_value!(".panel { text-wrap: balance; }", TextWrap),
+        CssTextWrap::Balance
     );
     assert_eq!(
-        declaration_value(".panel { white-space: pre-wrap; }", CssProperty::WhiteSpace),
-        CssValue::WhiteSpace(CssWhiteSpace::PreWrap)
+        declaration_value!(".panel { white-space: pre-wrap; }", WhiteSpace),
+        CssWhiteSpace::PreWrap
     );
     assert_eq!(
-        declaration_value(".panel { word-break: keep-all; }", CssProperty::WordBreak),
-        CssValue::WordBreak(CssWordBreak::KeepAll)
+        declaration_value!(".panel { word-break: keep-all; }", WordBreak),
+        CssWordBreak::KeepAll
     );
     assert_eq!(
-        declaration_value(
-            ".panel { overflow-wrap: anywhere; }",
-            CssProperty::OverflowWrap,
-        ),
-        CssValue::OverflowWrap(CssOverflowWrap::Anywhere)
+        declaration_value!(".panel { overflow-wrap: anywhere; }", OverflowWrap),
+        CssOverflowWrap::Anywhere
     );
     assert_eq!(
-        declaration_value(
-            ".panel { text-overflow: ellipsis; }",
-            CssProperty::TextOverflow
-        ),
-        CssValue::TextOverflow(CssTextOverflow::Ellipsis)
+        declaration_value!(".panel { text-overflow: ellipsis; }", TextOverflow),
+        CssTextOverflow::Ellipsis
     );
     assert_eq!(
-        declaration_value(
-            ".panel { text-transform: uppercase; }",
-            CssProperty::TextTransform
-        ),
-        CssValue::TextTransform(CssTextTransform::Uppercase)
+        declaration_value!(".panel { text-transform: uppercase; }", TextTransform),
+        CssTextTransform::Uppercase
     );
 }
 
 #[test]
 fn parses_typography_and_text_length_families() {
     assert_eq!(
-        declaration_value(".panel { text-indent: 2em; }", CssProperty::TextIndent),
-        CssValue::TextIndent(CssTextIndent::new(
-            CssLength::dimension(2.0, CssLengthUnit::Em),
-            false,
-            false,
-        ))
+        declaration_value!(".panel { text-indent: 2em; }", TextIndent),
+        CssTextIndent::new(CssLength::dimension(2.0, CssLengthUnit::Em), false, false,)
     );
     assert_eq!(
-        declaration_value(
-            ".panel { vertical-align: 4px; }",
-            CssProperty::VerticalAlign
-        ),
-        CssValue::VerticalAlign(CssVerticalAlign::Length(CssVerticalAlignLength::new(
-            CssLength::px(4.0)
+        declaration_value!(".panel { vertical-align: 4px; }", VerticalAlign),
+        CssVerticalAlign::Length(CssVerticalAlignLength::new(CssLength::px(4.0)))
+    );
+    assert_eq!(
+        declaration_value!(".panel { letter-spacing: normal; }", LetterSpacing),
+        CssLetterSpacing::Normal
+    );
+    assert_eq!(
+        declaration_value!(".panel { letter-spacing: 0.1em; }", LetterSpacing),
+        CssLetterSpacing::Length(CssLetterSpacingLength::new(CssLength::dimension(
+            0.1,
+            CssLengthUnit::Em
         )))
     );
     assert_eq!(
-        declaration_value(
-            ".panel { letter-spacing: normal; }",
-            CssProperty::LetterSpacing
-        ),
-        CssValue::LetterSpacing(CssLetterSpacing::Normal)
-    );
-    assert_eq!(
-        declaration_value(
-            ".panel { letter-spacing: 0.1em; }",
-            CssProperty::LetterSpacing
-        ),
-        CssValue::LetterSpacing(CssLetterSpacing::Length(CssLetterSpacingLength::new(
-            CssLength::dimension(0.1, CssLengthUnit::Em)
-        )))
-    );
-    assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { text-decoration-thickness: from-font; }",
-            CssProperty::TextDecorationThickness,
+            TextDecorationThickness
         ),
-        CssValue::TextDecorationThickness(CssTextDecorationThickness::FromFont)
+        CssTextDecorationThickness::FromFont
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { text-decoration-thickness: 2px; }",
-            CssProperty::TextDecorationThickness,
+            TextDecorationThickness
         ),
-        CssValue::TextDecorationThickness(CssTextDecorationThickness::Length(
-            CssTextDecorationThicknessLength::new(CssLength::px(2.0))
-        ))
+        CssTextDecorationThickness::Length(CssTextDecorationThicknessLength::new(CssLength::px(
+            2.0
+        )))
     );
 }
 
 #[test]
 fn parses_font_families_and_font_shorthand_as_authored_syntax() {
-    let family = declaration_value(
+    let family = declaration_value!(
         ".panel { font-family: \"Avenir Next\", Gill Sans, sans-serif; }",
-        CssProperty::FontFamily,
+        FontFamily
     );
-    let CssValue::FontFamily(family) = family else {
-        panic!("expected font family list");
-    };
     assert_eq!(
         family.families(),
         [
@@ -8356,47 +8428,36 @@ fn parses_font_families_and_font_shorthand_as_authored_syntax() {
     );
 
     assert_eq!(
-        declaration_value(".panel { font-weight: 725; }", CssProperty::FontWeight),
-        CssValue::FontWeight(CssFontWeight::Number(CssFontWeightNumber::new(725)))
+        declaration_value!(".panel { font-weight: 725; }", FontWeight),
+        CssFontWeight::Number(CssFontWeightNumber::new(725))
     );
     assert_eq!(
-        declaration_value(".panel { font-style: italic; }", CssProperty::FontStyle),
-        CssValue::FontStyle(CssFontStyle::Italic)
+        declaration_value!(".panel { font-style: italic; }", FontStyle),
+        CssFontStyle::Italic
     );
     assert_eq!(
-        declaration_value(
-            ".panel { font-stretch: semi-condensed; }",
-            CssProperty::FontStretch,
-        ),
-        CssValue::FontStretch(CssFontStretch::SemiCondensed)
+        declaration_value!(".panel { font-stretch: semi-condensed; }", FontStretch),
+        CssFontStretch::SemiCondensed
     );
     assert_eq!(
-        declaration_value(
-            ".panel { font-variant: small-caps; }",
-            CssProperty::FontVariant
-        ),
-        CssValue::FontVariant(CssFontVariant::SmallCaps)
+        declaration_value!(".panel { font-variant: small-caps; }", FontVariant),
+        CssFontVariant::SmallCaps
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { font-feature-settings: \"kern\" on, \"liga\" 0; }",
-            CssProperty::FontFeatureSettings,
+            FontFeatureSettings
         ),
-        CssValue::FontFeatureSettings(CssFontFeatureSettings::Features(CssFontFeatureList::new(
-            vec![
-                CssFontFeature::new("kern", Some(CssFontFeatureValue::On)),
-                CssFontFeature::new("liga", Some(CssFontFeatureValue::Integer(0))),
-            ]
-        )))
+        CssFontFeatureSettings::Features(CssFontFeatureList::new(vec![
+            CssFontFeature::new("kern", Some(CssFontFeatureValue::On)),
+            CssFontFeature::new("liga", Some(CssFontFeatureValue::Integer(0))),
+        ]))
     );
 
-    let shorthand = declaration_value(
+    let font = declaration_value!(
         ".panel { font: italic small-caps 700 condensed 16px/normal \"Avenir Next\", sans-serif; }",
-        CssProperty::Font,
+        Font
     );
-    let CssValue::Font(font) = shorthand else {
-        panic!("expected font shorthand");
-    };
     assert_eq!(font.style(), Some(CssFontStyle::Italic));
     assert_eq!(font.variant(), Some(CssFontVariant::SmallCaps));
     assert_eq!(
@@ -8418,37 +8479,37 @@ fn parses_font_families_and_font_shorthand_as_authored_syntax() {
 #[test]
 fn parses_text_decoration_family() {
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { text-decoration-line: underline overline; }",
-            CssProperty::TextDecorationLine,
+            TextDecorationLine
         ),
-        CssValue::TextDecorationLine(CssTextDecorationLine::new(vec![
+        CssTextDecorationLine::new(vec![
             CssTextDecorationLineComponent::Underline,
             CssTextDecorationLineComponent::Overline,
-        ]))
+        ])
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { text-decoration-color: black; }",
-            CssProperty::TextDecorationColor,
+            TextDecorationColor
         ),
-        CssValue::TextDecorationColor(CssColor::BLACK)
+        CssColor::BLACK
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { text-decoration-style: wavy; }",
-            CssProperty::TextDecorationStyle,
+            TextDecorationStyle
         ),
-        CssValue::TextDecorationStyle(CssTextDecorationStyle::Wavy)
+        CssTextDecorationStyle::Wavy
     );
 
-    let value = declaration_value(
+    let value = declaration_value!(
         ".panel { text-decoration: underline dotted white 3px; }",
-        CssProperty::TextDecoration,
+        TextDecoration
     );
     assert_eq!(
         value,
-        CssValue::TextDecoration(CssTextDecoration::new(
+        CssTextDecoration::new(
             Some(CssTextDecorationLine::new(vec![
                 CssTextDecorationLineComponent::Underline
             ])),
@@ -8457,7 +8518,7 @@ fn parses_text_decoration_family() {
             Some(CssTextDecorationThickness::Length(
                 CssTextDecorationThicknessLength::new(CssLength::px(3.0))
             )),
-        ))
+        )
     );
 }
 
@@ -8622,120 +8683,111 @@ fn rejects_task_5_cross_family_leakage_values() {
 #[test]
 fn parses_background_properties_as_authored_syntax() {
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { background-image: url(\"hero.png\"), none; }",
-            CssProperty::BackgroundImage,
+            BackgroundImage
         ),
-        CssValue::BackgroundImage(CssImageLayerList::new(vec![
+        CssImageLayerList::new(vec![
             CssImageLayer::Url(CssUrl::new("hero.png")),
             CssImageLayer::None,
-        ]))
+        ])
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { background-position: left 10px top 20%; }",
-            CssProperty::BackgroundPosition,
+            BackgroundPosition
         ),
-        CssValue::BackgroundPosition(CssPositionList::new(vec![CssPosition::new(vec![
+        CssPositionList::new(vec![CssPosition::new(vec![
             CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Left),
             CssPositionComponent::Length(CssLength::px(10.0)),
             CssPositionComponent::Vertical(CssVerticalPositionKeyword::Top),
             CssPositionComponent::Length(CssLength::percent(20.0)),
-        ])]))
+        ])])
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { background-size: cover, 10px auto; }",
-            CssProperty::BackgroundSize,
+            BackgroundSize
         ),
-        CssValue::BackgroundSize(CssBackgroundSizeList::new(vec![
+        CssBackgroundSizeList::new(vec![
             CssBackgroundSize::Cover,
             CssBackgroundSize::Explicit {
                 width: CssBackgroundSizeComponent::Length(CssLength::px(10.0)),
                 height: Some(CssBackgroundSizeComponent::Auto),
             },
-        ]))
+        ])
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { background-repeat: repeat-x, no-repeat round; }",
-            CssProperty::BackgroundRepeat,
+            BackgroundRepeat
         ),
-        CssValue::BackgroundRepeat(CssBackgroundRepeatList::new(vec![
+        CssBackgroundRepeatList::new(vec![
             CssBackgroundRepeat::RepeatX,
             CssBackgroundRepeat::Axes {
                 x: CssBackgroundRepeatStyle::NoRepeat,
                 y: CssBackgroundRepeatStyle::Round,
             },
-        ]))
+        ])
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { background-origin: content-box; }",
-            CssProperty::BackgroundOrigin,
+            BackgroundOrigin
         ),
-        CssValue::BackgroundBox(CssBackgroundBox::ContentBox)
+        CssBackgroundBox::ContentBox
     );
     assert_eq!(
-        declaration_value(
-            ".panel { background-clip: padding-box; }",
-            CssProperty::BackgroundClip,
-        ),
-        CssValue::BackgroundBox(CssBackgroundBox::PaddingBox)
+        declaration_value!(".panel { background-clip: padding-box; }", BackgroundClip),
+        CssBackgroundBox::PaddingBox
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { background-attachment: fixed, local; }",
-            CssProperty::BackgroundAttachment,
+            BackgroundAttachment
         ),
-        CssValue::BackgroundAttachment(CssBackgroundAttachmentList::new(vec![
+        CssBackgroundAttachmentList::new(vec![
             CssBackgroundAttachment::Fixed,
             CssBackgroundAttachment::Local,
-        ]))
+        ])
     );
 }
 
 #[test]
 fn parses_interaction_and_outline_properties_as_authored_syntax() {
     assert_eq!(
-        declaration_value(".panel { cursor: grab; }", CssProperty::Cursor),
-        CssValue::Cursor(CssCursor::Keyword(CssCursorKeyword::Grab))
+        declaration_value!(".panel { cursor: grab; }", Cursor),
+        CssCursor::Keyword(CssCursorKeyword::Grab)
     );
     assert_eq!(
-        declaration_value(
-            ".panel { pointer-events: none; }",
-            CssProperty::PointerEvents
-        ),
-        CssValue::PointerEvents(CssPointerEvents::None)
+        declaration_value!(".panel { pointer-events: none; }", PointerEvents),
+        CssPointerEvents::None
     );
     assert_eq!(
-        declaration_value(".panel { user-select: text; }", CssProperty::UserSelect),
-        CssValue::UserSelect(CssUserSelect::Text)
+        declaration_value!(".panel { user-select: text; }", UserSelect),
+        CssUserSelect::Text
     );
     assert_eq!(
-        declaration_value(
-            ".panel { outline: thick dotted white; }",
-            CssProperty::Outline,
-        ),
-        CssValue::Outline(CssOutline::new(
+        declaration_value!(".panel { outline: thick dotted white; }", Outline),
+        CssOutline::new(
             Some(CssOutlineWidth::Thick),
             Some(CssOutlineStyle::Border(CssBorderStyle::Dotted)),
             Some(CssColor::WHITE),
-        ))
+        )
     );
     assert_eq!(
-        declaration_value(".panel { outline-width: 2px; }", CssProperty::OutlineWidth),
-        CssValue::OutlineWidth(CssOutlineWidth::Length(CssLength::px(2.0)))
+        declaration_value!(".panel { outline-width: 2px; }", OutlineWidth),
+        CssOutlineWidth::Length(CssLength::px(2.0))
     );
 }
 
 #[test]
 fn parses_transform_effect_and_mask_properties_as_authored_syntax() {
-    let transform = declaration_value(
+    let transform = declaration_value!(
         ".panel { transform: translate(10px, 20px) rotate(45deg) scale(1.5); }",
-        CssProperty::Transform,
+        Transform
     );
-    let CssValue::Transform(CssTransform::Functions(functions)) = transform else {
+    let CssTransform::Functions(functions) = transform else {
         panic!("expected transform functions");
     };
     assert_eq!(functions.functions().len(), 3);
@@ -8745,57 +8797,40 @@ fn parses_transform_effect_and_mask_properties_as_authored_syntax() {
     );
 
     assert_eq!(
-        declaration_value(
-            ".panel { transform-origin: center top; }",
-            CssProperty::TransformOrigin
-        ),
-        CssValue::TransformOrigin(CssPosition::new(vec![
+        declaration_value!(".panel { transform-origin: center top; }", TransformOrigin),
+        CssPosition::new(vec![
             CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Center),
             CssPositionComponent::Vertical(CssVerticalPositionKeyword::Top),
-        ]))
+        ])
     );
     assert_eq!(
-        declaration_value(
-            ".panel { filter: blur(4px) opacity(50%); }",
-            CssProperty::Filter
-        ),
-        CssValue::Filter(CssFilter::Functions(CssFilterFunctionList::new(vec![
+        declaration_value!(".panel { filter: blur(4px) opacity(50%); }", Filter),
+        CssFilter::Functions(CssFilterFunctionList::new(vec![
             CssFilterFunction::Blur(filter_arguments("4px")),
             CssFilterFunction::Opacity(filter_arguments("50%")),
-        ])))
-    );
-    assert_eq!(
-        declaration_value(
-            ".panel { backdrop-filter: none; }",
-            CssProperty::BackdropFilter
-        ),
-        CssValue::Filter(CssFilter::None)
-    );
-    assert_eq!(
-        declaration_value(
-            ".panel { clip-path: circle(50% at center); }",
-            CssProperty::ClipPath
-        ),
-        CssValue::ClipPath(CssClipPath::BasicShape(CssBasicShape::Circle(
-            basic_shape_arguments("50% at center"),
-        )))
-    );
-    assert_eq!(
-        declaration_value(
-            ".panel { mask-image: url(mask.png), none; }",
-            CssProperty::MaskImage,
-        ),
-        CssValue::MaskImage(CssImageLayerList::new(vec![
-            CssImageLayer::Url(CssUrl::new("mask.png")),
-            CssImageLayer::None,
         ]))
     );
-    let CssValue::Mask(mask_layers) = declaration_value(
+    assert_eq!(
+        declaration_value!(".panel { backdrop-filter: none; }", BackdropFilter),
+        CssFilter::None
+    );
+    assert_eq!(
+        declaration_value!(".panel { clip-path: circle(50% at center); }", ClipPath),
+        CssClipPath::BasicShape(CssBasicShape::Circle(basic_shape_arguments(
+            "50% at center"
+        ),))
+    );
+    assert_eq!(
+        declaration_value!(".panel { mask-image: url(mask.png), none; }", MaskImage),
+        CssImageLayerList::new(vec![
+            CssImageLayer::Url(CssUrl::new("mask.png")),
+            CssImageLayer::None,
+        ])
+    );
+    let mask_layers = declaration_value!(
         ".panel { mask: url(mask.png) center / contain no-repeat; }",
-        CssProperty::Mask,
-    ) else {
-        panic!("expected mask shorthand");
-    };
+        Mask
+    );
     assert_eq!(mask_layers.layers().len(), 1);
 }
 
@@ -8814,9 +8849,9 @@ fn authored_transform_filter_easing_and_basic_shape_arguments_preserve_css_with_
         arguments.as_css()
     }
 
-    let CssValue::Transform(CssTransform::Functions(functions)) = declaration_value(
+    let CssTransform::Functions(functions) = declaration_value!(
         ".panel { transform: translate(10px, 20px) rotate(45deg); }",
-        CssProperty::Transform,
+        Transform
     ) else {
         panic!("expected transform functions");
     };
@@ -8825,10 +8860,9 @@ fn authored_transform_filter_easing_and_basic_shape_arguments_preserve_css_with_
         "10px, 20px"
     );
 
-    let CssValue::Filter(CssFilter::Functions(functions)) = declaration_value(
-        ".panel { filter: blur(4px) opacity(50%); }",
-        CssProperty::Filter,
-    ) else {
+    let CssFilter::Functions(functions) =
+        declaration_value!(".panel { filter: blur(4px) opacity(50%); }", Filter)
+    else {
         panic!("expected filter functions");
     };
     let CssFilterFunction::Opacity(arguments) = &functions.functions()[1] else {
@@ -8836,22 +8870,17 @@ fn authored_transform_filter_easing_and_basic_shape_arguments_preserve_css_with_
     };
     assert_eq!(filter_css(arguments), "50%");
 
-    let CssValue::ClipPath(CssClipPath::BasicShape(CssBasicShape::Circle(arguments))) =
-        declaration_value(
-            ".panel { clip-path: circle(50% at center); }",
-            CssProperty::ClipPath,
-        )
+    let CssClipPath::BasicShape(CssBasicShape::Circle(arguments)) =
+        declaration_value!(".panel { clip-path: circle(50% at center); }", ClipPath)
     else {
         panic!("expected basic shape clip-path");
     };
     assert_eq!(basic_shape_css(&arguments), "50% at center");
 
-    let CssValue::EasingList(easings) = declaration_value(
+    let easings = declaration_value!(
         ".panel { transition-timing-function: cubic-bezier(0.1, 0.2, 0.3, 1); }",
-        CssProperty::TransitionTimingFunction,
-    ) else {
-        panic!("expected easing list");
-    };
+        TransitionTimingFunction
+    );
     let CssEasing::CubicBezier(arguments) = &easings.easings()[0] else {
         panic!("expected cubic-bezier easing");
     };
@@ -8861,84 +8890,77 @@ fn authored_transform_filter_easing_and_basic_shape_arguments_preserve_css_with_
 #[test]
 fn parses_transition_properties_and_preserves_comma_lists() {
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { transition-property: opacity, transform; }",
-            CssProperty::TransitionProperty,
+            TransitionProperty
         ),
-        CssValue::TransitionProperty(CssTransitionPropertyList::new(vec![
+        CssTransitionPropertyList::new(vec![
             CssTransitionProperty::Custom(CssCustomIdent::new("opacity")),
             CssTransitionProperty::Custom(CssCustomIdent::new("transform")),
-        ]))
+        ])
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { transition-duration: 150ms, 2s; }",
-            CssProperty::TransitionDuration,
+            TransitionDuration
         ),
-        CssValue::TimeList(CssTimeList::new(vec![
+        CssTimeList::new(vec![
             CssTime::try_milliseconds(150.0).unwrap(),
             CssTime::try_seconds(2.0).unwrap(),
-        ]))
+        ])
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { transition-timing-function: ease-in, cubic-bezier(0.1, 0.2, 0.3, 1); }",
-            CssProperty::TransitionTimingFunction,
+            TransitionTimingFunction
         ),
-        CssValue::EasingList(CssEasingList::new(vec![
+        CssEasingList::new(vec![
             CssEasing::EaseIn,
             CssEasing::CubicBezier(easing_arguments("0.1, 0.2, 0.3, 1")),
-        ]))
+        ])
     );
 
-    let CssValue::Transition(transitions) = declaration_value(
+    let transitions = declaration_value!(
         ".panel { transition: opacity 150ms ease-in 20ms, transform 2s linear; }",
-        CssProperty::Transition,
-    ) else {
-        panic!("expected transition list");
-    };
+        Transition
+    );
     assert_eq!(transitions.items().len(), 2);
 }
 
 #[test]
 fn parses_animation_properties_and_preserves_comma_lists() {
     assert_eq!(
-        declaration_value(
-            ".panel { animation-name: fade, none; }",
-            CssProperty::AnimationName,
-        ),
-        CssValue::AnimationName(CssAnimationNameList::new(vec![
+        declaration_value!(".panel { animation-name: fade, none; }", AnimationName),
+        CssAnimationNameList::new(vec![
             CssAnimationName::Custom(CssCustomIdent::new("fade")),
             CssAnimationName::None,
-        ]))
+        ])
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { animation-iteration-count: 2, infinite; }",
-            CssProperty::AnimationIterationCount,
+            AnimationIterationCount
         ),
-        CssValue::AnimationIterationCount(CssAnimationIterationCountList::new(vec![
+        CssAnimationIterationCountList::new(vec![
             CssAnimationIterationCount::Number(CssAnimationIterationNumber::new(2.0)),
             CssAnimationIterationCount::Infinite,
-        ]))
+        ])
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { animation-play-state: running, paused; }",
-            CssProperty::AnimationPlayState,
+            AnimationPlayState
         ),
-        CssValue::AnimationPlayState(CssAnimationPlayStateList::new(vec![
+        CssAnimationPlayStateList::new(vec![
             CssAnimationPlayState::Running,
             CssAnimationPlayState::Paused,
-        ]))
+        ])
     );
 
-    let CssValue::Animation(animations) = declaration_value(
+    let animations = declaration_value!(
         ".panel { animation: fade 1s ease-in 200ms 3 alternate both running, slide 2s linear; }",
-        CssProperty::Animation,
-    ) else {
-        panic!("expected animation list");
-    };
+        Animation
+    );
     assert_eq!(animations.items().len(), 2);
 }
 
@@ -9194,142 +9216,123 @@ fn rejects_gap_auto() {
 #[test]
 fn accepts_margin_auto() {
     assert_eq!(
-        declaration_value(".panel { margin: auto; }", CssProperty::Margin),
-        CssValue::Edges(CssEdges::all(CssLength::Auto))
+        declaration_value!(".panel { margin: auto; }", Margin),
+        CssEdges::all(CssLength::Auto)
     );
 }
 
 #[test]
 fn parses_spacing_inset_and_z_index_values() {
     assert_eq!(
-        declaration_value(".panel { inset: auto 10px 5%; }", CssProperty::Inset),
-        CssValue::Edges(CssEdges::new(
+        declaration_value!(".panel { inset: auto 10px 5%; }", Inset),
+        CssEdges::new(
             CssLength::Auto,
             CssLength::px(10.0),
             CssLength::percent(5.0),
             CssLength::px(10.0),
+        )
+    );
+    assert_eq!(
+        declaration_value!(".panel { top: calc(10px + 5%); }", Top),
+        CssLength::Calc(CssCalcLength::sum(
+            CssCalcLengthTerm::add(CssCalcLength::px(10.0)),
+            [CssCalcLengthTerm::add(CssCalcLength::percent(5.0))]
         ))
     );
     assert_eq!(
-        declaration_value(".panel { top: calc(10px + 5%); }", CssProperty::Top),
-        CssValue::Length(CssLength::Calc(CssCalcLength::sum(
-            CssCalcLengthTerm::add(CssCalcLength::px(10.0)),
-            [CssCalcLengthTerm::add(CssCalcLength::percent(5.0))]
-        )))
+        declaration_value!(".panel { z-index: -2; }", ZIndex),
+        CssZIndex::Integer(-2)
     );
     assert_eq!(
-        declaration_value(".panel { z-index: -2; }", CssProperty::ZIndex),
-        CssValue::ZIndex(CssZIndex::Integer(-2))
-    );
-    assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { box-decoration-break: clone; }",
-            CssProperty::BoxDecorationBreak
+            BoxDecorationBreak
         ),
-        CssValue::BoxDecorationBreak(CssBoxDecorationBreak::Clone)
+        CssBoxDecorationBreak::Clone
     );
 }
 
 #[test]
 fn parses_spacing_longhands_with_existing_component_rules() {
     assert_eq!(
-        declaration_value(".panel { margin-left: auto; }", CssProperty::MarginLeft),
-        CssValue::Length(CssLength::Auto)
+        declaration_value!(".panel { margin-left: auto; }", MarginLeft),
+        CssLength::Auto
     );
     assert_eq!(
-        declaration_value(".panel { padding-top: 12px; }", CssProperty::PaddingTop),
-        CssValue::Length(CssLength::px(12.0))
+        declaration_value!(".panel { padding-top: 12px; }", PaddingTop),
+        CssLength::px(12.0)
     );
     assert_eq!(
-        declaration_value(
-            ".panel { border-right-width: 2px; }",
-            CssProperty::BorderRightWidth
-        ),
-        CssValue::Length(CssLength::px(2.0))
+        declaration_value!(".panel { border-right-width: 2px; }", BorderRightWidth),
+        CssLength::px(2.0)
     );
 }
 
 #[test]
 fn parses_border_style_and_border_shorthand_values() {
     assert_eq!(
-        declaration_value(
-            ".panel { border-style: solid dashed; }",
-            CssProperty::BorderStyle
-        ),
-        CssValue::BorderStyles(CssBorderStyles::new(
+        declaration_value!(".panel { border-style: solid dashed; }", BorderStyle),
+        CssBorderStyles::new(
             CssBorderStyle::Solid,
             CssBorderStyle::Dashed,
             CssBorderStyle::Solid,
             CssBorderStyle::Dashed,
-        ))
+        )
     );
     assert_eq!(
-        declaration_value(
-            ".panel { border-left-style: groove; }",
-            CssProperty::BorderLeftStyle
-        ),
-        CssValue::BorderStyle(CssBorderStyle::Groove)
+        declaration_value!(".panel { border-left-style: groove; }", BorderLeftStyle),
+        CssBorderStyle::Groove
     );
     assert_eq!(
-        declaration_value(".panel { border: solid 2px #fff; }", CssProperty::Border),
-        CssValue::Border(CssBorder::new(
+        declaration_value!(".panel { border: solid 2px #fff; }", Border),
+        CssBorder::new(
             Some(CssLength::px(2.0)),
             Some(CssBorderStyle::Solid),
             Some(CssColor::WHITE),
-        ))
+        )
     );
     assert_eq!(
-        declaration_value(
-            ".panel { border-top: black dotted; }",
-            CssProperty::BorderTop
-        ),
-        CssValue::Border(CssBorder::new(
-            None,
-            Some(CssBorderStyle::Dotted),
-            Some(CssColor::BLACK),
-        ))
+        declaration_value!(".panel { border-top: black dotted; }", BorderTop),
+        CssBorder::new(None, Some(CssBorderStyle::Dotted), Some(CssColor::BLACK),)
     );
 }
 
 #[test]
 fn parses_border_radius_shorthand_and_longhands() {
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { border-top-left-radius: 4px 10%; }",
-            CssProperty::BorderTopLeftRadius,
+            BorderTopLeftRadius
         ),
-        CssValue::CornerRadius(CssCornerRadius::new(
-            CssLength::px(4.0),
-            CssLength::percent(10.0),
-        ))
+        CssCornerRadius::new(CssLength::px(4.0), CssLength::percent(10.0),)
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { border-radius: 1px 2px 3px / 4px 5px; }",
-            CssProperty::BorderRadius,
+            BorderRadius
         ),
-        CssValue::BorderRadius(CssBorderRadii::new(
+        CssBorderRadii::new(
             CssCornerRadius::new(CssLength::px(1.0), CssLength::px(4.0)),
             CssCornerRadius::new(CssLength::px(2.0), CssLength::px(5.0)),
             CssCornerRadius::new(CssLength::px(3.0), CssLength::px(4.0)),
             CssCornerRadius::new(CssLength::px(2.0), CssLength::px(5.0)),
-        ))
+        )
     );
 }
 
 #[test]
 fn parses_box_shadow_none_and_shadow_lists() {
     assert_eq!(
-        declaration_value(".panel { box-shadow: none; }", CssProperty::BoxShadow),
-        CssValue::BoxShadow(CssBoxShadow::None)
+        declaration_value!(".panel { box-shadow: none; }", BoxShadow),
+        CssBoxShadow::None
     );
 
-    let value = declaration_value(
+    let value = declaration_value!(
         ".panel { box-shadow: inset 1px 2px 3px 4px black, 0 1px #fff; }",
-        CssProperty::BoxShadow,
+        BoxShadow
     );
 
-    let CssValue::BoxShadow(CssBoxShadow::Shadows(shadows)) = value else {
+    let CssBoxShadow::Shadows(shadows) = value else {
         panic!("expected box-shadow list");
     };
     assert_eq!(shadows.shadows().len(), 2);
@@ -9611,11 +9614,11 @@ fn rejects_task_2_cross_family_leakage_values() {
 #[test]
 fn parses_grid_track_lists_and_template_areas() {
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { grid-template-columns: [main] repeat(2, minmax(10px, 1fr)) fit-content(20%); }",
-            CssProperty::GridTemplateColumns,
+            GridTemplateColumns
         ),
-        CssValue::GridTrackList(CssGridTrackList::new(vec![
+        CssGridTrackList::new(vec![
             CssGridTrackComponent::LineNames(CssGridLineNames::new(vec![CssCustomIdent::new(
                 "main"
             )])),
@@ -9631,14 +9634,14 @@ fn parses_grid_track_lists_and_template_areas() {
             CssGridTrackComponent::TrackSize(CssGridTrackSize::fit_content(CssLength::percent(
                 20.0
             ))),
-        ]))
+        ])
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { grid-template-areas: \"header header\" \"nav main\"; }",
-            CssProperty::GridTemplateAreas,
+            GridTemplateAreas
         ),
-        CssValue::GridTemplateAreas(CssGridTemplateAreas::rows(vec![
+        CssGridTemplateAreas::rows(vec![
             CssGridTemplateAreaRow::new(vec![
                 CssGridTemplateAreaCell::Named(CssCustomIdent::new("header")),
                 CssGridTemplateAreaCell::Named(CssCustomIdent::new("header")),
@@ -9647,68 +9650,53 @@ fn parses_grid_track_lists_and_template_areas() {
                 CssGridTemplateAreaCell::Named(CssCustomIdent::new("nav")),
                 CssGridTemplateAreaCell::Named(CssCustomIdent::new("main")),
             ]),
-        ]))
+        ])
     );
     assert_eq!(
-        declaration_value(
-            ".panel { grid-template-areas: none; }",
-            CssProperty::GridTemplateAreas,
-        ),
-        CssValue::GridTemplateAreas(CssGridTemplateAreas::None)
+        declaration_value!(".panel { grid-template-areas: none; }", GridTemplateAreas),
+        CssGridTemplateAreas::None
     );
 }
 
 #[test]
 fn parses_grid_flow_lines_and_shorthands() {
     assert_eq!(
-        declaration_value(
-            ".panel { grid-auto-flow: column dense; }",
-            CssProperty::GridAutoFlow,
-        ),
-        CssValue::GridAutoFlow(CssGridAutoFlow::new(CssGridAutoFlowAxis::Column, true))
+        declaration_value!(".panel { grid-auto-flow: column dense; }", GridAutoFlow),
+        CssGridAutoFlow::new(CssGridAutoFlowAxis::Column, true)
     );
     assert_eq!(
-        declaration_value(
-            ".panel { grid-row-start: span 2 main; }",
-            CssProperty::GridRowStart
-        ),
-        CssValue::GridLine(CssGridLine::span(
-            Some(2),
-            Some(CssCustomIdent::new("main"))
-        ))
+        declaration_value!(".panel { grid-row-start: span 2 main; }", GridRowStart),
+        CssGridLine::span(Some(2), Some(CssCustomIdent::new("main")))
     );
     assert_eq!(
-        declaration_value(
-            ".panel { grid-column: nav / span 3; }",
-            CssProperty::GridColumn
-        ),
-        CssValue::GridLineRange(CssGridLineRange::new(
+        declaration_value!(".panel { grid-column: nav / span 3; }", GridColumn),
+        CssGridLineRange::new(
             CssGridLine::CustomIdent(CssCustomIdent::new("nav")),
             Some(CssGridLine::span(Some(3), None)),
-        ))
+        )
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { grid-area: header / 1 / span 2 / main; }",
-            CssProperty::GridArea
+            GridArea
         ),
-        CssValue::GridArea(CssGridArea::new(
+        CssGridArea::new(
             CssGridLine::CustomIdent(CssCustomIdent::new("header")),
             Some(CssGridLine::integer(1)),
             Some(CssGridLine::span(Some(2), None)),
             Some(CssGridLine::CustomIdent(CssCustomIdent::new("main"))),
-        ))
+        )
     );
 }
 
 #[test]
 fn parses_grid_template_and_grid_shorthands() {
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { grid-template: 100px 1fr / repeat(2, minmax(10px, 1fr)); }",
-            CssProperty::GridTemplate,
+            GridTemplate
         ),
-        CssValue::GridTemplate(CssGridTemplate::RowsColumns {
+        CssGridTemplate::RowsColumns {
             rows: CssGridTrackList::new(vec![
                 CssGridTrackComponent::TrackSize(CssGridTrackSize::breadth(
                     CssGridTrackBreadth::length(CssLength::px(100.0))
@@ -9728,14 +9716,14 @@ fn parses_grid_template_and_grid_shorthands() {
                     )]),
                 )
             )])),
-        })
+        }
     );
     assert_eq!(
-        declaration_value(
+        declaration_value!(
             ".panel { grid: auto-flow dense 12px / repeat(auto-fit, 1fr); }",
-            CssProperty::Grid,
+            Grid
         ),
-        CssValue::Grid(CssGrid::AutoFlow {
+        CssGrid::AutoFlow {
             flow: CssGridAutoFlow::new(CssGridAutoFlowAxis::Row, true),
             auto_tracks: Some(CssGridTrackList::new(vec![
                 CssGridTrackComponent::TrackSize(CssGridTrackSize::breadth(
@@ -9750,42 +9738,39 @@ fn parses_grid_template_and_grid_shorthands() {
                     )]),
                 )
             )]),
-        })
+        }
     );
 }
 
 #[test]
 fn parses_order_flex_and_track_alignment() {
     assert_eq!(
-        declaration_value(".panel { order: -2; }", CssProperty::Order),
-        CssValue::Order(CssOrder::Integer(-2))
+        declaration_value!(".panel { order: -2; }", Order),
+        CssOrder::Integer(-2)
     );
     assert_eq!(
-        declaration_value(".panel { flex: 2 0 10rem; }", CssProperty::Flex),
-        CssValue::Flex(CssFlex::Components {
+        declaration_value!(".panel { flex: 2 0 10rem; }", Flex),
+        CssFlex::Components {
             grow: CssFlexFactor::try_new(2.0).unwrap(),
             shrink: Some(CssFlexFactor::try_new(0.0).unwrap()),
             basis: Some(CssLength::dimension(10.0, CssLengthUnit::Rem)),
-        })
+        }
     );
     assert_eq!(
-        declaration_value(".panel { flex: none; }", CssProperty::Flex),
-        CssValue::Flex(CssFlex::None)
+        declaration_value!(".panel { flex: none; }", Flex),
+        CssFlex::None
     );
     assert_eq!(
-        declaration_value(".panel { flex: auto; }", CssProperty::Flex),
-        CssValue::Flex(CssFlex::Auto)
+        declaration_value!(".panel { flex: auto; }", Flex),
+        CssFlex::Auto
     );
     assert_eq!(
-        declaration_value(
-            ".panel { justify-tracks: space-evenly; }",
-            CssProperty::JustifyTracks,
-        ),
-        CssValue::Alignment(CssAlignment::SpaceEvenly)
+        declaration_value!(".panel { justify-tracks: space-evenly; }", JustifyTracks),
+        CssAlignment::SpaceEvenly
     );
     assert_eq!(
-        declaration_value(".panel { align-tracks: center; }", CssProperty::AlignTracks),
-        CssValue::Alignment(CssAlignment::Center)
+        declaration_value!(".panel { align-tracks: center; }", AlignTracks),
+        CssAlignment::Center
     );
 }
 

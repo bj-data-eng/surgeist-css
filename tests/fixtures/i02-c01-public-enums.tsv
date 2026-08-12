@@ -5,9 +5,10 @@ src/error.rs:CssDeclarationContextRef	evolving
 src/error.rs:CssErrorCode	evolving
 src/error.rs:CssTokenKind	evolving
 src/error.rs:ErrorKind	evolving
-src/properties.rs:CssKnownDeclaration	evolving
+src/properties.rs:CssKnownDeclaredValueRef	evolving
 src/properties.rs:CssKnownProperty	evolving
-src/properties.rs:CssOverflowPropertyValue	evolving
+src/properties.rs:CssKnownPropertyValueRef	evolving
+src/properties.rs:CssOverflowI01PropertyValue	evolving
 src/report.rs:CssRecoveryAction	evolving
 src/syntax.rs:CssAlignItems	evolving
 src/syntax.rs:CssAlignment	evolving
@@ -51,7 +52,6 @@ src/syntax.rs:CssCursor	evolving
 src/syntax.rs:CssCursorKeyword	evolving
 src/syntax.rs:CssCustomPropertyDeclaredValue	evolving
 src/syntax.rs:CssDeclarationBody	evolving
-src/syntax.rs:CssDeclaredValue	evolving
 src/syntax.rs:CssDirection	evolving
 src/syntax.rs:CssDisplay	evolving
 src/syntax.rs:CssDisplayMode	evolving

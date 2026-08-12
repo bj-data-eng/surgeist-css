@@ -68,7 +68,7 @@ use crate::error::{
     normalize_encoding_error, property_name_error, unsupported_value, with_at_rule_prelude_context,
     with_encoding_declaration_context, with_media_query_context, with_property_context,
 };
-use crate::properties::{CssOverflowPropertyValue, property_schema};
+use crate::properties::*;
 use crate::syntax::*;
 use crate::validation::parse_global_keyword;
 
@@ -107,25 +107,34 @@ pub(crate) fn finish_ordinary_parser_invocation_count() -> usize {
 macro_rules! define_property_dispatch {
     ($input:ident;
         All, $all_canonical:literal, [$($all_alias:literal),*], $all_stable_id:literal,
-        $all_value:ty, $all_parser:ident, $all_dispatch:block;
+        $all_value:ty, $all_wrapper:ident, $all_representation:ident,
+        $all_parser:ident, $all_dispatch:block;
         $(
         $variant:ident, $canonical:literal, [$($alias:literal),*], $stable_id:literal,
-        $value:ty, $parser:ident, $dispatch:block;
+        $value:ty, $wrapper:ident, $representation:ident, $parser:ident, $dispatch:block;
     )*) => {
         fn parse_known_property_value<'i, 't>(
             property: crate::CssKnownProperty,
+            authored: CssAuthoredDeclarationValue,
             $input: &mut Parser<'i, 't>,
         ) -> std::result::Result<CssKnownDeclaration, ParseError<'i, Error>> {
             match property {
                 crate::CssKnownProperty::All => {
                     let _authored_value_type = std::marker::PhantomData::<$all_value>;
+                    let _wrapper_type = std::marker::PhantomData::<$all_wrapper>;
+                    let _representation_type = stringify!($all_representation);
                     let keyword = $all_dispatch;
-                    Ok(CssKnownDeclaration::All(CssAllDeclaredValue::Global(keyword)))
+                    Ok(CssKnownDeclaration::from_global(CssKnownProperty::All, keyword))
                 }
                 $(crate::CssKnownProperty::$variant => {
                     let _authored_value_type = std::marker::PhantomData::<$value>;
+                    let _representation_type = stringify!($representation);
                     let value = $dispatch;
-                    Ok(CssKnownDeclaration::$variant(CssDeclaredValue::Value(value)))
+                    Ok(CssKnownDeclaration::from_value(
+                        CssKnownDeclarationValue::$variant(CssDeclaredValue::Value(
+                            $wrapper::new(authored, value),
+                        )),
+                    ))
                 },)*
             }
         }
@@ -146,10 +155,10 @@ fn parse_all_property<'i, 't>(
 
 fn parse_overflow_property<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssOverflowPropertyValue, ParseError<'i, Error>> {
+) -> std::result::Result<CssOverflowI01PropertyValue, ParseError<'i, Error>> {
     match parse_overflow_value(input)? {
-        CssValue::Overflow(value) => Ok(CssOverflowPropertyValue::Single(value)),
-        CssValue::OverflowAxes(value) => Ok(CssOverflowPropertyValue::Pair(value)),
+        CssValue::Overflow(value) => Ok(CssOverflowI01PropertyValue::Single(value)),
+        CssValue::OverflowAxes(value) => Ok(CssOverflowI01PropertyValue::Pair(value)),
     }
 }
 
@@ -2472,7 +2481,7 @@ fn parse_known_declaration_body<'i, 't>(
         input.reset(&state);
     }
 
-    let declaration = parse_known_property_value(known_property, input)
+    let declaration = parse_known_property_value(known_property, authored, input)
         .map_err(|error| with_property_context(error, name))?;
     input
         .expect_exhausted()

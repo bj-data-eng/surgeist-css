@@ -1,10 +1,19 @@
 use surgeist_css::{
-    CssAnimationDirection, CssCalcOperator, CssDeclaredValue, CssErrorCode, CssFeatureKind,
-    CssGridAutoFlowAxis, CssImportance, CssKnownDeclaration, CssKnownProperty,
+    CssAnimationDirection, CssCalcOperator, CssErrorCode, CssFeatureKind, CssGridAutoFlowAxis,
+    CssImportance, CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef,
     CssMediaQueryModifier, CssPropertyNameRef, CssRecoveryAction, CssRelativeColorFunction,
     CssRule, CssSelectorCombinator, CssSupportStatus, ErrorKind, feature_catalog, feature_metadata,
     parse_sheet, parse_style_attribute, property_metadata,
 };
+
+fn known_declared_value_kind(value: CssKnownDeclaredValueRef<'_>) -> &'static str {
+    match value {
+        CssKnownDeclaredValueRef::Property(_) => "property",
+        CssKnownDeclaredValueRef::Global(_) => "global",
+        CssKnownDeclaredValueRef::SubstitutionDependent(_) => "substitution-dependent",
+        _ => "future",
+    }
+}
 
 fn rule_kind(rule: &CssRule) -> &'static str {
     match rule {
@@ -215,10 +224,8 @@ fn public_surface_style_attributes_preserve_importance_custom_and_substitution_s
         width.property_name(),
         CssPropertyNameRef::Known(CssKnownProperty::Width)
     ));
-    let Some(CssKnownDeclaration::Width(value)) = width.known() else {
-        panic!("expected coupled width declaration");
-    };
-    assert!(value.value().is_none());
+    let value = width.known().expect("expected coupled width declaration");
+    assert!(value.property_value().is_none());
     assert!(value.global().is_none());
     assert_eq!(
         value
@@ -227,7 +234,55 @@ fn public_surface_style_attributes_preserve_importance_custom_and_substitution_s
             .as_css(),
         "var(--size, 2px)"
     );
-    assert!(matches!(value, CssDeclaredValue::SubstitutionDependent(_)));
+    assert!(matches!(
+        value.declared_value(),
+        CssKnownDeclaredValueRef::SubstitutionDependent(_)
+    ));
+}
+
+#[test]
+fn public_surface_known_declarations_expose_coupled_authored_value_views() {
+    let report =
+        parse_style_attribute("width: calc(100% - 12px); color: inherit; opacity: var(--alpha)");
+    assert!(report.is_clean());
+
+    let width = report.syntax()[0].known().expect("known width");
+    assert_eq!(width.property(), CssKnownProperty::Width);
+    assert_eq!(
+        known_declared_value_kind(width.declared_value()),
+        "property"
+    );
+    let Some(CssKnownPropertyValueRef::Width(value)) = width.property_value() else {
+        panic!("expected width wrapper");
+    };
+    assert_eq!(value.as_css(), "calc(100% - 12px)");
+    assert!(value.i01_subset().is_some());
+    assert!(width.global().is_none());
+    assert!(width.substitution_dependent().is_none());
+
+    let color = report.syntax()[1].known().expect("known color");
+    assert_eq!(known_declared_value_kind(color.declared_value()), "global");
+    assert_eq!(
+        color.global(),
+        Some(surgeist_css::CssGlobalKeyword::Inherit)
+    );
+    assert!(color.property_value().is_none());
+    assert!(color.substitution_dependent().is_none());
+
+    let opacity = report.syntax()[2].known().expect("known opacity");
+    assert_eq!(
+        known_declared_value_kind(opacity.declared_value()),
+        "substitution-dependent"
+    );
+    assert_eq!(
+        opacity
+            .substitution_dependent()
+            .expect("substitution-dependent opacity")
+            .as_css(),
+        "var(--alpha)"
+    );
+    assert!(opacity.property_value().is_none());
+    assert!(opacity.global().is_none());
 }
 
 #[test]

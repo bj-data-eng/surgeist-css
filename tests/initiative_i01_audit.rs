@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 
 use surgeist_css::{
-    CssDeclaredValue, CssErrorCode, CssFeatureKind, CssImportance, CssKnownDeclaration,
-    CssKnownProperty, CssRecoveryAction, CssRule, CssSupportStatus, ErrorKind, feature_catalog,
-    feature_metadata, parse_sheet, parse_style_attribute, property_metadata,
+    CssErrorCode, CssFeatureKind, CssImportance, CssKnownProperty, CssRecoveryAction, CssRule,
+    CssSupportStatus, ErrorKind, feature_catalog, feature_metadata, parse_sheet,
+    parse_style_attribute, property_metadata,
 };
 
 const MIGRATION_RECORD: &str = include_str!("../plans/handoffs/P01-I01-css-migration.md");
@@ -297,11 +297,11 @@ fn initiative_i01_audit_p14_04_f2_05_f2_06_f2_20_declarations_are_coupled() {
         width.property_name(),
         surgeist_css::CssPropertyNameRef::Known(CssKnownProperty::Width)
     ));
-    let Some(CssKnownDeclaration::Width(CssDeclaredValue::SubstitutionDependent(value))) =
-        width.known()
-    else {
-        panic!("P14.04/F2.20 expected property-coupled width value");
-    };
+    let value = width
+        .known()
+        .expect("P14.04/F2.20 known width")
+        .substitution_dependent()
+        .expect("P14.04/F2.20 expected property-coupled width value");
     assert_eq!(value.as_css(), "var(--size, 2px)");
 
     let color = &report.syntax()[2];
@@ -309,7 +309,10 @@ fn initiative_i01_audit_p14_04_f2_05_f2_06_f2_20_declarations_are_coupled() {
         color.property_name(),
         surgeist_css::CssPropertyNameRef::Known(CssKnownProperty::Color)
     ));
-    assert!(matches!(color.known(), Some(CssKnownDeclaration::Color(_))));
+    assert_eq!(
+        color.known().map(|known| known.property()),
+        Some(CssKnownProperty::Color)
+    );
 }
 
 #[test]

@@ -2437,9 +2437,21 @@ pub enum CssImportance {
 /// parser-owned: callers cannot forge a source position or create a property/value mismatch.
 ///
 /// ```compile_fail
-/// use surgeist_css::{CssDeclaredValue, CssKnownDeclaration, CssOpacity};
-/// let opacity = CssOpacity::try_new(0.5).unwrap();
-/// let _ = CssKnownDeclaration::Width(CssDeclaredValue::Value(opacity));
+/// use surgeist_css::{
+///     CssKnownPropertyValueRef, CssWidthPropertyValue, parse_style_attribute,
+/// };
+///
+/// let width_report = parse_style_attribute("width: 1px");
+/// let opacity_report = parse_style_attribute("opacity: .5");
+/// let Some(CssKnownPropertyValueRef::Width(width)) =
+///     width_report.syntax()[0].known().unwrap().property_value()
+/// else { panic!("expected width") };
+/// let Some(CssKnownPropertyValueRef::Opacity(opacity)) =
+///     opacity_report.syntax()[0].known().unwrap().property_value()
+/// else { panic!("expected opacity") };
+/// fn require_width(_: &CssWidthPropertyValue) {}
+/// require_width(width);
+/// require_width(opacity);
 /// ```
 ///
 /// ```compile_fail
@@ -2457,12 +2469,6 @@ pub struct CssDeclaration {
 }
 
 impl CssDeclaration {
-    #[must_use]
-    #[cfg(test)]
-    pub(crate) const fn new(body: CssDeclarationBody, position: CssSourcePosition) -> Self {
-        Self::new_with_importance(body, CssImportance::Normal, position)
-    }
-
     #[must_use]
     pub(crate) const fn new_with_importance(
         body: CssDeclarationBody,
@@ -2524,11 +2530,6 @@ impl CssDeclaration {
     #[cfg(test)]
     pub(crate) fn property(&self) -> crate::test_support::CssProperty {
         crate::test_support::declaration_property(self)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn value(&self) -> crate::test_support::CssValue {
-        crate::test_support::declaration_value(self)
     }
 }
 
@@ -2854,44 +2855,14 @@ pub enum CssGlobalKeyword {
 /// `Value` contains only the type selected by the active known-declaration variant. Global and
 /// substitution-dependent syntax remain symbolic. These views do not apply cascade, perform
 /// substitution, or contextually resolve the value.
-#[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
-pub enum CssDeclaredValue<T> {
+pub(crate) enum CssDeclaredValue<T> {
     /// A value accepted by the property's typed authored grammar.
     Value(T),
     /// A whole-value CSS-wide keyword.
     Global(CssGlobalKeyword),
     /// Authored syntax whose grammar depends on later substitution.
     SubstitutionDependent(CssSubstitutionDependentValue),
-}
-
-impl<T> CssDeclaredValue<T> {
-    /// Returns the property-specific typed value when present.
-    #[must_use]
-    pub const fn value(&self) -> Option<&T> {
-        match self {
-            Self::Value(value) => Some(value),
-            Self::Global(_) | Self::SubstitutionDependent(_) => None,
-        }
-    }
-
-    /// Returns the symbolic CSS-wide keyword when present.
-    #[must_use]
-    pub const fn global(&self) -> Option<CssGlobalKeyword> {
-        match self {
-            Self::Global(keyword) => Some(*keyword),
-            Self::Value(_) | Self::SubstitutionDependent(_) => None,
-        }
-    }
-
-    /// Returns the substitution-dependent authored value when present.
-    #[must_use]
-    pub const fn substitution_dependent(&self) -> Option<&CssSubstitutionDependentValue> {
-        match self {
-            Self::SubstitutionDependent(value) => Some(value),
-            Self::Value(_) | Self::Global(_) => None,
-        }
-    }
 }
 
 /// The authored declared-value domain for the `all` property.

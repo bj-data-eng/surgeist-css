@@ -49,12 +49,11 @@ fn declaration_importance_strips_only_terminal_annotation_boundary() {
         custom.value().value().expect("authored value").as_css(),
         "A/**/ B"
     );
-    let Some(surgeist_css::CssKnownDeclaration::Width(
-        surgeist_css::CssDeclaredValue::SubstitutionDependent(substitution),
-    )) = declarations.as_slice()[1].known()
-    else {
-        panic!("expected substitution-dependent width");
-    };
+    let substitution = declarations.as_slice()[1]
+        .known()
+        .expect("known width")
+        .substitution_dependent()
+        .expect("expected substitution-dependent width");
     assert_eq!(substitution.as_css(), "var(--measure,  2px)");
 }
 

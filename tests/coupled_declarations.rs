@@ -2,8 +2,8 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssAllDeclaredValue, CssDeclarationBody, CssDeclaredValue, CssGlobalKeyword,
-    CssKnownDeclaration, CssKnownProperty, CssPropertyNameRef, CssRule, parse_sheet,
+    CssDeclarationBody, CssGlobalKeyword, CssKnownDeclaredValueRef, CssKnownProperty,
+    CssKnownPropertyValueRef, CssPropertyNameRef, CssRule, parse_sheet,
 };
 
 fn declarations(source: &str) -> Vec<surgeist_css::CssDeclaration> {
@@ -21,18 +21,22 @@ fn coupled_adjacent_properties_expose_distinct_typed_values() {
         panic!("expected adjacent declarations");
     };
 
-    let Some(CssKnownDeclaration::Width(value)) = width.known() else {
+    let Some(CssKnownPropertyValueRef::Width(value)) =
+        width.known().and_then(|known| known.property_value())
+    else {
         panic!("expected typed width declaration");
     };
     assert!(matches!(
-        value.value().expect("typed width"),
+        value.i01_subset().expect("typed width"),
         surgeist_css::CssLength::Px(length) if length.value() == 12.0
     ));
 
-    let Some(CssKnownDeclaration::Opacity(value)) = opacity.known() else {
+    let Some(CssKnownPropertyValueRef::Opacity(value)) =
+        opacity.known().and_then(|known| known.property_value())
+    else {
         panic!("expected typed opacity declaration");
     };
-    assert_eq!(value.value().expect("typed opacity").value(), 0.5);
+    assert_eq!(value.i01_subset().expect("typed opacity").value(), 0.5);
 }
 
 #[test]
@@ -40,22 +44,16 @@ fn coupled_declared_value_views_distinguish_typed_global_and_substitution() {
     let declarations =
         declarations(".x { width: 1px; height: inherit; min-width: var(--size, 2px); }");
 
-    let CssKnownDeclaration::Width(typed) = declarations[0].known().unwrap() else {
-        panic!("expected width");
-    };
-    assert!(typed.value().is_some());
+    let typed = declarations[0].known().expect("expected width");
+    assert!(typed.property_value().is_some());
     assert!(typed.global().is_none());
     assert!(typed.substitution_dependent().is_none());
 
-    let CssKnownDeclaration::Height(global) = declarations[1].known().unwrap() else {
-        panic!("expected height");
-    };
+    let global = declarations[1].known().expect("expected height");
     assert_eq!(global.global(), Some(CssGlobalKeyword::Inherit));
-    assert!(global.value().is_none());
+    assert!(global.property_value().is_none());
 
-    let CssKnownDeclaration::MinWidth(substitution) = declarations[2].known().unwrap() else {
-        panic!("expected min-width");
-    };
+    let substitution = declarations[2].known().expect("expected min-width");
     assert_eq!(
         substitution
             .substitution_dependent()
@@ -72,17 +70,15 @@ fn coupled_all_never_exposes_an_ordinary_typed_value() {
         panic!("expected all declarations");
     };
 
-    let Some(CssKnownDeclaration::All(CssAllDeclaredValue::Global(keyword))) = global.known()
-    else {
-        panic!("expected global all value");
-    };
-    assert_eq!(*keyword, CssGlobalKeyword::Initial);
+    let global = global.known().expect("expected global all value");
+    assert_eq!(global.global(), Some(CssGlobalKeyword::Initial));
+    assert!(global.property_value().is_none());
 
-    let Some(CssKnownDeclaration::All(CssAllDeclaredValue::SubstitutionDependent(value))) =
-        substitution.known()
-    else {
-        panic!("expected substitution-dependent all value");
-    };
+    let value = substitution
+        .known()
+        .expect("known all")
+        .substitution_dependent()
+        .expect("expected substitution-dependent all value");
     assert_eq!(value.as_css(), "var(--mode)");
 }
 
@@ -133,13 +129,10 @@ fn coupled_declaration_position_is_property_name_start() {
 }
 
 #[test]
-fn coupled_declared_value_enum_is_wildcard_compatible() {
+fn coupled_declared_value_view_is_wildcard_compatible() {
     let declarations = declarations(".x { width: initial; }");
-    let CssKnownDeclaration::Width(value) = declarations[0].known().unwrap() else {
-        panic!("expected width");
-    };
-    match value {
-        CssDeclaredValue::Global(CssGlobalKeyword::Initial) => {}
+    match declarations[0].known().unwrap().declared_value() {
+        CssKnownDeclaredValueRef::Global(CssGlobalKeyword::Initial) => {}
         _ => panic!("expected global declared value"),
     }
 }

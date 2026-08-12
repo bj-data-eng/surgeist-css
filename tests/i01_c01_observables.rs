@@ -244,7 +244,7 @@ fn parse_authored_declarations<'a>(
         .collect()
 }
 
-fn assert_authored_declarations(actual: &Row, expected: &Row) {
+fn assert_authored_declarations(actual: &Row, expected: &Row) -> (usize, usize) {
     let actual = parse_authored_declarations(&actual.authored_declarations, &expected.case_id)
         .expect("runtime authored-declaration observation");
     let expected_declarations =
@@ -256,6 +256,8 @@ fn assert_authored_declarations(actual: &Row, expected: &Row) {
         "{} authored declaration count",
         expected.case_id
     );
+    let mut wrapper_comparisons = 0;
+    let mut prior_public_comparisons = 0;
     for (actual, expected_declaration) in actual.iter().zip(&expected_declarations) {
         assert_eq!(
             actual.id, expected_declaration.id,
@@ -278,6 +280,7 @@ fn assert_authored_declarations(actual: &Row, expected: &Row) {
             expected.case_id, expected_declaration.id
         );
         if expected_declaration.value_capability == "public" {
+            prior_public_comparisons += 1;
             assert_eq!(
                 actual.value, expected_declaration.value,
                 "{} {} publicly exposed authored slice",
@@ -289,13 +292,17 @@ fn assert_authored_declarations(actual: &Row, expected: &Row) {
                 "{} {} deferred slice must remain explicit in the TSV",
                 expected.case_id, expected_declaration.id
             );
-            assert_eq!(
-                actual.value, "<unavailable>",
-                "{} {} I01 runtime must not infer or fabricate a deferred authored slice",
-                expected.case_id, expected_declaration.id
-            );
+            if actual.value != "<unavailable>" {
+                wrapper_comparisons += 1;
+                assert_eq!(
+                    actual.value, expected_declaration.value,
+                    "{} {} wrapper-retained authored slice",
+                    expected.case_id, expected_declaration.id
+                );
+            }
         }
     }
+    (wrapper_comparisons, prior_public_comparisons)
 }
 
 fn unescape(field: &str) -> Result<String, String> {
@@ -496,6 +503,8 @@ fn i01_observable_fixture_has_the_exact_independent_case_union() {
 fn i01_observable_fixture_matches_every_public_report() {
     let rows = parse_fixture(FIXTURE).expect("valid I01 observable fixture");
     let mut executed = 0usize;
+    let mut wrapper_comparisons = 0usize;
+    let mut prior_public_comparisons = 0usize;
     for row in rows {
         if row.feature == "app-strict" && !cfg!(feature = "app-strict") {
             continue;
@@ -507,7 +516,9 @@ fn i01_observable_fixture_matches_every_public_report() {
             "{} public report",
             row.case_id
         );
-        assert_authored_declarations(&actual, &row);
+        let comparisons = assert_authored_declarations(&actual, &row);
+        wrapper_comparisons += comparisons.0;
+        prior_public_comparisons += comparisons.1;
         executed += 1;
         #[cfg(feature = "app-strict")]
         assert_strict_parity(&row);
@@ -518,6 +529,20 @@ fn i01_observable_fixture_matches_every_public_report() {
         EXACT_DEFAULT_CASE_COUNT
     };
     assert_eq!(executed, expected_executed, "executed public-report rows");
+    assert_eq!(
+        wrapper_comparisons,
+        if cfg!(feature = "app-strict") {
+            751
+        } else {
+            746
+        },
+        "all pre-authored deferred ordinary slices compare through wrappers"
+    );
+    assert_eq!(
+        prior_public_comparisons,
+        if cfg!(feature = "app-strict") { 35 } else { 34 },
+        "prior public authored-slice comparisons remain intact"
+    );
 }
 
 #[test]
@@ -925,11 +950,12 @@ fn declaration_value_observables(
     if let Some(custom) = custom {
         let (semantic, authored) = custom.value().value().map_or_else(
             || {
+                let keyword = custom.value().global().expect("symbolic custom global");
                 (
-                    format!("global:{:?}", custom.value().global()),
+                    format!("global:{:?}", Some(keyword)),
                     RuntimeAuthoredValue {
                         capability: "deferred-i01",
-                        value: None,
+                        value: Some(global_keyword_css(keyword).to_owned()),
                     },
                 )
             },
@@ -960,25 +986,582 @@ fn declaration_value_observables(
     (id, semantic, authored)
 }
 
-fn declared_value<T: std::fmt::Debug>(
-    value: &surgeist_css::CssDeclaredValue<T>,
+fn i01_property_value<T: std::fmt::Debug>(
+    authored: &str,
+    value: Option<&T>,
+) -> (String, RuntimeAuthoredValue) {
+    let semantic = value.map_or_else(|| "future".to_owned(), |value| format!("typed:{value:?}"));
+    (
+        semantic,
+        RuntimeAuthoredValue {
+            capability: "deferred-i01",
+            value: Some(authored.to_owned()),
+        },
+    )
+}
+
+fn known_property_value(
+    value: surgeist_css::CssKnownPropertyValueRef<'_>,
 ) -> (String, RuntimeAuthoredValue) {
     match value {
-        surgeist_css::CssDeclaredValue::Value(value) => (
-            format!("typed:{value:?}"),
+        surgeist_css::CssKnownPropertyValueRef::All(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Display(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BoxSizing(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Position(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Direction(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Overflow(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::OverflowX(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::OverflowY(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FlexDirection(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FlexWrap(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Float(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Clear(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AlignContent(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::JustifyContent(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AlignItems(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AlignSelf(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::JustifyItems(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::JustifySelf(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::PlaceContent(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::PlaceItems(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::PlaceSelf(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Visibility(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Content(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::ContentVisibility(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::ListStyleType(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::ListStylePosition(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::ListStyleImage(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::ListStyle(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::CounterReset(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::CounterIncrement(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::CounterSet(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Width(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Height(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MinWidth(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MinHeight(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MaxWidth(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MaxHeight(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FlexBasis(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Gap(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::RowGap(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::ColumnGap(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridFlowTolerance(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridTemplateRows(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridTemplateColumns(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridTemplateAreas(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridTemplate(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridAutoRows(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridAutoColumns(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridAutoFlow(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridRowStart(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridRowEnd(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridColumnStart(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridColumnEnd(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridRow(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridColumn(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::GridArea(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Grid(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FontSize(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::LineHeight(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::WritingMode(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TextAlign(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TextAlignLast(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TextIndent(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::VerticalAlign(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FontFamily(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Font(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FontWeight(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FontStyle(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FontStretch(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FontVariant(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FontFeatureSettings(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::LetterSpacing(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TextWrap(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::WhiteSpace(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::WordBreak(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::OverflowWrap(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TextOverflow(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TextDecoration(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TextDecorationLine(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TextDecorationColor(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TextDecorationStyle(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TextDecorationThickness(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TextTransform(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Inset(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Top(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Right(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Bottom(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Left(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::ZIndex(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BoxDecorationBreak(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Margin(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MarginTop(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MarginRight(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MarginBottom(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MarginLeft(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Padding(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::PaddingTop(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::PaddingRight(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::PaddingBottom(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::PaddingLeft(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Border(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderTop(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderRight(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderBottom(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderLeft(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderWidth(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderTopWidth(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderRightWidth(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderBottomWidth(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderLeftWidth(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Color(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Background(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BackgroundColor(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderColor(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderTopColor(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderRightColor(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderBottomColor(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderLeftColor(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BackgroundImage(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BackgroundPosition(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BackgroundSize(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BackgroundRepeat(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BackgroundOrigin(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BackgroundClip(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BackgroundAttachment(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderStyle(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderTopStyle(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderRightStyle(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderBottomStyle(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderLeftStyle(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderRadius(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderTopLeftRadius(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderTopRightRadius(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderBottomRightRadius(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BorderBottomLeftRadius(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BoxShadow(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Opacity(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FlexGrow(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::FlexShrink(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Order(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Flex(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::JustifyTracks(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AlignTracks(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AspectRatio(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::ScrollbarWidth(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Cursor(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::PointerEvents(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::UserSelect(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Outline(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::OutlineColor(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::OutlineStyle(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::OutlineWidth(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Transform(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TransformOrigin(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Translate(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Rotate(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Scale(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Filter(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::BackdropFilter(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::ClipPath(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Mask(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MaskImage(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MaskSize(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MaskPosition(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::MaskRepeat(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TransitionProperty(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TransitionDuration(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TransitionDelay(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::TransitionTimingFunction(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Transition(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AnimationName(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AnimationDuration(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AnimationDelay(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AnimationTimingFunction(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AnimationIterationCount(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AnimationDirection(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AnimationFillMode(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::AnimationPlayState(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        surgeist_css::CssKnownPropertyValueRef::Animation(value) => {
+            i01_property_value(value.as_css(), value.i01_subset())
+        }
+        _ => (
+            "future".to_owned(),
             RuntimeAuthoredValue {
                 capability: "deferred-i01",
                 value: None,
             },
         ),
-        surgeist_css::CssDeclaredValue::Global(value) => (
+    }
+}
+
+fn known_value(known: &surgeist_css::CssKnownDeclaration) -> (String, RuntimeAuthoredValue) {
+    match known.declared_value() {
+        surgeist_css::CssKnownDeclaredValueRef::Property(value) => known_property_value(value),
+        surgeist_css::CssKnownDeclaredValueRef::Global(value) => (
             format!("global:{value:?}"),
             RuntimeAuthoredValue {
                 capability: "deferred-i01",
-                value: None,
+                value: Some(global_keyword_css(value).to_owned()),
             },
         ),
-        surgeist_css::CssDeclaredValue::SubstitutionDependent(value) => (
+        surgeist_css::CssKnownDeclaredValueRef::SubstitutionDependent(value) => (
             format!("substitution:{}", value.as_css()),
             RuntimeAuthoredValue {
                 capability: "public",
@@ -995,223 +1578,14 @@ fn declared_value<T: std::fmt::Debug>(
     }
 }
 
-fn known_value(known: &surgeist_css::CssKnownDeclaration) -> (String, RuntimeAuthoredValue) {
-    macro_rules! arms {
-        ($($variant:ident),+ $(,)?) => { match known {
-            $(surgeist_css::CssKnownDeclaration::$variant(value) => declared_value(value),)+
-            _ => (
-                "future".to_owned(),
-                RuntimeAuthoredValue {
-                    capability: "deferred-i01",
-                    value: None,
-                },
-            ),
-        } };
-    }
-    match known {
-        surgeist_css::CssKnownDeclaration::All(value) => match value {
-            surgeist_css::CssAllDeclaredValue::Global(value) => (
-                format!("global:{value:?}"),
-                RuntimeAuthoredValue {
-                    capability: "deferred-i01",
-                    value: None,
-                },
-            ),
-            surgeist_css::CssAllDeclaredValue::SubstitutionDependent(value) => (
-                format!("substitution:{}", value.as_css()),
-                RuntimeAuthoredValue {
-                    capability: "public",
-                    value: Some(value.as_css().to_owned()),
-                },
-            ),
-            _ => (
-                "future".to_owned(),
-                RuntimeAuthoredValue {
-                    capability: "deferred-i01",
-                    value: None,
-                },
-            ),
-        },
-        _ => arms!(
-            Display,
-            BoxSizing,
-            Position,
-            Direction,
-            Overflow,
-            OverflowX,
-            OverflowY,
-            FlexDirection,
-            FlexWrap,
-            Float,
-            Clear,
-            AlignContent,
-            JustifyContent,
-            AlignItems,
-            AlignSelf,
-            JustifyItems,
-            JustifySelf,
-            PlaceContent,
-            PlaceItems,
-            PlaceSelf,
-            Visibility,
-            Content,
-            ContentVisibility,
-            ListStyleType,
-            ListStylePosition,
-            ListStyleImage,
-            ListStyle,
-            CounterReset,
-            CounterIncrement,
-            CounterSet,
-            Width,
-            Height,
-            MinWidth,
-            MinHeight,
-            MaxWidth,
-            MaxHeight,
-            FlexBasis,
-            Gap,
-            RowGap,
-            ColumnGap,
-            GridFlowTolerance,
-            GridTemplateRows,
-            GridTemplateColumns,
-            GridTemplateAreas,
-            GridTemplate,
-            GridAutoRows,
-            GridAutoColumns,
-            GridAutoFlow,
-            GridRowStart,
-            GridRowEnd,
-            GridColumnStart,
-            GridColumnEnd,
-            GridRow,
-            GridColumn,
-            GridArea,
-            Grid,
-            FontSize,
-            LineHeight,
-            WritingMode,
-            TextAlign,
-            TextAlignLast,
-            TextIndent,
-            VerticalAlign,
-            FontFamily,
-            Font,
-            FontWeight,
-            FontStyle,
-            FontStretch,
-            FontVariant,
-            FontFeatureSettings,
-            LetterSpacing,
-            TextWrap,
-            WhiteSpace,
-            WordBreak,
-            OverflowWrap,
-            TextOverflow,
-            TextDecoration,
-            TextDecorationLine,
-            TextDecorationColor,
-            TextDecorationStyle,
-            TextDecorationThickness,
-            TextTransform,
-            Inset,
-            Top,
-            Right,
-            Bottom,
-            Left,
-            ZIndex,
-            BoxDecorationBreak,
-            Margin,
-            MarginTop,
-            MarginRight,
-            MarginBottom,
-            MarginLeft,
-            Padding,
-            PaddingTop,
-            PaddingRight,
-            PaddingBottom,
-            PaddingLeft,
-            Border,
-            BorderTop,
-            BorderRight,
-            BorderBottom,
-            BorderLeft,
-            BorderWidth,
-            BorderTopWidth,
-            BorderRightWidth,
-            BorderBottomWidth,
-            BorderLeftWidth,
-            Color,
-            Background,
-            BackgroundColor,
-            BorderColor,
-            BorderTopColor,
-            BorderRightColor,
-            BorderBottomColor,
-            BorderLeftColor,
-            BackgroundImage,
-            BackgroundPosition,
-            BackgroundSize,
-            BackgroundRepeat,
-            BackgroundOrigin,
-            BackgroundClip,
-            BackgroundAttachment,
-            BorderStyle,
-            BorderTopStyle,
-            BorderRightStyle,
-            BorderBottomStyle,
-            BorderLeftStyle,
-            BorderRadius,
-            BorderTopLeftRadius,
-            BorderTopRightRadius,
-            BorderBottomRightRadius,
-            BorderBottomLeftRadius,
-            BoxShadow,
-            Opacity,
-            FlexGrow,
-            FlexShrink,
-            Order,
-            Flex,
-            JustifyTracks,
-            AlignTracks,
-            AspectRatio,
-            ScrollbarWidth,
-            Cursor,
-            PointerEvents,
-            UserSelect,
-            Outline,
-            OutlineColor,
-            OutlineStyle,
-            OutlineWidth,
-            Transform,
-            TransformOrigin,
-            Translate,
-            Rotate,
-            Scale,
-            Filter,
-            BackdropFilter,
-            ClipPath,
-            Mask,
-            MaskImage,
-            MaskSize,
-            MaskPosition,
-            MaskRepeat,
-            TransitionProperty,
-            TransitionDuration,
-            TransitionDelay,
-            TransitionTimingFunction,
-            Transition,
-            AnimationName,
-            AnimationDuration,
-            AnimationDelay,
-            AnimationTimingFunction,
-            AnimationIterationCount,
-            AnimationDirection,
-            AnimationFillMode,
-            AnimationPlayState,
-            Animation,
-        ),
+fn global_keyword_css(keyword: surgeist_css::CssGlobalKeyword) -> &'static str {
+    match keyword {
+        surgeist_css::CssGlobalKeyword::Inherit => "inherit",
+        surgeist_css::CssGlobalKeyword::Initial => "initial",
+        surgeist_css::CssGlobalKeyword::Unset => "unset",
+        surgeist_css::CssGlobalKeyword::Revert => "revert",
+        surgeist_css::CssGlobalKeyword::RevertLayer => "revert-layer",
+        _ => "<future-global>",
     }
 }
 

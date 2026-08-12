@@ -54,7 +54,7 @@ let _ = validate_style_attribute("color: red");
 //!
 //! ```
 //! use surgeist_css::{
-//!     CssImportance, CssKnownDeclaration, CssPropertyNameRef, parse_style_attribute,
+//!     CssImportance, CssKnownProperty, CssPropertyNameRef, parse_style_attribute,
 //! };
 //!
 //! let report = parse_style_attribute(
@@ -75,9 +75,8 @@ let _ = validate_style_attribute("color: red");
 //! let width = &report.syntax()[1];
 //! assert_eq!(width.importance(), CssImportance::Important);
 //! assert!(matches!(width.property_name(), CssPropertyNameRef::Known(_)));
-//! let Some(CssKnownDeclaration::Width(value)) = width.known() else {
-//!     panic!("expected coupled width declaration");
-//! };
+//! let value = width.known().expect("coupled width declaration");
+//! assert_eq!(value.property(), CssKnownProperty::Width);
 //! assert_eq!(
 //!     value
 //!         .substitution_dependent()
@@ -215,12 +214,12 @@ mod validation;
 pub use conformance::*;
 pub use error::*;
 pub use parser::{parse_sheet, parse_style_attribute};
-pub use properties::{CssKnownDeclaration, CssKnownProperty, CssOverflowPropertyValue};
+pub use properties::*;
 pub use report::*;
 pub use source::*;
 pub use syntax::*;
 #[cfg(test)]
-pub(crate) use test_support::{CssParseReportTestExt, CssProperty, CssValue};
+pub(crate) use test_support::{CssParseReportTestExt, CssProperty};
 
 /// Validates a stylesheet by accepting only a clean ordinary parse report.
 ///

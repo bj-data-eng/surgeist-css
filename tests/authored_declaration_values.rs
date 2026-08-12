@@ -2,9 +2,9 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssAllDeclaredValue, CssCustomPropertyDeclaredValue, CssCustomPropertyName, CssDeclaredValue,
-    CssErrorCode, CssGlobalKeyword, CssKnownDeclaration, CssKnownProperty, CssPropertyNameRef,
-    CssRule, CssTokenKind, ErrorKind, parse_sheet,
+    CssCustomPropertyDeclaredValue, CssCustomPropertyName, CssErrorCode, CssGlobalKeyword,
+    CssKnownProperty, CssKnownPropertyValueRef, CssPropertyNameRef, CssRule, CssTokenKind,
+    ErrorKind, parse_sheet,
 };
 
 fn declarations(source: &str) -> Vec<surgeist_css::CssDeclaration> {
@@ -141,11 +141,11 @@ fn authored_declaration_known_substitution_preserves_complete_value_between_type
     };
 
     assert_eq!(width.known().unwrap().property(), CssKnownProperty::Width);
-    let Some(CssKnownDeclaration::Height(CssDeclaredValue::SubstitutionDependent(value))) =
-        height.known()
-    else {
-        panic!("expected substitution-dependent height");
-    };
+    let value = height
+        .known()
+        .expect("known height")
+        .substitution_dependent()
+        .expect("expected substitution-dependent height");
     assert_eq!(value.as_css(), "Calc( VAR(--Size, min(2px, 3px)) + 4px )");
     assert_eq!(
         opacity.known().unwrap().property(),
@@ -158,21 +158,45 @@ fn authored_declaration_known_substitution_preserves_complete_value_between_type
 }
 
 #[test]
+fn authored_declaration_known_ordinary_wrappers_preserve_interior_css_text() {
+    let declarations = declarations(
+        ".x { font-family: /**/ \"A\\76 enir\"/**/,/**/ SeRiF /**/ !ImPoRtAnT; \
+         transform: TrAnSlAtE(1px/**/, 2px)/**/; }",
+    );
+    let [family, transform] = declarations.as_slice() else {
+        panic!("expected both ordinary declarations");
+    };
+
+    let Some(CssKnownPropertyValueRef::FontFamily(value)) =
+        family.known().and_then(|known| known.property_value())
+    else {
+        panic!("expected a font-family wrapper");
+    };
+    assert_eq!(value.as_css(), "\"A\\76 enir\"/**/,/**/ SeRiF");
+    assert_eq!(family.importance(), surgeist_css::CssImportance::Important);
+
+    let Some(CssKnownPropertyValueRef::Transform(value)) =
+        transform.known().and_then(|known| known.property_value())
+    else {
+        panic!("expected a transform wrapper");
+    };
+    assert_eq!(value.as_css(), "TrAnSlAtE(1px/**/, 2px)");
+}
+
+#[test]
 fn authored_declaration_substitution_accepts_fallback_unusable_after_substitution() {
     let declarations =
         declarations(".x { color: var(--brand, 8px); all: VAR(--mode, definitely-not-a-global); }");
-    let Some(CssKnownDeclaration::Color(value)) = declarations[0].known() else {
-        panic!("expected color declaration");
-    };
+    let value = declarations[0].known().expect("expected color declaration");
     assert_eq!(
         value.substitution_dependent().unwrap().as_css(),
         "var(--brand, 8px)"
     );
-    let Some(CssKnownDeclaration::All(CssAllDeclaredValue::SubstitutionDependent(value))) =
-        declarations[1].known()
-    else {
-        panic!("expected substitution-dependent all declaration");
-    };
+    let value = declarations[1]
+        .known()
+        .expect("known all")
+        .substitution_dependent()
+        .expect("expected substitution-dependent all declaration");
     assert_eq!(value.as_css(), "VAR(--mode, definitely-not-a-global)");
 }
 
@@ -235,11 +259,11 @@ fn authored_declaration_rejects_top_level_bang_in_variable_fallback() {
 #[test]
 fn authored_declaration_retains_balanced_fallback_with_nested_restricted_tokens() {
     let declarations = declarations(".x { width: var(--x, fn(; !)); }");
-    let Some(CssKnownDeclaration::Width(CssDeclaredValue::SubstitutionDependent(value))) =
-        declarations[0].known()
-    else {
-        panic!("expected substitution-dependent width");
-    };
+    let value = declarations[0]
+        .known()
+        .expect("known width")
+        .substitution_dependent()
+        .expect("expected substitution-dependent width");
 
     assert_eq!(value.as_css(), "var(--x, fn(; !))");
 }

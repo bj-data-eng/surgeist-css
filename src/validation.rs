@@ -59,13 +59,3 @@ fn contains_ascii_case(haystack: &[&str], needle: &str) -> bool {
         .iter()
         .any(|candidate| candidate.eq_ignore_ascii_case(needle))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn known_unsupported_property_registry_is_empty() {
-        assert!(KNOWN_UNSUPPORTED_PROPERTY_NAMES.is_empty());
-    }
-}

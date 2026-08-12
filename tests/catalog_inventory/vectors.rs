@@ -1,6 +1,7 @@
 // These manifests are intentionally hand-authored independently from both the
-// conformance catalog and the crate-private property schema. Stable IDs are
-// repeated explicitly so omission, extra, and duplicate mutations are visible.
+// conformance catalog and the crate-private property schema. Stable IDs and
+// property-specific values are repeated explicitly so catalog/schema coupling,
+// omissions, extras, and duplicates remain observable.
 
 #[derive(Clone, Copy, Debug)]
 pub struct PropertyVector {
@@ -19,1158 +20,1075 @@ macro_rules! vector {
     };
 }
 
+// Every non-`all` value is an ordinary typed value that must reach generated
+// property dispatch. The `all` row deliberately exercises its global contract.
 pub const PROPERTY_POSITIVE_VECTORS: &[PropertyVector] = &[
     vector!("baseline.property.all", "all", "inherit"),
-    vector!("baseline.property.display", "display", "inherit"),
-    vector!("baseline.property.box-sizing", "box-sizing", "inherit"),
-    vector!("baseline.property.position", "position", "inherit"),
-    vector!("baseline.property.direction", "direction", "inherit"),
-    vector!("baseline.property.overflow", "overflow", "inherit"),
-    vector!("baseline.property.overflow-x", "overflow-x", "inherit"),
-    vector!("baseline.property.overflow-y", "overflow-y", "inherit"),
+    vector!("baseline.property.display", "display", "block"),
+    vector!("baseline.property.box-sizing", "box-sizing", "border-box"),
+    vector!("baseline.property.position", "position", "sticky"),
+    vector!("baseline.property.direction", "direction", "rtl"),
+    vector!("baseline.property.overflow", "overflow", "hidden scroll"),
+    vector!("baseline.property.overflow-x", "overflow-x", "clip"),
+    vector!("baseline.property.overflow-y", "overflow-y", "visible"),
     vector!(
         "baseline.property.flex-direction",
         "flex-direction",
-        "inherit"
+        "column-reverse"
     ),
-    vector!("baseline.property.flex-wrap", "flex-wrap", "inherit"),
-    vector!("baseline.property.float", "float", "inherit"),
-    vector!("baseline.property.clear", "clear", "inherit"),
+    vector!("baseline.property.flex-wrap", "flex-wrap", "wrap-reverse"),
+    vector!("baseline.property.float", "float", "left"),
+    vector!("baseline.property.clear", "clear", "both"),
     vector!(
         "baseline.property.align-content",
         "align-content",
-        "inherit"
+        "space-between"
     ),
     vector!(
         "baseline.property.justify-content",
         "justify-content",
-        "inherit"
-    ),
-    vector!("baseline.property.align-items", "align-items", "inherit"),
-    vector!("baseline.property.align-self", "align-self", "inherit"),
-    vector!(
-        "baseline.property.justify-items",
-        "justify-items",
-        "inherit"
-    ),
-    vector!("baseline.property.justify-self", "justify-self", "inherit"),
-    vector!(
-        "baseline.property.place-content",
-        "place-content",
-        "inherit"
-    ),
-    vector!("baseline.property.place-items", "place-items", "inherit"),
-    vector!("baseline.property.place-self", "place-self", "inherit"),
-    vector!("baseline.property.visibility", "visibility", "inherit"),
-    vector!("baseline.property.content", "content", "inherit"),
-    vector!(
-        "baseline.property.content-visibility",
-        "content-visibility",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.list-style-type",
-        "list-style-type",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.list-style-position",
-        "list-style-position",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.list-style-image",
-        "list-style-image",
-        "inherit"
-    ),
-    vector!("baseline.property.list-style", "list-style", "inherit"),
-    vector!(
-        "baseline.property.counter-reset",
-        "counter-reset",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.counter-increment",
-        "counter-increment",
-        "inherit"
-    ),
-    vector!("baseline.property.counter-set", "counter-set", "inherit"),
-    vector!("baseline.property.width", "width", "inherit"),
-    vector!("baseline.property.height", "height", "inherit"),
-    vector!("baseline.property.min-width", "min-width", "inherit"),
-    vector!("baseline.property.min-height", "min-height", "inherit"),
-    vector!("baseline.property.max-width", "max-width", "inherit"),
-    vector!("baseline.property.max-height", "max-height", "inherit"),
-    vector!("baseline.property.flex-basis", "flex-basis", "inherit"),
-    vector!("baseline.property.gap", "gap", "inherit"),
-    vector!("baseline.property.row-gap", "row-gap", "inherit"),
-    vector!("baseline.property.column-gap", "column-gap", "inherit"),
-    vector!(
-        "baseline.property.grid-flow-tolerance",
-        "grid-flow-tolerance",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.grid-template-rows",
-        "grid-template-rows",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.grid-template-columns",
-        "grid-template-columns",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.grid-template-areas",
-        "grid-template-areas",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.grid-template",
-        "grid-template",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.grid-auto-rows",
-        "grid-auto-rows",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.grid-auto-columns",
-        "grid-auto-columns",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.grid-auto-flow",
-        "grid-auto-flow",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.grid-row-start",
-        "grid-row-start",
-        "inherit"
-    ),
-    vector!("baseline.property.grid-row-end", "grid-row-end", "inherit"),
-    vector!(
-        "baseline.property.grid-column-start",
-        "grid-column-start",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.grid-column-end",
-        "grid-column-end",
-        "inherit"
-    ),
-    vector!("baseline.property.grid-row", "grid-row", "inherit"),
-    vector!("baseline.property.grid-column", "grid-column", "inherit"),
-    vector!("baseline.property.grid-area", "grid-area", "inherit"),
-    vector!("baseline.property.grid", "grid", "inherit"),
-    vector!("baseline.property.font-size", "font-size", "inherit"),
-    vector!("baseline.property.line-height", "line-height", "inherit"),
-    vector!("baseline.property.writing-mode", "writing-mode", "inherit"),
-    vector!("baseline.property.text-align", "text-align", "inherit"),
-    vector!(
-        "baseline.property.text-align-last",
-        "text-align-last",
-        "inherit"
-    ),
-    vector!("baseline.property.text-indent", "text-indent", "inherit"),
-    vector!(
-        "baseline.property.vertical-align",
-        "vertical-align",
-        "inherit"
-    ),
-    vector!("baseline.property.font-family", "font-family", "inherit"),
-    vector!("baseline.property.font", "font", "inherit"),
-    vector!("baseline.property.font-weight", "font-weight", "inherit"),
-    vector!("baseline.property.font-style", "font-style", "inherit"),
-    vector!("baseline.property.font-stretch", "font-stretch", "inherit"),
-    vector!("baseline.property.font-variant", "font-variant", "inherit"),
-    vector!(
-        "baseline.property.font-feature-settings",
-        "font-feature-settings",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.letter-spacing",
-        "letter-spacing",
-        "inherit"
-    ),
-    vector!("baseline.property.text-wrap", "text-wrap", "inherit"),
-    vector!("baseline.property.white-space", "white-space", "inherit"),
-    vector!("baseline.property.word-break", "word-break", "inherit"),
-    vector!(
-        "baseline.property.overflow-wrap",
-        "overflow-wrap",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.text-overflow",
-        "text-overflow",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.text-decoration",
-        "text-decoration",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.text-decoration-line",
-        "text-decoration-line",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.text-decoration-color",
-        "text-decoration-color",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.text-decoration-style",
-        "text-decoration-style",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.text-decoration-thickness",
-        "text-decoration-thickness",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.text-transform",
-        "text-transform",
-        "inherit"
-    ),
-    vector!("baseline.property.inset", "inset", "inherit"),
-    vector!("baseline.property.top", "top", "inherit"),
-    vector!("baseline.property.right", "right", "inherit"),
-    vector!("baseline.property.bottom", "bottom", "inherit"),
-    vector!("baseline.property.left", "left", "inherit"),
-    vector!("baseline.property.z-index", "z-index", "inherit"),
-    vector!(
-        "baseline.property.box-decoration-break",
-        "box-decoration-break",
-        "inherit"
-    ),
-    vector!("baseline.property.margin", "margin", "inherit"),
-    vector!("baseline.property.margin-top", "margin-top", "inherit"),
-    vector!("baseline.property.margin-right", "margin-right", "inherit"),
-    vector!(
-        "baseline.property.margin-bottom",
-        "margin-bottom",
-        "inherit"
-    ),
-    vector!("baseline.property.margin-left", "margin-left", "inherit"),
-    vector!("baseline.property.padding", "padding", "inherit"),
-    vector!("baseline.property.padding-top", "padding-top", "inherit"),
-    vector!(
-        "baseline.property.padding-right",
-        "padding-right",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.padding-bottom",
-        "padding-bottom",
-        "inherit"
-    ),
-    vector!("baseline.property.padding-left", "padding-left", "inherit"),
-    vector!("baseline.property.border", "border", "inherit"),
-    vector!("baseline.property.border-top", "border-top", "inherit"),
-    vector!("baseline.property.border-right", "border-right", "inherit"),
-    vector!(
-        "baseline.property.border-bottom",
-        "border-bottom",
-        "inherit"
-    ),
-    vector!("baseline.property.border-left", "border-left", "inherit"),
-    vector!("baseline.property.border-width", "border-width", "inherit"),
-    vector!(
-        "baseline.property.border-top-width",
-        "border-top-width",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-right-width",
-        "border-right-width",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-bottom-width",
-        "border-bottom-width",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-left-width",
-        "border-left-width",
-        "inherit"
-    ),
-    vector!("baseline.property.color", "color", "inherit"),
-    vector!("baseline.property.background", "background", "inherit"),
-    vector!(
-        "baseline.property.background-color",
-        "background-color",
-        "inherit"
-    ),
-    vector!("baseline.property.border-color", "border-color", "inherit"),
-    vector!(
-        "baseline.property.border-top-color",
-        "border-top-color",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-right-color",
-        "border-right-color",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-bottom-color",
-        "border-bottom-color",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-left-color",
-        "border-left-color",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.background-image",
-        "background-image",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.background-position",
-        "background-position",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.background-size",
-        "background-size",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.background-repeat",
-        "background-repeat",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.background-origin",
-        "background-origin",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.background-clip",
-        "background-clip",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.background-attachment",
-        "background-attachment",
-        "inherit"
-    ),
-    vector!("baseline.property.border-style", "border-style", "inherit"),
-    vector!(
-        "baseline.property.border-top-style",
-        "border-top-style",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-right-style",
-        "border-right-style",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-bottom-style",
-        "border-bottom-style",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-left-style",
-        "border-left-style",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-radius",
-        "border-radius",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-top-left-radius",
-        "border-top-left-radius",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-top-right-radius",
-        "border-top-right-radius",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-bottom-right-radius",
-        "border-bottom-right-radius",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.border-bottom-left-radius",
-        "border-bottom-left-radius",
-        "inherit"
-    ),
-    vector!("baseline.property.box-shadow", "box-shadow", "inherit"),
-    vector!("baseline.property.opacity", "opacity", "inherit"),
-    vector!("baseline.property.flex-grow", "flex-grow", "inherit"),
-    vector!("baseline.property.flex-shrink", "flex-shrink", "inherit"),
-    vector!("baseline.property.order", "order", "inherit"),
-    vector!("baseline.property.flex", "flex", "inherit"),
-    vector!(
-        "baseline.property.justify-tracks",
-        "justify-tracks",
-        "inherit"
-    ),
-    vector!("baseline.property.align-tracks", "align-tracks", "inherit"),
-    vector!("baseline.property.aspect-ratio", "aspect-ratio", "inherit"),
-    vector!(
-        "baseline.property.scrollbar-width",
-        "scrollbar-width",
-        "inherit"
-    ),
-    vector!("baseline.property.cursor", "cursor", "inherit"),
-    vector!(
-        "baseline.property.pointer-events",
-        "pointer-events",
-        "inherit"
-    ),
-    vector!("baseline.property.user-select", "user-select", "inherit"),
-    vector!("baseline.property.outline", "outline", "inherit"),
-    vector!(
-        "baseline.property.outline-color",
-        "outline-color",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.outline-style",
-        "outline-style",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.outline-width",
-        "outline-width",
-        "inherit"
-    ),
-    vector!("baseline.property.transform", "transform", "inherit"),
-    vector!(
-        "baseline.property.transform-origin",
-        "transform-origin",
-        "inherit"
-    ),
-    vector!("baseline.property.translate", "translate", "inherit"),
-    vector!("baseline.property.rotate", "rotate", "inherit"),
-    vector!("baseline.property.scale", "scale", "inherit"),
-    vector!("baseline.property.filter", "filter", "inherit"),
-    vector!(
-        "baseline.property.backdrop-filter",
-        "backdrop-filter",
-        "inherit"
-    ),
-    vector!("baseline.property.clip-path", "clip-path", "inherit"),
-    vector!("baseline.property.mask", "mask", "inherit"),
-    vector!("baseline.property.mask-image", "mask-image", "inherit"),
-    vector!("baseline.property.mask-size", "mask-size", "inherit"),
-    vector!(
-        "baseline.property.mask-position",
-        "mask-position",
-        "inherit"
-    ),
-    vector!("baseline.property.mask-repeat", "mask-repeat", "inherit"),
-    vector!(
-        "baseline.property.transition-property",
-        "transition-property",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.transition-duration",
-        "transition-duration",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.transition-delay",
-        "transition-delay",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.transition-timing-function",
-        "transition-timing-function",
-        "inherit"
-    ),
-    vector!("baseline.property.transition", "transition", "inherit"),
-    vector!(
-        "baseline.property.animation-name",
-        "animation-name",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.animation-duration",
-        "animation-duration",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.animation-delay",
-        "animation-delay",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.animation-timing-function",
-        "animation-timing-function",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.animation-iteration-count",
-        "animation-iteration-count",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.animation-direction",
-        "animation-direction",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.animation-fill-mode",
-        "animation-fill-mode",
-        "inherit"
-    ),
-    vector!(
-        "baseline.property.animation-play-state",
-        "animation-play-state",
-        "inherit"
-    ),
-    vector!("baseline.property.animation", "animation", "inherit"),
-];
-
-pub const PROPERTY_NEGATIVE_VECTORS: &[PropertyVector] = &[
-    vector!("baseline.property.all", "all", "initial 1px"),
-    vector!("baseline.property.display", "display", "initial 1px"),
-    vector!("baseline.property.box-sizing", "box-sizing", "initial 1px"),
-    vector!("baseline.property.position", "position", "initial 1px"),
-    vector!("baseline.property.direction", "direction", "initial 1px"),
-    vector!("baseline.property.overflow", "overflow", "initial 1px"),
-    vector!("baseline.property.overflow-x", "overflow-x", "initial 1px"),
-    vector!("baseline.property.overflow-y", "overflow-y", "initial 1px"),
-    vector!(
-        "baseline.property.flex-direction",
-        "flex-direction",
-        "initial 1px"
-    ),
-    vector!("baseline.property.flex-wrap", "flex-wrap", "initial 1px"),
-    vector!("baseline.property.float", "float", "initial 1px"),
-    vector!("baseline.property.clear", "clear", "initial 1px"),
-    vector!(
-        "baseline.property.align-content",
-        "align-content",
-        "initial 1px"
-    ),
-    vector!(
-        "baseline.property.justify-content",
-        "justify-content",
-        "initial 1px"
+        "safe center"
     ),
     vector!(
         "baseline.property.align-items",
         "align-items",
-        "initial 1px"
+        "first baseline"
     ),
-    vector!("baseline.property.align-self", "align-self", "initial 1px"),
+    vector!(
+        "baseline.property.align-self",
+        "align-self",
+        "safe flex-end"
+    ),
     vector!(
         "baseline.property.justify-items",
         "justify-items",
-        "initial 1px"
+        "stretch"
     ),
-    vector!(
-        "baseline.property.justify-self",
-        "justify-self",
-        "initial 1px"
-    ),
+    vector!("baseline.property.justify-self", "justify-self", "center"),
     vector!(
         "baseline.property.place-content",
         "place-content",
-        "initial 1px"
+        "center end"
     ),
-    vector!(
-        "baseline.property.place-items",
-        "place-items",
-        "initial 1px"
-    ),
-    vector!("baseline.property.place-self", "place-self", "initial 1px"),
-    vector!("baseline.property.visibility", "visibility", "initial 1px"),
-    vector!("baseline.property.content", "content", "initial 1px"),
+    vector!("baseline.property.place-items", "place-items", "stretch"),
+    vector!("baseline.property.place-self", "place-self", "end center"),
+    vector!("baseline.property.visibility", "visibility", "collapse"),
+    vector!("baseline.property.content", "content", "\"Chapter \""),
     vector!(
         "baseline.property.content-visibility",
         "content-visibility",
-        "initial 1px"
+        "auto"
     ),
     vector!(
         "baseline.property.list-style-type",
         "list-style-type",
-        "initial 1px"
+        "square"
     ),
     vector!(
         "baseline.property.list-style-position",
         "list-style-position",
-        "initial 1px"
+        "inside"
     ),
     vector!(
         "baseline.property.list-style-image",
         "list-style-image",
-        "initial 1px"
+        "url(marker.svg)"
     ),
-    vector!("baseline.property.list-style", "list-style", "initial 1px"),
+    vector!(
+        "baseline.property.list-style",
+        "list-style",
+        "url(marker.svg) inside square"
+    ),
     vector!(
         "baseline.property.counter-reset",
         "counter-reset",
-        "initial 1px"
+        "section 2"
     ),
     vector!(
         "baseline.property.counter-increment",
         "counter-increment",
-        "initial 1px"
+        "section 1"
     ),
-    vector!(
-        "baseline.property.counter-set",
-        "counter-set",
-        "initial 1px"
-    ),
-    vector!("baseline.property.width", "width", "initial 1px"),
-    vector!("baseline.property.height", "height", "initial 1px"),
-    vector!("baseline.property.min-width", "min-width", "initial 1px"),
-    vector!("baseline.property.min-height", "min-height", "initial 1px"),
-    vector!("baseline.property.max-width", "max-width", "initial 1px"),
-    vector!("baseline.property.max-height", "max-height", "initial 1px"),
-    vector!("baseline.property.flex-basis", "flex-basis", "initial 1px"),
-    vector!("baseline.property.gap", "gap", "initial 1px"),
-    vector!("baseline.property.row-gap", "row-gap", "initial 1px"),
-    vector!("baseline.property.column-gap", "column-gap", "initial 1px"),
+    vector!("baseline.property.counter-set", "counter-set", "section 3"),
+    vector!("baseline.property.width", "width", "calc(100% - 12px)"),
+    vector!("baseline.property.height", "height", "auto"),
+    vector!("baseline.property.min-width", "min-width", "0"),
+    vector!("baseline.property.min-height", "min-height", "min-content"),
+    vector!("baseline.property.max-width", "max-width", "max-content"),
+    vector!("baseline.property.max-height", "max-height", "fit-content"),
+    vector!("baseline.property.flex-basis", "flex-basis", "10rem"),
+    vector!("baseline.property.gap", "gap", "12px"),
+    vector!("baseline.property.row-gap", "row-gap", "normal"),
+    vector!("baseline.property.column-gap", "column-gap", "5%"),
     vector!(
         "baseline.property.grid-flow-tolerance",
         "grid-flow-tolerance",
-        "initial 1px"
+        "infinite"
     ),
     vector!(
         "baseline.property.grid-template-rows",
         "grid-template-rows",
-        "initial 1px"
+        "[top] 100px 1fr"
     ),
     vector!(
         "baseline.property.grid-template-columns",
         "grid-template-columns",
-        "initial 1px"
+        "repeat(2, minmax(10px, 1fr))"
     ),
     vector!(
         "baseline.property.grid-template-areas",
         "grid-template-areas",
-        "initial 1px"
+        "\"header header\" \"nav main\""
     ),
     vector!(
         "baseline.property.grid-template",
         "grid-template",
-        "initial 1px"
+        "100px 1fr / repeat(2, minmax(10px, 1fr))"
     ),
     vector!(
         "baseline.property.grid-auto-rows",
         "grid-auto-rows",
-        "initial 1px"
+        "minmax(10px, auto)"
     ),
     vector!(
         "baseline.property.grid-auto-columns",
         "grid-auto-columns",
-        "initial 1px"
+        "fit-content(20%)"
     ),
     vector!(
         "baseline.property.grid-auto-flow",
         "grid-auto-flow",
-        "initial 1px"
+        "column dense"
     ),
     vector!(
         "baseline.property.grid-row-start",
         "grid-row-start",
-        "initial 1px"
+        "span 2 main"
     ),
-    vector!(
-        "baseline.property.grid-row-end",
-        "grid-row-end",
-        "initial 1px"
-    ),
+    vector!("baseline.property.grid-row-end", "grid-row-end", "auto"),
     vector!(
         "baseline.property.grid-column-start",
         "grid-column-start",
-        "initial 1px"
+        "nav"
+    ),
+    vector!("baseline.property.grid-column-end", "grid-column-end", "4"),
+    vector!("baseline.property.grid-row", "grid-row", "1 / span 2"),
+    vector!("baseline.property.grid-column", "grid-column", "nav / main"),
+    vector!(
+        "baseline.property.grid-area",
+        "grid-area",
+        "header / 1 / span 2 / main"
     ),
     vector!(
-        "baseline.property.grid-column-end",
-        "grid-column-end",
-        "initial 1px"
+        "baseline.property.grid",
+        "grid",
+        "auto-flow dense 12px / repeat(auto-fit, 1fr)"
     ),
-    vector!("baseline.property.grid-row", "grid-row", "initial 1px"),
-    vector!(
-        "baseline.property.grid-column",
-        "grid-column",
-        "initial 1px"
-    ),
-    vector!("baseline.property.grid-area", "grid-area", "initial 1px"),
-    vector!("baseline.property.grid", "grid", "initial 1px"),
-    vector!("baseline.property.font-size", "font-size", "initial 1px"),
-    vector!(
-        "baseline.property.line-height",
-        "line-height",
-        "initial 1px"
-    ),
+    vector!("baseline.property.font-size", "font-size", "16px"),
+    vector!("baseline.property.line-height", "line-height", "normal"),
     vector!(
         "baseline.property.writing-mode",
         "writing-mode",
-        "initial 1px"
+        "vertical-rl"
     ),
-    vector!("baseline.property.text-align", "text-align", "initial 1px"),
+    vector!("baseline.property.text-align", "text-align", "start"),
     vector!(
         "baseline.property.text-align-last",
         "text-align-last",
-        "initial 1px"
+        "justify"
     ),
     vector!(
         "baseline.property.text-indent",
         "text-indent",
-        "initial 1px"
+        "1rem hanging each-line"
     ),
     vector!(
         "baseline.property.vertical-align",
         "vertical-align",
-        "initial 1px"
+        "super"
     ),
     vector!(
         "baseline.property.font-family",
         "font-family",
-        "initial 1px"
+        "\"Avenir Next\", sans-serif"
     ),
-    vector!("baseline.property.font", "font", "initial 1px"),
     vector!(
-        "baseline.property.font-weight",
-        "font-weight",
-        "initial 1px"
+        "baseline.property.font",
+        "font",
+        "italic small-caps 700 condensed 16px/normal \"Avenir Next\", sans-serif"
     ),
-    vector!("baseline.property.font-style", "font-style", "initial 1px"),
+    vector!("baseline.property.font-weight", "font-weight", "725"),
+    vector!("baseline.property.font-style", "font-style", "italic"),
     vector!(
         "baseline.property.font-stretch",
         "font-stretch",
-        "initial 1px"
+        "semi-condensed"
     ),
     vector!(
         "baseline.property.font-variant",
         "font-variant",
-        "initial 1px"
+        "small-caps"
     ),
     vector!(
         "baseline.property.font-feature-settings",
         "font-feature-settings",
-        "initial 1px"
+        "\"kern\" on, \"liga\" 0"
     ),
     vector!(
         "baseline.property.letter-spacing",
         "letter-spacing",
-        "initial 1px"
+        "0.1em"
     ),
-    vector!("baseline.property.text-wrap", "text-wrap", "initial 1px"),
-    vector!(
-        "baseline.property.white-space",
-        "white-space",
-        "initial 1px"
-    ),
-    vector!("baseline.property.word-break", "word-break", "initial 1px"),
+    vector!("baseline.property.text-wrap", "text-wrap", "balance"),
+    vector!("baseline.property.white-space", "white-space", "pre-wrap"),
+    vector!("baseline.property.word-break", "word-break", "keep-all"),
     vector!(
         "baseline.property.overflow-wrap",
         "overflow-wrap",
-        "initial 1px"
+        "anywhere"
     ),
     vector!(
         "baseline.property.text-overflow",
         "text-overflow",
-        "initial 1px"
+        "ellipsis"
     ),
     vector!(
         "baseline.property.text-decoration",
         "text-decoration",
-        "initial 1px"
+        "underline dotted white 3px"
     ),
     vector!(
         "baseline.property.text-decoration-line",
         "text-decoration-line",
-        "initial 1px"
+        "underline overline"
     ),
     vector!(
         "baseline.property.text-decoration-color",
         "text-decoration-color",
-        "initial 1px"
+        "black"
     ),
     vector!(
         "baseline.property.text-decoration-style",
         "text-decoration-style",
-        "initial 1px"
+        "wavy"
     ),
     vector!(
         "baseline.property.text-decoration-thickness",
         "text-decoration-thickness",
-        "initial 1px"
+        "2px"
     ),
     vector!(
         "baseline.property.text-transform",
         "text-transform",
-        "initial 1px"
+        "uppercase"
     ),
-    vector!("baseline.property.inset", "inset", "initial 1px"),
-    vector!("baseline.property.top", "top", "initial 1px"),
-    vector!("baseline.property.right", "right", "initial 1px"),
-    vector!("baseline.property.bottom", "bottom", "initial 1px"),
-    vector!("baseline.property.left", "left", "initial 1px"),
-    vector!("baseline.property.z-index", "z-index", "initial 1px"),
+    vector!("baseline.property.inset", "inset", "auto 10px 5%"),
+    vector!("baseline.property.top", "top", "auto"),
+    vector!("baseline.property.right", "right", "10px"),
+    vector!("baseline.property.bottom", "bottom", "5%"),
+    vector!("baseline.property.left", "left", "calc(3px + 4%)"),
+    vector!("baseline.property.z-index", "z-index", "-2"),
     vector!(
         "baseline.property.box-decoration-break",
         "box-decoration-break",
-        "initial 1px"
+        "clone"
     ),
-    vector!("baseline.property.margin", "margin", "initial 1px"),
-    vector!("baseline.property.margin-top", "margin-top", "initial 1px"),
-    vector!(
-        "baseline.property.margin-right",
-        "margin-right",
-        "initial 1px"
-    ),
-    vector!(
-        "baseline.property.margin-bottom",
-        "margin-bottom",
-        "initial 1px"
-    ),
+    vector!("baseline.property.margin", "margin", "auto 10px 5%"),
+    vector!("baseline.property.margin-top", "margin-top", "auto"),
+    vector!("baseline.property.margin-right", "margin-right", "10px"),
+    vector!("baseline.property.margin-bottom", "margin-bottom", "5%"),
     vector!(
         "baseline.property.margin-left",
         "margin-left",
-        "initial 1px"
-    ),
-    vector!("baseline.property.padding", "padding", "initial 1px"),
-    vector!(
-        "baseline.property.padding-top",
-        "padding-top",
-        "initial 1px"
+        "calc(3px + 4%)"
     ),
     vector!(
-        "baseline.property.padding-right",
-        "padding-right",
-        "initial 1px"
+        "baseline.property.padding",
+        "padding",
+        "1px 2% calc(3px + 4%) 0"
     ),
+    vector!("baseline.property.padding-top", "padding-top", "12px"),
+    vector!("baseline.property.padding-right", "padding-right", "2%"),
     vector!(
         "baseline.property.padding-bottom",
         "padding-bottom",
-        "initial 1px"
+        "calc(3px + 4%)"
     ),
-    vector!(
-        "baseline.property.padding-left",
-        "padding-left",
-        "initial 1px"
-    ),
-    vector!("baseline.property.border", "border", "initial 1px"),
-    vector!("baseline.property.border-top", "border-top", "initial 1px"),
-    vector!(
-        "baseline.property.border-right",
-        "border-right",
-        "initial 1px"
-    ),
-    vector!(
-        "baseline.property.border-bottom",
-        "border-bottom",
-        "initial 1px"
-    ),
+    vector!("baseline.property.padding-left", "padding-left", "0"),
+    vector!("baseline.property.border", "border", "solid 2px #fff"),
+    vector!("baseline.property.border-top", "border-top", "black dotted"),
+    vector!("baseline.property.border-right", "border-right", "1px"),
+    vector!("baseline.property.border-bottom", "border-bottom", "#fff"),
     vector!(
         "baseline.property.border-left",
         "border-left",
-        "initial 1px"
+        "dashed black"
     ),
     vector!(
         "baseline.property.border-width",
         "border-width",
-        "initial 1px"
+        "1px 2px 3px 4px"
     ),
     vector!(
         "baseline.property.border-top-width",
         "border-top-width",
-        "initial 1px"
+        "1px"
     ),
     vector!(
         "baseline.property.border-right-width",
         "border-right-width",
-        "initial 1px"
+        "2px"
     ),
     vector!(
         "baseline.property.border-bottom-width",
         "border-bottom-width",
-        "initial 1px"
+        "3px"
     ),
     vector!(
         "baseline.property.border-left-width",
         "border-left-width",
-        "initial 1px"
+        "4px"
     ),
-    vector!("baseline.property.color", "color", "initial 1px"),
-    vector!("baseline.property.background", "background", "initial 1px"),
+    vector!("baseline.property.color", "color", "black"),
+    vector!("baseline.property.background", "background", "#fff"),
     vector!(
         "baseline.property.background-color",
         "background-color",
-        "initial 1px"
+        "transparent"
     ),
-    vector!(
-        "baseline.property.border-color",
-        "border-color",
-        "initial 1px"
-    ),
+    vector!("baseline.property.border-color", "border-color", "black"),
     vector!(
         "baseline.property.border-top-color",
         "border-top-color",
-        "initial 1px"
+        "black"
     ),
     vector!(
         "baseline.property.border-right-color",
         "border-right-color",
-        "initial 1px"
+        "white"
     ),
     vector!(
         "baseline.property.border-bottom-color",
         "border-bottom-color",
-        "initial 1px"
+        "transparent"
     ),
     vector!(
         "baseline.property.border-left-color",
         "border-left-color",
-        "initial 1px"
+        "#fff"
     ),
     vector!(
         "baseline.property.background-image",
         "background-image",
-        "initial 1px"
+        "url(\"hero.png\"), none"
     ),
     vector!(
         "baseline.property.background-position",
         "background-position",
-        "initial 1px"
+        "left 10px top 20%"
     ),
     vector!(
         "baseline.property.background-size",
         "background-size",
-        "initial 1px"
+        "cover, 10px auto"
     ),
     vector!(
         "baseline.property.background-repeat",
         "background-repeat",
-        "initial 1px"
+        "repeat-x, no-repeat round"
     ),
     vector!(
         "baseline.property.background-origin",
         "background-origin",
-        "initial 1px"
+        "content-box"
     ),
     vector!(
         "baseline.property.background-clip",
         "background-clip",
-        "initial 1px"
+        "padding-box"
     ),
     vector!(
         "baseline.property.background-attachment",
         "background-attachment",
-        "initial 1px"
+        "fixed, local"
     ),
     vector!(
         "baseline.property.border-style",
         "border-style",
-        "initial 1px"
+        "none hidden dotted dashed"
     ),
     vector!(
         "baseline.property.border-top-style",
         "border-top-style",
-        "initial 1px"
+        "solid"
     ),
     vector!(
         "baseline.property.border-right-style",
         "border-right-style",
-        "initial 1px"
+        "double"
     ),
     vector!(
         "baseline.property.border-bottom-style",
         "border-bottom-style",
-        "initial 1px"
+        "ridge"
     ),
     vector!(
         "baseline.property.border-left-style",
         "border-left-style",
-        "initial 1px"
+        "outset"
     ),
     vector!(
         "baseline.property.border-radius",
         "border-radius",
-        "initial 1px"
+        "1px 2px 3px / 4px 5px"
     ),
     vector!(
         "baseline.property.border-top-left-radius",
         "border-top-left-radius",
-        "initial 1px"
+        "4px 10%"
     ),
     vector!(
         "baseline.property.border-top-right-radius",
         "border-top-right-radius",
-        "initial 1px"
+        "1px"
     ),
     vector!(
         "baseline.property.border-bottom-right-radius",
         "border-bottom-right-radius",
-        "initial 1px"
+        "10%"
     ),
     vector!(
         "baseline.property.border-bottom-left-radius",
         "border-bottom-left-radius",
-        "initial 1px"
+        "calc(1px + 2%)"
     ),
-    vector!("baseline.property.box-shadow", "box-shadow", "initial 1px"),
-    vector!("baseline.property.opacity", "opacity", "initial 1px"),
-    vector!("baseline.property.flex-grow", "flex-grow", "initial 1px"),
     vector!(
-        "baseline.property.flex-shrink",
-        "flex-shrink",
-        "initial 1px"
+        "baseline.property.box-shadow",
+        "box-shadow",
+        "inset 1px 2px 3px 4px black"
     ),
-    vector!("baseline.property.order", "order", "initial 1px"),
-    vector!("baseline.property.flex", "flex", "initial 1px"),
+    vector!("baseline.property.opacity", "opacity", "0.5"),
+    vector!("baseline.property.flex-grow", "flex-grow", "2"),
+    vector!("baseline.property.flex-shrink", "flex-shrink", "0"),
+    vector!("baseline.property.order", "order", "-2"),
+    vector!("baseline.property.flex", "flex", "2 0 10rem"),
     vector!(
         "baseline.property.justify-tracks",
         "justify-tracks",
-        "initial 1px"
+        "space-evenly"
     ),
-    vector!(
-        "baseline.property.align-tracks",
-        "align-tracks",
-        "initial 1px"
-    ),
-    vector!(
-        "baseline.property.aspect-ratio",
-        "aspect-ratio",
-        "initial 1px"
-    ),
+    vector!("baseline.property.align-tracks", "align-tracks", "center"),
+    vector!("baseline.property.aspect-ratio", "aspect-ratio", "1.5"),
     vector!(
         "baseline.property.scrollbar-width",
         "scrollbar-width",
-        "initial 1px"
+        "thin"
     ),
-    vector!("baseline.property.cursor", "cursor", "initial 1px"),
+    vector!("baseline.property.cursor", "cursor", "grab"),
+    vector!("baseline.property.pointer-events", "pointer-events", "none"),
+    vector!("baseline.property.user-select", "user-select", "text"),
+    vector!("baseline.property.outline", "outline", "thick dotted white"),
+    vector!("baseline.property.outline-color", "outline-color", "black"),
+    vector!("baseline.property.outline-style", "outline-style", "auto"),
+    vector!("baseline.property.outline-width", "outline-width", "2px"),
     vector!(
-        "baseline.property.pointer-events",
-        "pointer-events",
-        "initial 1px"
+        "baseline.property.transform",
+        "transform",
+        "translate(10px, 20px) rotate(45deg) scale(1.5)"
     ),
-    vector!(
-        "baseline.property.user-select",
-        "user-select",
-        "initial 1px"
-    ),
-    vector!("baseline.property.outline", "outline", "initial 1px"),
-    vector!(
-        "baseline.property.outline-color",
-        "outline-color",
-        "initial 1px"
-    ),
-    vector!(
-        "baseline.property.outline-style",
-        "outline-style",
-        "initial 1px"
-    ),
-    vector!(
-        "baseline.property.outline-width",
-        "outline-width",
-        "initial 1px"
-    ),
-    vector!("baseline.property.transform", "transform", "initial 1px"),
     vector!(
         "baseline.property.transform-origin",
         "transform-origin",
-        "initial 1px"
+        "center top"
     ),
-    vector!("baseline.property.translate", "translate", "initial 1px"),
-    vector!("baseline.property.rotate", "rotate", "initial 1px"),
-    vector!("baseline.property.scale", "scale", "initial 1px"),
-    vector!("baseline.property.filter", "filter", "initial 1px"),
+    vector!("baseline.property.translate", "translate", "10px 20px"),
+    vector!("baseline.property.rotate", "rotate", "45deg"),
+    vector!("baseline.property.scale", "scale", "1.5 2"),
+    vector!(
+        "baseline.property.filter",
+        "filter",
+        "blur(4px) opacity(50%)"
+    ),
     vector!(
         "baseline.property.backdrop-filter",
         "backdrop-filter",
-        "initial 1px"
-    ),
-    vector!("baseline.property.clip-path", "clip-path", "initial 1px"),
-    vector!("baseline.property.mask", "mask", "initial 1px"),
-    vector!("baseline.property.mask-image", "mask-image", "initial 1px"),
-    vector!("baseline.property.mask-size", "mask-size", "initial 1px"),
-    vector!(
-        "baseline.property.mask-position",
-        "mask-position",
-        "initial 1px"
+        "none"
     ),
     vector!(
-        "baseline.property.mask-repeat",
-        "mask-repeat",
-        "initial 1px"
+        "baseline.property.clip-path",
+        "clip-path",
+        "circle(50% at center)"
     ),
+    vector!(
+        "baseline.property.mask",
+        "mask",
+        "url(mask.png) center / contain no-repeat"
+    ),
+    vector!(
+        "baseline.property.mask-image",
+        "mask-image",
+        "url(mask.png), none"
+    ),
+    vector!("baseline.property.mask-size", "mask-size", "contain"),
+    vector!("baseline.property.mask-position", "mask-position", "center"),
+    vector!("baseline.property.mask-repeat", "mask-repeat", "repeat"),
     vector!(
         "baseline.property.transition-property",
         "transition-property",
-        "initial 1px"
+        "opacity, transform"
     ),
     vector!(
         "baseline.property.transition-duration",
         "transition-duration",
-        "initial 1px"
+        "150ms, 2s"
     ),
     vector!(
         "baseline.property.transition-delay",
         "transition-delay",
-        "initial 1px"
+        "20ms"
     ),
     vector!(
         "baseline.property.transition-timing-function",
         "transition-timing-function",
-        "initial 1px"
+        "ease-in, cubic-bezier(0.1, 0.2, 0.3, 1)"
     ),
-    vector!("baseline.property.transition", "transition", "initial 1px"),
+    vector!(
+        "baseline.property.transition",
+        "transition",
+        "opacity 150ms ease-in 20ms, transform 2s linear"
+    ),
     vector!(
         "baseline.property.animation-name",
         "animation-name",
-        "initial 1px"
+        "fade, none"
     ),
     vector!(
         "baseline.property.animation-duration",
         "animation-duration",
-        "initial 1px"
+        "1s"
     ),
     vector!(
         "baseline.property.animation-delay",
         "animation-delay",
-        "initial 1px"
+        "200ms"
     ),
     vector!(
         "baseline.property.animation-timing-function",
         "animation-timing-function",
-        "initial 1px"
+        "ease-out"
     ),
     vector!(
         "baseline.property.animation-iteration-count",
         "animation-iteration-count",
-        "initial 1px"
+        "2, infinite"
     ),
     vector!(
         "baseline.property.animation-direction",
         "animation-direction",
-        "initial 1px"
+        "alternate"
     ),
     vector!(
         "baseline.property.animation-fill-mode",
         "animation-fill-mode",
-        "initial 1px"
+        "both"
     ),
     vector!(
         "baseline.property.animation-play-state",
         "animation-play-state",
-        "initial 1px"
+        "running, paused"
     ),
-    vector!("baseline.property.animation", "animation", "initial 1px"),
+    vector!(
+        "baseline.property.animation",
+        "animation",
+        "fade 1s ease-in 200ms 3 alternate both running"
+    ),
+];
+
+// Every rejection is a property-specific wrong keyword, cross-family value,
+// cardinality error, or numeric/range boundary. The `all` row deliberately uses
+// ordinary typed syntax so its generated dispatch arm rejects it.
+pub const PROPERTY_NEGATIVE_VECTORS: &[PropertyVector] = &[
+    vector!("baseline.property.all", "all", "block"),
+    vector!("baseline.property.display", "display", "inline"),
+    vector!("baseline.property.box-sizing", "box-sizing", "padding-box"),
+    vector!("baseline.property.position", "position", "running"),
+    vector!("baseline.property.direction", "direction", "block"),
+    vector!("baseline.property.overflow", "overflow", "auto"),
+    vector!("baseline.property.overflow-x", "overflow-x", "auto"),
+    vector!("baseline.property.overflow-y", "overflow-y", "auto"),
+    vector!("baseline.property.flex-direction", "flex-direction", "wrap"),
+    vector!("baseline.property.flex-wrap", "flex-wrap", "column"),
+    vector!("baseline.property.float", "float", "center"),
+    vector!("baseline.property.clear", "clear", "start"),
+    vector!("baseline.property.align-content", "align-content", "auto"),
+    vector!(
+        "baseline.property.justify-content",
+        "justify-content",
+        "auto"
+    ),
+    vector!(
+        "baseline.property.align-items",
+        "align-items",
+        "space-between"
+    ),
+    vector!(
+        "baseline.property.align-self",
+        "align-self",
+        "space-between"
+    ),
+    vector!(
+        "baseline.property.justify-items",
+        "justify-items",
+        "space-between"
+    ),
+    vector!(
+        "baseline.property.justify-self",
+        "justify-self",
+        "space-between"
+    ),
+    vector!("baseline.property.place-content", "place-content", "auto"),
+    vector!(
+        "baseline.property.place-items",
+        "place-items",
+        "space-between"
+    ),
+    vector!(
+        "baseline.property.place-self",
+        "place-self",
+        "space-between"
+    ),
+    vector!("baseline.property.visibility", "visibility", "auto"),
+    vector!("baseline.property.content", "content", "contents"),
+    vector!(
+        "baseline.property.content-visibility",
+        "content-visibility",
+        "collapse"
+    ),
+    vector!(
+        "baseline.property.list-style-type",
+        "list-style-type",
+        "symbols(cyclic \"*\" \"+\")"
+    ),
+    vector!(
+        "baseline.property.list-style-position",
+        "list-style-position",
+        "center"
+    ),
+    vector!(
+        "baseline.property.list-style-image",
+        "list-style-image",
+        "red"
+    ),
+    vector!(
+        "baseline.property.list-style",
+        "list-style",
+        "inside outside"
+    ),
+    vector!(
+        "baseline.property.counter-reset",
+        "counter-reset",
+        "none item"
+    ),
+    vector!(
+        "baseline.property.counter-increment",
+        "counter-increment",
+        "1"
+    ),
+    vector!("baseline.property.counter-set", "counter-set", "none item"),
+    vector!("baseline.property.width", "width", "solid"),
+    vector!("baseline.property.height", "height", "solid"),
+    vector!("baseline.property.min-width", "min-width", "solid"),
+    vector!("baseline.property.min-height", "min-height", "solid"),
+    vector!("baseline.property.max-width", "max-width", "solid"),
+    vector!("baseline.property.max-height", "max-height", "solid"),
+    vector!("baseline.property.flex-basis", "flex-basis", "solid"),
+    vector!("baseline.property.gap", "gap", "auto"),
+    vector!("baseline.property.row-gap", "row-gap", "auto"),
+    vector!("baseline.property.column-gap", "column-gap", "auto"),
+    vector!(
+        "baseline.property.grid-flow-tolerance",
+        "grid-flow-tolerance",
+        "solid"
+    ),
+    vector!(
+        "baseline.property.grid-template-rows",
+        "grid-template-rows",
+        "solid"
+    ),
+    vector!(
+        "baseline.property.grid-template-columns",
+        "grid-template-columns",
+        "solid"
+    ),
+    vector!(
+        "baseline.property.grid-template-areas",
+        "grid-template-areas",
+        "\"a a\" \"a .\""
+    ),
+    vector!("baseline.property.grid-template", "grid-template", "solid"),
+    vector!(
+        "baseline.property.grid-auto-rows",
+        "grid-auto-rows",
+        "solid"
+    ),
+    vector!(
+        "baseline.property.grid-auto-columns",
+        "grid-auto-columns",
+        "solid"
+    ),
+    vector!("baseline.property.grid-auto-flow", "grid-auto-flow", "left"),
+    vector!("baseline.property.grid-row-start", "grid-row-start", "0"),
+    vector!("baseline.property.grid-row-end", "grid-row-end", "0"),
+    vector!(
+        "baseline.property.grid-column-start",
+        "grid-column-start",
+        "0"
+    ),
+    vector!("baseline.property.grid-column-end", "grid-column-end", "0"),
+    vector!("baseline.property.grid-row", "grid-row", "0"),
+    vector!("baseline.property.grid-column", "grid-column", "0"),
+    vector!("baseline.property.grid-area", "grid-area", "0"),
+    vector!("baseline.property.grid", "grid", "auto-flow"),
+    vector!("baseline.property.font-size", "font-size", "auto"),
+    vector!("baseline.property.line-height", "line-height", "auto"),
+    vector!("baseline.property.writing-mode", "writing-mode", "lr"),
+    vector!("baseline.property.text-align", "text-align", "auto"),
+    vector!(
+        "baseline.property.text-align-last",
+        "text-align-last",
+        "match-parent"
+    ),
+    vector!("baseline.property.text-indent", "text-indent", "auto"),
+    vector!("baseline.property.vertical-align", "vertical-align", "auto"),
+    vector!(
+        "baseline.property.font-family",
+        "font-family",
+        "sans-serif,"
+    ),
+    vector!("baseline.property.font", "font", "bold sans-serif"),
+    vector!("baseline.property.font-weight", "font-weight", "1001"),
+    vector!("baseline.property.font-style", "font-style", "bold"),
+    vector!("baseline.property.font-stretch", "font-stretch", "wide"),
+    vector!("baseline.property.font-variant", "font-variant", "italic"),
+    vector!(
+        "baseline.property.font-feature-settings",
+        "font-feature-settings",
+        "\"abc\" on"
+    ),
+    vector!("baseline.property.letter-spacing", "letter-spacing", "auto"),
+    vector!("baseline.property.text-wrap", "text-wrap", "auto"),
+    vector!("baseline.property.white-space", "white-space", "balance"),
+    vector!("baseline.property.word-break", "word-break", "nowrap"),
+    vector!(
+        "baseline.property.overflow-wrap",
+        "overflow-wrap",
+        "ellipsis"
+    ),
+    vector!("baseline.property.text-overflow", "text-overflow", "wrap"),
+    vector!(
+        "baseline.property.text-decoration",
+        "text-decoration",
+        "underline underline"
+    ),
+    vector!(
+        "baseline.property.text-decoration-line",
+        "text-decoration-line",
+        "underline underline"
+    ),
+    vector!(
+        "baseline.property.text-decoration-color",
+        "text-decoration-color",
+        "black white"
+    ),
+    vector!(
+        "baseline.property.text-decoration-style",
+        "text-decoration-style",
+        "auto"
+    ),
+    vector!(
+        "baseline.property.text-decoration-thickness",
+        "text-decoration-thickness",
+        "-1px"
+    ),
+    vector!("baseline.property.text-transform", "text-transform", "wrap"),
+    vector!("baseline.property.inset", "inset", "solid"),
+    vector!("baseline.property.top", "top", "solid"),
+    vector!("baseline.property.right", "right", "solid"),
+    vector!("baseline.property.bottom", "bottom", "solid"),
+    vector!("baseline.property.left", "left", "solid"),
+    vector!("baseline.property.z-index", "z-index", "1.5"),
+    vector!(
+        "baseline.property.box-decoration-break",
+        "box-decoration-break",
+        "auto"
+    ),
+    vector!("baseline.property.margin", "margin", "solid"),
+    vector!("baseline.property.margin-top", "margin-top", "solid"),
+    vector!("baseline.property.margin-right", "margin-right", "solid"),
+    vector!("baseline.property.margin-bottom", "margin-bottom", "solid"),
+    vector!("baseline.property.margin-left", "margin-left", "solid"),
+    vector!("baseline.property.padding", "padding", "auto"),
+    vector!("baseline.property.padding-top", "padding-top", "auto"),
+    vector!("baseline.property.padding-right", "padding-right", "auto"),
+    vector!("baseline.property.padding-bottom", "padding-bottom", "auto"),
+    vector!("baseline.property.padding-left", "padding-left", "auto"),
+    vector!("baseline.property.border", "border", "solid dotted"),
+    vector!("baseline.property.border-top", "border-top", "solid dotted"),
+    vector!(
+        "baseline.property.border-right",
+        "border-right",
+        "solid dotted"
+    ),
+    vector!(
+        "baseline.property.border-bottom",
+        "border-bottom",
+        "solid dotted"
+    ),
+    vector!(
+        "baseline.property.border-left",
+        "border-left",
+        "solid dotted"
+    ),
+    vector!("baseline.property.border-width", "border-width", "10%"),
+    vector!(
+        "baseline.property.border-top-width",
+        "border-top-width",
+        "10%"
+    ),
+    vector!(
+        "baseline.property.border-right-width",
+        "border-right-width",
+        "10%"
+    ),
+    vector!(
+        "baseline.property.border-bottom-width",
+        "border-bottom-width",
+        "10%"
+    ),
+    vector!(
+        "baseline.property.border-left-width",
+        "border-left-width",
+        "10%"
+    ),
+    vector!("baseline.property.color", "color", "black white"),
+    vector!("baseline.property.background", "background", "#fff #000"),
+    vector!(
+        "baseline.property.background-color",
+        "background-color",
+        "black white"
+    ),
+    vector!(
+        "baseline.property.border-color",
+        "border-color",
+        "black white black white black"
+    ),
+    vector!(
+        "baseline.property.border-top-color",
+        "border-top-color",
+        "black white"
+    ),
+    vector!(
+        "baseline.property.border-right-color",
+        "border-right-color",
+        "black white"
+    ),
+    vector!(
+        "baseline.property.border-bottom-color",
+        "border-bottom-color",
+        "black white"
+    ),
+    vector!(
+        "baseline.property.border-left-color",
+        "border-left-color",
+        "black white"
+    ),
+    vector!(
+        "baseline.property.background-image",
+        "background-image",
+        "url(\"\")"
+    ),
+    vector!(
+        "baseline.property.background-position",
+        "background-position",
+        "left right"
+    ),
+    vector!(
+        "baseline.property.background-size",
+        "background-size",
+        "solid"
+    ),
+    vector!(
+        "baseline.property.background-repeat",
+        "background-repeat",
+        "solid"
+    ),
+    vector!(
+        "baseline.property.background-origin",
+        "background-origin",
+        "margin-box"
+    ),
+    vector!(
+        "baseline.property.background-clip",
+        "background-clip",
+        "margin-box"
+    ),
+    vector!(
+        "baseline.property.background-attachment",
+        "background-attachment",
+        "sticky"
+    ),
+    vector!("baseline.property.border-style", "border-style", "auto"),
+    vector!(
+        "baseline.property.border-top-style",
+        "border-top-style",
+        "auto"
+    ),
+    vector!(
+        "baseline.property.border-right-style",
+        "border-right-style",
+        "auto"
+    ),
+    vector!(
+        "baseline.property.border-bottom-style",
+        "border-bottom-style",
+        "auto"
+    ),
+    vector!(
+        "baseline.property.border-left-style",
+        "border-left-style",
+        "auto"
+    ),
+    vector!("baseline.property.border-radius", "border-radius", "-1px"),
+    vector!(
+        "baseline.property.border-top-left-radius",
+        "border-top-left-radius",
+        "-1px"
+    ),
+    vector!(
+        "baseline.property.border-top-right-radius",
+        "border-top-right-radius",
+        "-1px"
+    ),
+    vector!(
+        "baseline.property.border-bottom-right-radius",
+        "border-bottom-right-radius",
+        "-1px"
+    ),
+    vector!(
+        "baseline.property.border-bottom-left-radius",
+        "border-bottom-left-radius",
+        "-1px"
+    ),
+    vector!("baseline.property.box-shadow", "box-shadow", "1px 2px -3px"),
+    vector!("baseline.property.opacity", "opacity", "solid"),
+    vector!("baseline.property.flex-grow", "flex-grow", "solid"),
+    vector!("baseline.property.flex-shrink", "flex-shrink", "solid"),
+    vector!("baseline.property.order", "order", "1.5"),
+    vector!("baseline.property.flex", "flex", "-1"),
+    vector!("baseline.property.justify-tracks", "justify-tracks", "auto"),
+    vector!("baseline.property.align-tracks", "align-tracks", "auto"),
+    vector!("baseline.property.aspect-ratio", "aspect-ratio", "solid"),
+    vector!(
+        "baseline.property.scrollbar-width",
+        "scrollbar-width",
+        "solid"
+    ),
+    vector!("baseline.property.cursor", "cursor", "10px"),
+    vector!("baseline.property.pointer-events", "pointer-events", "grab"),
+    vector!("baseline.property.user-select", "user-select", "grab"),
+    vector!("baseline.property.outline", "outline", "solid dotted"),
+    vector!(
+        "baseline.property.outline-color",
+        "outline-color",
+        "black white"
+    ),
+    vector!("baseline.property.outline-style", "outline-style", "10px"),
+    vector!("baseline.property.outline-width", "outline-width", "10%"),
+    vector!("baseline.property.transform", "transform", "translate(red)"),
+    vector!(
+        "baseline.property.transform-origin",
+        "transform-origin",
+        "left right"
+    ),
+    vector!("baseline.property.translate", "translate", "red"),
+    vector!("baseline.property.rotate", "rotate", "45px"),
+    vector!("baseline.property.scale", "scale", "solid"),
+    vector!("baseline.property.filter", "filter", "opacity(red)"),
+    vector!(
+        "baseline.property.backdrop-filter",
+        "backdrop-filter",
+        "opacity(red)"
+    ),
+    vector!("baseline.property.clip-path", "clip-path", "circle(red)"),
+    vector!("baseline.property.mask", "mask", "solid"),
+    vector!("baseline.property.mask-image", "mask-image", "url(\"\")"),
+    vector!("baseline.property.mask-size", "mask-size", "solid"),
+    vector!(
+        "baseline.property.mask-position",
+        "mask-position",
+        "left right"
+    ),
+    vector!("baseline.property.mask-repeat", "mask-repeat", "solid"),
+    vector!(
+        "baseline.property.transition-property",
+        "transition-property",
+        "auto"
+    ),
+    vector!(
+        "baseline.property.transition-duration",
+        "transition-duration",
+        "10px"
+    ),
+    vector!(
+        "baseline.property.transition-delay",
+        "transition-delay",
+        "10px"
+    ),
+    vector!(
+        "baseline.property.transition-timing-function",
+        "transition-timing-function",
+        "bounce"
+    ),
+    vector!(
+        "baseline.property.transition",
+        "transition",
+        "opacity 1s 2s 3s"
+    ),
+    vector!("baseline.property.animation-name", "animation-name", "auto"),
+    vector!(
+        "baseline.property.animation-duration",
+        "animation-duration",
+        "10px"
+    ),
+    vector!(
+        "baseline.property.animation-delay",
+        "animation-delay",
+        "10px"
+    ),
+    vector!(
+        "baseline.property.animation-timing-function",
+        "animation-timing-function",
+        "bounce"
+    ),
+    vector!(
+        "baseline.property.animation-iteration-count",
+        "animation-iteration-count",
+        "-1"
+    ),
+    vector!(
+        "baseline.property.animation-direction",
+        "animation-direction",
+        "running"
+    ),
+    vector!(
+        "baseline.property.animation-fill-mode",
+        "animation-fill-mode",
+        "running"
+    ),
+    vector!(
+        "baseline.property.animation-play-state",
+        "animation-play-state",
+        "alternate"
+    ),
+    vector!("baseline.property.animation", "animation", "fade 1s 2s 3s"),
 ];

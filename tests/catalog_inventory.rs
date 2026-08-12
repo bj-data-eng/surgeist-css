@@ -6,13 +6,30 @@ mod catalog_inventory {
 
 use catalog_inventory::vectors::{PROPERTY_NEGATIVE_VECTORS, PROPERTY_POSITIVE_VECTORS};
 use surgeist_css::{
-    CssErrorCode, CssFeatureKind, CssSupportStatus, feature_catalog, feature_metadata,
+    CssErrorCode, CssFeatureKind, CssSupportStatus, ErrorKind, feature_catalog, feature_metadata,
     parse_style_attribute, property_metadata,
 };
 
 const PROPERTY_SUBSET: &str = "The property-specific parser behavior at 4b288d6:src/parser/mod.rs, plus whole-value CSS-wide keywords and syntactically admissible substitution-dependent authored values, is supported.";
 const PROPERTY_REMAINDER: &str =
     "Other valid forms of the cited property production are outside the I01 subset.";
+const CSS_WIDE_KEYWORDS: &[&str] = &["inherit", "initial", "unset", "revert", "revert-layer"];
+
+fn starts_with_css_wide_keyword(authored_value: &str) -> bool {
+    authored_value
+        .trim_start()
+        .split(|character: char| character.is_ascii_whitespace() || character == ',')
+        .next()
+        .is_some_and(|first| {
+            CSS_WIDE_KEYWORDS
+                .iter()
+                .any(|keyword| first.eq_ignore_ascii_case(keyword))
+        })
+}
+
+fn contains_substitution(authored_value: &str) -> bool {
+    authored_value.to_ascii_lowercase().contains("var(")
+}
 
 #[test]
 fn catalog_inventory_has_exact_independent_property_records_and_lookup() {
@@ -108,6 +125,26 @@ fn catalog_inventory_positive_and_negative_manifests_exercise_every_property() {
             "duplicate positive `{}`",
             vector.id
         );
+        if vector.canonical_name == "all" {
+            assert!(
+                CSS_WIDE_KEYWORDS
+                    .iter()
+                    .any(|keyword| vector.authored_value.trim().eq_ignore_ascii_case(keyword))
+                    || contains_substitution(vector.authored_value),
+                "`all` positive must use its valid global/substitution contract"
+            );
+        } else {
+            assert!(
+                !starts_with_css_wide_keyword(vector.authored_value),
+                "{} positive must reach property-specific dispatch",
+                vector.id
+            );
+            assert!(
+                !contains_substitution(vector.authored_value),
+                "{} positive must not use substitution-dependent parsing",
+                vector.id
+            );
+        }
         let report = parse_style_attribute(&format!(
             "{}: {}",
             vector.canonical_name, vector.authored_value
@@ -124,12 +161,11 @@ fn catalog_inventory_positive_and_negative_manifests_exercise_every_property() {
                 vector.id
             );
         };
-        assert_eq!(
-            declaration.known().map(|known| known.property()),
-            Some(property_metadata(vector.canonical_name).unwrap().property()),
-            "{} positive vector identity",
-            vector.id
-        );
+        let known = declaration
+            .known()
+            .unwrap_or_else(|| panic!("{} positive was not a known declaration", vector.id));
+        assert_eq!(known.property().canonical_name(), vector.canonical_name);
+        assert_eq!(known.property().stable_id(), vector.id);
     }
 
     let mut negative_ids = HashSet::new();
@@ -137,6 +173,35 @@ fn catalog_inventory_positive_and_negative_manifests_exercise_every_property() {
         assert!(
             negative_ids.insert(vector.id),
             "duplicate negative `{}`",
+            vector.id
+        );
+        let positive = PROPERTY_POSITIVE_VECTORS
+            .iter()
+            .find(|positive| positive.id == vector.id)
+            .unwrap_or_else(|| panic!("{} negative has no positive peer", vector.id));
+        assert_eq!(positive.canonical_name, vector.canonical_name);
+        if vector.canonical_name == "all" {
+            assert_eq!(vector.authored_value, "block");
+        } else {
+            assert_ne!(
+                vector.authored_value, positive.authored_value,
+                "{} negative must differ from its accepted typed value",
+                vector.id
+            );
+            assert!(
+                !vector.authored_value.trim_end().ends_with('/'),
+                "{} negative must use a property-specific rejection, not shared trailing syntax",
+                vector.id
+            );
+        }
+        assert!(
+            !starts_with_css_wide_keyword(vector.authored_value),
+            "{} negative must reach property-specific dispatch",
+            vector.id
+        );
+        assert!(
+            !contains_substitution(vector.authored_value),
+            "{} negative must not use substitution-dependent parsing",
             vector.id
         );
         let report = parse_style_attribute(&format!(
@@ -150,12 +215,18 @@ fn catalog_inventory_positive_and_negative_manifests_exercise_every_property() {
             vector.id
         );
         assert_eq!(diagnostics.len(), 1, "{} negative diagnostics", vector.id);
+        let error = diagnostics[0].error();
         assert_eq!(
-            diagnostics[0].error().code(),
+            error.code(),
             CssErrorCode::InvalidPropertyValue,
             "{} negative diagnostic root",
             vector.id
         );
+        let ErrorKind::InvalidPropertyValue(detail) = error.kind() else {
+            panic!("{} negative returned {error:?}", vector.id);
+        };
+        assert_eq!(detail.property().canonical_name(), vector.canonical_name);
+        assert_eq!(detail.property().stable_id(), vector.id);
     }
 
     assert_eq!(positive_ids.len(), 179);

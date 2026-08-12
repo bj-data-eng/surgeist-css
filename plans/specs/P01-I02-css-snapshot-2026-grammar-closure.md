@@ -293,7 +293,7 @@ provenance for container-query or style-query syntax.
 
 The immutable official coverage universe is
 `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256
-`02955c03b5cc404aeb6e6a1724402d570d1736d06ccef74dc631084540188116`.
+`09ecbf2dcaafbd402b24642f1244ce0be3568fd8a85b993c0218e2e7c0deac6d`.
 It enumerates exactly 162 property units, 167 non-property units, the one
 normative legacy-shorthand alias, all supersession mappings, and the complete
 selected exclusion remainder. The implementation may consume its stable IDs in
@@ -363,8 +363,10 @@ specification order. The official Cascade 4 core, reliable Cascade 5 layer
 delta, and reliable Cascade 5 supports delta are distinct atomic catalog rows.
 The supports clause shares the `@supports` condition parser.
 Conditional 3's imported `general-enclosed` grammar is bound to the dated
-`X-VALUES4` source in section 4.3 as its own atomic delta, and Conditional 3
-`@media` binds to `O-MEDIA3`; no moving imported URL becomes conformance input.
+`X-VALUES4` source in section 4.3 as its own atomic delta. The `@media` rule
+shell and `baseline.rule.media` record bind to `O-CONDITIONAL3`; their imported
+`<media-query-list>` grammar binds to the `O-MEDIA3` core plus separately
+catalogued `R-MEDIA4` deltas. No moving imported URL becomes conformance input.
 Unknown/general-enclosed tests are retained as authored syntax where the owning
 grammar requires, not recovered as malformed.
 

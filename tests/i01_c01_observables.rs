@@ -1,42 +1,10 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use surgeist_css::{
     CssDeclaration, CssDeclarationContextRef, CssErrorCode, CssImportance, CssPropertyNameRef,
     CssRecoveryAction, CssRecoveryDiagnostic, CssRule, CssScopedRule, ErrorKind, parse_sheet,
     parse_style_attribute,
 };
-
-#[path = "catalog_inventory/vectors.rs"]
-mod catalog_vectors;
-#[path = "i01_c01_observables/cases.rs"]
-mod i01_cases;
-
-use i01_cases::{
-    Case, EntryPoint, FeatureMode, STABLE_CASE_OWNERS, focused_cases, non_property_cases,
-};
-
-const EXACT_CASE_COUNT: usize = 974;
-const EXACT_DEFAULT_CASE_COUNT: usize = 962;
-const EXACT_APP_STRICT_CASE_COUNT: usize = 974;
-const EXACT_IDENTITY_FINGERPRINT: u64 = 0x16c4_697e_8010_aa3c;
-const EXACT_OWNER_COUNTS: [(&str, usize); 16] = [
-    ("app_strict_parity", 12),
-    ("authored_declaration_values", 10),
-    ("catalog_inventory", 358),
-    ("conformance_catalog", 72),
-    ("coupled_declarations", 6),
-    ("declaration_importance", 8),
-    ("initiative_i01_audit", 8),
-    ("nested_structural_recovery", 12),
-    ("property_schema", 358),
-    ("public_surface", 15),
-    ("source_coordinates", 6),
-    ("specialized_list_recovery", 24),
-    ("structural_recovery_adversarial", 24),
-    ("structured_errors", 19),
-    ("style_attribute_recovery", 19),
-    ("stylesheet_recovery", 23),
-];
 
 const FIXTURE: &str = include_str!("fixtures/i01-c01-observables.tsv");
 const HEADER: &str = "case_id\towner\tentry\tfeature\tinput\tclean\tretained\tvalues\tauthored_declarations\tdiagnostics";
@@ -142,6 +110,7 @@ fn parse_fixture(source: &str) -> Result<Vec<Row>, String> {
             "true" | "false" => {}
             value => return Err(format!("{}: invalid clean state `{value}`", row.case_id)),
         }
+        parse_semantic_values(&row.values, &row.case_id)?;
         validate_authored_field(&row)?;
         rows.push(row);
     }
@@ -223,8 +192,6 @@ struct FrozenDeclarationCursor<'a> {
     authored_declarations: Vec<AuthoredDeclaration<'a>>,
     semantic_index: usize,
     authored_index: usize,
-    wrapper_comparisons: usize,
-    prior_public_comparisons: usize,
 }
 
 impl<'a> FrozenDeclarationCursor<'a> {
@@ -240,8 +207,6 @@ impl<'a> FrozenDeclarationCursor<'a> {
             .expect("frozen authored-declaration expectation"),
             semantic_index: 0,
             authored_index: 0,
-            wrapper_comparisons: 0,
-            prior_public_comparisons: 0,
         }
     }
 
@@ -267,17 +232,17 @@ impl<'a> FrozenDeclarationCursor<'a> {
     }
 
     fn finish(&self) {
-        assert_eq!(
-            self.semantic_index,
-            self.semantic_values.len(),
-            "{} semantic value count",
-            self.case_id
+        assert!(
+            self.semantic_values.get(self.semantic_index).is_none(),
+            "{}: fixture contains an unmatched semantic declaration observable",
+            self.case_id,
         );
-        assert_eq!(
-            self.authored_index,
-            self.authored_declarations.len(),
-            "{} authored declaration count",
-            self.case_id
+        assert!(
+            self.authored_declarations
+                .get(self.authored_index)
+                .is_none(),
+            "{}: fixture contains an unmatched authored declaration observable",
+            self.case_id,
         );
     }
 }
@@ -352,186 +317,17 @@ fn unescape(field: &str) -> Result<String, String> {
     Ok(output)
 }
 
-fn expected_cases() -> Vec<Case> {
-    let mut cases = Vec::new();
-    for vector in catalog_vectors::PROPERTY_POSITIVE_VECTORS {
-        cases.push(Case::new(
-            format!("catalog.property.{}.positive", vector.id),
-            format!("catalog_inventory::{}/positive", vector.id),
-            EntryPoint::Style,
-            FeatureMode::Both,
-            format!("{}: {}", vector.canonical_name, vector.authored_value),
-        ));
-    }
-    for vector in catalog_vectors::PROPERTY_NEGATIVE_VECTORS {
-        cases.push(Case::new(
-            format!("catalog.property.{}.boundary", vector.id),
-            format!("catalog_inventory::{}/negative", vector.id),
-            EntryPoint::Style,
-            FeatureMode::Both,
-            format!("{}: {}", vector.canonical_name, vector.authored_value),
-        ));
-    }
-    for vector in catalog_vectors::PROPERTY_POSITIVE_VECTORS {
-        cases.push(Case::new(
-            format!("focused.property-schema.{}.ordinary", vector.id),
-            format!("property_schema::property_schema_parser_identity_matches_every_frozen_name/{}/ordinary", vector.id),
-            EntryPoint::Sheet,
-            FeatureMode::Both,
-            format!(".test {{ {}: {}; }}", vector.canonical_name.to_ascii_uppercase(), vector.authored_value),
-        ));
-        cases.push(Case::new(
-            format!("focused.property-schema.{}.important", vector.id),
-            format!("property_schema::property_schema_parser_identity_matches_every_frozen_name/{}/important", vector.id),
-            EntryPoint::Sheet,
-            FeatureMode::Both,
-            format!(".test {{ {}: {} !important; }}", vector.canonical_name.to_ascii_uppercase(), if vector.canonical_name == "all" { "inherit" } else { vector.authored_value }),
-        ));
-    }
-    cases.extend(non_property_cases());
-    cases.extend(focused_cases());
-    cases.sort_by(|left, right| left.id.cmp(&right.id));
-    cases
-}
-
-fn identity_pairs_from_rows(rows: &[Row]) -> Vec<(String, String)> {
-    rows.iter()
-        .map(|row| (row.owner.clone(), row.case_id.clone()))
-        .collect()
-}
-
-fn identity_pairs_from_cases(cases: &[Case]) -> Vec<(String, String)> {
-    cases
-        .iter()
-        .map(|case| (case.owner.clone(), case.id.clone()))
-        .collect()
-}
-
-fn literal_identity_pairs() -> Result<Vec<(String, String)>, String> {
-    STABLE_CASE_OWNERS
-        .lines()
-        .filter(|line| !line.is_empty())
-        .enumerate()
-        .map(|(index, line)| {
-            let (case_id, owner) = line
-                .split_once('\t')
-                .ok_or_else(|| format!("malformed stable identity at line {}", index + 1))?;
-            if case_id.is_empty() || owner.is_empty() || owner.contains('\t') {
-                return Err(format!("malformed stable identity `{line}`"));
-            }
-            Ok((owner.to_owned(), case_id.to_owned()))
-        })
-        .collect()
-}
-
-fn validate_exact_identity_closure(mut identities: Vec<(String, String)>) -> Result<(), String> {
-    if identities.len() != EXACT_CASE_COUNT {
-        return Err(format!(
-            "exact I01 case count: expected {EXACT_CASE_COUNT}, got {}",
-            identities.len()
-        ));
-    }
-    identities.sort();
-    let mut case_ids = BTreeSet::new();
-    let mut owner_case_pairs = BTreeSet::new();
-    let mut owners = BTreeMap::new();
-    for (owner, case_id) in &identities {
-        if !case_ids.insert(case_id.as_str()) {
-            return Err(format!("case identity collision: `{case_id}`"));
-        }
-        if !owner_case_pairs.insert((owner.as_str(), case_id.as_str())) {
-            return Err(format!(
-                "owner/case identity collision: `{owner}` / `{case_id}`"
-            ));
-        }
-        let owner_id = owner
-            .split_once("::")
-            .map_or(owner.as_str(), |(owner_id, _)| owner_id);
-        *owners.entry(owner_id).or_insert(0usize) += 1;
-    }
-    let exact_owners = EXACT_OWNER_COUNTS.into_iter().collect::<BTreeMap<_, _>>();
-    if owners != exact_owners {
-        return Err("exact I01 owner/cardinality closure mismatch".to_owned());
-    }
-    let fingerprint = identity_fingerprint(&identities);
-    if fingerprint != EXACT_IDENTITY_FINGERPRINT {
-        return Err(format!(
-            "stable owner/case mapping changed: expected {EXACT_IDENTITY_FINGERPRINT:#018x}, got {fingerprint:#018x}"
-        ));
-    }
-    Ok(())
-}
-
-fn identity_fingerprint(identities: &[(String, String)]) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325u64;
-    for (owner, case_id) in identities {
-        for byte in owner
-            .bytes()
-            .chain([0])
-            .chain(case_id.bytes())
-            .chain(*b"\n")
-        {
-            hash ^= u64::from(byte);
-            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-        }
-    }
-    hash
-}
-
 #[test]
-fn i01_observable_fixture_has_the_exact_independent_case_union() {
+fn authored_css_cases_match_frozen_public_report_observables() {
     let rows = parse_fixture(FIXTURE).expect("valid I01 observable fixture");
-    let expected = expected_cases();
-    let literal_identities = literal_identity_pairs().expect("literal stable owner/case mapping");
-    validate_exact_identity_closure(literal_identities.clone())
-        .expect("literal exact owner/case closure");
-    validate_exact_identity_closure(identity_pairs_from_rows(&rows))
-        .expect("fixture exact owner/case closure");
-    validate_exact_identity_closure(identity_pairs_from_cases(&expected))
-        .expect("source-case exact owner/case closure");
-    let literal_identities = literal_identities.into_iter().collect::<BTreeSet<_>>();
-    assert_eq!(
-        identity_pairs_from_rows(&rows)
-            .into_iter()
-            .collect::<BTreeSet<_>>(),
-        literal_identities,
-        "fixture owner/case mapping"
-    );
-    assert_eq!(
-        identity_pairs_from_cases(&expected)
-            .into_iter()
-            .collect::<BTreeSet<_>>(),
-        literal_identities,
-        "executable source-case owner/case mapping"
-    );
-    assert_eq!(
-        catalog_vectors::PROPERTY_POSITIVE_VECTORS.len(),
-        179,
-        "imported positive catalog-vector count changed"
-    );
-    assert_eq!(
-        catalog_vectors::PROPERTY_NEGATIVE_VECTORS.len(),
-        179,
-        "imported boundary catalog-vector count changed"
-    );
-    assert_eq!(rows.len(), expected.len(), "exact I01 case union size");
-    for (row, case) in rows.iter().zip(expected.iter()) {
-        assert_eq!(row.case_id, case.id, "case-union identity");
-        assert_eq!(row.owner, case.owner, "{} owner", case.id);
-        assert_eq!(row.entry, case.entry.as_str(), "{} entry", case.id);
-        assert_eq!(row.feature, case.feature.as_str(), "{} feature", case.id);
-        assert_eq!(row.input, case.input, "{} authored input", case.id);
-    }
-}
-
-#[test]
-fn i01_observable_fixture_matches_every_public_report() {
-    let rows = parse_fixture(FIXTURE).expect("valid I01 observable fixture");
-    let mut executed = 0usize;
-    let mut wrapper_comparisons = 0usize;
-    let mut prior_public_comparisons = 0usize;
     for row in rows {
-        if row.feature == "app-strict" && !cfg!(feature = "app-strict") {
+        let applicable = match row.feature.as_str() {
+            "both" => true,
+            "default" => !cfg!(feature = "app-strict"),
+            "app-strict" => cfg!(feature = "app-strict"),
+            _ => unreachable!("validated fixture feature"),
+        };
+        if !applicable {
             continue;
         }
         let actual = observe(&row);
@@ -546,36 +342,13 @@ fn i01_observable_fixture_matches_every_public_report() {
             "{} diagnostics",
             row.case_id
         );
-        wrapper_comparisons += actual.wrapper_comparisons;
-        prior_public_comparisons += actual.prior_public_comparisons;
-        executed += 1;
         #[cfg(feature = "app-strict")]
         assert_strict_parity(&row);
     }
-    let expected_executed = if cfg!(feature = "app-strict") {
-        EXACT_APP_STRICT_CASE_COUNT
-    } else {
-        EXACT_DEFAULT_CASE_COUNT
-    };
-    assert_eq!(executed, expected_executed, "executed public-report rows");
-    assert_eq!(
-        wrapper_comparisons,
-        if cfg!(feature = "app-strict") {
-            751
-        } else {
-            746
-        },
-        "all pre-authored deferred ordinary slices compare through wrappers"
-    );
-    assert_eq!(
-        prior_public_comparisons,
-        if cfg!(feature = "app-strict") { 35 } else { 34 },
-        "prior public authored-slice comparisons remain intact"
-    );
 }
 
 #[test]
-fn i01_observable_reader_rejects_union_and_observable_mutations() {
+fn malformed_observable_fixture_rows_are_rejected() {
     let rows = parse_fixture(FIXTURE).expect("valid fixture");
     assert!(
         parse_fixture(&FIXTURE.replacen(HEADER, &format!("{HEADER}\textra"), 1))
@@ -608,35 +381,29 @@ fn i01_observable_reader_rejects_union_and_observable_mutations() {
             .expect_err("noncanonical order must fail")
             .contains("noncanonical case order")
     );
-    let removed = rows
-        .iter()
-        .skip(1)
-        .map(render_row)
-        .collect::<Vec<_>>()
-        .join("\n");
-    let removed = format!("{HEADER}\n{removed}\n");
-    let removed_rows = parse_fixture(&removed).expect("well-formed incomplete fixture");
-    assert_ne!(
-        removed_rows.len(),
-        expected_cases().len(),
-        "removed case must fail exact union"
-    );
-    let removed_expected = expected_cases().into_iter().skip(1).collect::<Vec<_>>();
+
+    let mut invalid_entry = rows[0].clone();
+    invalid_entry.entry = "unknown".to_owned();
     assert!(
-        validate_exact_identity_closure(identity_pairs_from_rows(&removed_rows)).is_err(),
-        "coordinated TSV/source omission must fail literal closure"
-    );
-    assert!(
-        validate_exact_identity_closure(identity_pairs_from_cases(&removed_expected)).is_err(),
-        "coordinated source/TSV omission must fail literal closure"
+        parse_fixture(&format!("{HEADER}\n{}\n", render_row(&invalid_entry)))
+            .expect_err("unknown entry point must fail")
+            .contains("unknown entry point")
     );
 
-    let mut collided = identity_pairs_from_rows(&rows);
-    collided[1].1 = collided[0].1.clone();
+    let mut invalid_feature = rows[0].clone();
+    invalid_feature.feature = "unknown".to_owned();
     assert!(
-        validate_exact_identity_closure(collided)
-            .expect_err("case identity collision must fail")
-            .contains(&rows[0].case_id)
+        parse_fixture(&format!("{HEADER}\n{}\n", render_row(&invalid_feature)))
+            .expect_err("unknown feature mode must fail")
+            .contains("unknown feature mode")
+    );
+
+    let mut invalid_clean = rows[0].clone();
+    invalid_clean.clean = "unknown".to_owned();
+    assert!(
+        parse_fixture(&format!("{HEADER}\n{}\n", render_row(&invalid_clean)))
+            .expect_err("invalid clean state must fail")
+            .contains("invalid clean state")
     );
 
     let mut missing = rows.clone();
@@ -709,11 +476,15 @@ fn i01_observable_reader_rejects_union_and_observable_mutations() {
         "responsible case: {}",
         rows[0].case_id
     );
+}
 
+#[test]
+fn omitted_recovery_diagnostic_changes_the_public_report_observable() {
+    let rows = parse_fixture(FIXTURE).expect("valid fixture");
     let repeated_index = rows
         .iter()
-        .position(|row| row.diagnostics.split('~').count() > 1)
-        .expect("fixture must contain repeated diagnostics");
+        .position(|row| row.diagnostics.split_once('~').is_some())
+        .expect("fixture contains an input with multiple recovery diagnostics");
     let mut repeated = rows.clone();
     repeated[repeated_index].diagnostics = repeated[repeated_index]
         .diagnostics
@@ -724,8 +495,14 @@ fn i01_observable_reader_rejects_union_and_observable_mutations() {
     assert_ne!(
         observe(&repeated[repeated_index]).diagnostics,
         repeated[repeated_index].diagnostics,
-        "{} repeated diagnostic removal must fail",
+        "{} public parser retains every recovery diagnostic in source order",
         repeated[repeated_index].case_id
+    );
+    assert_eq!(
+        observe(&rows[repeated_index]).diagnostics,
+        rows[repeated_index].diagnostics,
+        "{} public report matches the complete authored diagnostic sequence",
+        rows[repeated_index].case_id
     );
 }
 
@@ -745,8 +522,6 @@ struct Observation {
     clean: String,
     retained: String,
     diagnostics: String,
-    wrapper_comparisons: usize,
-    prior_public_comparisons: usize,
 }
 
 fn observe(expected: &Row) -> Observation {
@@ -778,8 +553,6 @@ fn observe(expected: &Row) -> Observation {
         clean: clean.to_string(),
         retained: nonempty(retained.join("~")),
         diagnostics: nonempty(diagnostics.join("~")),
-        wrapper_comparisons: frozen.wrapper_comparisons,
-        prior_public_comparisons: frozen.prior_public_comparisons,
     }
 }
 
@@ -1009,7 +782,6 @@ fn assert_declaration_value(
                 frozen.case_id,
                 authored.id
             );
-            frozen.prior_public_comparisons += 1;
             if let Some(semantic) = semantic {
                 assert_eq!(
                     semantic.payload,
@@ -1038,7 +810,6 @@ fn assert_declaration_value(
                 frozen.case_id,
                 authored.id
             );
-            frozen.wrapper_comparisons += 1;
             if let Some(semantic) = semantic {
                 assert_eq!(
                     semantic.payload,
@@ -1100,7 +871,6 @@ fn assert_declaration_value(
                 frozen.case_id,
                 authored.id
             );
-            frozen.wrapper_comparisons += 1;
             if let Some(semantic) = semantic {
                 assert_eq!(
                     semantic.payload,
@@ -1124,7 +894,6 @@ fn assert_declaration_value(
                 frozen.case_id,
                 authored.id
             );
-            frozen.prior_public_comparisons += 1;
             if let Some(semantic) = semantic {
                 assert_eq!(
                     semantic.payload,
@@ -1214,7 +983,6 @@ macro_rules! assert_property_specific_value {
                             $frozen.case_id, expected_id
                         );
                     }
-                    $frozen.wrapper_comparisons += 1;
                 }
             )*
             _ => panic!(

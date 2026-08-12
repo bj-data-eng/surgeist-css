@@ -115,9 +115,12 @@ I01 owns the intentionally breaking production front door and model foundation:
 I01 makes no Snapshot-completeness claim. It must classify every grammar spelling
 it recognizes at its completion as complete, partial, or recognized unsupported,
 and ordinary parsing must recover with a typed diagnostic from unsupported or
-invalid constructs. I01 shall leave I02 able to add completed grammar through
-the established non-exhaustive surface without redesigning parser semantics,
-diagnostics, declarations, positions, or validation.
+invalid constructs. I01 shall leave I02 able to add completed grammar without
+redesigning parser semantics, diagnostics, positions, or validation. P01.9
+supersedes only the published claim that every required authored-value evolution
+boundary and declaration payload is already sufficient; its one required repair
+preserves property/value coupling while replacing insufficient partial payload
+shapes.
 
 ### P01-I02 CSS Snapshot 2026 Grammar Closure
 
@@ -135,9 +138,13 @@ foundation:
 - exact positive, negative, recovery, metadata, and public-API vectors proving
   that every in-boundary official production is complete.
 
-I02 may add public non-exhaustive variants and new validated authored types. It
-shall not change the I01 parser signatures, recovery meaning, diagnostic ordering,
-source-coordinate convention, declaration coupling, or feature-unification
+I02 may add public variants and new validated authored types. Its first cycle
+shall perform the bounded evolution-boundary repair recorded in P01.9 before any
+grammar-closure cycle: add missing non-exhaustive boundaries and replace I01
+property/value payload shapes that cannot represent their complete owning
+grammar without semantic distortion. It shall not change the I01 parser
+signatures, report meaning, recovery actions, diagnostic ordering,
+source-coordinate convention, property/value coupling, or feature-unification
 behavior. It adds no corpus harness and invokes no sibling generator.
 
 ### P01-I03 CSSTree Public API Corpus Harness
@@ -212,10 +219,9 @@ I03 supplements, but does not own closure of, the 25 findings.
 
 I01 is intentionally breaking. Its candidate handoff shall identify removed or
 changed public types and the root-owned adapter/API-artifact migration. I02 is
-additive relative to the I01 evolution boundaries except when its JIT
-specification proves that a retained I01 grammar claim is untruthful; such a
-contradiction returns to P01 reconciliation before implementation. I03 is
-production-API internal-only.
+additive relative to sound I01 evolution boundaries, except for the one bounded
+repair authorized by P01.9 and any later contradiction that returns to P01
+reconciliation before implementation. I03 is production-API internal-only.
 
 I01 and I02 shall retain the existing production dependencies unless their JIT
 specification establishes a new dependency as a material design decision and the
@@ -262,3 +268,47 @@ the generator handoff is incomplete, a claimed-complete corpus case fails, an
 ownership boundary would be crossed, external software acquisition would be
 required without exact permission, or completion would retain or introduce
 Surgeist-owned `unsafe`.
+
+## P01.9 I02 Entry Reconciliation
+
+The published I01 candidate at
+`bc5394ff5855109dd1d224d29278d6ab601cef4f` satisfies its parser, recovery,
+diagnostic, declaration, catalog-foundation, verification, and publication
+predicates. Its static migration record nevertheless overstates one evolution
+property: it says every public enum except `CssImportance` and
+`CssSupportStatus` is non-exhaustive, while current source retains many
+exhaustive public value enums required by I02 grammar closure. Representative
+blocking types include media, selector, calculation, timing, Grid, and relative-
+color models. Several coupled property variants also carry a payload type that
+models only the I01 partial subset—for example `background`, `border-color`,
+`gap`, timing, and position-bearing properties—and cannot express the complete
+owning grammar by merely adding a sibling enum variant.
+
+P01 rejects two superficially additive workarounds: leaving the published
+partial payload as the parser's complete representation, and adding parallel
+`V2` property variants for the same canonical property. Either would make the
+authored model or property coupling untruthful. P01 therefore authorizes exactly
+one intentionally breaking I02 foundation cycle with this boundary:
+
+1. add `#[non_exhaustive]` to evolving public enums that I02 or a later
+   compatible grammar addition can extend, while retaining only deliberately
+   finite semantic states as closed;
+2. replace insufficient I01 partial property/value payloads with one truthful
+   property-specific authored model per canonical property, retaining the
+   authoritative property schema and derived property/value coupling;
+3. preserve the public `parse_sheet`, `parse_style_attribute`, `validate_sheet`,
+   and `validate_style_attribute` signatures and their one-pass behavior;
+4. preserve `CssParseReport`, typed diagnostics, source positions/spans,
+   recovery-action meanings, diagnostic ordering, parser-owned construction,
+   custom/substitution preservation, declaration importance, and ordinary/
+   `app-strict` feature parity;
+5. publish a superseding I02 migration record that names every affected public
+   type and all root-owned facade, adapter, API-artifact, documentation, and test
+   work. The I01 record remains immutable historical evidence and is not edited.
+
+The I02 JIT specification must prove the exact affected type inventory and
+replacement shapes before that cycle is planned. After the bounded foundation
+cycle, the remaining I02 work is additive against the repaired evolution
+surface. Any need to break a frozen item in points 3 or 4, weaken I01 evidence,
+or create a second breaking cycle stops implementation and returns to P01
+reconciliation. This repair does not authorize I03 production-API changes.

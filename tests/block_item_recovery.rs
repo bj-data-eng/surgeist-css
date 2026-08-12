@@ -1,6 +1,6 @@
 use surgeist_css::{
     CssDeclarationContextRef, CssErrorCode, CssPropertyNameRef, CssRecoveryAction, CssRule,
-    CssScopedRule, CssTokenKind, ErrorKind, parse_sheet,
+    CssScopedRule, CssSelector, CssSelectorCombinator, CssTokenKind, ErrorKind, parse_sheet,
 };
 
 fn property_names(declarations: &surgeist_css::CssDeclarationList) -> Vec<&str> {
@@ -180,6 +180,95 @@ fn block_item_recovery_repeated_declaration_failures_progress_to_later_valid_ite
             responsible,
         );
     }
+}
+
+#[test]
+fn block_item_recovery_all_invalid_declarations_retain_empty_ordinary_style_in_order() {
+    let unit = "mystery: 1;";
+    let source = format!(".before {{ color: red; }} .x {{ {unit} }} .after {{ height: 2px; }}");
+    let report = parse_sheet(&source);
+
+    let [
+        CssRule::Style(before),
+        CssRule::Style(empty),
+        CssRule::Style(after),
+    ] = report.syntax().rules()
+    else {
+        panic!("expected the empty owning style between its retained siblings");
+    };
+    assert_eq!(before.selector(), &CssSelector::Class("before".to_owned()));
+    assert_eq!(property_names(before.declarations()), ["color"]);
+    assert_eq!(empty.selector(), &CssSelector::Class("x".to_owned()));
+    assert!(empty.declarations().is_empty());
+    assert_eq!(after.selector(), &CssSelector::Class("after".to_owned()));
+    assert_eq!(property_names(after.declarations()), ["height"]);
+
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected exactly one declaration diagnostic");
+    };
+    assert_drop(
+        &source,
+        diagnostic,
+        unit,
+        CssErrorCode::UnknownProperty,
+        CssRecoveryAction::DropDeclaration,
+        source.find("mystery").unwrap(),
+    );
+    let ErrorKind::UnknownProperty(detail) = diagnostic.error().kind() else {
+        panic!("expected unknown-property detail");
+    };
+    assert_eq!(detail.name().as_str(), "mystery");
+}
+
+#[test]
+fn block_item_recovery_all_invalid_declarations_retain_empty_nested_style_in_order() {
+    let unit = "mystery: 1;";
+    let source = format!(
+        ".host {{ color: red; & .child {{ {unit} }} opacity: 1; }} .after {{ height: 2px; }}"
+    );
+    let report = parse_sheet(&source);
+
+    let [
+        CssRule::Style(before),
+        CssRule::Style(empty),
+        CssRule::Style(after),
+        CssRule::Style(sibling),
+    ] = report.syntax().rules()
+    else {
+        panic!("expected the empty nested style between retained parent segments and sibling");
+    };
+    assert_eq!(before.selector(), &CssSelector::Class("host".to_owned()));
+    assert_eq!(property_names(before.declarations()), ["color"]);
+    let CssSelector::Complex(empty_selector) = empty.selector() else {
+        panic!("expected flattened descendant selector for the empty nested style");
+    };
+    assert_eq!(empty_selector.first().classes(), &["host".to_owned()]);
+    let [child] = empty_selector.rest() else {
+        panic!("expected exactly one descendant selector part");
+    };
+    assert_eq!(child.combinator(), CssSelectorCombinator::Descendant);
+    assert_eq!(child.selector().classes(), &["child".to_owned()]);
+    assert!(empty.declarations().is_empty());
+    assert_eq!(after.selector(), &CssSelector::Class("host".to_owned()));
+    assert_eq!(property_names(after.declarations()), ["opacity"]);
+    assert_eq!(sibling.selector(), &CssSelector::Class("after".to_owned()));
+    assert_eq!(property_names(sibling.declarations()), ["height"]);
+
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected exactly one nested declaration diagnostic");
+    };
+    assert_drop(
+        &source,
+        diagnostic,
+        unit,
+        CssErrorCode::UnknownProperty,
+        CssRecoveryAction::DropDeclaration,
+        source.find("mystery").unwrap(),
+    );
+    let ErrorKind::UnknownProperty(detail) = diagnostic.error().kind() else {
+        panic!("expected nested unknown-property detail");
+    };
+    assert_eq!(detail.name().as_str(), "mystery");
 }
 
 #[test]

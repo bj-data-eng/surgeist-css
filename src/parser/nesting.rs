@@ -33,11 +33,9 @@ pub(super) fn parse_style_rule_block<'i, 't>(
     let parent_selectors = body_parser.parent_selectors.clone();
     let mut rules = Vec::new();
     let mut declaration_buffer = Vec::new();
-    let mut saw_item = false;
 
     let mut items = RuleBodyParser::new(input, &mut body_parser);
     while let Some(item) = items.next() {
-        saw_item = true;
         let unit_end = items.input.position().byte_index();
         match item {
             Ok(StyleBlockItem::Declaration(declaration)) => {
@@ -63,7 +61,7 @@ pub(super) fn parse_style_rule_block<'i, 't>(
     }
 
     flush_declarations(&parent_selectors, &mut declaration_buffer, &mut rules);
-    if !saw_item && rules.is_empty() {
+    if rules.is_empty() {
         for selector in &parent_selectors {
             rules.push(CssRule::Style(CssStyleRule::new(
                 selector.clone(),

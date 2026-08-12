@@ -618,9 +618,11 @@ fn layer_rule_models_preserve_authored_statement_and_block_shapes() {
         CssRule::LayerStatement(statement)
     );
 
+    let nested_location = source_position(4, 1);
     let nested = CssRule::Style(CssStyleRule::new(
         CssSelector::Class("button".to_owned()),
         CssDeclarationList::new(Vec::new()),
+        nested_location,
     ));
     let block_location = source_position(4, 5);
     let named_block = CssLayerBlockRule::new(
@@ -628,6 +630,7 @@ fn layer_rule_models_preserve_authored_statement_and_block_shapes() {
         vec![nested.clone()],
         block_location,
     );
+    assert_eq!(style_rule(&nested).position(), nested_location);
     assert_eq!(named_block.name(), Some(&components));
     assert_eq!(named_block.rules(), &[nested]);
     assert_eq!(named_block.position(), block_location);
@@ -672,6 +675,7 @@ fn scope_rule_model_keeps_scoped_selectors_and_rules_separate() {
     let style = CssScopedStyleRule::new(
         selectors.clone(),
         CssDeclarationList::new(vec![declaration.clone()]),
+        source_position(5, 3),
     );
     let scoped_rules = CssScopedRuleList::from_rules(vec![CssScopedRule::Style(style.clone())]);
     let location = source_position(5, 1);
@@ -690,6 +694,7 @@ fn scope_rule_model_keeps_scoped_selectors_and_rules_separate() {
     );
     assert_eq!(style.selectors(), &selectors);
     assert_eq!(style.declarations().as_slice(), &[declaration]);
+    assert_eq!(style.position(), source_position(5, 3));
     assert_eq!(scope.root(), Some(&root));
     assert_eq!(scope.limit(), Some(&limit));
     assert_eq!(scope.rules(), &scoped_rules);
@@ -747,12 +752,13 @@ fn scoped_group_rule_models_keep_scoped_children() {
             CssSelector::Class("label".to_owned()),
         )])
         .unwrap();
+    let location = source_position(8, 9);
     let child = CssScopedRule::Style(CssScopedStyleRule::new(
         child_selector,
         CssDeclarationList::new(Vec::new()),
+        location,
     ));
     let scoped_children = CssScopedRuleList::from_rules(vec![child.clone()]);
-    let location = source_position(8, 9);
     let query = CssMediaQueryList::try_new(vec![CssMediaQuery::Typed(CssTypedMediaQuery::new(
         None,
         CssMediaType::Screen,
@@ -5660,11 +5666,12 @@ fn container_rule_accessors_expose_authored_structure() {
     let name = CssContainerName::try_new("sidebar").unwrap();
     let condition =
         parse_container_condition_for_test("(inline-size > 30rem)").expect("condition parses");
+    let location = source_position(4, 9);
     let nested = CssRule::Style(CssStyleRule::new(
         CssSelector::Class("card".to_owned()),
         CssDeclarationList::new(Vec::new()),
+        location,
     ));
-    let location = source_position(4, 9);
     let rule = CssContainerRule::new(
         Some(name.clone()),
         condition.clone(),
@@ -5672,6 +5679,7 @@ fn container_rule_accessors_expose_authored_structure() {
         location,
     );
 
+    assert_eq!(style_rule(&nested).position(), location);
     assert_eq!(rule.name(), Some(&name));
     assert_eq!(rule.condition(), &condition);
     assert_eq!(rule.rules(), &[nested]);

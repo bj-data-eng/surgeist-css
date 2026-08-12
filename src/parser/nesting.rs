@@ -25,12 +25,13 @@ use crate::syntax::*;
 pub(super) fn parse_style_rule_block<'i, 't>(
     source: &'i str,
     parent_selectors: Vec<CssSelector>,
+    position: crate::CssSourcePosition,
     input: &mut Parser<'i, 't>,
     recovery: RecoveryState,
 ) -> std::result::Result<Recovered<Vec<CssRule>>, ParseError<'i, Error>> {
     let content_start = input.position().byte_index();
     let suppress_preflight_placeholder =
-        recovery.record_style_context(content_start, &parent_selectors);
+        recovery.record_style_context(content_start, &parent_selectors, position);
     let mut body_parser = NestedStyleRuleParser {
         source,
         parent_selectors,
@@ -69,7 +70,12 @@ pub(super) fn parse_style_rule_block<'i, 't>(
                 declaration_buffer.push(*declaration);
             }
             Ok(StyleBlockItem::NestedRules(nested_rules)) => {
-                flush_declarations(&parent_selectors, &mut declaration_buffer, &mut rules);
+                flush_declarations(
+                    &parent_selectors,
+                    position,
+                    &mut declaration_buffer,
+                    &mut rules,
+                );
                 rules.extend(nested_rules);
             }
             Err((error, failed_unit))
@@ -87,7 +93,12 @@ pub(super) fn parse_style_rule_block<'i, 't>(
             }
             Err((error, failed_unit)) => {
                 let error = failed_block_error.unwrap_or(error);
-                flush_declarations(&parent_selectors, &mut declaration_buffer, &mut rules);
+                flush_declarations(
+                    &parent_selectors,
+                    position,
+                    &mut declaration_buffer,
+                    &mut rules,
+                );
                 let action = structural_recovery_action(failed_unit);
                 if let Some(diagnostic) = structural_rule_diagnostic(
                     source,
@@ -107,12 +118,18 @@ pub(super) fn parse_style_rule_block<'i, 't>(
         }
     }
 
-    flush_declarations(&parent_selectors, &mut declaration_buffer, &mut rules);
+    flush_declarations(
+        &parent_selectors,
+        position,
+        &mut declaration_buffer,
+        &mut rules,
+    );
     if rules.is_empty() && !suppress_preflight_placeholder {
         for selector in &parent_selectors {
             rules.push(CssRule::Style(CssStyleRule::new(
                 selector.clone(),
                 CssDeclarationList::new(Vec::new()),
+                position,
             )));
         }
     }
@@ -125,6 +142,7 @@ pub(super) fn parse_style_rule_block<'i, 't>(
 
 fn flush_declarations(
     parent_selectors: &[CssSelector],
+    position: crate::CssSourcePosition,
     declaration_buffer: &mut Vec<CssDeclaration>,
     rules: &mut Vec<CssRule>,
 ) {
@@ -136,6 +154,7 @@ fn flush_declarations(
         rules.push(CssRule::Style(CssStyleRule::new(
             selector.clone(),
             CssDeclarationList::new(declaration_buffer.clone()),
+            position,
         )));
     }
     declaration_buffer.clear();
@@ -282,6 +301,7 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
                 let recovered = parse_style_rule_block(
                     self.source,
                     self.parent_selectors.clone(),
+                    position,
                     input,
                     self.recovery.clone(),
                 )?;
@@ -293,6 +313,7 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
                 let recovered = parse_style_rule_block(
                     self.source,
                     self.parent_selectors.clone(),
+                    position,
                     input,
                     self.recovery.clone(),
                 )?;
@@ -317,6 +338,7 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
                 let recovered = parse_style_rule_block(
                     self.source,
                     self.parent_selectors.clone(),
+                    position,
                     input,
                     self.recovery.clone(),
                 )?;
@@ -359,7 +381,7 @@ impl<'i> QualifiedRuleParser<'i> for NestedStyleRuleParser<'i> {
     fn parse_block<'t>(
         &mut self,
         nested_selectors: Self::Prelude,
-        _start: &ParserState,
+        start: &ParserState,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
         let _depth = self
@@ -375,6 +397,10 @@ impl<'i> QualifiedRuleParser<'i> for NestedStyleRuleParser<'i> {
         let recovered = parse_style_rule_block(
             self.source,
             flattened_selectors,
+            crate::source::CssSourcePosition::from_cssparser(
+                start.position(),
+                start.source_location(),
+            ),
             input,
             self.recovery.clone(),
         )?;

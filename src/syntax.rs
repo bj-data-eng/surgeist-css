@@ -1358,12 +1358,14 @@ pub enum CssScopedRule {
 
 /// A scoped authored style rule whose declarations passed the ordinary declaration boundary.
 ///
-/// The private collection preserves order and importance without applying scope matching, selector
-/// matching, cascade, substitution, or contextual resolution.
+/// Its parser-produced position identifies the start of the authored scoped style rule and cannot
+/// be forged by callers. The private collection preserves order and importance without applying
+/// scope matching, selector matching, cascade, substitution, or contextual resolution.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssScopedStyleRule {
     selectors: CssScopedStyleSelectorList,
     declarations: CssDeclarationList,
+    position: CssSourcePosition,
 }
 
 impl CssScopedStyleRule {
@@ -1372,10 +1374,12 @@ impl CssScopedStyleRule {
     pub(crate) fn new(
         selectors: CssScopedStyleSelectorList,
         declarations: CssDeclarationList,
+        position: CssSourcePosition,
     ) -> Self {
         Self {
             selectors,
             declarations,
+            position,
         }
     }
 
@@ -1387,6 +1391,15 @@ impl CssScopedStyleRule {
     #[must_use]
     pub const fn declarations(&self) -> &CssDeclarationList {
         &self.declarations
+    }
+
+    /// Returns the semantic source position at the authored scoped selector-list start.
+    ///
+    /// This parser-produced position is diagnostic and ordering provenance only; it does not
+    /// perform scope or selector matching and does not participate in cascade.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 
@@ -2037,20 +2050,28 @@ impl CssQueryLength {
 
 /// An authored style rule with an ordered validated ordinary declaration collection.
 ///
-/// Declarations retain their importance and semantic positions. This syntax node does not match
-/// selectors, apply cascade, substitute variables, or resolve contextual values.
+/// The parser-produced position identifies the authored rule syntax that produced this node;
+/// callers cannot forge it. Declarations retain their importance and their own semantic positions.
+/// This syntax node does not match selectors, apply cascade, substitute variables, or resolve
+/// contextual values.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssStyleRule {
     selector: CssSelector,
     declarations: CssDeclarationList,
+    position: CssSourcePosition,
 }
 
 impl CssStyleRule {
     #[must_use]
-    pub(crate) fn new(selector: CssSelector, declarations: CssDeclarationList) -> Self {
+    pub(crate) fn new(
+        selector: CssSelector,
+        declarations: CssDeclarationList,
+        position: CssSourcePosition,
+    ) -> Self {
         Self {
             selector,
             declarations,
+            position,
         }
     }
 
@@ -2062,6 +2083,15 @@ impl CssStyleRule {
     #[must_use]
     pub const fn declarations(&self) -> &CssDeclarationList {
         &self.declarations
+    }
+
+    /// Returns the semantic source position of the authored rule syntax that produced this node.
+    ///
+    /// This parser-produced position is diagnostic and ordering provenance only; it does not
+    /// perform selector matching or participate in cascade.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
     }
 }
 

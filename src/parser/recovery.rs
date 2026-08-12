@@ -4,6 +4,7 @@ use std::rc::Rc;
 use cssparser::{ParseError, Parser, ParserInput, Token};
 
 use crate::error::{Error, is_nesting_limit_error, nesting_limit};
+use crate::source::CssSourcePosition;
 use crate::syntax::CssSelector;
 
 pub(super) const STRUCTURAL_NESTING_LIMIT: u32 = 256;
@@ -31,8 +32,10 @@ impl RecoveryState {
         &self,
         content_start: usize,
         selectors: &[CssSelector],
+        position: CssSourcePosition,
     ) -> bool {
-        self.style_context_captures.record(content_start, selectors)
+        self.style_context_captures
+            .record(content_start, selectors, position)
     }
 
     pub(super) fn enter_rule_block<'i>(
@@ -116,6 +119,7 @@ pub(super) struct StyleContextCaptures {
 struct StyleContextCapture {
     content_start: usize,
     selectors: Option<Vec<CssSelector>>,
+    position: Option<CssSourcePosition>,
 }
 
 impl StyleContextCaptures {
@@ -128,11 +132,17 @@ impl StyleContextCaptures {
             entries.push(StyleContextCapture {
                 content_start,
                 selectors: None,
+                position: None,
             });
         }
     }
 
-    fn record(&self, content_start: usize, selectors: &[CssSelector]) -> bool {
+    fn record(
+        &self,
+        content_start: usize,
+        selectors: &[CssSelector],
+        position: CssSourcePosition,
+    ) -> bool {
         let mut entries = self.entries.borrow_mut();
         let Some(entry) = entries
             .iter_mut()
@@ -142,16 +152,20 @@ impl StyleContextCaptures {
         };
         if entry.selectors.is_none() {
             entry.selectors = Some(selectors.to_vec());
+            entry.position = Some(position);
         }
         true
     }
 
-    pub(super) fn selectors(&self, content_start: usize) -> Option<Vec<CssSelector>> {
+    pub(super) fn context(
+        &self,
+        content_start: usize,
+    ) -> Option<(Vec<CssSelector>, CssSourcePosition)> {
         self.entries
             .borrow()
             .iter()
             .find(|entry| entry.content_start == content_start)
-            .and_then(|entry| entry.selectors.clone())
+            .and_then(|entry| Some((entry.selectors.clone()?, entry.position?)))
     }
 }
 

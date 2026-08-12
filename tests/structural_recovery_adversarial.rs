@@ -2,7 +2,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use surgeist_css::{
     CssErrorCode, CssRecoveryAction, CssRule, CssScopedRule, CssSelector, CssSelectorCombinator,
-    ErrorKind, parse_sheet,
+    CssSourcePosition, ErrorKind, parse_sheet,
 };
 
 fn nested_layers(depth: usize, tail: &str) -> String {
@@ -57,6 +57,24 @@ fn distinct_nested_styles(
     source
 }
 
+fn nested_empty_rule_order(depth: usize, scoped: bool) -> String {
+    if !scoped {
+        return format!(
+            ".before-empty{{}}{}{}.after-empty{{}}",
+            (0..depth)
+                .map(|level| format!(".n{level:03}{{"))
+                .collect::<String>(),
+            "}".repeat(depth),
+        );
+    }
+    let parent = "@scope{";
+    format!(
+        "{}.before-empty{{}}@layer{{}}.after-empty{{}}{}",
+        parent.repeat(depth - 1),
+        "}".repeat(depth - 1),
+    )
+}
+
 fn selector_classes(selector: &CssSelector) -> Vec<&str> {
     match selector {
         CssSelector::Class(name) => vec![name],
@@ -71,6 +89,12 @@ fn selector_classes(selector: &CssSelector) -> Vec<&str> {
             .collect(),
         unexpected => panic!("expected class selector chain, got {unexpected:?}"),
     }
+}
+
+fn assert_ascii_position(position: CssSourcePosition, offset: usize) {
+    assert_eq!(position.byte_offset().value(), offset);
+    assert_eq!(position.line().value(), 0);
+    assert_eq!(position.column().value(), offset as u32);
 }
 
 fn style_rules(
@@ -496,6 +520,119 @@ fn structural_preflight_at_256_preserves_every_style_chunk_context_and_source_or
     }
     expected_offsets.extend(after_offsets);
     assert_eq!(declaration_offsets, expected_offsets);
+}
+
+#[test]
+fn structural_preflight_orders_empty_ordinary_styles_around_recovered_chunks() {
+    for depth in [64, 256] {
+        let source = nested_empty_rule_order(depth, false);
+        let report = parse_sheet(&source);
+        assert!(
+            report.is_clean(),
+            "depth {depth}: {:?}",
+            report.diagnostics()
+        );
+
+        let [
+            CssRule::Style(before),
+            CssRule::Style(recovered),
+            CssRule::Style(after),
+        ] = report.syntax().rules()
+        else {
+            panic!(
+                "expected authored empty rule order at depth {depth}: {:#?}",
+                report.syntax().rules()
+            );
+        };
+        assert_eq!(selector_classes(before.selector()), ["before-empty"]);
+        assert_ascii_position(
+            before.position(),
+            source.find(".before-empty").expect("before style start"),
+        );
+        assert_eq!(
+            selector_classes(recovered.selector()),
+            (0..depth)
+                .map(|level| format!("n{level:03}"))
+                .collect::<Vec<_>>()
+        );
+        assert_ascii_position(
+            recovered.position(),
+            source
+                .find(&format!(".n{:03}", depth - 1))
+                .expect("recovered style start"),
+        );
+        assert_eq!(selector_classes(after.selector()), ["after-empty"]);
+        assert_ascii_position(
+            after.position(),
+            source.find(".after-empty").expect("after style start"),
+        );
+        assert!(before.declarations().is_empty());
+        assert!(recovered.declarations().is_empty());
+        assert!(after.declarations().is_empty());
+    }
+}
+
+#[test]
+fn structural_preflight_orders_empty_scoped_styles_around_recovered_chunks() {
+    for depth in [64, 256] {
+        let source = nested_empty_rule_order(depth, true);
+        let report = parse_sheet(&source);
+        assert!(
+            report.is_clean(),
+            "depth {depth}: {:?}",
+            report.diagnostics()
+        );
+
+        let [CssRule::Scope(scope)] = report.syntax().rules() else {
+            panic!("expected outer scope at depth {depth}");
+        };
+        let mut scope = scope;
+        for _ in 1..depth - 1 {
+            let [CssScopedRule::Scope(nested)] = scope.rules().rules() else {
+                panic!("expected nested scope chain at depth {depth}");
+            };
+            scope = nested;
+        }
+        let [
+            CssScopedRule::Style(before),
+            CssScopedRule::LayerBlock(recovered),
+            CssScopedRule::Style(after),
+        ] = scope.rules().rules()
+        else {
+            panic!("expected authored empty scoped rule order at depth {depth}: {scope:#?}");
+        };
+        let [surgeist_css::CssScopedStyleSelector::Selector(before_selector)] =
+            before.selectors().selectors()
+        else {
+            panic!("expected one ordinary scoped selector at depth {depth}");
+        };
+        let [surgeist_css::CssScopedStyleSelector::Selector(after_selector)] =
+            after.selectors().selectors()
+        else {
+            panic!("expected one ordinary scoped selector at depth {depth}");
+        };
+        assert_eq!(selector_classes(before_selector), ["before-empty"]);
+        assert_ascii_position(
+            before.position(),
+            source
+                .find(".before-empty")
+                .expect("before scoped style start"),
+        );
+        assert!(recovered.rules().rules().is_empty());
+        assert_ascii_position(
+            recovered.position(),
+            source.find("@layer").expect("recovered scoped layer start"),
+        );
+        assert_eq!(selector_classes(after_selector), ["after-empty"]);
+        assert_ascii_position(
+            after.position(),
+            source
+                .find(".after-empty")
+                .expect("after scoped style start"),
+        );
+        assert!(before.declarations().is_empty());
+        assert!(after.declarations().is_empty());
+    }
 }
 
 #[test]

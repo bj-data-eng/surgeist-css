@@ -6,7 +6,7 @@
 | --- | --- |
 | Cycle ID | `P01-I01-C03` |
 | Owning repository | `surgeist-css` |
-| Status | `in_progress` |
+| Status | `complete` |
 | Cycle base | `4697cdeb9e288d42761a01d407f12e27c238e154` |
 | Reviewed specification | `plans/specs/P01-I01-browser-recovery-authored-api-foundation.md`, SHA-256 `76b76a50a613aea26e1b790749a780f7d05efdfe57711c6b8dbf9a9fca2359d7`, sections 1, 4 ordinary sheet API, 5, 6.1 structural rows, 6.2, 6.4, 7.3, 10, 12.1, and 13 finding 2.15 |
 | Reviewed sequence | `plans/sequences/P01-I01-browser-recovery-authored-api-foundation.md`, SHA-256 `f3a65df04c5c5a4f6f02212fe4d69959b75bba1cdcf2fd12e5bfb012f2c4ec94`, entry `I01-C03 Structural Stylesheet Recovery` |

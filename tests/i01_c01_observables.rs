@@ -7,12 +7,12 @@ use surgeist_css::{
 };
 
 const FIXTURE: &str = include_str!("fixtures/i01-c01-observables.tsv");
-const HEADER: &str = "case_id\towner\tentry\tfeature\tinput\tclean\tretained\tvalues\tauthored_declarations\tdiagnostics";
+const HEADER: &str =
+    "case_id\tentry\tfeature\tinput\tclean\tretained\tvalues\tauthored_declarations\tdiagnostics";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Row {
     case_id: String,
-    owner: String,
     entry: String,
     feature: String,
     input: String,
@@ -24,10 +24,9 @@ struct Row {
 }
 
 impl Row {
-    fn fields(&self) -> [&str; 10] {
+    fn fields(&self) -> [&str; 9] {
         [
             &self.case_id,
-            &self.owner,
             &self.entry,
             &self.feature,
             &self.input,
@@ -54,9 +53,9 @@ fn parse_fixture(source: &str) -> Result<Vec<Row>, String> {
             return Err(format!("blank row at fixture line {}", line_index + 2));
         }
         let raw = line.split('\t').collect::<Vec<_>>();
-        if raw.len() != 10 {
+        if raw.len() != 9 {
             return Err(format!(
-                "fixture line {} has {} columns, expected 10",
+                "fixture line {} has {} columns, expected 9",
                 line_index + 2,
                 raw.len()
             ));
@@ -68,7 +67,7 @@ fn parse_fixture(source: &str) -> Result<Vec<Row>, String> {
         if fields
             .iter()
             .enumerate()
-            .any(|(index, field)| index != 4 && field.is_empty())
+            .any(|(index, field)| index != 3 && field.is_empty())
         {
             return Err(format!(
                 "absent required observable at fixture line {}",
@@ -77,15 +76,14 @@ fn parse_fixture(source: &str) -> Result<Vec<Row>, String> {
         }
         let row = Row {
             case_id: fields[0].clone(),
-            owner: fields[1].clone(),
-            entry: fields[2].clone(),
-            feature: fields[3].clone(),
-            input: fields[4].clone(),
-            clean: fields[5].clone(),
-            retained: fields[6].clone(),
-            values: fields[7].clone(),
-            authored_declarations: fields[8].clone(),
-            diagnostics: fields[9].clone(),
+            entry: fields[1].clone(),
+            feature: fields[2].clone(),
+            input: fields[3].clone(),
+            clean: fields[4].clone(),
+            retained: fields[5].clone(),
+            values: fields[6].clone(),
+            authored_declarations: fields[7].clone(),
+            diagnostics: fields[8].clone(),
         };
         if !ids.insert(row.case_id.clone()) {
             return Err(format!("duplicate case ID `{}`", row.case_id));

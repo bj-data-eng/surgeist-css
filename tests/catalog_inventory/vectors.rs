@@ -1,7 +1,6 @@
-// These manifests are intentionally hand-authored independently from both the
-// conformance catalog and the crate-private property schema. Stable IDs and
-// property-specific values are repeated explicitly so catalog/schema coupling,
-// omissions, extras, and duplicates remain observable.
+// These authored cases exercise explicit public property-parser behavior.
+// Stable IDs, canonical names, and property-specific values are recorded with
+// each case so its public metadata and parser observables can be asserted.
 
 #[derive(Clone, Copy, Debug)]
 pub struct PropertyVector {

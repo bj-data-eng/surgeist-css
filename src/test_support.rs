@@ -1,7 +1,3 @@
-use crate::properties::{
-    PropertyImplementation as SupportedProperty,
-    property_implementation_inventory as supported_properties,
-};
 use crate::syntax::*;
 use crate::{
     CssDeclaration, CssKnownProperty, CssKnownPropertyValueRef, CssParseReport, CssRule, CssSheet,
@@ -75,15 +71,6 @@ macro_rules! define_test_property {
             Custom(CssCustomPropertyName),
         }
 
-        impl CssProperty {
-            pub(crate) const fn known(&self) -> Option<CssKnownProperty> {
-                match self {
-                    $(Self::$variant => Some(CssKnownProperty::$variant),)*
-                    Self::Custom(_) => None,
-                }
-            }
-        }
-
         impl From<CssKnownProperty> for CssProperty {
             fn from(value: CssKnownProperty) -> Self {
                 match value {
@@ -127,26 +114,6 @@ pub(crate) struct AcceptedDeclarationCase {
 }
 
 impl AcceptedDeclarationCase {
-    pub(crate) fn supported_global_inherit(supported_property: &SupportedProperty) -> Self {
-        Self::global_inherit(
-            supported_property.name,
-            supported_property.known_property.into(),
-        )
-    }
-
-    pub(crate) fn global_inherit(
-        property_name: &'static str,
-        expected_property: CssProperty,
-    ) -> Self {
-        Self {
-            label: property_name,
-            property_name,
-            authored_value: "inherit",
-            expected_property,
-            expected_global: crate::CssGlobalKeyword::Inherit,
-        }
-    }
-
     pub(crate) fn assert_accepts(&self) -> CssDeclaration {
         let declaration = parse_single_declaration(self.property_name, self.authored_value);
         assert_eq!(
@@ -295,13 +262,13 @@ impl RejectedDeclarationCase {
     }
 }
 
-pub(crate) fn assert_accepts_declarations(cases: &[AcceptedDeclarationCase]) {
+pub(crate) fn assert_accepts_value_cases(cases: &[AcceptedValueCase]) {
     for case in cases {
         case.assert_accepts();
     }
 }
 
-pub(crate) fn assert_accepts_value_cases(cases: &[AcceptedValueCase]) {
+pub(crate) fn assert_accepts_declarations(cases: &[AcceptedDeclarationCase]) {
     for case in cases {
         case.assert_accepts();
     }
@@ -335,13 +302,6 @@ pub(crate) fn assert_sheet_rejected(input: &str, expected_error: &ExpectedErrorK
     let error = parse_sheet(input).expect_err("invalid CSS must reject the whole sheet");
     expected_error.assert_matches(error.kind(), input);
     error
-}
-
-pub(crate) fn accepted_declaration_cases() -> Vec<AcceptedDeclarationCase> {
-    supported_properties()
-        .iter()
-        .map(AcceptedDeclarationCase::supported_global_inherit)
-        .collect()
 }
 
 fn declaration_sheet(property_name: &str, authored_value: &str) -> String {

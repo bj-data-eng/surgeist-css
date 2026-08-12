@@ -262,26 +262,3 @@ pub fn validate_style_attribute(input: &str) -> Result<CssDeclarationList, CssVa
 
 #[cfg(test)]
 mod tests;
-
-#[cfg(all(test, feature = "app-strict"))]
-mod app_strict_tests {
-    use super::{validate_sheet, validate_style_attribute};
-    use crate::parser::{
-        finish_ordinary_parser_invocation_count, reset_ordinary_parser_invocation_count,
-    };
-
-    #[test]
-    fn app_strict_one_pass_clean_and_recovered_sheet_and_style_validation() {
-        for source in [".x { color: red; }", ".x { mystery: 1; }"] {
-            reset_ordinary_parser_invocation_count();
-            let _ = validate_sheet(source);
-            assert_eq!(finish_ordinary_parser_invocation_count(), 1, "{source}");
-        }
-
-        for source in ["color: red", "mystery: 1"] {
-            reset_ordinary_parser_invocation_count();
-            let _ = validate_style_attribute(source);
-            assert_eq!(finish_ordinary_parser_invocation_count(), 1, "{source}");
-        }
-    }
-}

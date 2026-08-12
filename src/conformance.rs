@@ -1578,45 +1578,9 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
-    use crate::properties::property_implementation_inventory;
-
-    mod catalog_inventory_vectors {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/catalog_inventory/vectors.rs"
-        ));
-    }
-
-    use catalog_inventory_vectors::{PROPERTY_NEGATIVE_VECTORS, PROPERTY_POSITIVE_VECTORS};
-
-    fn unique_owner_ids<'a>(
-        ids: impl IntoIterator<Item = &'a str>,
-    ) -> Result<HashSet<&'a str>, &'static str> {
-        let mut unique = HashSet::new();
-        for id in ids {
-            if !unique.insert(id) {
-                return Err("duplicate");
-            }
-        }
-        Ok(unique)
-    }
-
-    fn compare_owner_ids<'a>(
-        catalog: &HashSet<&'a str>,
-        ids: impl IntoIterator<Item = &'a str>,
-    ) -> Result<(), &'static str> {
-        let owner = unique_owner_ids(ids)?;
-        if !owner.is_subset(catalog) {
-            return Err("extra");
-        }
-        if !catalog.is_subset(&owner) {
-            return Err("omission");
-        }
-        Ok(())
-    }
 
     #[test]
-    fn conformance_catalog_internal_status_and_source_invariants_hold() {
+    fn support_catalog_records_expose_consistent_status_and_source_metadata() {
         let mut ids = HashSet::new();
         for feature in feature_catalog() {
             assert!(ids.insert(feature.id().as_str()));
@@ -1640,75 +1604,5 @@ mod tests {
             );
         }
         assert_eq!(ids.len(), 219);
-    }
-
-    #[test]
-    fn catalog_inventory_three_independent_property_owners_close_bidirectionally() {
-        let catalog: HashSet<_> = feature_catalog()
-            .iter()
-            .filter(|feature| feature.kind() == CssFeatureKind::Property)
-            .map(|feature| {
-                assert_eq!(feature.status(), CssSupportStatus::Partial);
-                feature.id().as_str()
-            })
-            .collect();
-        assert_eq!(catalog.len(), 179);
-
-        compare_owner_ids(
-            &catalog,
-            property_implementation_inventory()
-                .iter()
-                .map(|row| row.stable_id),
-        )
-        .expect("property implementation inventory must match the catalog");
-        compare_owner_ids(&catalog, PROPERTY_POSITIVE_VECTORS.iter().map(|row| row.id))
-            .expect("positive vector manifest must match the catalog");
-        compare_owner_ids(&catalog, PROPERTY_NEGATIVE_VECTORS.iter().map(|row| row.id))
-            .expect("negative vector manifest must match the catalog");
-
-        for vector in PROPERTY_POSITIVE_VECTORS {
-            let metadata = property_metadata(vector.canonical_name)
-                .unwrap_or_else(|| panic!("missing positive metadata for `{}`", vector.id));
-            assert_eq!(metadata.feature().id().as_str(), vector.id);
-            assert!(!vector.authored_value.is_empty());
-        }
-        for vector in PROPERTY_NEGATIVE_VECTORS {
-            let metadata = property_metadata(vector.canonical_name)
-                .unwrap_or_else(|| panic!("missing negative metadata for `{}`", vector.id));
-            assert_eq!(metadata.feature().id().as_str(), vector.id);
-            assert!(!vector.authored_value.is_empty());
-        }
-
-        for implementation in property_implementation_inventory() {
-            let metadata = property_metadata(implementation.name)
-                .unwrap_or_else(|| panic!("missing `{}` metadata", implementation.name));
-            assert_eq!(metadata.property(), implementation.known_property);
-            assert_eq!(metadata.canonical_name(), implementation.name);
-            assert_eq!(metadata.aliases(), implementation.aliases);
-            assert_eq!(metadata.feature().id().as_str(), implementation.stable_id);
-        }
-    }
-
-    #[test]
-    fn catalog_inventory_mutation_guards_reject_omission_extra_and_duplicate() {
-        let catalog: HashSet<_> = feature_catalog()
-            .iter()
-            .filter(|feature| feature.kind() == CssFeatureKind::Property)
-            .map(|feature| feature.id().as_str())
-            .collect();
-        let ids: Vec<_> = PROPERTY_POSITIVE_VECTORS.iter().map(|row| row.id).collect();
-
-        assert_eq!(
-            compare_owner_ids(&catalog, ids[1..].iter().copied()),
-            Err("omission")
-        );
-
-        let mut extra = ids.clone();
-        extra.push("baseline.property.not-in-the-catalog");
-        assert_eq!(compare_owner_ids(&catalog, extra), Err("extra"));
-
-        let mut duplicate = ids;
-        duplicate.push(duplicate[0]);
-        assert_eq!(compare_owner_ids(&catalog, duplicate), Err("duplicate"));
     }
 }

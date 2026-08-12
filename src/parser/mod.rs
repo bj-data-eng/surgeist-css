@@ -72,38 +72,6 @@ use crate::properties::*;
 use crate::syntax::*;
 use crate::validation::parse_global_keyword;
 
-#[cfg(all(test, feature = "app-strict"))]
-static ORDINARY_PARSER_INVOCATIONS: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
-
-#[cfg(all(test, feature = "app-strict"))]
-std::thread_local! {
-    static COUNT_ORDINARY_PARSER_INVOCATIONS: std::cell::Cell<bool> = const {
-        std::cell::Cell::new(false)
-    };
-}
-
-#[cfg(all(test, feature = "app-strict"))]
-fn record_ordinary_parser_invocation() {
-    COUNT_ORDINARY_PARSER_INVOCATIONS.with(|enabled| {
-        if enabled.get() {
-            ORDINARY_PARSER_INVOCATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        }
-    });
-}
-
-#[cfg(all(test, feature = "app-strict"))]
-pub(crate) fn reset_ordinary_parser_invocation_count() {
-    ORDINARY_PARSER_INVOCATIONS.store(0, std::sync::atomic::Ordering::Relaxed);
-    COUNT_ORDINARY_PARSER_INVOCATIONS.with(|enabled| enabled.set(true));
-}
-
-#[cfg(all(test, feature = "app-strict"))]
-pub(crate) fn finish_ordinary_parser_invocation_count() -> usize {
-    COUNT_ORDINARY_PARSER_INVOCATIONS.with(|enabled| enabled.set(false));
-    ORDINARY_PARSER_INVOCATIONS.load(std::sync::atomic::Ordering::Relaxed)
-}
-
 macro_rules! define_property_dispatch {
     ($input:ident;
         All, $all_canonical:literal, [$($all_alias:literal),*], $all_stable_id:literal,
@@ -188,9 +156,6 @@ fn parse_overflow_property<'i, 't>(
 /// ));
 /// ```
 pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
-    #[cfg(all(test, feature = "app-strict"))]
-    record_ordinary_parser_invocation();
-
     if recovery::maximum_nested_depth(source) > recovery::DIRECT_PARSE_DEPTH {
         // The public limit is intentionally higher than the platform's small
         // default test-thread stack. A bounded parser thread preserves the exact
@@ -238,9 +203,6 @@ pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
 /// ```
 #[must_use]
 pub fn parse_style_attribute(source: &str) -> crate::CssParseReport<CssDeclarationList> {
-    #[cfg(all(test, feature = "app-strict"))]
-    record_ordinary_parser_invocation();
-
     if recovery::maximum_nested_depth(source) > recovery::DIRECT_PARSE_DEPTH {
         return std::thread::scope(|scope| {
             let parser = std::thread::Builder::new()

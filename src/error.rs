@@ -1972,7 +1972,7 @@ mod tests {
     }
 
     #[test]
-    fn error_code_has_one_to_one_mapping_for_every_root() {
+    fn semantic_error_variants_report_their_stable_root_codes() {
         let token = CssTokenSummary {
             kind: CssTokenKind::Ident,
             authored: "x".to_owned(),
@@ -2145,7 +2145,7 @@ mod tests {
     }
 
     #[test]
-    fn error_unreachable_detail_accessors_expose_every_semantic_field() {
+    fn semantic_error_details_expose_typed_fields() {
         let token = CssTokenSummary {
             kind: CssTokenKind::Delim,
             authored: "!".to_owned(),

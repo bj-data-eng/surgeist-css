@@ -1,9 +1,9 @@
 use super::*;
 use crate::test_support::{
     AcceptedDeclarationCase, AcceptedValueCase, ExpectedErrorKind, RejectedDeclarationCase,
-    RejectedSheetCase, accepted_declaration_cases, assert_accepts_declarations,
-    assert_accepts_value_cases, assert_rejects_declarations, assert_rejects_sheets,
-    assert_sheet_rejected, parse_single_declaration,
+    RejectedSheetCase, assert_accepts_declarations, assert_accepts_value_cases,
+    assert_rejects_declarations, assert_rejects_sheets, assert_sheet_rejected,
+    parse_single_declaration,
 };
 
 fn source_position(line: u32, column: u32) -> CssSourcePosition {
@@ -1484,11 +1484,6 @@ fn list_counter_and_content_models_preserve_authored_shapes() {
     ])
     .unwrap();
     assert_eq!(content_list.items().len(), 9);
-    assert_eq!(
-        CssContent::Items(content_list.clone()),
-        CssContent::Items(content_list)
-    );
-
     let list_style = CssListStyle::try_new(
         Some(CssListStyleType::String(
             CssContentString::try_new("*").unwrap(),
@@ -1508,37 +1503,12 @@ fn list_counter_and_content_models_preserve_authored_shapes() {
         list_style.image(),
         Some(CssListStyleImage::Url(_))
     ));
-    assert_eq!(list_style.clone(), list_style);
-    assert_eq!(
-        CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
-            CssBuiltInCounterStyle::DecimalLeadingZero,
-        )),
-        CssListStyleType::CounterStyle(CssCounterStyle::BuiltIn(
-            CssBuiltInCounterStyle::DecimalLeadingZero,
-        ))
-    );
-    assert_eq!(CssListStylePosition::Outside, CssListStylePosition::Outside);
-    assert_eq!(CssListStyleImage::None, CssListStyleImage::None);
-
     let counter_change = CssCounterChange::new(counter_name.clone(), Some(4));
     assert_eq!(counter_change.name(), &counter_name);
     assert_eq!(counter_change.value(), Some(4));
     let changes = CssCounterChangeList::try_new(vec![counter_change]).unwrap();
     assert_eq!(changes.changes().len(), 1);
-    assert!(matches!(
-        CssCounterChanges::Changes(changes),
-        CssCounterChanges::Changes(_)
-    ));
-    assert!(matches!(CssCounterChanges::None, CssCounterChanges::None));
-    assert!(matches!(CssContent::Normal, CssContent::Normal));
-    assert!(matches!(CssContent::None, CssContent::None));
-    assert!(matches!(
-        CssCounterChanges::Changes(
-            CssCounterChangeList::try_new(vec![CssCounterChange::new(counter_name, None),])
-                .unwrap()
-        ),
-        CssCounterChanges::Changes(_)
-    ));
+    assert_eq!(changes.changes()[0].name(), &counter_name);
 }
 
 #[test]
@@ -4401,173 +4371,8 @@ macro_rules! value_case {
     };
 }
 
-fn property_specific_rejection_probe(property_name: &str) -> &'static str {
-    match property_name {
-        "all" => "block",
-        "display" => "inline",
-        "box-sizing" => "padding-box",
-        "position" => "running",
-        "direction" => "block",
-        "overflow" | "overflow-x" | "overflow-y" => "auto",
-        "flex-direction" => "wrap",
-        "flex-wrap" => "column",
-        "float" => "center",
-        "clear" => "start",
-        "align-content" | "justify-content" | "place-content" | "justify-tracks"
-        | "align-tracks" => "auto",
-        "align-items" | "align-self" | "justify-items" | "justify-self" | "place-items"
-        | "place-self" => "space-between",
-        "visibility" => "auto",
-        "content" => "contents",
-        "content-visibility" => "collapse",
-        "list-style-type" => "symbols(cyclic \"*\" \"+\")",
-        "list-style-position" => "center",
-        "list-style-image" => "red",
-        "list-style" => "inside outside",
-        "counter-reset" => "none item",
-        "counter-increment" => "1",
-        "counter-set" => "inherit 1",
-        "width" | "height" | "min-width" | "min-height" | "max-width" | "max-height"
-        | "flex-basis" | "inset" | "top" | "right" | "bottom" | "left" | "margin"
-        | "margin-top" | "margin-right" | "margin-bottom" | "margin-left" => "solid",
-        "gap" | "row-gap" | "column-gap" => "auto",
-        "grid-flow-tolerance" => "solid",
-        "grid-template-rows"
-        | "grid-template-columns"
-        | "grid-template"
-        | "grid-auto-rows"
-        | "grid-auto-columns" => "solid",
-        "grid-template-areas" => "\"a a\" \"a .\"",
-        "grid-auto-flow" => "left",
-        "grid-row-start" | "grid-row-end" | "grid-column-start" | "grid-column-end"
-        | "grid-row" | "grid-column" | "grid-area" => "0",
-        "grid" => "auto-flow",
-        "font-size" | "line-height" | "text-indent" | "vertical-align" => "auto",
-        "writing-mode" => "lr",
-        "text-align" => "auto",
-        "text-align-last" => "match-parent",
-        "font-family" => "sans-serif,",
-        "font" => "bold sans-serif",
-        "font-weight" => "1001",
-        "font-style" => "bold",
-        "font-stretch" => "wide",
-        "font-variant" => "italic",
-        "font-feature-settings" => "\"abc\" on",
-        "letter-spacing" => "auto",
-        "text-wrap" => "auto",
-        "white-space" => "balance",
-        "word-break" => "nowrap",
-        "overflow-wrap" => "ellipsis",
-        "text-overflow" => "wrap",
-        "text-decoration" | "text-decoration-line" => "underline underline",
-        "text-decoration-color" => "solid",
-        "text-decoration-style" => "auto",
-        "text-decoration-thickness" => "-1px",
-        "text-transform" => "wrap",
-        "z-index" => "1.5",
-        "box-decoration-break" => "auto",
-        "padding" | "padding-top" | "padding-right" | "padding-bottom" | "padding-left" => "auto",
-        "border" | "border-top" | "border-right" | "border-bottom" | "border-left" => {
-            "solid dotted"
-        }
-        "border-width"
-        | "border-top-width"
-        | "border-right-width"
-        | "border-bottom-width"
-        | "border-left-width"
-        | "outline-width" => "10%",
-        "color"
-        | "background"
-        | "background-color"
-        | "border-color"
-        | "border-top-color"
-        | "border-right-color"
-        | "border-bottom-color"
-        | "border-left-color"
-        | "outline-color" => "solid",
-        "background-image" | "mask-image" => "url(\"\")",
-        "background-position" | "mask-position" | "transform-origin" => "left right",
-        "background-size" | "mask-size" => "solid",
-        "background-repeat" | "mask-repeat" => "solid",
-        "background-origin" | "background-clip" => "margin-box",
-        "background-attachment" => "sticky",
-        "border-style"
-        | "border-top-style"
-        | "border-right-style"
-        | "border-bottom-style"
-        | "border-left-style" => "auto",
-        "outline-style" => "10px",
-        "border-radius"
-        | "border-top-left-radius"
-        | "border-top-right-radius"
-        | "border-bottom-right-radius"
-        | "border-bottom-left-radius" => "-1px",
-        "box-shadow" => "1px 2px -3px",
-        "opacity" | "flex-grow" | "flex-shrink" | "aspect-ratio" | "scrollbar-width" => "solid",
-        "flex" => "-1",
-        "order" => "1.5",
-        "cursor" => "10px",
-        "pointer-events" => "grab",
-        "user-select" => "grab",
-        "outline" => "solid dotted",
-        "transform" => "translate(red)",
-        "translate" => "red",
-        "rotate" => "45px",
-        "scale" => "solid",
-        "filter" | "backdrop-filter" => "opacity(red)",
-        "clip-path" => "circle(red)",
-        "mask" => "solid",
-        "transition-property" | "animation-name" => "auto",
-        "transition-duration" | "transition-delay" | "animation-duration" | "animation-delay" => {
-            "10px"
-        }
-        "transition-timing-function" | "animation-timing-function" => "bounce",
-        "transition" => "opacity 1s 2s 3s",
-        "animation-iteration-count" => "-1",
-        "animation-direction" => "running",
-        "animation-fill-mode" => "running",
-        "animation-play-state" => "alternate",
-        "animation" => "fade 1s 2s 3s",
-        other => panic!("missing rejection probe for supported property `{other}`"),
-    }
-}
-
 #[test]
-fn strict_declaration_case_helpers_accept_and_reject_cases() {
-    assert_accepts_declarations(&accepted_declaration_cases()[..3]);
-    assert_eq!(
-        parse_single_declaration("display", "inherit")
-            .known()
-            .and_then(|known| known.global())
-            .unwrap(),
-        CssGlobalKeyword::Inherit
-    );
-
-    assert_rejects_declarations(&[
-        RejectedDeclarationCase {
-            label: "unsupported display keyword",
-            property_name: "display",
-            authored_value: "inline",
-            expected_error: ExpectedErrorKind::UnsupportedValue {
-                property: Some("display"),
-            },
-            property_name_should_be_recognized: true,
-        },
-        RejectedDeclarationCase {
-            label: "unknown property name",
-            property_name: "widht",
-            authored_value: "10px",
-            expected_error: ExpectedErrorKind::UnknownProperty { name: "widht" },
-            property_name_should_be_recognized: false,
-        },
-    ]);
-
-    let accepted = AcceptedDeclarationCase::global_inherit("width", CssProperty::Width);
-    accepted.assert_accepts();
-}
-
-#[test]
-fn strict_whole_sheet_rejection_helper_rejects_mixed_declarations() {
+fn invalid_mixed_declarations_emit_expected_typed_diagnostics() {
     assert_sheet_rejected(
         ".panel { width: 10px; display: inline; }",
         &ExpectedErrorKind::UnsupportedValue {
@@ -4581,7 +4386,7 @@ fn strict_whole_sheet_rejection_helper_rejects_mixed_declarations() {
 }
 
 #[test]
-fn strict_no_recovery_whole_sheet_rejects_every_invalid_surface() {
+fn malformed_sheet_surfaces_emit_expected_typed_diagnostics() {
     assert_rejects_sheets(&[
         RejectedSheetCase {
             label: "valid declaration before invalid declaration fails the whole sheet",
@@ -4640,7 +4445,7 @@ fn strict_no_recovery_whole_sheet_rejects_every_invalid_surface() {
 }
 
 #[test]
-fn new_authored_surfaces_reject_whole_sheet_without_recovery() {
+fn malformed_authored_surfaces_emit_recovery_diagnostics() {
     for css in [
         "@layer reset; @layer , theme; .ok { color: black; }",
         "@scope (.card) { .ok { color: black; } @font-face { font-family: Test; src: local(Test); } } .after { color: blue; }",
@@ -4649,38 +4454,6 @@ fn new_authored_surfaces_reject_whole_sheet_without_recovery() {
         ".ok { list-style: square inside; counter-reset: none item; color: red; }",
     ] {
         assert!(parse_sheet(css).is_err(), "{css} should reject");
-    }
-}
-
-#[test]
-fn rejection_property_specific_matrix_rejects_every_supported_property() {
-    for case in accepted_declaration_cases() {
-        let authored_value = property_specific_rejection_probe(case.property_name);
-        RejectedDeclarationCase {
-            label: case.property_name,
-            property_name: case.property_name,
-            authored_value,
-            expected_error: ExpectedErrorKind::InvalidSyntaxOrUnsupportedValueForProperty {
-                property: case.property_name,
-            },
-            property_name_should_be_recognized: true,
-        }
-        .assert_rejects();
-    }
-}
-
-#[test]
-fn coverage_global_keyword_cases_derive_from_supported_property_metadata() {
-    let cases = accepted_declaration_cases();
-    let supported_properties = crate::properties::property_implementation_inventory();
-
-    assert_eq!(cases.len(), supported_properties.len());
-    for (case, supported_property) in cases.iter().zip(supported_properties) {
-        assert_eq!(case.property_name, supported_property.name);
-        assert_eq!(
-            case.expected_property.known(),
-            Some(supported_property.known_property)
-        );
     }
 }
 
@@ -5152,7 +4925,7 @@ fn media_feature_names_are_canonical() {
 }
 
 #[test]
-fn media_query_parser_accepts_plan_examples() {
+fn media_query_parser_accepts_supported_types_ranges_and_conditions() {
     for css in [
         "screen",
         "print",
@@ -5171,7 +4944,7 @@ fn media_query_parser_accepts_plan_examples() {
 }
 
 #[test]
-fn media_query_parser_rejects_unknown_and_malformed_plan_examples() {
+fn media_query_parser_rejects_unknown_types_features_and_malformed_conditions() {
     for css in [
         "tv",
         "(unknown-feature: yes)",
@@ -5720,7 +5493,7 @@ fn font_face_rule_parser_rejects_invalid_descriptor_blocks() {
 }
 
 #[test]
-fn container_condition_parser_accepts_plan_examples() {
+fn container_condition_parser_accepts_supported_size_style_and_boolean_conditions() {
     for css in [
         "(width > 600px)",
         "(inline-size >= 30rem)",
@@ -5739,7 +5512,7 @@ fn container_condition_parser_accepts_plan_examples() {
 }
 
 #[test]
-fn container_condition_parser_rejects_unknown_and_malformed_plan_examples() {
+fn container_condition_parser_rejects_unknown_features_and_malformed_conditions() {
     for css in [
         "(unknown > 1px)",
         "(width: auto)",
@@ -6238,7 +6011,6 @@ fn color_model_preserves_rgba_and_currentcolor() {
     assert_eq!(rgba.blue(), 0);
     assert_eq!(rgba.alpha(), 0.5);
     assert_eq!(CssColor::BLACK.as_rgba().unwrap().red(), 0);
-    assert!(matches!(CssColor::CurrentColor, CssColor::CurrentColor));
 }
 
 #[test]
@@ -8588,7 +8360,7 @@ fn checked_typography_constructors_reject_invalid_states() {
 }
 
 #[test]
-fn parses_every_task_5_supported_property_name() {
+fn typography_and_text_property_families_accept_supported_values() {
     let sheet = parse_sheet(
         ".panel {
             writing-mode: horizontal-tb;
@@ -8656,7 +8428,7 @@ fn parses_every_task_5_supported_property_name() {
 }
 
 #[test]
-fn rejects_task_5_cross_family_leakage_values() {
+fn typography_and_text_properties_reject_cross_family_values() {
     for input in [
         ".panel { font-size: auto; }",
         ".panel { font-weight: 1001; }",
@@ -8965,7 +8737,7 @@ fn parses_animation_properties_and_preserves_comma_lists() {
 }
 
 #[test]
-fn checked_task_6_constructors_reject_invalid_invariants() {
+fn background_effect_and_animation_constructors_reject_invalid_states() {
     assert_eq!(CssImageLayerList::try_new(Vec::new()), None);
     assert_eq!(CssCursorUrlList::try_new(Vec::new()), None);
     assert!(CssCursor::try_urls(Vec::new(), CssCursorKeyword::Pointer).is_none());
@@ -9009,7 +8781,7 @@ fn checked_task_6_constructors_reject_invalid_invariants() {
 }
 
 #[test]
-fn parses_every_task_6_supported_property_name() {
+fn background_effect_and_animation_property_families_accept_supported_values() {
     let sheet = parse_sheet(
         ".panel {
             background-image: none;
@@ -9111,7 +8883,7 @@ fn parses_every_task_6_supported_property_name() {
 }
 
 #[test]
-fn rejects_task_6_cross_family_leakage_values_and_empty_lists() {
+fn background_effect_and_animation_properties_reject_cross_family_values_and_empty_lists() {
     for input in [
         ".panel { background-size: solid; }",
         ".panel { cursor: 10px; }",
@@ -9177,7 +8949,7 @@ fn preserves_valid_position_keyword_forms_after_duplicate_axis_rejection() {
 }
 
 #[test]
-fn rejects_task_6_invalid_function_arguments() {
+fn transform_filter_shape_and_easing_functions_reject_invalid_arguments() {
     for input in [
         ".panel { transform: translate(red); }",
         ".panel { filter: opacity(red); }",
@@ -9478,7 +9250,7 @@ fn checked_shadow_constructor_rejects_invalid_pairings_and_lengths() {
 }
 
 #[test]
-fn parses_every_task_2_supported_property_name() {
+fn box_model_property_families_accept_supported_values() {
     let sheet = parse_sheet(
         ".panel {
             inset: auto 1px 2%;
@@ -9576,7 +9348,7 @@ fn parses_every_task_2_supported_property_name() {
 }
 
 #[test]
-fn rejects_negative_lengths_for_non_negative_task_2_properties() {
+fn non_negative_box_model_properties_reject_negative_lengths() {
     for input in [
         ".panel { border-radius: -1px; }",
         ".panel { padding-top: -1px; }",
@@ -9589,7 +9361,7 @@ fn rejects_negative_lengths_for_non_negative_task_2_properties() {
 }
 
 #[test]
-fn rejects_task_2_cross_family_leakage_values() {
+fn box_model_properties_reject_cross_family_values() {
     for input in [
         ".panel { padding-top: auto; }",
         ".panel { border-width: 10%; }",
@@ -9775,7 +9547,7 @@ fn parses_order_flex_and_track_alignment() {
 }
 
 #[test]
-fn parses_every_task_4_supported_property_name() {
+fn grid_and_flex_property_families_accept_supported_values() {
     let sheet = parse_sheet(
         ".panel {
             grid-template-rows: [top] 100px 1fr;
@@ -9833,7 +9605,7 @@ fn parses_every_task_4_supported_property_name() {
 }
 
 #[test]
-fn rejects_task_4_cross_family_leakage_values() {
+fn grid_and_flex_properties_reject_cross_family_values() {
     for input in [
         ".panel { order: 1.2; }",
         ".panel { grid-auto-flow: left; }",

@@ -257,8 +257,6 @@ impl CssValidationFailure {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::{CssParseReport, CssRecoveryAction, CssRecoveryDiagnostic, CssValidationFailure};
     use crate::test_support::CssParseReportTestExt;
     use crate::{CssSourcePosition, CssSourceSpan, Error, parse_sheet};
@@ -394,25 +392,6 @@ mod tests {
             CssRecoveryDiagnostic::new(error, after_error, CssRecoveryAction::DropDeclaration,)
                 .is_none()
         );
-    }
-
-    #[test]
-    fn report_every_recovery_action_is_representable() {
-        let actions = [
-            CssRecoveryAction::DropDeclaration,
-            CssRecoveryAction::DropDescriptor,
-            CssRecoveryAction::DropQualifiedRule,
-            CssRecoveryAction::DropAtRule,
-            CssRecoveryAction::DropKeyframeBlock,
-            CssRecoveryAction::DropSelectorListItem,
-            CssRecoveryAction::ReplaceMediaQueryWithNever,
-            CssRecoveryAction::RetainWithImplicitClosure,
-            CssRecoveryAction::IgnoreLegacyToken,
-            CssRecoveryAction::StopAtNestingLimit,
-        ];
-
-        let unique_actions: HashSet<_> = actions.into_iter().collect();
-        assert_eq!(unique_actions.len(), 10);
     }
 
     #[test]

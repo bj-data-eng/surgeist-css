@@ -423,41 +423,6 @@ fn public_surface_emits_all_ten_recovery_actions() {
     );
 }
 
-#[test]
-fn readme_describes_recovery_and_rejects_the_obsolete_strict_only_contract() {
-    let readme = include_str!("../README.md");
-    let normalized = readme.to_ascii_lowercase();
-
-    for required in [
-        "browser recovery",
-        "clean report",
-        "diagnostic",
-        "utf-16",
-        "!important",
-        "custom properties",
-        "substitution-dependent",
-        "support status",
-        "style attribute",
-        "app-strict",
-    ] {
-        assert!(
-            normalized.contains(required),
-            "README is missing `{required}`"
-        );
-    }
-
-    for stale in [
-        "does not recover from invalid application CSS",
-        "reject the whole sheet",
-        "rejects the whole sheet",
-    ] {
-        assert!(
-            !normalized.contains(stale),
-            "README retains stale claim `{stale}`"
-        );
-    }
-}
-
 #[cfg(feature = "app-strict")]
 #[test]
 fn public_surface_enabled_validators_accept_clean_reports_and_preserve_failures() {

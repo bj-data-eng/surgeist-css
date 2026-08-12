@@ -24,6 +24,10 @@ property name, rule, descriptor, selector, query, value spelling, recovery
 action, diagnostic code, dependency, feature, build script, generator, corpus,
 root/sibling edit, external software, or unsafe.
 
+The leaf manifest declares no `rust-version`; C01 introduces no leaf MSRV or
+toolchain requirement. Root retains ownership of the compatible integration
+MSRV.
+
 All committed tests obey the installed Surgeist testing reference: they apply a
 real parser or compiler stimulus and assert public or crate-owned behavior. No
 test reads Rust source, plans, handoffs, review state, command manifests, or code

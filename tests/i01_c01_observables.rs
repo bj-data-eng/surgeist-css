@@ -70,20 +70,6 @@ impl Row {
             &self.diagnostics,
         ]
     }
-
-    fn report_fields(&self) -> [&str; 9] {
-        [
-            &self.case_id,
-            &self.owner,
-            &self.entry,
-            &self.feature,
-            &self.input,
-            &self.clean,
-            &self.retained,
-            &self.values,
-            &self.diagnostics,
-        ]
-    }
 }
 
 fn parse_fixture(source: &str) -> Result<Vec<Row>, String> {
@@ -185,13 +171,115 @@ fn validate_authored_field(row: &Row) -> Result<(), String> {
     Ok(())
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct AuthoredDeclaration<'a> {
     id: String,
     value_capability: &'a str,
     value: &'a str,
     importance_capability: &'a str,
     importance: &'a str,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct FrozenSemanticValue<'a> {
+    id: &'a str,
+    payload: &'a str,
+    importance: &'a str,
+}
+
+fn parse_semantic_values<'a>(
+    field: &'a str,
+    case_id: &str,
+) -> Result<Vec<FrozenSemanticValue<'a>>, String> {
+    if field == "-" {
+        return Ok(Vec::new());
+    }
+    field
+        .split('~')
+        .map(|item| {
+            let (id, observation) = item
+                .split_once('=')
+                .ok_or_else(|| format!("{case_id}: malformed semantic value `{item}`"))?;
+            let (payload, importance) = observation
+                .rsplit_once('@')
+                .ok_or_else(|| format!("{case_id}: missing semantic importance in `{item}`"))?;
+            if !matches!(importance, "normal" | "important") {
+                return Err(format!(
+                    "{case_id}: invalid semantic importance `{importance}`"
+                ));
+            }
+            Ok(FrozenSemanticValue {
+                id,
+                payload,
+                importance,
+            })
+        })
+        .collect()
+}
+
+struct FrozenDeclarationCursor<'a> {
+    case_id: &'a str,
+    semantic_values: Vec<FrozenSemanticValue<'a>>,
+    authored_declarations: Vec<AuthoredDeclaration<'a>>,
+    semantic_index: usize,
+    authored_index: usize,
+    wrapper_comparisons: usize,
+    prior_public_comparisons: usize,
+}
+
+impl<'a> FrozenDeclarationCursor<'a> {
+    fn new(row: &'a Row) -> Self {
+        Self {
+            case_id: &row.case_id,
+            semantic_values: parse_semantic_values(&row.values, &row.case_id)
+                .expect("frozen semantic-value expectation"),
+            authored_declarations: parse_authored_declarations(
+                &row.authored_declarations,
+                &row.case_id,
+            )
+            .expect("frozen authored-declaration expectation"),
+            semantic_index: 0,
+            authored_index: 0,
+            wrapper_comparisons: 0,
+            prior_public_comparisons: 0,
+        }
+    }
+
+    fn next(
+        &mut self,
+        includes_semantic_value: bool,
+    ) -> (Option<FrozenSemanticValue<'a>>, AuthoredDeclaration<'a>) {
+        let authored = self
+            .authored_declarations
+            .get(self.authored_index)
+            .unwrap_or_else(|| panic!("{}: unexpected retained declaration", self.case_id))
+            .clone();
+        self.authored_index += 1;
+        let semantic = includes_semantic_value.then(|| {
+            let value = *self
+                .semantic_values
+                .get(self.semantic_index)
+                .unwrap_or_else(|| panic!("{}: missing frozen semantic value", self.case_id));
+            self.semantic_index += 1;
+            value
+        });
+        (semantic, authored)
+    }
+
+    fn finish(&self) {
+        assert_eq!(
+            self.semantic_index,
+            self.semantic_values.len(),
+            "{} semantic value count",
+            self.case_id
+        );
+        assert_eq!(
+            self.authored_index,
+            self.authored_declarations.len(),
+            "{} authored declaration count",
+            self.case_id
+        );
+    }
 }
 
 fn parse_authored_declarations<'a>(
@@ -242,67 +330,6 @@ fn parse_authored_declarations<'a>(
             })
         })
         .collect()
-}
-
-fn assert_authored_declarations(actual: &Row, expected: &Row) -> (usize, usize) {
-    let actual = parse_authored_declarations(&actual.authored_declarations, &expected.case_id)
-        .expect("runtime authored-declaration observation");
-    let expected_declarations =
-        parse_authored_declarations(&expected.authored_declarations, &expected.case_id)
-            .expect("frozen authored-declaration expectation");
-    assert_eq!(
-        actual.len(),
-        expected_declarations.len(),
-        "{} authored declaration count",
-        expected.case_id
-    );
-    let mut wrapper_comparisons = 0;
-    let mut prior_public_comparisons = 0;
-    for (actual, expected_declaration) in actual.iter().zip(&expected_declarations) {
-        assert_eq!(
-            actual.id, expected_declaration.id,
-            "{} authored declaration identity",
-            expected.case_id
-        );
-        assert_eq!(
-            actual.value_capability, expected_declaration.value_capability,
-            "{} {} authored-value capability",
-            expected.case_id, expected_declaration.id
-        );
-        assert_eq!(
-            actual.importance_capability, expected_declaration.importance_capability,
-            "{} {} importance capability",
-            expected.case_id, expected_declaration.id
-        );
-        assert_eq!(
-            actual.importance, expected_declaration.importance,
-            "{} {} importance",
-            expected.case_id, expected_declaration.id
-        );
-        if expected_declaration.value_capability == "public" {
-            prior_public_comparisons += 1;
-            assert_eq!(
-                actual.value, expected_declaration.value,
-                "{} {} publicly exposed authored slice",
-                expected.case_id, expected_declaration.id
-            );
-        } else {
-            assert_ne!(
-                expected_declaration.value, "<unavailable>",
-                "{} {} deferred slice must remain explicit in the TSV",
-                expected.case_id, expected_declaration.id
-            );
-            if actual.value != "<unavailable>" {
-                wrapper_comparisons += 1;
-                assert_eq!(
-                    actual.value, expected_declaration.value,
-                    "{} {} wrapper-retained authored slice",
-                    expected.case_id, expected_declaration.id
-                );
-            }
-        }
-    }
-    (wrapper_comparisons, prior_public_comparisons)
 }
 
 fn unescape(field: &str) -> Result<String, String> {
@@ -510,15 +537,19 @@ fn i01_observable_fixture_matches_every_public_report() {
             continue;
         }
         let actual = observe(&row);
+        assert_eq!(actual.clean, row.clean, "{} clean report", row.case_id);
         assert_eq!(
-            actual.report_fields(),
-            row.report_fields(),
-            "{} public report",
+            actual.retained, row.retained,
+            "{} retained syntax",
             row.case_id
         );
-        let comparisons = assert_authored_declarations(&actual, &row);
-        wrapper_comparisons += comparisons.0;
-        prior_public_comparisons += comparisons.1;
+        assert_eq!(
+            actual.diagnostics, row.diagnostics,
+            "{} diagnostics",
+            row.case_id
+        );
+        wrapper_comparisons += actual.wrapper_comparisons;
+        prior_public_comparisons += actual.prior_public_comparisons;
         executed += 1;
         #[cfg(feature = "app-strict")]
         assert_strict_parity(&row);
@@ -542,6 +573,29 @@ fn i01_observable_fixture_matches_every_public_report() {
         prior_public_comparisons,
         if cfg!(feature = "app-strict") { 35 } else { 34 },
         "prior public authored-slice comparisons remain intact"
+    );
+}
+
+#[test]
+fn i01_oracle_keeps_property_payload_comparisons_typed() {
+    let source = include_str!("i01_c01_observables.rs");
+    for prohibited in [
+        ["fn i01_property_", "value<"].concat(),
+        ["RuntimeAuthored", "Value"].concat(),
+        ["fn known_property_value(", ") -> (String"].concat(),
+    ] {
+        assert!(
+            !source.contains(&prohibited),
+            "property oracle must not recreate the heterogeneous `{prohibited}` proxy"
+        );
+    }
+    assert!(
+        source.contains("macro_rules! assert_property_specific_value"),
+        "property oracle must retain schema-variant-specific assertion arms"
+    );
+    assert!(
+        source.contains("format!(\"typed:{typed:?}\")"),
+        "each expanded concrete arm must compare the frozen typed Debug payload in place"
     );
 }
 
@@ -712,46 +766,45 @@ fn escape(field: &str) -> String {
         .replace('\r', "\\r")
 }
 
-fn observe(expected: &Row) -> Row {
-    let (clean, retained, values, authored_declarations, diagnostics) =
-        match expected.entry.as_str() {
-            "sheet" => {
-                let report = parse_sheet(&expected.input);
-                let (retained, values, authored_declarations) =
-                    sheet_observables(report.syntax().rules());
-                (
-                    report.is_clean(),
-                    retained,
-                    values,
-                    authored_declarations,
-                    diagnostics_observable(report.diagnostics()),
-                )
-            }
-            "style" => {
-                let report = parse_style_attribute(&expected.input);
-                let (retained, values, authored_declarations) =
-                    declaration_observables(report.syntax().as_slice(), "public");
-                (
-                    report.is_clean(),
-                    retained,
-                    values,
-                    authored_declarations,
-                    diagnostics_observable(report.diagnostics()),
-                )
-            }
-            _ => unreachable!("validated fixture entry"),
-        };
-    Row {
-        case_id: expected.case_id.clone(),
-        owner: expected.owner.clone(),
-        entry: expected.entry.clone(),
-        feature: expected.feature.clone(),
-        input: expected.input.clone(),
+struct Observation {
+    clean: String,
+    retained: String,
+    diagnostics: String,
+    wrapper_comparisons: usize,
+    prior_public_comparisons: usize,
+}
+
+fn observe(expected: &Row) -> Observation {
+    let mut frozen = FrozenDeclarationCursor::new(expected);
+    let (clean, retained, diagnostics) = match expected.entry.as_str() {
+        "sheet" => {
+            let report = parse_sheet(&expected.input);
+            let retained = sheet_observables(report.syntax().rules(), &mut frozen);
+            (
+                report.is_clean(),
+                retained,
+                diagnostics_observable(report.diagnostics()),
+            )
+        }
+        "style" => {
+            let report = parse_style_attribute(&expected.input);
+            let retained =
+                declaration_observables(report.syntax().as_slice(), "public", true, &mut frozen);
+            (
+                report.is_clean(),
+                retained,
+                diagnostics_observable(report.diagnostics()),
+            )
+        }
+        _ => unreachable!("validated fixture entry"),
+    };
+    frozen.finish();
+    Observation {
         clean: clean.to_string(),
         retained: nonempty(retained.join("~")),
-        values: nonempty(values.join("~")),
-        authored_declarations: nonempty(authored_declarations.join("~")),
         diagnostics: nonempty(diagnostics.join("~")),
+        wrapper_comparisons: frozen.wrapper_comparisons,
+        prior_public_comparisons: frozen.prior_public_comparisons,
     }
 }
 
@@ -763,21 +816,18 @@ fn nonempty(value: String) -> String {
     }
 }
 
-fn sheet_observables(rules: &[CssRule]) -> (Vec<String>, Vec<String>, Vec<String>) {
+fn sheet_observables(rules: &[CssRule], frozen: &mut FrozenDeclarationCursor<'_>) -> Vec<String> {
     let mut retained = Vec::new();
-    let mut values = Vec::new();
-    let mut authored_declarations = Vec::new();
     for rule in rules {
-        rule_observables(rule, &mut retained, &mut values, &mut authored_declarations);
+        rule_observables(rule, &mut retained, frozen);
     }
-    (retained, values, authored_declarations)
+    retained
 }
 
 fn rule_observables(
     rule: &CssRule,
     retained: &mut Vec<String>,
-    values: &mut Vec<String>,
-    authored_declarations: &mut Vec<String>,
+    frozen: &mut FrozenDeclarationCursor<'_>,
 ) {
     match rule {
         CssRule::Import(_) => retained.push("rule:baseline.rule.import".to_owned()),
@@ -787,7 +837,7 @@ fn rule_observables(
         CssRule::LayerBlock(rule) => {
             retained.push("rule:baseline.rule.layer-block".to_owned());
             for child in rule.rules() {
-                rule_observables(child, retained, values, authored_declarations);
+                rule_observables(child, retained, frozen);
             }
         }
         CssRule::FontFace(_) => retained.push("rule:baseline.rule.font-face".to_owned()),
@@ -795,45 +845,54 @@ fn rule_observables(
             retained.push("rule:baseline.rule.keyframes".to_owned());
             for block in rule.blocks() {
                 for declaration in block.declarations().iter() {
-                    let (id, semantic, authored) = declaration_value_observables(
-                        declaration.property_name(),
+                    let name = declaration.property_name();
+                    let id = property_id(name);
+                    retained.push(format!("property:{id}"));
+                    let (semantic, authored) = frozen.next(false);
+                    assert_eq!(authored.id, id, "{} declaration identity", frozen.case_id);
+                    assert_eq!(
+                        authored.importance_capability, "keyframe-grammar",
+                        "{} {id} importance capability",
+                        frozen.case_id
+                    );
+                    assert_eq!(
+                        authored.importance, "normal",
+                        "{} {id} authored importance",
+                        frozen.case_id
+                    );
+                    assert_declaration_value(
+                        name,
                         declaration.custom(),
                         declaration.known(),
+                        semantic,
+                        &authored,
+                        frozen,
                     );
-                    retained.push(format!("property:{id}"));
-                    let _ = semantic;
-                    authored_declarations.push(format!(
-                        "{id}={}:{}@keyframe-grammar:normal",
-                        authored.capability,
-                        authored.value.as_deref().unwrap_or("<unavailable>")
-                    ));
                 }
             }
         }
         CssRule::Style(rule) => {
             retained.push("rule:baseline.rule.style".to_owned());
-            let (ids, semantic, authored) =
-                declaration_observables(rule.declarations().as_slice(), "public");
+            let ids =
+                declaration_observables(rule.declarations().as_slice(), "public", true, frozen);
             retained.extend(ids);
-            values.extend(semantic);
-            authored_declarations.extend(authored);
         }
         CssRule::Media(rule) => {
             retained.push("rule:baseline.rule.media".to_owned());
             for child in rule.rules() {
-                rule_observables(child, retained, values, authored_declarations);
+                rule_observables(child, retained, frozen);
             }
         }
         CssRule::Container(rule) => {
             retained.push("rule:baseline.rule.container".to_owned());
             for child in rule.rules() {
-                rule_observables(child, retained, values, authored_declarations);
+                rule_observables(child, retained, frozen);
             }
         }
         CssRule::Scope(rule) => {
             retained.push("rule:baseline.rule.scope".to_owned());
             for child in rule.rules().rules() {
-                scoped_rule_observables(child, retained, values, authored_declarations);
+                scoped_rule_observables(child, retained, frozen);
             }
         }
         _ => retained.push("rule:future".to_owned()),
@@ -843,26 +902,23 @@ fn rule_observables(
 fn scoped_rule_observables(
     rule: &CssScopedRule,
     retained: &mut Vec<String>,
-    values: &mut Vec<String>,
-    authored_declarations: &mut Vec<String>,
+    frozen: &mut FrozenDeclarationCursor<'_>,
 ) {
     match rule {
         CssScopedRule::Style(rule) => {
             retained.push("rule:baseline.rule.style".to_owned());
-            let (ids, semantic, authored) =
-                declaration_observables(rule.declarations().as_slice(), "public");
+            let ids =
+                declaration_observables(rule.declarations().as_slice(), "public", true, frozen);
             retained.extend(ids);
-            values.extend(semantic);
-            authored_declarations.extend(authored);
         }
         CssScopedRule::Media(rule) => {
             for child in rule.rules().rules() {
-                scoped_rule_observables(child, retained, values, authored_declarations);
+                scoped_rule_observables(child, retained, frozen);
             }
         }
         CssScopedRule::Container(rule) => {
             for child in rule.rules().rules() {
-                scoped_rule_observables(child, retained, values, authored_declarations);
+                scoped_rule_observables(child, retained, frozen);
             }
         }
         CssScopedRule::LayerStatement(_) => {
@@ -870,12 +926,12 @@ fn scoped_rule_observables(
         }
         CssScopedRule::LayerBlock(rule) => {
             for child in rule.rules().rules() {
-                scoped_rule_observables(child, retained, values, authored_declarations);
+                scoped_rule_observables(child, retained, frozen);
             }
         }
         CssScopedRule::Scope(rule) => {
             for child in rule.rules().rules() {
-                scoped_rule_observables(child, retained, values, authored_declarations);
+                scoped_rule_observables(child, retained, frozen);
             }
         }
         _ => retained.push("rule:future".to_owned()),
@@ -885,52 +941,67 @@ fn scoped_rule_observables(
 fn declaration_observables(
     declarations: &[CssDeclaration],
     importance_capability: &str,
-) -> (Vec<String>, Vec<String>, Vec<String>) {
+    includes_semantic_value: bool,
+    frozen: &mut FrozenDeclarationCursor<'_>,
+) -> Vec<String> {
     let mut retained = Vec::new();
-    let mut values = Vec::new();
-    let mut authored_declarations = Vec::new();
     declaration_values(
         declarations
             .iter()
             .map(|declaration| (declaration.property_name(), Some(declaration))),
         &mut retained,
-        &mut values,
-        &mut authored_declarations,
         importance_capability,
+        includes_semantic_value,
+        frozen,
     );
-    (retained, values, authored_declarations)
+    retained
 }
 
 fn declaration_values<'a>(
     declarations: impl Iterator<Item = (CssPropertyNameRef<'a>, Option<&'a CssDeclaration>)>,
     retained: &mut Vec<String>,
-    values: &mut Vec<String>,
-    authored_declarations: &mut Vec<String>,
     importance_capability: &str,
+    includes_semantic_value: bool,
+    frozen: &mut FrozenDeclarationCursor<'_>,
 ) {
     for (name, declaration) in declarations {
         let id = property_id(name);
         retained.push(format!("property:{id}"));
         if let Some(declaration) = declaration {
-            let (_, semantic, authored) =
-                declaration_value_observables(name, declaration.custom(), declaration.known());
+            let (semantic, authored) = frozen.next(includes_semantic_value);
             let importance = match declaration.importance() {
                 CssImportance::Normal => "normal",
                 CssImportance::Important => "important",
             };
-            values.push(format!("{id}={semantic}@{importance}"));
-            authored_declarations.push(format!(
-                "{id}={}:{}@{importance_capability}:{importance}",
-                authored.capability,
-                authored.value.as_deref().unwrap_or("<unavailable>")
-            ));
+            assert_eq!(authored.id, id, "{} declaration identity", frozen.case_id);
+            assert_eq!(
+                authored.importance_capability, importance_capability,
+                "{} {id} importance capability",
+                frozen.case_id
+            );
+            assert_eq!(
+                authored.importance, importance,
+                "{} {id} authored importance",
+                frozen.case_id
+            );
+            if let Some(semantic) = semantic {
+                assert_eq!(semantic.id, id, "{} semantic identity", frozen.case_id);
+                assert_eq!(
+                    semantic.importance, importance,
+                    "{} {id} semantic importance",
+                    frozen.case_id
+                );
+            }
+            assert_declaration_value(
+                name,
+                declaration.custom(),
+                declaration.known(),
+                semantic,
+                &authored,
+                frozen,
+            );
         }
     }
-}
-
-struct RuntimeAuthoredValue {
-    capability: &'static str,
-    value: Option<String>,
 }
 
 fn property_id(name: CssPropertyNameRef<'_>) -> String {
@@ -941,643 +1012,438 @@ fn property_id(name: CssPropertyNameRef<'_>) -> String {
     }
 }
 
-fn declaration_value_observables(
+fn assert_declaration_value(
     name: CssPropertyNameRef<'_>,
     custom: Option<&surgeist_css::CssCustomDeclaration>,
     known: Option<&surgeist_css::CssKnownDeclaration>,
-) -> (String, String, RuntimeAuthoredValue) {
-    let id = property_id(name);
+    semantic: Option<FrozenSemanticValue<'_>>,
+    authored: &AuthoredDeclaration<'_>,
+    frozen: &mut FrozenDeclarationCursor<'_>,
+) {
     if let Some(custom) = custom {
-        let (semantic, authored) = custom.value().value().map_or_else(
-            || {
-                let keyword = custom.value().global().expect("symbolic custom global");
-                (
+        if let Some(value) = custom.value().value() {
+            assert_eq!(
+                authored.value_capability, "public",
+                "{} {} authored-value capability",
+                frozen.case_id, authored.id
+            );
+            assert_eq!(
+                authored.value,
+                value.as_css(),
+                "{} {} publicly exposed authored slice",
+                frozen.case_id,
+                authored.id
+            );
+            frozen.prior_public_comparisons += 1;
+            if let Some(semantic) = semantic {
+                assert_eq!(
+                    semantic.payload,
+                    value.as_css(),
+                    "{} {} frozen custom-property payload",
+                    frozen.case_id,
+                    authored.id
+                );
+            }
+        } else {
+            let keyword = custom.value().global().expect("symbolic custom global");
+            assert_eq!(
+                authored.value_capability, "deferred-i01",
+                "{} {} authored-value capability",
+                frozen.case_id, authored.id
+            );
+            assert_ne!(
+                authored.value, "<unavailable>",
+                "{} {} deferred slice must remain explicit in the TSV",
+                frozen.case_id, authored.id
+            );
+            assert_eq!(
+                authored.value,
+                global_keyword_css(keyword),
+                "{} {} custom-global authored slice",
+                frozen.case_id,
+                authored.id
+            );
+            frozen.wrapper_comparisons += 1;
+            if let Some(semantic) = semantic {
+                assert_eq!(
+                    semantic.payload,
                     format!("global:{:?}", Some(keyword)),
-                    RuntimeAuthoredValue {
-                        capability: "deferred-i01",
-                        value: Some(global_keyword_css(keyword).to_owned()),
-                    },
-                )
-            },
-            |value| {
-                (
-                    value.as_css().to_owned(),
-                    RuntimeAuthoredValue {
-                        capability: "public",
-                        value: Some(value.as_css().to_owned()),
-                    },
-                )
-            },
+                    "{} {} frozen custom-global payload",
+                    frozen.case_id,
+                    authored.id
+                );
+            }
+        }
+        return;
+    }
+
+    let Some(known) = known else {
+        assert_eq!(
+            authored.value_capability, "deferred-i01",
+            "{} {} future authored-value capability",
+            frozen.case_id, authored.id
         );
-        return (id, semantic, authored);
-    }
-    let (semantic, authored) = known.map_or_else(
-        || {
-            (
-                "future".to_owned(),
-                RuntimeAuthoredValue {
-                    capability: "deferred-i01",
-                    value: None,
-                },
-            )
-        },
-        known_value,
+        assert_eq!(
+            authored.value, "<unavailable>",
+            "{} {} future authored slice",
+            frozen.case_id, authored.id
+        );
+        if let Some(semantic) = semantic {
+            assert_eq!(
+                semantic.payload, "future",
+                "{} {} future semantic payload",
+                frozen.case_id, authored.id
+            );
+        }
+        return;
+    };
+    assert_eq!(
+        property_id(name),
+        known.property().stable_id(),
+        "{} known property/declaration identity",
+        frozen.case_id
     );
-    (id, semantic, authored)
-}
-
-fn i01_property_value<T: std::fmt::Debug>(
-    authored: &str,
-    value: Option<&T>,
-) -> (String, RuntimeAuthoredValue) {
-    let semantic = value.map_or_else(|| "future".to_owned(), |value| format!("typed:{value:?}"));
-    (
-        semantic,
-        RuntimeAuthoredValue {
-            capability: "deferred-i01",
-            value: Some(authored.to_owned()),
-        },
-    )
-}
-
-fn known_property_value(
-    value: surgeist_css::CssKnownPropertyValueRef<'_>,
-) -> (String, RuntimeAuthoredValue) {
-    match value {
-        surgeist_css::CssKnownPropertyValueRef::All(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Display(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BoxSizing(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Position(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Direction(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Overflow(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::OverflowX(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::OverflowY(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FlexDirection(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FlexWrap(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Float(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Clear(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AlignContent(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::JustifyContent(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AlignItems(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AlignSelf(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::JustifyItems(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::JustifySelf(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::PlaceContent(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::PlaceItems(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::PlaceSelf(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Visibility(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Content(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::ContentVisibility(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::ListStyleType(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::ListStylePosition(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::ListStyleImage(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::ListStyle(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::CounterReset(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::CounterIncrement(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::CounterSet(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Width(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Height(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MinWidth(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MinHeight(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MaxWidth(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MaxHeight(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FlexBasis(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Gap(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::RowGap(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::ColumnGap(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridFlowTolerance(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridTemplateRows(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridTemplateColumns(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridTemplateAreas(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridTemplate(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridAutoRows(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridAutoColumns(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridAutoFlow(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridRowStart(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridRowEnd(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridColumnStart(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridColumnEnd(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridRow(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridColumn(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::GridArea(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Grid(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FontSize(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::LineHeight(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::WritingMode(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TextAlign(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TextAlignLast(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TextIndent(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::VerticalAlign(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FontFamily(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Font(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FontWeight(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FontStyle(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FontStretch(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FontVariant(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FontFeatureSettings(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::LetterSpacing(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TextWrap(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::WhiteSpace(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::WordBreak(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::OverflowWrap(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TextOverflow(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TextDecoration(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TextDecorationLine(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TextDecorationColor(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TextDecorationStyle(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TextDecorationThickness(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TextTransform(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Inset(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Top(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Right(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Bottom(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Left(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::ZIndex(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BoxDecorationBreak(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Margin(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MarginTop(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MarginRight(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MarginBottom(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MarginLeft(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Padding(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::PaddingTop(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::PaddingRight(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::PaddingBottom(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::PaddingLeft(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Border(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderTop(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderRight(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderBottom(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderLeft(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderWidth(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderTopWidth(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderRightWidth(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderBottomWidth(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderLeftWidth(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Color(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Background(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BackgroundColor(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderColor(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderTopColor(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderRightColor(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderBottomColor(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderLeftColor(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BackgroundImage(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BackgroundPosition(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BackgroundSize(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BackgroundRepeat(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BackgroundOrigin(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BackgroundClip(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BackgroundAttachment(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderStyle(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderTopStyle(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderRightStyle(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderBottomStyle(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderLeftStyle(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderRadius(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderTopLeftRadius(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderTopRightRadius(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderBottomRightRadius(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BorderBottomLeftRadius(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BoxShadow(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Opacity(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FlexGrow(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::FlexShrink(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Order(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Flex(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::JustifyTracks(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AlignTracks(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AspectRatio(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::ScrollbarWidth(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Cursor(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::PointerEvents(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::UserSelect(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Outline(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::OutlineColor(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::OutlineStyle(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::OutlineWidth(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Transform(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TransformOrigin(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Translate(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Rotate(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Scale(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Filter(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::BackdropFilter(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::ClipPath(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Mask(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MaskImage(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MaskSize(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MaskPosition(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::MaskRepeat(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TransitionProperty(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TransitionDuration(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TransitionDelay(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::TransitionTimingFunction(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Transition(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AnimationName(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AnimationDuration(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AnimationDelay(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AnimationTimingFunction(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AnimationIterationCount(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AnimationDirection(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AnimationFillMode(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::AnimationPlayState(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        surgeist_css::CssKnownPropertyValueRef::Animation(value) => {
-            i01_property_value(value.as_css(), value.i01_subset())
-        }
-        _ => (
-            "future".to_owned(),
-            RuntimeAuthoredValue {
-                capability: "deferred-i01",
-                value: None,
-            },
-        ),
-    }
-}
-
-fn known_value(known: &surgeist_css::CssKnownDeclaration) -> (String, RuntimeAuthoredValue) {
     match known.declared_value() {
-        surgeist_css::CssKnownDeclaredValueRef::Property(value) => known_property_value(value),
-        surgeist_css::CssKnownDeclaredValueRef::Global(value) => (
-            format!("global:{value:?}"),
-            RuntimeAuthoredValue {
-                capability: "deferred-i01",
-                value: Some(global_keyword_css(value).to_owned()),
-            },
-        ),
-        surgeist_css::CssKnownDeclaredValueRef::SubstitutionDependent(value) => (
-            format!("substitution:{}", value.as_css()),
-            RuntimeAuthoredValue {
-                capability: "public",
-                value: Some(value.as_css().to_owned()),
-            },
-        ),
-        _ => (
-            "future".to_owned(),
-            RuntimeAuthoredValue {
-                capability: "deferred-i01",
-                value: None,
-            },
-        ),
+        surgeist_css::CssKnownDeclaredValueRef::Property(value) => {
+            assert_known_property_value(known.property(), value, semantic, authored, frozen);
+        }
+        surgeist_css::CssKnownDeclaredValueRef::Global(value) => {
+            assert_eq!(
+                authored.value_capability, "deferred-i01",
+                "{} {} authored-value capability",
+                frozen.case_id, authored.id
+            );
+            assert_ne!(
+                authored.value, "<unavailable>",
+                "{} {} deferred slice must remain explicit in the TSV",
+                frozen.case_id, authored.id
+            );
+            assert_eq!(
+                authored.value,
+                global_keyword_css(value),
+                "{} {} global authored slice",
+                frozen.case_id,
+                authored.id
+            );
+            frozen.wrapper_comparisons += 1;
+            if let Some(semantic) = semantic {
+                assert_eq!(
+                    semantic.payload,
+                    format!("global:{value:?}"),
+                    "{} {} frozen global payload",
+                    frozen.case_id,
+                    authored.id
+                );
+            }
+        }
+        surgeist_css::CssKnownDeclaredValueRef::SubstitutionDependent(value) => {
+            assert_eq!(
+                authored.value_capability, "public",
+                "{} {} authored-value capability",
+                frozen.case_id, authored.id
+            );
+            assert_eq!(
+                authored.value,
+                value.as_css(),
+                "{} {} publicly exposed authored slice",
+                frozen.case_id,
+                authored.id
+            );
+            frozen.prior_public_comparisons += 1;
+            if let Some(semantic) = semantic {
+                assert_eq!(
+                    semantic.payload,
+                    format!("substitution:{}", value.as_css()),
+                    "{} {} frozen substitution payload",
+                    frozen.case_id,
+                    authored.id
+                );
+            }
+        }
+        _ => {
+            assert_eq!(
+                authored.value_capability, "deferred-i01",
+                "{} {} future authored-value capability",
+                frozen.case_id, authored.id
+            );
+            assert_eq!(
+                authored.value, "<unavailable>",
+                "{} {} future authored slice",
+                frozen.case_id, authored.id
+            );
+            if let Some(semantic) = semantic {
+                assert_eq!(
+                    semantic.payload, "future",
+                    "{} {} future semantic payload",
+                    frozen.case_id, authored.id
+                );
+            }
+        }
     }
 }
 
+macro_rules! assert_property_specific_value {
+    (
+        $property:expr,
+        $value:expr,
+        $semantic:expr,
+        $authored:expr,
+        $frozen:expr;
+        $($variant:ident,)*
+    ) => {
+        match ($property, $value) {
+            $(
+                (
+                    surgeist_css::CssKnownProperty::$variant,
+                    surgeist_css::CssKnownPropertyValueRef::$variant(value),
+                ) => {
+                    let expected_id =
+                        surgeist_css::CssKnownProperty::$variant.stable_id();
+                    assert_eq!(
+                        $authored.id, expected_id,
+                        "{} {} property-specific authored identity",
+                        $frozen.case_id, expected_id
+                    );
+                    assert_eq!(
+                        $authored.value_capability, "deferred-i01",
+                        "{} {} authored-value capability",
+                        $frozen.case_id, expected_id
+                    );
+                    assert_ne!(
+                        $authored.value, "<unavailable>",
+                        "{} {} deferred slice must remain explicit in the TSV",
+                        $frozen.case_id, expected_id
+                    );
+                    assert_eq!(
+                        value.as_css(),
+                        $authored.value,
+                        "{} {} concrete wrapper authored slice",
+                        $frozen.case_id, expected_id
+                    );
+                    let typed = value.i01_subset().unwrap_or_else(|| {
+                        panic!(
+                            "{}: {} concrete wrapper lacks its typed I01 payload",
+                            $frozen.case_id, expected_id
+                        )
+                    });
+                    if let Some(semantic) = $semantic {
+                        assert_eq!(
+                            semantic.id, expected_id,
+                            "{} {} property-specific semantic identity",
+                            $frozen.case_id, expected_id
+                        );
+                        assert_eq!(
+                            semantic.payload,
+                            format!("typed:{typed:?}"),
+                            "{} {} frozen I01 public Debug payload",
+                            $frozen.case_id, expected_id
+                        );
+                    }
+                    $frozen.wrapper_comparisons += 1;
+                }
+            )*
+            _ => panic!(
+                "{}: known property identity and concrete value wrapper disagree",
+                $frozen.case_id
+            ),
+        }
+    };
+}
+
+fn assert_known_property_value(
+    property: surgeist_css::CssKnownProperty,
+    value: surgeist_css::CssKnownPropertyValueRef<'_>,
+    semantic: Option<FrozenSemanticValue<'_>>,
+    authored: &AuthoredDeclaration<'_>,
+    frozen: &mut FrozenDeclarationCursor<'_>,
+) {
+    assert_property_specific_value!(
+        property,
+        value,
+        semantic,
+        authored,
+        frozen;
+            All,
+            Display,
+            BoxSizing,
+            Position,
+            Direction,
+            Overflow,
+            OverflowX,
+            OverflowY,
+            FlexDirection,
+            FlexWrap,
+            Float,
+            Clear,
+            AlignContent,
+            JustifyContent,
+            AlignItems,
+            AlignSelf,
+            JustifyItems,
+            JustifySelf,
+            PlaceContent,
+            PlaceItems,
+            PlaceSelf,
+            Visibility,
+            Content,
+            ContentVisibility,
+            ListStyleType,
+            ListStylePosition,
+            ListStyleImage,
+            ListStyle,
+            CounterReset,
+            CounterIncrement,
+            CounterSet,
+            Width,
+            Height,
+            MinWidth,
+            MinHeight,
+            MaxWidth,
+            MaxHeight,
+            FlexBasis,
+            Gap,
+            RowGap,
+            ColumnGap,
+            GridFlowTolerance,
+            GridTemplateRows,
+            GridTemplateColumns,
+            GridTemplateAreas,
+            GridTemplate,
+            GridAutoRows,
+            GridAutoColumns,
+            GridAutoFlow,
+            GridRowStart,
+            GridRowEnd,
+            GridColumnStart,
+            GridColumnEnd,
+            GridRow,
+            GridColumn,
+            GridArea,
+            Grid,
+            FontSize,
+            LineHeight,
+            WritingMode,
+            TextAlign,
+            TextAlignLast,
+            TextIndent,
+            VerticalAlign,
+            FontFamily,
+            Font,
+            FontWeight,
+            FontStyle,
+            FontStretch,
+            FontVariant,
+            FontFeatureSettings,
+            LetterSpacing,
+            TextWrap,
+            WhiteSpace,
+            WordBreak,
+            OverflowWrap,
+            TextOverflow,
+            TextDecoration,
+            TextDecorationLine,
+            TextDecorationColor,
+            TextDecorationStyle,
+            TextDecorationThickness,
+            TextTransform,
+            Inset,
+            Top,
+            Right,
+            Bottom,
+            Left,
+            ZIndex,
+            BoxDecorationBreak,
+            Margin,
+            MarginTop,
+            MarginRight,
+            MarginBottom,
+            MarginLeft,
+            Padding,
+            PaddingTop,
+            PaddingRight,
+            PaddingBottom,
+            PaddingLeft,
+            Border,
+            BorderTop,
+            BorderRight,
+            BorderBottom,
+            BorderLeft,
+            BorderWidth,
+            BorderTopWidth,
+            BorderRightWidth,
+            BorderBottomWidth,
+            BorderLeftWidth,
+            Color,
+            Background,
+            BackgroundColor,
+            BorderColor,
+            BorderTopColor,
+            BorderRightColor,
+            BorderBottomColor,
+            BorderLeftColor,
+            BackgroundImage,
+            BackgroundPosition,
+            BackgroundSize,
+            BackgroundRepeat,
+            BackgroundOrigin,
+            BackgroundClip,
+            BackgroundAttachment,
+            BorderStyle,
+            BorderTopStyle,
+            BorderRightStyle,
+            BorderBottomStyle,
+            BorderLeftStyle,
+            BorderRadius,
+            BorderTopLeftRadius,
+            BorderTopRightRadius,
+            BorderBottomRightRadius,
+            BorderBottomLeftRadius,
+            BoxShadow,
+            Opacity,
+            FlexGrow,
+            FlexShrink,
+            Order,
+            Flex,
+            JustifyTracks,
+            AlignTracks,
+            AspectRatio,
+            ScrollbarWidth,
+            Cursor,
+            PointerEvents,
+            UserSelect,
+            Outline,
+            OutlineColor,
+            OutlineStyle,
+            OutlineWidth,
+            Transform,
+            TransformOrigin,
+            Translate,
+            Rotate,
+            Scale,
+            Filter,
+            BackdropFilter,
+            ClipPath,
+            Mask,
+            MaskImage,
+            MaskSize,
+            MaskPosition,
+            MaskRepeat,
+            TransitionProperty,
+            TransitionDuration,
+            TransitionDelay,
+            TransitionTimingFunction,
+            Transition,
+            AnimationName,
+            AnimationDuration,
+            AnimationDelay,
+            AnimationTimingFunction,
+            AnimationIterationCount,
+            AnimationDirection,
+            AnimationFillMode,
+            AnimationPlayState,
+            Animation,
+    );
+}
 fn global_keyword_css(keyword: surgeist_css::CssGlobalKeyword) -> &'static str {
     match keyword {
         surgeist_css::CssGlobalKeyword::Inherit => "inherit",

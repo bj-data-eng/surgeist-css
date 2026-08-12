@@ -9,30 +9,22 @@
 | Status | `in_progress` |
 | Cycle base | `a80ff9339f21ad041b159de72a03942ffb11ac50` |
 | Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `e290a7fef9bf6b6e9bde764140e5f7fac34156bb8f644d999e6bba58dc92ca2b`, especially P01.9 |
-| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `c965dfedc08adf8648ef005f1b4f3a981f7e1ebf9fd904980b403d041c90792a`, sections 3.1, 4.4, 8.1, 10, 11 findings 2.11/2.12, and 12.2-12.6 |
+| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `c6a9984521e23d5c010c3890902b70730db42eda092ad0e77f7d9e8e6168dfa1`, sections 3.1, 4.4, 8.1, 10, 11 findings 2.11/2.12, and 12.2-12.6 |
 | Reviewed ledger | `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256 `09ecbf2dcaafbd402b24642f1244ce0be3568fd8a85b993c0218e2e7c0deac6d`, the `O-VALUES3` numeric/math rows and timing-property rows |
-| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `106618c1eda854c74bc60b7a9156018908ed0c1490ba64bb730a35cdc9d72e73`, entry `I02-C03` |
+| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `fb02bf326ae06414ac7b50e58d791962db9973cea3b8ae73b9a1d372276f645c`, entry `I02-C03` |
 | Bounded outcome | Publish finite scalar invariants, distinct authored duration and delay domains, and typed calculation trees for the selected numeric roots; integrate them into existing numeric and timing consumers without changing any I01 accepted syntax or recovery contract. |
 
 ## 2. Boundary, Impacts, And Resolved Architecture
 
-C02 candidate `a80ff9339f21ad041b159de72a03942ffb11ac50` is published and read back on
-the authority remote. Its active atomic owners and C03 reserved rows have no
-unresolved source or catalog finding. C03 closes findings 2.11 and 2.12 only.
-Positions, dedicated transform/easing/filter/shape grammars, colors, Grid,
-typography, and later property families remain in their ordered cycles.
+C02 candidate `a80ff9339f21ad041b159de72a03942ffb11ac50` is published and read back on the authority remote. Its active atomic owners and C03 reserved rows have no unresolved source or catalog finding. C03 closes findings 2.11 and 2.12 only. Positions, dedicated transform/easing/filter/shape grammars, colors, Grid, typography, and later property families remain in their ordered cycles.
 
-The authored CSS syntax phase remains the owner. Numeric and calculation values
-remain symbolic; this crate neither resolves relative units nor computes layout,
-used values, animation timelines, or cross-crate style data. Calculation type
-checking uses authored dimensional categories only. It does not canonicalize
-units, combine unlike dimensions, or expose evaluated values.
+The authored CSS syntax phase remains the owner. Numeric and calculation values remain symbolic; this crate neither resolves relative units nor computes layout, used values, animation timelines, or cross-crate style data. Calculation type checking uses authored dimensional categories only. It does not canonicalize units, combine unlike dimensions, or expose evaluated values.
 
-All scalar construction paths reject NaN and positive or negative infinity.
-Existing `CssFiniteNumber` and semantic wrappers remain the primitive boundary.
-Every unchecked crate-private constructor may be used only after the parser or a
-checked public constructor establishes the same invariant. No input-dependent
-panic, `unwrap`, `expect`, or `unreachable!` is permitted.
+All current scalar construction paths reject NaN and positive or negative infinity. Direct public construction of the frozen legacy `CssGridFlowTolerance` enum is the sole exception: its raw payload remains source-compatible, while parser-produced projections and the current accessor are always finite. `CssFiniteNumber` and semantic wrappers remain the primitive boundary. Unchecked crate-private construction follows equivalent validation; no input-dependent panic, `unwrap`, `expect`, or `unreachable!` is permitted.
+
+The sole C03 legacy raw-scalar compatibility payload is `CssGridFlowTolerance::Percent(f32)`, and that public enum remains unchanged. New non-exhaustive `CssGridFlowToleranceValue::{Normal, Infinite, Length(CssLength), Percent(CssFiniteNumber)}` is the checked current model. `CssGridFlowTolerancePropertyValue` stores its parser-owned current value plus an optional legacy projection and exposes `value() -> &CssGridFlowToleranceValue`; `i01_subset()` retains its exact existing signature.
+
+Every I01 parse has both representations. One shared checked post-`unit_value * 100.0` conversion protects ordinary and retained legacy-calc percentage paths before either representation is built. New typed length calculation syntax may use only the current value and return no I01 projection.
 
 Timing uses separate authored domains:
 
@@ -54,28 +46,11 @@ Timing uses separate authored domains:
   in a shorthand is always a duration and the second is always a signed delay;
   a negative first time is invalid even when a later non-negative time exists.
 
-`CssTransitionValue` exposes `property()`, `duration() -> Option<&CssDuration>`,
-`delay() -> Option<&CssDelay>`, and `timing_function()`.
-`CssAnimationValue` exposes the existing eight component names, with
-`duration() -> Option<&CssDuration>`, `delay() -> Option<&CssDelay>`, and
-`iteration_count() -> Option<&CssAnimationIterationValue>`; each current list
-exposes `values()`. Construction of these aggregate values is parser-owned.
+`CssTransitionValue` exposes `property()`, `duration() -> Option<&CssDuration>`, `delay() -> Option<&CssDelay>`, and `timing_function()`. `CssAnimationValue` exposes the existing eight component names, with `duration() -> Option<&CssDuration>`, `delay() -> Option<&CssDelay>`, and `iteration_count() -> Option<&CssAnimationIterationValue>`; each current list exposes `values()`. Construction of these aggregate values is parser-owned.
 
-Exactly seven wrappers gain current-value accessors:
-`CssTransitionDurationPropertyValue::durations()`, `CssTransitionDelayPropertyValue::delays()`,
-`CssAnimationDurationPropertyValue::durations()`, `CssAnimationDelayPropertyValue::delays()`,
-`CssAnimationIterationCountPropertyValue::iteration_counts()`, `CssTransitionPropertyValue::transitions()`, and
-`CssAnimationPropertyValue::animations()`. They return respectively
-`&CssDurationList`, `&CssDelayList`, `&CssDurationList`, `&CssDelayList`,
-`&CssAnimationIterationValueList`, `&CssTransitionValueList`, and
-`&CssAnimationValueList`. Their
-`i01_subset()` projections remain byte-for-byte compatible for every I01 input.
-Newly accepted negative-delay or calculation syntax returns `None` only when it
-cannot be represented by the I01 payload. Existing `CssTime`, `CssTimeList`,
-`CssTransition`, `CssTransitionList`, `CssAnimation`, `CssAnimationList`, and
-`CssAnimationComponents` remain available as compatibility models and keep
-their existing signatures and observable values for the I01 subset. New parser
-paths do not place an invalid or lossy state into those compatibility types.
+Exactly seven wrappers gain current-value accessors: `CssTransitionDurationPropertyValue::durations()`, `CssTransitionDelayPropertyValue::delays()`, `CssAnimationDurationPropertyValue::durations()`, `CssAnimationDelayPropertyValue::delays()`, `CssAnimationIterationCountPropertyValue::iteration_counts()`, `CssTransitionPropertyValue::transitions()`, and `CssAnimationPropertyValue::animations()`. They return respectively `&CssDurationList`, `&CssDelayList`, `&CssDurationList`, `&CssDelayList`, `&CssAnimationIterationValueList`, `&CssTransitionValueList`, and `&CssAnimationValueList`.
+
+Their `i01_subset()` projections remain byte-for-byte compatible for every I01 input. Newly accepted negative-delay or calculation syntax returns `None` only when it cannot be represented by the I01 payload. Existing `CssTime`, `CssTimeList`, `CssTransition`, `CssTransitionList`, `CssAnimation`, `CssAnimationList`, and `CssAnimationComponents` remain available as compatibility models and keep their existing signatures and observable values for the I01 subset. New parser paths do not place an invalid or lossy state into those compatibility types.
 
 Typed calculations use one private expression implementation with seven public private-field root wrappers:
 `CssNumberCalculation`, `CssIntegerCalculation`, `CssPercentageCalculation`, `CssLengthCalculation`,
@@ -155,16 +130,20 @@ state. The C01 fixture is immutable and must not be regenerated or edited.
 
 ### T1 Make Every Numeric Scalar Construction Path Finite
 
-- **Files/area:** numeric scalar models in `src/syntax.rs`; their existing parser
-  call sites; `tests/numeric_domains.rs`, `tests/public_surface.rs`, and focused
-  crate-private value tests. No calculation grammar, timing shorthand, catalog,
-  fixture, manifest, or docs edit.
+- **Files/area:** numeric scalar models in `src/syntax.rs`; the
+  `CssGridFlowTolerancePropertyValue` representation in `src/properties.rs`;
+  their existing parser call sites; `tests/numeric_domains.rs`,
+  `tests/public_surface.rs`, and focused crate-private value tests. No
+  calculation grammar, timing shorthand, catalog, fixture, manifest, or docs
+  edit.
 - **Dependency:** published/read-back C02 base only.
-- **Outcome:** audit every public and parser-reachable numeric wrapper and make
-  NaN and both infinities unconstructable. Preserve each existing sign/range
-  invariant and accepted finite boundary. Route crate-private constructors only
-  from already validated values; return structured parser diagnostics rather
-  than panic on non-finite authored tokens.
+- **Outcome:** audit every current public and parser-reachable numeric wrapper
+  and make NaN and both infinities unconstructable, explicitly excluding direct
+  construction of the frozen raw Grid enum. Preserve sign/range boundaries,
+  validate unchecked parser paths, and return diagnostics rather than panic.
+  Restore the exact legacy
+  `CssGridFlowTolerance::Percent(f32)` payload and implement the exact dual
+  current/compatibility property representation and `value()` accessor above.
 - **RED evidence:** checked constructors and real property parses first expose at
   least one currently admitted non-finite path, with named finite edge cases as
   characterization. The RED asserts the public construction or parse outcome,
@@ -172,6 +151,12 @@ state. The C01 fixture is immutable and must not be regenerated or edited.
 - **Acceptance:** representative number, integer, percentage, length, angle,
   time, frequency/resolution, opacity, ratio, keyframe, font, Grid, flex, and
   iteration-count paths preserve finite values and reject non-finite values;
+  public construction and matching of the unchanged legacy Grid percent payload
+  compiles, while a parser-produced Grid wrapper exposes the checked current
+  percent and matching finite I01 projection; finite `3.5e38%` and
+  `calc(3.5e38%)` inputs whose percentage conversion overflows are rejected by
+  the shared checked conversion with exact diagnostics and sibling retention in
+  both feature modes;
   error code, typed payload, position, span, and recovery action are exact for
   parser cases; C01 observables remain byte-identical.
 - **Commands:** `cargo test -p surgeist-css --offline --no-default-features --test numeric_domains`; `cargo test -p surgeist-css --offline --no-default-features --test public_surface`;
@@ -239,6 +224,7 @@ state. The C01 fixture is immutable and must not be regenerated or edited.
   `CssOpacityValue::{Literal(CssOpacity), Calculation(CssNumberCalculation)}`,
   `CssNonNegativeNumberValue::{Literal(CssNonNegativeNumber), Calculation(CssNumberCalculation)}`,
   `CssPositiveNumberValue::{Literal(CssPositiveNumber), Calculation(CssNumberCalculation)}`,
+  `CssAspectRatioValue::{Literal(CssAspectRatio), Calculation(CssNumberCalculation)}`,
   `CssIntegerValue::{Literal(i32), Calculation(CssIntegerCalculation)}`,
   `CssZIndexValue::{Auto, Integer(CssIntegerValue)}`, and current
   `CssFlexValue::{None, Auto, Components(CssFlexComponents)}`. Private-field
@@ -247,7 +233,14 @@ state. The C01 fixture is immutable and must not be regenerated or edited.
   Private-field `CssPositiveNumber::try_new(f32)` enforces finite positive literals. Exact wrapper accessors are `CssOpacityPropertyValue::value()`,
   `CssFlexGrowPropertyValue::factor()`, `CssFlexShrinkPropertyValue::factor()`, `CssOrderPropertyValue::value()`, `CssZIndexPropertyValue::value()`,
   `CssAspectRatioPropertyValue::ratio()`, and `CssFlexPropertyValue::value()`;
-  they return the corresponding current types above and new calc syntax has no I01 projection.
+  they return the corresponding current types above. Aspect-ratio literals stay
+  finite and positive; a number calculation's range is deferred even with a
+  negative component. Literal aspect ratios retain the exact I01 projection,
+  while typed calculations and all other new calc syntax return none.
+- **Grid compatibility:** integrate typed length/percentage calculations through
+  T1's `CssGridFlowToleranceValue` and existing
+  `CssGridFlowTolerancePropertyValue::value()`; do not change the legacy
+  `CssGridFlowTolerance` enum or the wrapper's I01 accessor.
 - **Compatibility:** preserve each I01 simple length sum as the same
   `CssCalcLength` projection; additive `CssCalcLength::Typed` carries new length
   trees. Existing wrappers above need no parallel accessor because their payload
@@ -259,8 +252,11 @@ state. The C01 fixture is immutable and must not be regenerated or edited.
   context, while one-token invalid type/operator/divisor mutations demonstrate
   the expected structured diagnostic and recovery.
 - **Acceptance:** `CssCalcLength::Typed` and the named scalar payloads expose
-  exact typed trees; all frozen projections remain `Some`; non-negative literal
-  versus calculation behavior is distinct in public outcomes; sibling retention, non-BMP source
+  exact typed trees; frozen inputs retain `Some` projections and new syntax
+  returns `None`; public aspect-ratio evidence distinguishes a rejected
+  non-positive literal from an accepted typed number calculation and inspects
+  its tree; non-negative literal versus calculation behavior is distinct in
+  public outcomes; sibling retention, non-BMP source
   coordinates, recovery spans/actions, and default/`app-strict` parity are exact;
   the C01 fixture bytes and results remain unchanged.
 - **Commands:** `cargo test -p surgeist-css --offline --no-default-features --test typed_calculations`; `cargo test -p surgeist-css --offline --no-default-features --test property_schema`; `cargo test -p surgeist-css --offline --no-default-features --test structured_errors`;

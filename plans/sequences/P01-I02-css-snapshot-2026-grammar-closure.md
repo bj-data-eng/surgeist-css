@@ -2,8 +2,9 @@
 
 ## 1. Authority And Sequencing Rules
 
-This sequence implements the reviewed P01-I02 specification at SHA-256
-`c965dfedc08adf8648ef005f1b4f3a981f7e1ebf9fd904980b403d041c90792a`
+This sequence implements the reviewed P01-I02 specification at
+`plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
+`c6a9984521e23d5c010c3890902b70730db42eda092ad0e77f7d9e8e6168dfa1`,
 and its official ledger at SHA-256
 `09ecbf2dcaafbd402b24642f1244ce0be3568fd8a85b993c0218e2e7c0deac6d`.
 It is subordinate to reviewed P01 semantic SHA-256

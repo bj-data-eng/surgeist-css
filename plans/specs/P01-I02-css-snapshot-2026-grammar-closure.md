@@ -113,6 +113,35 @@ could not represent. The accurately named compatibility accessor never claims
 complete grammar coverage. New official properties add new schema rows and
 wrappers additively.
 
+The frozen I01 payload types reached through `i01_subset()` are compatibility
+projections, not the construction boundary for the current authored model.
+Their existing public constructors and enum payloads remain source-compatible,
+including raw scalar payloads that predate checked numeric wrappers. A current
+property-specific accessor must expose a valid-by-construction model, and the
+parser may create an I01 projection only after validating the same invariant.
+This distinction is the additive repair path when changing a compatibility
+payload would otherwise require a second breaking cycle.
+
+For C03 the affected legacy raw-scalar inventory is exactly
+`CssGridFlowTolerance::Percent(f32)`. Its name, variants, payloads, derives,
+construction syntax, and `CssGridFlowTolerancePropertyValue::i01_subset() ->
+Option<&CssGridFlowTolerance>` signature remain unchanged. Add a distinct
+non-exhaustive current `CssGridFlowToleranceValue::{Normal, Infinite,
+Length(CssLength), Percent(CssFiniteNumber)}` and
+`CssGridFlowTolerancePropertyValue::value() -> &CssGridFlowToleranceValue`.
+The property wrapper stores the parser-owned current value and an optional I01
+compatibility projection. Every I01 input stores both; the percent projection
+is formed only after the post-`unit_value * 100.0` result is checked finite.
+New typed-calculation syntax stores only the current value and therefore returns
+`None` from `i01_subset()`. Public evidence constructs and pattern-matches the
+unchanged legacy `Percent(f32)`, inspects a finite parser-produced current
+`Percent(CssFiniteNumber)`, proves its matching finite I01 projection, and
+checks exact diagnostic position, span, action, and sibling retention when a
+finite token overflows during percentage conversion. No other C03 legacy
+payload requires a parallel checked representation: the remaining numeric
+public fields are private or already use checked wrappers, and their existing
+public signatures remain unchanged.
+
 Public inspection uses two exact non-exhaustive borrowed views generated from
 the same schema:
 
@@ -425,10 +454,13 @@ No query is evaluated by this crate.
 
 ### 8.1 Numeric And Math Foundation
 
-All numeric wrappers reject non-finite values. Split non-negative durations from
-signed delays and use finite animation iteration counts with a distinct
-`infinite` branch. Shorthands assign first/second time values by grammar without
-conflating their domains.
+All current numeric wrappers reject non-finite values. Frozen I01 compatibility
+payloads retain their existing signatures, but no parser path may put a
+non-finite value into them and every property-specific current accessor exposes
+only checked scalar state. Split non-negative durations from signed delays and
+use finite animation iteration counts with a distinct `infinite` branch.
+Shorthands assign first/second time values by grammar without conflating their
+domains.
 
 Replace sum-only calc modeling with typed sum/product/negation/group/nested-calc
 trees for number, integer, percentage, length, angle, time, and frequency roots.
@@ -557,9 +589,13 @@ I02 is complete only when all predicates hold:
    focused exact evidence, while I01 evidence stays green.
 5. Both ordinary front doors retain valid siblings and report every recovery;
    both validators reject exactly non-clean reports under either feature graph.
-6. All public authored states are valid by construction; non-finite numbers,
-   mismatched property values, recursive repeats, invalid function domains,
-   namespace errors, and invalid grammar combinations are unconstructable.
+6. All current public authored states are valid by construction; non-finite
+   numbers, mismatched property values, recursive repeats, invalid function
+   domains, namespace errors, and invalid grammar combinations are
+   unconstructable. Frozen I01 compatibility payloads may retain legacy public
+   construction shapes, but parser-produced projections always satisfy the
+   current invariant and property-specific current access never exposes an
+   invalid compatibility state.
 7. Public docs and consumers expose the complete official grammar and exact
    metadata/recovery/downstream boundaries without relying on private modules.
 8. Default and `app-strict` check/test/doctest/Clippy matrices, focused catalog

@@ -15,6 +15,7 @@
 
 mod error;
 mod parser;
+mod properties;
 mod report;
 mod source;
 mod syntax;
@@ -24,6 +25,7 @@ mod validation;
 
 pub use error::*;
 pub use parser::parse_sheet;
+pub use properties::{CssKnownProperty, CssProperty};
 pub use report::*;
 pub use source::*;
 pub use syntax::*;

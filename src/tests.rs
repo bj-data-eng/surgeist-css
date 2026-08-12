@@ -4519,7 +4519,7 @@ fn rejection_property_specific_matrix_rejects_every_supported_property() {
 #[test]
 fn coverage_global_keyword_cases_derive_from_supported_property_metadata() {
     let cases = accepted_declaration_cases();
-    let supported_properties = crate::validation::supported_properties();
+    let supported_properties = crate::properties::property_implementation_inventory();
 
     assert_eq!(cases.len(), supported_properties.len());
     for (case, supported_property) in cases.iter().zip(supported_properties) {

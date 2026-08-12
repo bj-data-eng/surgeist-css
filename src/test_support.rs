@@ -1,4 +1,7 @@
-use crate::validation::{SupportedProperty, supported_properties};
+use crate::properties::{
+    PropertyImplementation as SupportedProperty,
+    property_implementation_inventory as supported_properties,
+};
 use crate::{
     CssDeclaration, CssGlobalKeyword, CssProperty, CssRule, CssSheet, CssStyleRule, CssValue,
     Error, ErrorKind, parse_sheet,

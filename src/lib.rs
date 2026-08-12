@@ -95,7 +95,88 @@ let _ = validate_style_attribute("color: red");
 //! Byte offsets index the original UTF-8 input. Lines and columns are zero-based,
 //! and columns count UTF-16 code units. Display and debug prose are for people;
 //! control flow should match typed variants and include a wildcard for every
-//! non-exhaustive enum.
+//! non-exhaustive enum. [`CssImportance`] and [`CssSupportStatus`] are the two
+//! deliberately closed enums and remain exhaustively matchable.
+//!
+//! Evolving authored-syntax enums intentionally require a wildcard in external
+//! matches. These representative exhaustive matches therefore do not compile:
+//!
+//! ```compile_fail
+//! use surgeist_css::CssMediaQueryModifier;
+//!
+//! fn describe(value: CssMediaQueryModifier) -> &'static str {
+//!     match value {
+//!         CssMediaQueryModifier::Not => "not",
+//!         CssMediaQueryModifier::Only => "only",
+//!     }
+//! }
+//! ```
+//!
+//! ```compile_fail
+//! use surgeist_css::CssSelectorCombinator;
+//!
+//! fn describe(value: CssSelectorCombinator) -> &'static str {
+//!     match value {
+//!         CssSelectorCombinator::Descendant => "descendant",
+//!         CssSelectorCombinator::Child => "child",
+//!         CssSelectorCombinator::NextSibling => "next",
+//!         CssSelectorCombinator::SubsequentSibling => "subsequent",
+//!     }
+//! }
+//! ```
+//!
+//! ```compile_fail
+//! use surgeist_css::CssCalcOperator;
+//!
+//! fn describe(value: CssCalcOperator) -> &'static str {
+//!     match value {
+//!         CssCalcOperator::Add => "add",
+//!         CssCalcOperator::Subtract => "subtract",
+//!     }
+//! }
+//! ```
+//!
+//! ```compile_fail
+//! use surgeist_css::CssAnimationDirection;
+//!
+//! fn describe(value: CssAnimationDirection) -> &'static str {
+//!     match value {
+//!         CssAnimationDirection::Normal => "normal",
+//!         CssAnimationDirection::Reverse => "reverse",
+//!         CssAnimationDirection::Alternate => "alternate",
+//!         CssAnimationDirection::AlternateReverse => "alternate-reverse",
+//!     }
+//! }
+//! ```
+//!
+//! ```compile_fail
+//! use surgeist_css::CssGridAutoFlowAxis;
+//!
+//! fn describe(value: CssGridAutoFlowAxis) -> &'static str {
+//!     match value {
+//!         CssGridAutoFlowAxis::Row => "row",
+//!         CssGridAutoFlowAxis::Column => "column",
+//!     }
+//! }
+//! ```
+//!
+//! ```compile_fail
+//! use surgeist_css::{CssPredefinedColorSpace, CssRelativeColorFunction};
+//!
+//! fn describe(value: CssRelativeColorFunction) -> &'static str {
+//!     match value {
+//!         CssRelativeColorFunction::Rgb => "rgb",
+//!         CssRelativeColorFunction::Hsl => "hsl",
+//!         CssRelativeColorFunction::Hwb => "hwb",
+//!         CssRelativeColorFunction::Lab => "lab",
+//!         CssRelativeColorFunction::Lch => "lch",
+//!         CssRelativeColorFunction::Oklab => "oklab",
+//!         CssRelativeColorFunction::Oklch => "oklch",
+//!         CssRelativeColorFunction::Color(CssPredefinedColorSpace::Srgb) => "srgb",
+//!         CssRelativeColorFunction::Color(_) => "other color space",
+//!     }
+//! }
+//! ```
 //!
 //! # Support metadata and application policy
 //!

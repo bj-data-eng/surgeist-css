@@ -853,6 +853,7 @@ fn scoped_rule_observables(
                 scoped_rule_observables(child, retained, values, authored_declarations);
             }
         }
+        _ => retained.push("rule:future".to_owned()),
     }
 }
 

@@ -168,6 +168,7 @@ impl CssImportRule {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssImportTarget {
     Url(CssImportUrl),
     String(CssImportString),
@@ -232,6 +233,7 @@ impl CssImportString {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssImportLayer {
     Anonymous,
     Named(CssLayerName),
@@ -319,6 +321,7 @@ impl CssKeyframesRule {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssKeyframesName {
     Ident(CssCustomIdent),
     String(CssKeyframesString),
@@ -437,6 +440,7 @@ impl CssKeyframeSelectorList {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssKeyframeSelector {
     From,
     To,
@@ -634,6 +638,7 @@ impl<T> std::ops::Deref for CssDescriptorOccurrence<T> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontFaceSource {
     Url(CssFontFaceUrlSource),
     Local(CssFontLocalName),
@@ -824,6 +829,7 @@ impl CssFontFaceWeightValue {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontFaceStyle {
     Normal,
     Italic,
@@ -934,6 +940,7 @@ impl CssFontFaceStretchValue {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontDisplay {
     Auto,
     Block,
@@ -997,6 +1004,7 @@ impl CssUnicodeRange {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontFormatHint {
     Woff,
     Woff2,
@@ -1008,6 +1016,7 @@ pub enum CssFontFormatHint {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontTechHint {
     Variations,
     ColorCOLRv0,
@@ -1347,6 +1356,7 @@ impl CssScopedRuleList {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssScopedRule {
     Style(CssScopedStyleRule),
     Media(CssScopedMediaRule),
@@ -1431,6 +1441,7 @@ impl CssScopedStyleSelectorList {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssScopedStyleSelector {
     Selector(CssSelector),
     Relative(CssRelativeSelector),
@@ -1733,12 +1744,14 @@ impl CssTypedMediaQuery {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssMediaQueryModifier {
     Not,
     Only,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssMediaType {
     All,
     Screen,
@@ -1842,6 +1855,7 @@ fn is_parser_reserved_container_name(name: &str) -> bool {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssContainerCondition {
     Feature(CssContainerFeatureQuery),
     Style(CssContainerStyleQuery),
@@ -1878,6 +1892,7 @@ impl CssContainerConditionList {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssContainerFeatureQuery {
     Width(CssRangeFeature<CssQueryLength>),
     Height(CssRangeFeature<CssQueryLength>),
@@ -1888,6 +1903,7 @@ pub enum CssContainerFeatureQuery {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssContainerStyleQuery {
     CustomPropertyPresence(CssCustomPropertyName),
     CustomPropertyValue {
@@ -1924,6 +1940,7 @@ impl CssMediaConditionList {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssMediaFeatureQuery {
     Width(CssRangeFeature<CssQueryLength>),
     Height(CssRangeFeature<CssQueryLength>),
@@ -1968,6 +1985,7 @@ impl CssMediaFeatureQuery {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssQueryComparison {
     LessThan,
     LessThanOrEqual,
@@ -2017,30 +2035,35 @@ impl CssNonNegativeInteger {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssOrientation {
     Portrait,
     Landscape,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssColorSchemePreference {
     Light,
     Dark,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssReducedMotionPreference {
     Reduce,
     NoPreference,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssReducedTransparencyPreference {
     Reduce,
     NoPreference,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssContrastPreference {
     NoPreference,
     More,
@@ -2049,18 +2072,21 @@ pub enum CssContrastPreference {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssForcedColorsMode {
     None,
     Active,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssHoverCapability {
     None,
     Hover,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssPointerCapability {
     None,
     Coarse,
@@ -2068,6 +2094,7 @@ pub enum CssPointerCapability {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssDisplayMode {
     Fullscreen,
     Standalone,
@@ -2104,6 +2131,7 @@ impl CssResolution {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssResolutionUnit {
     Dpi,
     Dpcm,
@@ -2391,7 +2419,8 @@ impl CssKeyframeDeclaration {
 /// The complete importance state of an ordinary authored declaration.
 ///
 /// Importance is syntactically recognized at the declaration boundary and is not part of the
-/// property value. Downstream cascade policy may consume it, but this crate does not apply cascade.
+/// property value. Its two states deliberately form a closed, exhaustively matchable set.
+/// Downstream cascade policy may consume it, but this crate does not apply cascade.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum CssImportance {
     /// No terminal importance annotation was authored.
@@ -3025,6 +3054,7 @@ impl CssAspectRatio {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssScrollbarWidth {
     Auto,
     Thin,
@@ -3032,6 +3062,7 @@ pub enum CssScrollbarWidth {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssDisplay {
     Block,
     Flex,
@@ -3044,12 +3075,14 @@ pub enum CssDisplay {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssBoxSizing {
     ContentBox,
     BorderBox,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssLayoutPosition {
     Static,
     Relative,
@@ -3059,12 +3092,14 @@ pub enum CssLayoutPosition {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssDirection {
     Ltr,
     Rtl,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssOverflow {
     Visible,
     Clip,
@@ -3086,6 +3121,7 @@ impl CssOverflowAxes {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFlexDirection {
     Row,
     Column,
@@ -3094,6 +3130,7 @@ pub enum CssFlexDirection {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFlexWrap {
     NoWrap,
     Wrap,
@@ -3101,6 +3138,7 @@ pub enum CssFlexWrap {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFloat {
     Left,
     Right,
@@ -3108,6 +3146,7 @@ pub enum CssFloat {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssClear {
     Left,
     Right,
@@ -3116,6 +3155,7 @@ pub enum CssClear {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssAlignment {
     Normal,
     Start,
@@ -3136,6 +3176,7 @@ pub enum CssAlignment {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssAlignItems {
     Normal,
     Start,
@@ -3153,6 +3194,7 @@ pub enum CssAlignItems {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssPlaceAlignment {
     Content(CssPlaceContentAlignment),
     Items(CssPlaceItemsAlignment),
@@ -3237,6 +3279,7 @@ impl CssPlaceItemsAlignment {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssVisibility {
     Visible,
     Hidden,
@@ -3244,6 +3287,7 @@ pub enum CssVisibility {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssContentVisibility {
     Visible,
     Hidden,
@@ -3251,6 +3295,7 @@ pub enum CssContentVisibility {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssContent {
     Normal,
     None,
@@ -3279,6 +3324,7 @@ impl CssContentList {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssContentItem {
     String(CssContentString),
     Url(CssUrl),
@@ -3447,12 +3493,14 @@ impl CssCountersFunction {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssCounterStyle {
     BuiltIn(CssBuiltInCounterStyle),
     Named(CssCounterStyleName),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssBuiltInCounterStyle {
     Disc,
     Circle,
@@ -3468,6 +3516,7 @@ pub enum CssBuiltInCounterStyle {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssListStyleType {
     None,
     CounterStyle(CssCounterStyle),
@@ -3475,12 +3524,14 @@ pub enum CssListStyleType {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssListStylePosition {
     Inside,
     Outside,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssListStyleImage {
     None,
     Url(CssUrl),
@@ -3528,6 +3579,7 @@ impl CssListStyle {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssCounterChanges {
     None,
     Changes(CssCounterChangeList),
@@ -3585,6 +3637,7 @@ impl CssCounterChange {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssGridFlowTolerance {
     Normal,
     Infinite,
@@ -3630,6 +3683,7 @@ fn is_valid_custom_ident(value: &str) -> bool {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssGridTrackBreadth {
     Length(CssLength),
     Fraction(CssNonNegativeNumber),
@@ -3656,6 +3710,7 @@ impl CssGridTrackBreadth {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssGridTrackSize {
     Breadth(CssGridTrackBreadth),
     MinMax {
@@ -3709,6 +3764,7 @@ impl CssGridLineNames {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssGridTrackComponent {
     LineNames(CssGridLineNames),
     TrackSize(CssGridTrackSize),
@@ -3742,6 +3798,7 @@ impl CssGridTrackList {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssGridRepeatCount {
     Integer(CssGridRepeatInteger),
     AutoFill,
@@ -3820,6 +3877,7 @@ impl CssGridRepeat {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssGridTemplateAreaCell {
     Empty,
     Named(CssCustomIdent),
@@ -3852,6 +3910,7 @@ impl CssGridTemplateAreaRow {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssGridTemplateAreas {
     None,
     Rows(CssGridTemplateAreaRows),
@@ -3946,6 +4005,7 @@ struct GridAreaBounds {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssGridTemplate {
     None,
     RowsColumns {
@@ -3955,6 +4015,7 @@ pub enum CssGridTemplate {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssGridAutoFlowAxis {
     Row,
     Column,
@@ -3984,6 +4045,7 @@ impl CssGridAutoFlow {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssGridLine {
     Auto,
     Integer(CssGridLineInteger),
@@ -4169,6 +4231,7 @@ impl CssGridArea {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssGrid {
     Template(CssGridTemplate),
     AutoFlow {
@@ -4179,11 +4242,13 @@ pub enum CssGrid {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssOrder {
     Integer(i32),
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssFlex {
     None,
     Auto,
@@ -4210,18 +4275,21 @@ impl CssFlex {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssZIndex {
     Auto,
     Integer(i32),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssBoxDecorationBreak {
     Slice,
     Clone,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssWritingMode {
     HorizontalTb,
     VerticalRl,
@@ -4231,6 +4299,7 @@ pub enum CssWritingMode {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssTextAlign {
     Start,
     End,
@@ -4242,6 +4311,7 @@ pub enum CssTextAlign {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssTextAlignLast {
     Auto,
     Start,
@@ -4295,6 +4365,7 @@ impl CssTextIndent {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssVerticalAlign {
     Baseline,
     Sub,
@@ -4334,6 +4405,7 @@ impl CssVerticalAlignLength {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontFamilyNameKind {
     Quoted,
     IdentSequence,
@@ -4420,6 +4492,7 @@ impl CssFontFamilyList {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontWeight {
     Normal,
     Bold,
@@ -4458,6 +4531,7 @@ impl CssFontWeightNumber {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontStyle {
     Normal,
     Italic,
@@ -4465,6 +4539,7 @@ pub enum CssFontStyle {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontStretch {
     Normal,
     UltraCondensed,
@@ -4478,12 +4553,14 @@ pub enum CssFontStretch {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontVariant {
     Normal,
     SmallCaps,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontFeatureSettings {
     Normal,
     Features(CssFontFeatureList),
@@ -4556,6 +4633,7 @@ fn is_valid_font_feature_tag(tag: &str) -> bool {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFontFeatureValue {
     On,
     Off,
@@ -4670,6 +4748,7 @@ impl CssFont {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssLetterSpacing {
     Normal,
     Length(CssLetterSpacingLength),
@@ -4702,6 +4781,7 @@ impl CssLetterSpacingLength {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssTextWrap {
     Wrap,
     NoWrap,
@@ -4711,6 +4791,7 @@ pub enum CssTextWrap {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssWhiteSpace {
     Normal,
     NoWrap,
@@ -4721,6 +4802,7 @@ pub enum CssWhiteSpace {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssWordBreak {
     Normal,
     BreakAll,
@@ -4729,6 +4811,7 @@ pub enum CssWordBreak {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssOverflowWrap {
     Normal,
     BreakWord,
@@ -4736,6 +4819,7 @@ pub enum CssOverflowWrap {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssTextOverflow {
     Clip,
     Ellipsis,
@@ -4853,6 +4937,7 @@ fn has_duplicate_decoration_line_components(components: &[CssTextDecorationLineC
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssTextDecorationLineComponent {
     Underline,
     Overline,
@@ -4861,6 +4946,7 @@ pub enum CssTextDecorationLineComponent {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssTextDecorationStyle {
     Solid,
     Double,
@@ -4870,6 +4956,7 @@ pub enum CssTextDecorationStyle {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssTextDecorationThickness {
     Auto,
     FromFont,
@@ -4903,6 +4990,7 @@ impl CssTextDecorationThicknessLength {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssTextTransform {
     None,
     Capitalize,
@@ -4911,6 +4999,7 @@ pub enum CssTextTransform {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssLengthUnit {
     Px,
     Em,
@@ -5116,6 +5205,7 @@ impl CssLengthDimension {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssLength {
     Px(CssFiniteNumber),
     Dimension(CssLengthDimension),
@@ -5198,6 +5288,7 @@ impl CssEdges {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssBorderStyle {
     None,
     Hidden,
@@ -5388,6 +5479,7 @@ impl CssBorderRadii {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssBoxShadow {
     None,
     Shadows(CssBoxShadowList),
@@ -5687,6 +5779,7 @@ impl CssEasingArguments {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssImageLayer {
     None,
     Url(CssUrl),
@@ -5719,6 +5812,7 @@ impl CssImageLayerList {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssHorizontalPositionKeyword {
     Left,
     Center,
@@ -5726,6 +5820,7 @@ pub enum CssHorizontalPositionKeyword {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssVerticalPositionKeyword {
     Top,
     Center,
@@ -5733,6 +5828,7 @@ pub enum CssVerticalPositionKeyword {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssPositionComponent {
     Horizontal(CssHorizontalPositionKeyword),
     Vertical(CssVerticalPositionKeyword),
@@ -5826,12 +5922,14 @@ impl CssPositionList {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssBackgroundSizeComponent {
     Auto,
     Length(CssLength),
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssBackgroundSize {
     Cover,
     Contain,
@@ -5868,6 +5966,7 @@ impl CssBackgroundSizeList {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssBackgroundRepeatStyle {
     Repeat,
     Space,
@@ -5876,6 +5975,7 @@ pub enum CssBackgroundRepeatStyle {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssBackgroundRepeat {
     RepeatX,
     RepeatY,
@@ -5912,6 +6012,7 @@ impl CssBackgroundRepeatList {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssBackgroundBox {
     BorderBox,
     PaddingBox,
@@ -5919,6 +6020,7 @@ pub enum CssBackgroundBox {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssBackgroundAttachment {
     Scroll,
     Fixed,
@@ -5952,6 +6054,7 @@ impl CssBackgroundAttachmentList {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssCursorKeyword {
     Auto,
     Default,
@@ -5992,6 +6095,7 @@ pub enum CssCursorKeyword {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssCursor {
     Keyword(CssCursorKeyword),
     Urls(CssCursorUrls),
@@ -6062,12 +6166,14 @@ impl CssCursorUrlList {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssPointerEvents {
     Auto,
     None,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssUserSelect {
     Auto,
     Text,
@@ -6077,12 +6183,14 @@ pub enum CssUserSelect {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssOutlineStyle {
     Auto,
     Border(CssBorderStyle),
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssOutlineWidth {
     Thin,
     Medium,
@@ -6141,6 +6249,7 @@ impl CssOutline {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssTransformFunctionKind {
     Matrix,
     Matrix3d,
@@ -6215,12 +6324,14 @@ impl CssTransformFunctionList {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssTransform {
     None,
     Functions(CssTransformFunctionList),
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssTranslate {
     None,
     Values(CssTranslateValues),
@@ -6253,12 +6364,14 @@ impl CssTranslateValues {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssRotate {
     None,
     Value(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssScale {
     None,
     Values(CssScaleValues),
@@ -6291,6 +6404,7 @@ impl CssScaleValues {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFilterFunction {
     Blur(CssFilterArguments),
     Brightness(CssFilterArguments),
@@ -6332,12 +6446,14 @@ impl CssFilterFunctionList {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssFilter {
     None,
     Functions(CssFilterFunctionList),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssBasicShape {
     Inset(CssBasicShapeArguments),
     Circle(CssBasicShapeArguments),
@@ -6346,6 +6462,7 @@ pub enum CssBasicShape {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssClipPath {
     None,
     Url(CssUrl),
@@ -6418,6 +6535,7 @@ impl CssMaskList {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssTimeUnit {
     Seconds,
     Milliseconds,
@@ -6495,6 +6613,7 @@ impl CssTimeList {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssEasing {
     Ease,
     Linear,
@@ -6534,6 +6653,7 @@ impl CssEasingList {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssTransitionProperty {
     All,
     None,
@@ -6567,6 +6687,7 @@ impl CssTransitionPropertyList {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssAnimationName {
     None,
     Custom(CssCustomIdent),
@@ -6600,6 +6721,7 @@ impl CssAnimationNameList {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssAnimationIterationCount {
     Infinite,
     Number(CssAnimationIterationNumber),
@@ -6676,6 +6798,7 @@ impl CssAnimationIterationCountList {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssAnimationDirection {
     Normal,
     Reverse,
@@ -6705,6 +6828,7 @@ impl CssAnimationDirectionList {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssAnimationFillMode {
     None,
     Forwards,
@@ -6734,6 +6858,7 @@ impl CssAnimationFillModeList {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssAnimationPlayState {
     Running,
     Paused,
@@ -6979,6 +7104,7 @@ pub(crate) fn calc_has_negative_component(calc: &CssCalcLength) -> bool {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssColor {
     CurrentColor,
     Rgba(CssRgbaColor),
@@ -7359,6 +7485,7 @@ impl CssLchColor {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssPredefinedColorSpace {
     Srgb,
     SrgbLinear,
@@ -7432,6 +7559,7 @@ fn color_alpha_is_valid(alpha: Option<f32>) -> bool {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssSystemColor {
     Canvas,
     CanvasText,
@@ -7558,6 +7686,7 @@ impl CssColorInterpolationMethod {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssColorInterpolationSpace {
     Predefined(CssPredefinedColorSpace),
     Hsl,
@@ -7569,6 +7698,7 @@ pub enum CssColorInterpolationSpace {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssHueInterpolationMethod {
     Shorter,
     Longer,
@@ -7636,6 +7766,7 @@ impl CssRelativeColor {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssRelativeColorFunction {
     Rgb,
     Hsl,
@@ -7693,6 +7824,7 @@ impl CssColorComponentExpression {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssSelector {
     Tag(String),
     Key(String),
@@ -7880,6 +8012,7 @@ impl CssComplexSelectorPart {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssSelectorCombinator {
     Descendant,
     Child,
@@ -8012,6 +8145,7 @@ impl CssRelativeSelectorList {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssPseudoClass {
     Root,
     Scope,
@@ -8101,6 +8235,7 @@ impl CssPseudoClass {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssPseudoElement {
     Before,
     After,
@@ -8183,6 +8318,7 @@ impl CssNthChildPattern {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssNthPattern {
     Odd,
     Even,
@@ -8403,6 +8539,7 @@ impl CssAttributeName {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssAttributeMatcher {
     Exists,
     Equals(String),
@@ -8414,6 +8551,7 @@ pub enum CssAttributeMatcher {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssAttributeCaseSensitivity {
     DocumentDefault,
     AsciiCaseInsensitive,
@@ -8421,6 +8559,7 @@ pub enum CssAttributeCaseSensitivity {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CssCalcLength {
     Px(CssFiniteNumber),
     Dimension(CssLengthDimension),
@@ -8552,6 +8691,7 @@ impl CssCalcLengthTerm {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CssCalcOperator {
     Add,
     Subtract,

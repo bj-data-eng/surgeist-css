@@ -1,7 +1,9 @@
 use surgeist_css::{
-    CssDeclaredValue, CssErrorCode, CssFeatureKind, CssImportance, CssKnownDeclaration,
-    CssKnownProperty, CssPropertyNameRef, CssRecoveryAction, CssRule, CssSupportStatus, ErrorKind,
-    feature_catalog, feature_metadata, parse_sheet, parse_style_attribute, property_metadata,
+    CssAnimationDirection, CssCalcOperator, CssDeclaredValue, CssErrorCode, CssFeatureKind,
+    CssGridAutoFlowAxis, CssImportance, CssKnownDeclaration, CssKnownProperty,
+    CssMediaQueryModifier, CssPropertyNameRef, CssRecoveryAction, CssRelativeColorFunction,
+    CssRule, CssSelectorCombinator, CssSupportStatus, ErrorKind, feature_catalog, feature_metadata,
+    parse_sheet, parse_style_attribute, property_metadata,
 };
 
 fn rule_kind(rule: &CssRule) -> &'static str {
@@ -41,6 +43,72 @@ fn feature_kind(kind: CssFeatureKind) -> &'static str {
     }
 }
 
+fn importance_kind(importance: CssImportance) -> &'static str {
+    match importance {
+        CssImportance::Normal => "normal",
+        CssImportance::Important => "important",
+    }
+}
+
+fn support_status_kind(status: CssSupportStatus) -> &'static str {
+    match status {
+        CssSupportStatus::Complete => "complete",
+        CssSupportStatus::Partial => "partial",
+        CssSupportStatus::RecognizedUnsupported => "recognized unsupported",
+    }
+}
+
+fn representative_evolving_kind(
+    media: CssMediaQueryModifier,
+    selector: CssSelectorCombinator,
+    calculation: CssCalcOperator,
+    timing: CssAnimationDirection,
+    grid: CssGridAutoFlowAxis,
+    color: CssRelativeColorFunction,
+) -> [&'static str; 6] {
+    let media = match media {
+        CssMediaQueryModifier::Not => "media not",
+        CssMediaQueryModifier::Only => "media only",
+        _ => "future media modifier",
+    };
+    let selector = match selector {
+        CssSelectorCombinator::Descendant => "selector descendant",
+        CssSelectorCombinator::Child => "selector child",
+        CssSelectorCombinator::NextSibling => "selector next sibling",
+        CssSelectorCombinator::SubsequentSibling => "selector subsequent sibling",
+        _ => "future selector combinator",
+    };
+    let calculation = match calculation {
+        CssCalcOperator::Add => "calculation add",
+        CssCalcOperator::Subtract => "calculation subtract",
+        _ => "future calculation operator",
+    };
+    let timing = match timing {
+        CssAnimationDirection::Normal => "timing normal",
+        CssAnimationDirection::Reverse => "timing reverse",
+        CssAnimationDirection::Alternate => "timing alternate",
+        CssAnimationDirection::AlternateReverse => "timing alternate reverse",
+        _ => "future timing direction",
+    };
+    let grid = match grid {
+        CssGridAutoFlowAxis::Row => "grid row",
+        CssGridAutoFlowAxis::Column => "grid column",
+        _ => "future grid axis",
+    };
+    let color = match color {
+        CssRelativeColorFunction::Rgb => "relative rgb",
+        CssRelativeColorFunction::Hsl => "relative hsl",
+        CssRelativeColorFunction::Hwb => "relative hwb",
+        CssRelativeColorFunction::Lab => "relative lab",
+        CssRelativeColorFunction::Lch => "relative lch",
+        CssRelativeColorFunction::Oklab => "relative oklab",
+        CssRelativeColorFunction::Oklch => "relative oklch",
+        CssRelativeColorFunction::Color(_) => "relative color",
+        _ => "future relative color function",
+    };
+    [media, selector, calculation, timing, grid, color]
+}
+
 fn emitted_actions(source: &str) -> Vec<CssRecoveryAction> {
     parse_sheet(source)
         .diagnostics()
@@ -77,6 +145,36 @@ fn public_surface_sheet_reports_expose_retained_syntax_and_structured_recovery()
     let (sheet, diagnostics) = recovered.into_parts();
     assert_eq!(sheet.rules().len(), 2);
     assert_eq!(diagnostics.len(), 1);
+}
+
+#[test]
+fn public_surface_closed_enums_are_exhaustive_and_evolving_enums_use_wildcards() {
+    assert_eq!(importance_kind(CssImportance::Normal), "normal");
+    assert_eq!(importance_kind(CssImportance::Important), "important");
+    assert_eq!(support_status_kind(CssSupportStatus::Complete), "complete");
+    assert_eq!(support_status_kind(CssSupportStatus::Partial), "partial");
+    assert_eq!(
+        support_status_kind(CssSupportStatus::RecognizedUnsupported),
+        "recognized unsupported"
+    );
+    assert_eq!(
+        representative_evolving_kind(
+            CssMediaQueryModifier::Only,
+            CssSelectorCombinator::Child,
+            CssCalcOperator::Add,
+            CssAnimationDirection::Alternate,
+            CssGridAutoFlowAxis::Column,
+            CssRelativeColorFunction::Oklch,
+        ),
+        [
+            "media only",
+            "selector child",
+            "calculation add",
+            "timing alternate",
+            "grid column",
+            "relative oklch",
+        ]
+    );
 }
 
 #[test]

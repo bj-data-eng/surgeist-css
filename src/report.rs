@@ -69,6 +69,15 @@ impl<T> CssParseReport<T> {
     pub fn into_parts(self) -> (T, Vec<CssRecoveryDiagnostic>) {
         (self.syntax, self.diagnostics)
     }
+
+    #[cfg(feature = "app-strict")]
+    pub(crate) fn into_validation_result(self) -> Result<T, CssValidationFailure> {
+        let (syntax, diagnostics) = self.into_parts();
+        match CssValidationFailure::new(diagnostics) {
+            Some(failure) => Err(failure),
+            None => Ok(syntax),
+        }
+    }
 }
 
 /// A diagnostic-phase description of one CSS-owned recovery decision.
@@ -203,10 +212,10 @@ pub struct CssValidationFailure {
 impl CssValidationFailure {
     #[must_use]
     #[cfg_attr(
-        not(test),
+        not(any(test, feature = "app-strict")),
         expect(
             dead_code,
-            reason = "validation failure construction is consumed by validators in cycle C04"
+            reason = "validation failure construction is feature-gated with app-strict"
         )
     )]
     pub(crate) fn new(diagnostics: Vec<CssRecoveryDiagnostic>) -> Option<Self> {

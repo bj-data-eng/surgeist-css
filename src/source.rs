@@ -82,6 +82,14 @@ impl CssSourcePosition {
         }
     }
 
+    pub(crate) const fn previous_ascii_byte(self) -> Self {
+        Self {
+            byte_offset: CssByteOffset::new(self.byte_offset.value().saturating_sub(1)),
+            line: self.line,
+            column: CssUtf16ColumnIndex::new(self.column.value().saturating_sub(1)),
+        }
+    }
+
     pub(crate) const fn from_source_location(location: cssparser::SourceLocation) -> Self {
         Self {
             byte_offset: CssByteOffset::new(0),

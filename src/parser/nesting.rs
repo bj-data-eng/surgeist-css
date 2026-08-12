@@ -14,7 +14,7 @@ use super::{
     parse_layer_prelude, parse_scope_prelude, parse_scoped_rule_list,
 };
 use crate::error::{
-    Error, invalid_at_rule_body, invalid_at_rule_placement, invalid_selector, invalid_syntax,
+    Error, invalid_at_rule_block, invalid_at_rule_placement, invalid_selector, invalid_syntax,
     selector_basic, with_at_rule_prelude_context, with_media_query_context,
 };
 use crate::syntax::*;
@@ -206,8 +206,8 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser {
             }
             NestedStyleAtRulePrelude::Layer(names) => {
                 if names.len() > 1 {
-                    return Err(invalid_at_rule_body(
-                        start.source_location(),
+                    return Err(invalid_at_rule_block(
+                        input,
                         "layer",
                         "baseline.rule.layer-block",
                         "at most one layer name before a block",

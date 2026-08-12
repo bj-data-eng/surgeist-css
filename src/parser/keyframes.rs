@@ -52,7 +52,7 @@ pub(super) fn parse_keyframes_rule<'i, 't>(
     )
     .ok_or_else(|| {
         invalid_at_rule_body(
-            start.source_location(),
+            input,
             "keyframes",
             "baseline.rule.keyframes",
             "one or more valid keyframe blocks",

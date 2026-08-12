@@ -35,7 +35,7 @@ pub(super) fn parse_font_face_rule<'i, 't>(
     )
     .ok_or_else(|| {
         invalid_at_rule_body(
-            start.source_location(),
+            input,
             "font-face",
             "baseline.rule.font-face",
             "font-family and src descriptors",

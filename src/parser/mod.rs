@@ -54,7 +54,7 @@ use variables::{
 };
 
 use crate::error::{
-    Error, Result, basic, from_rule_parse_error, invalid_at_rule_body, invalid_at_rule_placement,
+    Error, Result, basic, from_rule_parse_error, invalid_at_rule_block, invalid_at_rule_placement,
     invalid_syntax, property_name_error, unsupported_value, with_at_rule_prelude_context,
     with_declaration_annotation_context, with_media_query_context, with_property_context,
 };
@@ -305,16 +305,16 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser {
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::AtRule, ParseError<'i, Self::Error>> {
         match prelude {
-            StrictAtRulePrelude::Import(_) => Err(invalid_at_rule_body(
-                start.source_location(),
+            StrictAtRulePrelude::Import(_) => Err(invalid_at_rule_block(
+                input,
                 "import",
                 "baseline.rule.import",
                 "a semicolon-terminated @import rule",
             )),
             StrictAtRulePrelude::Layer(names) => {
                 if names.len() > 1 {
-                    return Err(invalid_at_rule_body(
-                        start.source_location(),
+                    return Err(invalid_at_rule_block(
+                        input,
                         "layer",
                         "baseline.rule.layer-block",
                         "at most one layer name before a block",
@@ -742,8 +742,8 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser {
             }
             ScopedAtRulePrelude::Layer(names) => {
                 if names.len() > 1 {
-                    return Err(invalid_at_rule_body(
-                        start.source_location(),
+                    return Err(invalid_at_rule_block(
+                        input,
                         "layer",
                         "baseline.rule.layer-block",
                         "at most one layer name before a block",

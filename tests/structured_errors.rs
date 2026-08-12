@@ -81,6 +81,54 @@ fn error_missing_at_rule_body_reports_missing_token_position() {
 }
 
 #[test]
+fn error_empty_font_face_body_reports_missing_descriptor_at_body_end() {
+    let error = parse_sheet("@font-face {\n}")
+        .expect_err("font-face requires font-family and src descriptors");
+    assert_eq!(error.code(), CssErrorCode::InvalidAtRuleBody);
+    match error.kind() {
+        ErrorKind::InvalidAtRuleBody(detail) => {
+            assert_eq!(detail.name().as_str(), "font-face");
+            assert_eq!(detail.production().as_str(), "baseline.rule.font-face");
+            assert_eq!(
+                detail.expectation().as_str(),
+                "font-family and src descriptors"
+            );
+            assert!(detail.encountered().is_none());
+        }
+        _ => panic!("unexpected error root"),
+    }
+    let position = error.position();
+    assert_eq!(position.byte_offset().value(), 13);
+    assert_eq!(position.line().value(), 1);
+    assert_eq!(position.column().value(), 0);
+}
+
+#[test]
+fn error_multi_name_layer_block_reports_offending_block_token() {
+    let error = parse_sheet("@layer 😀, theme {}")
+        .expect_err("a layer block accepts at most one layer name");
+    assert_eq!(error.code(), CssErrorCode::InvalidAtRuleBody);
+    match error.kind() {
+        ErrorKind::InvalidAtRuleBody(detail) => {
+            assert_eq!(detail.name().as_str(), "layer");
+            assert_eq!(detail.production().as_str(), "baseline.rule.layer-block");
+            assert_eq!(
+                detail.expectation().as_str(),
+                "at most one layer name before a block"
+            );
+            let token = detail.encountered().expect("offending block token");
+            assert_eq!(token.kind(), CssTokenKind::CurlyBracketBlock);
+            assert_eq!(token.authored(), "{");
+        }
+        _ => panic!("unexpected error root"),
+    }
+    let position = error.position();
+    assert_eq!(position.byte_offset().value(), 19);
+    assert_eq!(position.line().value(), 0);
+    assert_eq!(position.column().value(), 17);
+}
+
+#[test]
 fn error_selector_media_and_qualified_rule_failures_keep_production_context() {
     let selector = parse_sheet("??? { width: 1px; }").expect_err("selector must fail");
     match selector.kind() {

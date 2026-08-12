@@ -687,6 +687,11 @@ impl Error {
         }
     }
 
+    fn at_exact_nonzero_byte_offset(position: CssSourcePosition, kind: ErrorKind) -> Self {
+        debug_assert_ne!(position.byte_offset().value(), 0);
+        Self { kind, position }
+    }
+
     #[must_use]
     pub const fn kind(&self) -> &ErrorKind {
         &self.kind
@@ -729,11 +734,17 @@ impl Error {
     }
 
     fn resolve_source(mut self, source: &str) -> Self {
-        let source_location = cssparser::SourceLocation {
-            line: self.position.line().value(),
-            column: self.position.column().value().saturating_add(1),
+        // Location-only errors carry byte zero until they can be resolved against
+        // the authored source. Body-parser errors retain their exact nonzero cursor.
+        self.position = if self.position.byte_offset().value() != 0 {
+            CssSourcePosition::from_byte_offset_in(source, self.position.byte_offset().value())
+        } else {
+            let source_location = cssparser::SourceLocation {
+                line: self.position.line().value(),
+                column: self.position.column().value().saturating_add(1),
+            };
+            CssSourcePosition::from_source_location_in(source, source_location)
         };
-        self.position = CssSourcePosition::from_source_location_in(source, source_location);
 
         if let Some((start, summary)) = next_authored_token_at(source, self.position) {
             if let Some(token) = encountered_mut(&mut self.kind) {
@@ -975,21 +986,54 @@ pub(crate) fn with_at_rule_prelude_context<'i>(
     error
 }
 
-pub(crate) fn invalid_at_rule_body<'i>(
+pub(crate) fn invalid_at_rule_body<'i, 't>(
+    input: &Parser<'i, 't>,
+    name: &str,
+    production: &'static str,
+    expectation: &'static str,
+) -> ParseError<'i, Error> {
+    invalid_at_rule_body_at(
+        CssSourcePosition::from_cssparser(input.position(), input.current_source_location()),
+        input.current_source_location(),
+        name,
+        production,
+        expectation,
+    )
+}
+
+pub(crate) fn invalid_at_rule_block<'i, 't>(
+    input: &Parser<'i, 't>,
+    name: &str,
+    production: &'static str,
+    expectation: &'static str,
+) -> ParseError<'i, Error> {
+    let position =
+        CssSourcePosition::from_cssparser(input.position(), input.current_source_location())
+            .previous_ascii_byte();
+    let mut location = input.current_source_location();
+    location.column = location.column.saturating_sub(1).max(1);
+    invalid_at_rule_body_at(position, location, name, production, expectation)
+}
+
+fn invalid_at_rule_body_at<'i>(
+    position: CssSourcePosition,
     location: cssparser::SourceLocation,
     name: &str,
     production: &'static str,
     expectation: &'static str,
 ) -> ParseError<'i, Error> {
-    error_at(
+    ParseError {
+        kind: ParseErrorKind::Custom(Error::at_exact_nonzero_byte_offset(
+            position,
+            ErrorKind::InvalidAtRuleBody(CssAtRuleSyntaxError {
+                name: CssAtRuleName::new(name),
+                production: CssProductionId::new(production),
+                expectation: CssGrammarExpectation::new(expectation),
+                encountered: None,
+            }),
+        )),
         location,
-        ErrorKind::InvalidAtRuleBody(CssAtRuleSyntaxError {
-            name: CssAtRuleName::new(name),
-            production: CssProductionId::new(production),
-            expectation: CssGrammarExpectation::new(expectation),
-            encountered: None,
-        }),
-    )
+    }
 }
 
 pub(crate) fn invalid_selector<'i, 't>(

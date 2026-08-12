@@ -93,35 +93,63 @@ test owner.
 | `F2.24` configured Clippy gate | lint-clean owned Rust source | both configured warning-denied Clippy commands |
 | `F2.25` crate-root unsafe prohibition | `src/lib.rs` | crate-root attribute check, both compiler-enforced Clippy commands, and the complete owned-Rust scan |
 
+## Audit Artifact Contract
+
+The manifests below declare exact evidence identities. They do not claim that a
+command, review, publication, or remote readback has already succeeded. The leaf
+coordinator executes every command after task and holistic review, records each
+result in the canonical candidate handoff, and then performs publication and
+fresh remote readback under the canonical publication gate. This static record
+remains unchanged throughout those later transitions.
+
+### Configured Command Evidence Manifest V1
+```text
+P14.07.PUBLIC-SURFACE|cargo test -p surgeist-css --offline --test public_surface
+P14.07.DOCTEST.DEFAULT|cargo test -p surgeist-css --offline --no-default-features --doc
+P14.07.DOCTEST.APP-STRICT|cargo test -p surgeist-css --offline --no-default-features --features app-strict --doc
+P14.07.RUSTDOC.DEFAULT|RUSTDOCFLAGS='-D warnings' cargo doc -p surgeist-css --offline --no-default-features --no-deps
+P14.07.RUSTDOC.APP-STRICT|RUSTDOCFLAGS='-D warnings' cargo doc -p surgeist-css --offline --no-default-features --features app-strict --no-deps
+P14.08.CHECK.DEFAULT|cargo check -p surgeist-css --offline --no-default-features
+P14.08.TEST.DEFAULT|cargo test -p surgeist-css --offline --no-default-features
+P14.08.CHECK.APP-STRICT|cargo check -p surgeist-css --offline --no-default-features --features app-strict
+P14.08.TEST.APP-STRICT|cargo test -p surgeist-css --offline --no-default-features --features app-strict
+P14.08.CONFORMANCE-CATALOG|cargo test -p surgeist-css --offline --test conformance_catalog
+P14.08.CATALOG-INVENTORY|cargo test -p surgeist-css --offline --test catalog_inventory
+P14.08.INITIATIVE-AUDIT|cargo test -p surgeist-css --offline initiative_i01_audit_
+P14.08.FORMAT|cargo fmt --check
+F2.24.CLIPPY.DEFAULT|cargo clippy -p surgeist-css --offline --no-default-features --all-targets -- -F unsafe-code -D warnings
+F2.24.CLIPPY.APP-STRICT|cargo clippy -p surgeist-css --offline --no-default-features --features app-strict --all-targets -- -F unsafe-code -D warnings
+F2.25.CRATE-ROOT-PROHIBITION|rg -n '^#!\[forbid\(unsafe_code\)\]$' src/lib.rs
+F2.25.OWNED-RUST-SCAN|! rg -n --glob '*.rs' 'unsafe[[:space:]]*(\{|fn|trait|impl|extern)|#!?\[[[:space:]]*unsafe|#!?\[[^]]*(allow|expect)\(unsafe_code\)' .
+P14.09.DIFF-CHECK|git diff --check
+P14.09.PROCESS-CHECK.BEFORE-CLEAN|! pgrep -f '/Users/codex/Development/surgeist-css/target/(debug|release)/'
+P14.09.CLEAN|cargo clean
+P14.09.TARGET-ABSENT|test ! -d target
+P14.09.PROCESS-CHECK.AFTER-CLEAN|! pgrep -f '/Users/codex/Development/surgeist-css/target/(debug|release)/'
+P14.09.STATUS|git status --short
+```
+
+The exact command text is part of this migration artifact's contract. Omitting
+an identity, changing a flag, or substituting a broader summary invalidates the
+artifact. The command manifest records required future execution; it is not a
+stored result and does not replace fresh coordinator evidence.
+
 ## Root-Owned Follow-Up
 
 After receiving the canonical immutable candidate handoff, root owns every
 integration mutation:
 
-1. Verify that the selected candidate is reachable from the leaf authority's
-   published `main`, check it against root's committed MSRV, and deliberately
-   update the `crates/surgeist-css` gitlink.
-2. Migrate facade reexports and CSS-to-Surgeist adapters from the former parser
-   result, location, and independent property/value contracts to reports,
-   structured diagnostics, semantic positions, and coupled declarations.
-3. Decide root feature forwarding for `app-strict`; keep ordinary parser access
-   report-based whether or not strict validation is exposed by the facade.
-4. Preserve custom and substitution-dependent authored values until the
-   root-owned layer with cascade/substitution context resolves them. Carry
-   declaration importance into the root-owned cascade input rather than
-   interpreting it in this leaf.
-5. Run root's committed API generator and update only root-owned API audit
-   artifacts. This leaf contains no generated API artifact.
-6. Update root documentation and examples to inspect retained syntax and
-   diagnostics, explain clean reports and coordinates, include style-attribute
-   use, and avoid obsolete whole-sheet rejection language.
-7. Add or migrate root integration tests for clean and recovered sheets, clean
-   and recovered style attributes, exact diagnostic payload/span/action/order,
-   non-BMP coordinates, declaration importance, custom and substitution-
-   dependent preservation, property coupling, metadata lookup, and strict
-   validation when forwarded.
-8. Run the complete root workspace, feature, lint, format, API-artifact,
-   dependency, MSRV, unsafe, and publication gates before reporting promotion.
+### Root Follow-Up Manifest V1
+```text
+ROOT.01.PUBLISHED-CANDIDATE|Verify the selected candidate is reachable from the leaf authority's published main, check it against root's committed MSRV, and deliberately update the crates/surgeist-css gitlink.
+ROOT.02.FACADE-ADAPTERS|Migrate facade reexports and CSS-to-Surgeist adapters to reports, structured diagnostics, semantic positions, and property-coupled declarations.
+ROOT.03.FEATURE-FORWARDING|Decide root feature forwarding for app-strict while keeping ordinary parser access report-based.
+ROOT.04.AUTHORED-VALUES|Preserve custom and substitution-dependent authored values until the root-owned cascade/substitution layer resolves them, and carry declaration importance into root-owned cascade input.
+ROOT.05.API-ARTIFACTS|Run root's committed API generator and update only root-owned API audit artifacts.
+ROOT.06.DOCUMENTATION|Update root documentation and examples for retained syntax, diagnostics, clean reports, coordinates, style attributes, and the removal of whole-sheet rejection semantics.
+ROOT.07.INTEGRATION-TESTS|Cover clean and recovered sheets and style attributes, exact diagnostics, non-BMP coordinates, importance, authored-value preservation, property coupling, metadata lookup, and forwarded strict validation.
+ROOT.08.ROOT-GATES|Run root's complete workspace, feature, lint, format, API-artifact, dependency, MSRV, unsafe, and publication gates before reporting promotion.
+```
 
 Root owns the pointer, facade, adapters, generated API artifacts, root docs, and
 root integration tests. The leaf candidate must not edit any of them.

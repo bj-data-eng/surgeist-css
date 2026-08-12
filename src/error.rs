@@ -1073,6 +1073,39 @@ pub(crate) fn from_parse_error(source: &str, error: ParseError<'_, Error>) -> Er
     .resolve_source(source)
 }
 
+pub(crate) fn is_nesting_limit_error(error: &ParseError<'_, Error>) -> bool {
+    matches!(
+        error.kind,
+        ParseErrorKind::Custom(Error {
+            kind: ErrorKind::NestingLimit(_),
+            ..
+        })
+    )
+}
+
+pub(crate) fn nesting_limit<'i>(
+    source: &str,
+    byte_offset: usize,
+    limit: u32,
+    enclosing_production: &'static str,
+) -> ParseError<'i, Error> {
+    let position = CssSourcePosition::from_byte_offset_in(source, byte_offset);
+    let location = cssparser::SourceLocation {
+        line: position.line().value(),
+        column: position.column().value().saturating_add(1),
+    };
+    ParseError {
+        kind: ParseErrorKind::Custom(Error {
+            kind: ErrorKind::NestingLimit(CssNestingLimitError {
+                limit,
+                enclosing_production: CssProductionId::new(enclosing_production),
+            }),
+            position,
+        }),
+        location,
+    }
+}
+
 pub(crate) fn from_rule_parse_error(
     source: &str,
     failed_unit: &str,

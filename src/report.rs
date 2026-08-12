@@ -23,7 +23,8 @@ pub struct CssParseReport<T> {
 }
 
 impl<T> CssParseReport<T> {
-    pub(crate) fn new(syntax: T, diagnostics: Vec<CssRecoveryDiagnostic>) -> Self {
+    pub(crate) fn new(syntax: T, mut diagnostics: Vec<CssRecoveryDiagnostic>) -> Self {
+        diagnostics.sort_by_key(|diagnostic| diagnostic.error.position().byte_offset());
         Self {
             syntax,
             diagnostics,
@@ -39,10 +40,11 @@ impl<T> CssParseReport<T> {
         &self.syntax
     }
 
-    /// Returns the diagnostics in parser-produced source order.
+    /// Returns diagnostics ordered by first responsible authored byte offset.
     ///
-    /// This diagnostic-phase accessor preserves recovery provenance; it does not
-    /// log diagnostics or apply recovery actions.
+    /// Equal offsets preserve parser discovery order, including child-before-parent
+    /// recovery. This diagnostic-phase accessor preserves recovery provenance; it
+    /// does not log diagnostics or apply recovery actions.
     #[must_use]
     pub fn diagnostics(&self) -> &[CssRecoveryDiagnostic] {
         &self.diagnostics
@@ -299,6 +301,22 @@ mod tests {
         let (syntax, diagnostics) = report.into_parts();
         assert_eq!(syntax, "retained syntax");
         assert_eq!(diagnostics, vec![diagnostic]);
+    }
+
+    #[test]
+    fn structural_recovery_report_orders_offsets_and_preserves_child_parent_ties() {
+        let child = diagnostic(CssRecoveryAction::DropDeclaration);
+        let parent = CssRecoveryDiagnostic::new(
+            child.error().clone(),
+            child.span(),
+            CssRecoveryAction::DropAtRule,
+        )
+        .expect("the parent tie shares the child's responsible position");
+        let earlier = diagnostic_for("@bad;", CssRecoveryAction::DropAtRule);
+
+        let report = CssParseReport::new((), vec![child.clone(), parent.clone(), earlier.clone()]);
+
+        assert_eq!(report.diagnostics(), &[earlier, child, parent]);
     }
 
     #[test]

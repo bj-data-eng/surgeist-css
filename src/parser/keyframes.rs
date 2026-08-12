@@ -3,6 +3,7 @@ use cssparser::{
     QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, Token, match_ignore_ascii_case,
 };
 
+use super::recovery::{RecoveryLoopOutcome, RecoveryProgress, RecoveryState};
 use super::values::parse_custom_ident_from_str_at;
 use super::{
     DeclarationMode, block_item_diagnostic, consume_failed_rule_block,
@@ -42,17 +43,25 @@ pub(super) fn parse_keyframes_rule<'i, 't>(
     input: &mut Parser<'i, 't>,
     start: &ParserState,
     diagnostics: &mut Vec<crate::CssRecoveryDiagnostic>,
+    recovery: RecoveryState,
 ) -> std::result::Result<CssKeyframesRule, ParseError<'i, Error>> {
     let mut parser = KeyframeBlockParser {
         source,
         diagnostics: Vec::new(),
+        recovery,
     };
     let mut blocks = Vec::new();
     let mut previous_end = input.position().byte_index();
     {
         let mut items = RuleBodyParser::new(input, &mut parser);
-        while let Some(item) = items.next() {
+        loop {
+            let progress = RecoveryProgress::record(items.input);
+            let Some(item) = items.next() else {
+                break;
+            };
             consume_failed_rule_block(source, items.input, item.is_err());
+            let retained = item.is_ok();
+            let progress_outcome = progress.finish(items.input, retained);
             let unit_end = items.input.position().byte_index();
             match item {
                 Ok(block) => blocks.push(block),
@@ -70,6 +79,9 @@ pub(super) fn parse_keyframes_rule<'i, 't>(
                 }
             }
             previous_end = unit_end;
+            if progress_outcome == RecoveryLoopOutcome::Terminated {
+                break;
+            }
         }
     }
     diagnostics.append(&mut parser.diagnostics);
@@ -92,6 +104,7 @@ pub(super) fn parse_keyframes_rule<'i, 't>(
 struct KeyframeBlockParser<'s> {
     source: &'s str,
     diagnostics: Vec<crate::CssRecoveryDiagnostic>,
+    recovery: RecoveryState,
 }
 
 impl<'i> AtRuleParser<'i> for KeyframeBlockParser<'i> {
@@ -118,14 +131,26 @@ impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser<'i> {
         start: &ParserState,
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::QualifiedRule, ParseError<'i, Self::Error>> {
+        let _depth =
+            self.recovery
+                .enter_rule_block(self.source, input, "baseline.keyframes.block")?;
         let mut declarations = Vec::new();
-        let mut declaration_parser = KeyframeDeclarationParser;
+        let mut declaration_parser = KeyframeDeclarationParser {
+            source: self.source,
+            recovery: self.recovery.clone(),
+        };
         let mut items = RuleBodyParser::new(input, &mut declaration_parser);
-        while let Some(item) = items.next() {
+        loop {
+            let progress = RecoveryProgress::record(items.input);
+            let Some(item) = items.next() else {
+                break;
+            };
             let position = items.input.position().byte_index();
             let failed_at_block = item.is_err()
                 && position > 0
                 && self.source.as_bytes().get(position - 1) == Some(&b'{');
+            let retained = item.is_ok();
+            let progress_outcome = progress.finish(items.input, retained);
             let unit_end = items.input.position().byte_index();
             match item {
                 Ok(declaration) => declarations.push(declaration),
@@ -143,6 +168,9 @@ impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser<'i> {
                     }
                 }
                 Err((error, _)) => return Err(error),
+            }
+            if progress_outcome == RecoveryLoopOutcome::Terminated {
+                break;
             }
         }
 
@@ -236,9 +264,12 @@ fn parse_keyframe_selector<'i, 't>(
     }
 }
 
-struct KeyframeDeclarationParser;
+struct KeyframeDeclarationParser<'s> {
+    source: &'s str,
+    recovery: RecoveryState,
+}
 
-impl<'i> AtRuleParser<'i> for KeyframeDeclarationParser {
+impl<'i> AtRuleParser<'i> for KeyframeDeclarationParser<'i> {
     type Prelude = ();
     type AtRule = CssKeyframeDeclaration;
     type Error = Error;
@@ -256,13 +287,13 @@ impl<'i> AtRuleParser<'i> for KeyframeDeclarationParser {
     }
 }
 
-impl<'i> QualifiedRuleParser<'i> for KeyframeDeclarationParser {
+impl<'i> QualifiedRuleParser<'i> for KeyframeDeclarationParser<'i> {
     type Prelude = ();
     type QualifiedRule = CssKeyframeDeclaration;
     type Error = Error;
 }
 
-impl<'i> RuleBodyItemParser<'i, CssKeyframeDeclaration, Error> for KeyframeDeclarationParser {
+impl<'i> RuleBodyItemParser<'i, CssKeyframeDeclaration, Error> for KeyframeDeclarationParser<'i> {
     fn parse_declarations(&self) -> bool {
         true
     }
@@ -272,7 +303,7 @@ impl<'i> RuleBodyItemParser<'i, CssKeyframeDeclaration, Error> for KeyframeDecla
     }
 }
 
-impl<'i> DeclarationParser<'i> for KeyframeDeclarationParser {
+impl<'i> DeclarationParser<'i> for KeyframeDeclarationParser<'i> {
     type Declaration = CssKeyframeDeclaration;
     type Error = Error;
 
@@ -282,6 +313,8 @@ impl<'i> DeclarationParser<'i> for KeyframeDeclarationParser {
         input: &mut Parser<'i, 't>,
         declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
+        self.recovery
+            .check_component_values(self.source, input, "css.declaration")?;
         let parsed =
             parse_declaration_core(DeclarationMode::Keyframe, name, input, declaration_start)?;
         Ok(CssKeyframeDeclaration::new(parsed.body, parsed.position))

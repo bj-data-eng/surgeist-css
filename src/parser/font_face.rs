@@ -4,6 +4,7 @@ use cssparser::{
     UnicodeRange as ParsedUnicodeRange, match_ignore_ascii_case,
 };
 
+use super::recovery::{RecoveryLoopOutcome, RecoveryProgress, RecoveryState};
 use super::typography::parse_font_family_name;
 use super::{
     block_item_diagnostic, block_item_diagnostic_from_start, is_declaration_recovery_unit,
@@ -21,12 +22,19 @@ pub(super) fn parse_font_face_rule<'i, 't>(
     input: &mut Parser<'i, 't>,
     start: &ParserState,
     diagnostics: &mut Vec<crate::CssRecoveryDiagnostic>,
+    recovery: RecoveryState,
 ) -> std::result::Result<CssFontFaceRule, ParseError<'i, Error>> {
     let mut descriptors = ParsedFontFaceDescriptors::default();
-    let mut descriptor_parser = FontFaceDescriptorParser;
+    let mut descriptor_parser = FontFaceDescriptorParser { source, recovery };
 
     let mut items = RuleBodyParser::new(input, &mut descriptor_parser);
-    while let Some(item) = items.next() {
+    loop {
+        let progress = RecoveryProgress::record(items.input);
+        let Some(item) = items.next() else {
+            break;
+        };
+        let retained = item.is_ok();
+        let progress_outcome = progress.finish(items.input, retained);
         let unit_end = items.input.position().byte_index();
         match item {
             Ok(descriptor) => {
@@ -55,6 +63,9 @@ pub(super) fn parse_font_face_rule<'i, 't>(
                 }
             }
             Err((error, _)) => return Err(error),
+        }
+        if progress_outcome == RecoveryLoopOutcome::Terminated {
+            break;
         }
     }
 
@@ -187,21 +198,24 @@ impl FontFaceDescriptor {
     }
 }
 
-struct FontFaceDescriptorParser;
+struct FontFaceDescriptorParser<'s> {
+    source: &'s str,
+    recovery: RecoveryState,
+}
 
-impl<'i> AtRuleParser<'i> for FontFaceDescriptorParser {
+impl<'i> AtRuleParser<'i> for FontFaceDescriptorParser<'i> {
     type Prelude = ();
     type AtRule = FontFaceDescriptor;
     type Error = Error;
 }
 
-impl<'i> QualifiedRuleParser<'i> for FontFaceDescriptorParser {
+impl<'i> QualifiedRuleParser<'i> for FontFaceDescriptorParser<'i> {
     type Prelude = ();
     type QualifiedRule = FontFaceDescriptor;
     type Error = Error;
 }
 
-impl<'i> RuleBodyItemParser<'i, FontFaceDescriptor, Error> for FontFaceDescriptorParser {
+impl<'i> RuleBodyItemParser<'i, FontFaceDescriptor, Error> for FontFaceDescriptorParser<'i> {
     fn parse_declarations(&self) -> bool {
         true
     }
@@ -211,7 +225,7 @@ impl<'i> RuleBodyItemParser<'i, FontFaceDescriptor, Error> for FontFaceDescripto
     }
 }
 
-impl<'i> DeclarationParser<'i> for FontFaceDescriptorParser {
+impl<'i> DeclarationParser<'i> for FontFaceDescriptorParser<'i> {
     type Declaration = FontFaceDescriptor;
     type Error = Error;
 
@@ -221,6 +235,8 @@ impl<'i> DeclarationParser<'i> for FontFaceDescriptorParser {
         input: &mut Parser<'i, 't>,
         declaration_start: &ParserState,
     ) -> std::result::Result<Self::Declaration, ParseError<'i, Self::Error>> {
+        self.recovery
+            .check_component_values(self.source, input, "css.descriptor")?;
         let location = declaration_start.source_location();
         let position = crate::source::CssSourcePosition::from_cssparser(
             declaration_start.position(),

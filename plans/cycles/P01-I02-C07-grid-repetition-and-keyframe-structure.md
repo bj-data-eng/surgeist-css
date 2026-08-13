@@ -204,7 +204,62 @@ prohibited repository-wide.
 - **Intended commits:** `test: specify Grid and keyframe metadata`;
   `docs: publish Grid and keyframe structure`.
 
-## 6. Completion
+## 6. Final Cycle Gate And Publication
+
+After T3 is independently clean and before holistic review, the coordinator runs
+this exact gate at the candidate head:
+
+```sh
+cargo check -p surgeist-css --offline --no-default-features
+cargo check -p surgeist-css --offline --no-default-features --features app-strict
+cargo test -p surgeist-css --offline --no-default-features
+cargo test -p surgeist-css --offline --no-default-features --features app-strict
+cargo test -p surgeist-css --offline --no-default-features --doc
+cargo test -p surgeist-css --offline --no-default-features --features app-strict --doc
+cargo clippy -p surgeist-css --offline --no-default-features --all-targets -- -F unsafe-code -D warnings
+cargo clippy -p surgeist-css --offline --no-default-features --features app-strict --all-targets -- -F unsafe-code -D warnings
+RUSTDOCFLAGS='-D warnings' cargo doc -p surgeist-css --offline --no-deps --no-default-features
+RUSTDOCFLAGS='-D warnings' cargo doc -p surgeist-css --offline --no-deps --no-default-features --features app-strict
+cargo fmt --check
+git diff --check 4ec24e2bd09bbd937b85e059980970ec4ddcfc6e..HEAD
+shasum -a 256 tests/fixtures/i01-c01-observables.tsv
+git diff --unified=0 4ec24e2bd09bbd937b85e059980970ec4ddcfc6e..HEAD -- tests/fixtures/i01-c01-observables.tsv
+rg -n 'unsafe|unsafe_code' --glob '*.rs' src tests
+! rg -n 'TO''DO|TB''D|FIX''ME|\?''\?''\?' README.md src/lib.rs plans/handoffs/P01-I02-C07-grid-repetition-and-keyframe-structure.md
+git status --short --branch
+ps -axo pid=,command=
+```
+
+The fixture checksum output must be exactly
+`99bbb897710969949d7b596d14fbd352d5d3121a6c4cf663b8ca100154057f8b`;
+direct diff inspection must show only the seven section 3 IDs. The Rust scan is
+classified directly: the crate-level `forbid(unsafe_code)` and authored CSS
+keyword strings are not executable unsafe; any other match blocks review. The
+process listing must contain no repository Cargo, rustc, rustdoc, or
+`surgeist_css` process. The worktree must be clean. A fresh holistic reviewer
+then reviews exact range
+`4ec24e2bd09bbd937b85e059980970ec4ddcfc6e..HEAD`.
+
+Only after holistic `CLEAN` and the status-only completion commit, run:
+
+```sh
+cargo clean --offline
+test ! -e target
+git status --short --branch
+ps -axo pid=,command=
+git fetch origin main
+git push --force-with-lease=refs/heads/main:597265b574be01c88a3ce559cc2bc07e02791da3 origin "${candidate_sha}:refs/heads/main"
+git fetch origin main
+git rev-parse HEAD refs/remotes/origin/main
+git ls-remote origin refs/heads/main
+```
+
+Before the push, `candidate_sha` is set to and checked against the immutable
+post-review local `HEAD`; fetched `origin/main` must still equal the published
+C06 lease SHA. Afterward all three readbacks must equal `candidate_sha`, the
+worktree stays clean, `target` stays absent, and no stale process remains.
+
+## 7. Completion
 
 C07 completes only after all three tasks are independently `CLEAN`, the exact
 seven-row fixture correction and replacement digest are verified directly,

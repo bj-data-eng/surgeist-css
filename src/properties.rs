@@ -444,6 +444,32 @@ fn font_i01_projection(value: &CssFontValue) -> Option<CssFont> {
     )
 }
 
+fn font_feature_settings_i01_projection(
+    value: &CssAuthoredFontFeatureSettings,
+) -> CssFontFeatureSettings {
+    match value {
+        CssAuthoredFontFeatureSettings::Normal => CssFontFeatureSettings::Normal,
+        CssAuthoredFontFeatureSettings::Features(features) => {
+            let features = features
+                .features()
+                .iter()
+                .map(|feature| {
+                    let value = match feature.value() {
+                        CssAuthoredFontFeatureValue::Omitted => None,
+                        CssAuthoredFontFeatureValue::On => Some(CssFontFeatureValue::On),
+                        CssAuthoredFontFeatureValue::Off => Some(CssFontFeatureValue::Off),
+                        CssAuthoredFontFeatureValue::Index(value) => {
+                            Some(CssFontFeatureValue::Integer(value.value()))
+                        }
+                    };
+                    CssFontFeature::new(feature.tag().as_str(), value)
+                })
+                .collect();
+            CssFontFeatureSettings::Features(CssFontFeatureList::new(features))
+        }
+    }
+}
+
 macro_rules! define_current_property_value {
     (
         $canonical:literal, $wrapper:ident, $representation:ident,
@@ -753,6 +779,20 @@ macro_rules! define_property_value {
             CssFont,
             font,
             font_i01_projection
+        );
+    };
+    (
+        FontFeatureSettings, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssAuthoredFontFeatureSettings,
+            CssFontFeatureSettings,
+            settings,
+            |value| Some(font_feature_settings_i01_projection(value))
         );
     };
     (

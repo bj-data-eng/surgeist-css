@@ -59,11 +59,12 @@ fn core_font_wrappers_keep_current_i01_global_and_substitution_branches_distinct
     let report = parse_style_attribute(concat!(
         "font-size: 16px; line-height: normal; ",
         "font-family: Arial, serif; font: italic 16px/normal Arial; ",
-        "font-size: var(--size); font: inherit",
+        "font-feature-settings: \"kern\"; ",
+        "font-feature-settings: var(--features); font: inherit",
     ));
     assert!(report.is_clean(), "{:?}", report.diagnostics());
 
-    for index in 0..4 {
+    for index in 0..5 {
         let value = report.syntax()[index]
             .known()
             .unwrap()
@@ -86,15 +87,19 @@ fn core_font_wrappers_keep_current_i01_global_and_substitution_branches_distinct
                 assert!(value.i01_subset().is_some());
                 let _ = value.font();
             }
+            CssKnownPropertyValueRef::FontFeatureSettings(value) => {
+                assert!(value.i01_subset().is_some());
+                let _ = value.settings();
+            }
             _ => panic!("expected core font wrapper"),
         }
     }
     assert!(matches!(
-        report.syntax()[4].known().unwrap().declared_value(),
+        report.syntax()[5].known().unwrap().declared_value(),
         CssKnownDeclaredValueRef::SubstitutionDependent(_)
     ));
     assert!(matches!(
-        report.syntax()[5].known().unwrap().declared_value(),
+        report.syntax()[6].known().unwrap().declared_value(),
         CssKnownDeclaredValueRef::Global(_)
     ));
 }

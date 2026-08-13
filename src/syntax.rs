@@ -5472,6 +5472,115 @@ pub enum CssFontFeatureValue {
     Integer(i32),
 }
 
+/// A decoded OpenType feature tag containing exactly four ASCII characters.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CssOpenTypeTag {
+    value: String,
+}
+
+impl CssOpenTypeTag {
+    #[must_use]
+    pub fn try_new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        if value.len() == 4 && value.is_ascii() {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+/// A non-negative authored OpenType feature index.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CssFontFeatureIndex {
+    value: i32,
+}
+
+impl CssFontFeatureIndex {
+    #[must_use]
+    pub const fn try_new(value: i32) -> Option<Self> {
+        if value >= 0 {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> i32 {
+        self.value
+    }
+}
+
+/// The authored value associated with a checked OpenType feature tag.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssAuthoredFontFeatureValue {
+    Omitted,
+    On,
+    Off,
+    Index(CssFontFeatureIndex),
+}
+
+/// One checked current authored OpenType feature setting.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssAuthoredFontFeature {
+    tag: CssOpenTypeTag,
+    value: CssAuthoredFontFeatureValue,
+}
+
+impl CssAuthoredFontFeature {
+    #[must_use]
+    pub const fn new(tag: CssOpenTypeTag, value: CssAuthoredFontFeatureValue) -> Self {
+        Self { tag, value }
+    }
+
+    #[must_use]
+    pub const fn tag(&self) -> &CssOpenTypeTag {
+        &self.tag
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> CssAuthoredFontFeatureValue {
+        self.value
+    }
+}
+
+/// A nonempty checked current authored OpenType feature list.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssAuthoredFontFeatureList {
+    features: Vec<CssAuthoredFontFeature>,
+}
+
+impl CssAuthoredFontFeatureList {
+    #[must_use]
+    pub fn try_new(features: Vec<CssAuthoredFontFeature>) -> Option<Self> {
+        if features.is_empty() {
+            None
+        } else {
+            Some(Self { features })
+        }
+    }
+
+    #[must_use]
+    pub fn features(&self) -> &[CssAuthoredFontFeature] {
+        &self.features
+    }
+}
+
+/// The checked current authored `font-feature-settings` value.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssAuthoredFontFeatureSettings {
+    Normal,
+    Features(CssAuthoredFontFeatureList),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssFontSizeLengthPercentage {
     value: CssLength,

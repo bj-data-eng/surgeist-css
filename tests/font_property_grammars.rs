@@ -1,7 +1,8 @@
 use surgeist_css::{
-    CssFontFamilyNameKind, CssFontSize, CssFontStyle, CssFontValue, CssGenericFontFamily,
-    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLineHeight,
-    CssNonNegativeNumberValue, CssSystemFont, parse_style_attribute,
+    CssAuthoredFontFeatureSettings, CssAuthoredFontFeatureValue, CssFontFamilyNameKind,
+    CssFontFeatureSettings, CssFontFeatureValue, CssFontSize, CssFontStyle, CssFontValue,
+    CssGenericFontFamily, CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef,
+    CssLineHeight, CssNonNegativeNumberValue, CssSystemFont, parse_style_attribute,
 };
 
 #[test]
@@ -311,4 +312,89 @@ fn opentype_tags_and_indices_enforce_ascii_and_nonnegative_domains() {
         report.syntax()[0].known().unwrap().property(),
         CssKnownProperty::Color,
     );
+}
+
+#[test]
+fn font_feature_settings_preserve_authored_values_and_i01_projection() {
+    let report = parse_style_attribute(
+        r#"font-feature-settings: "kern", "\6c iga" on, "zero" off, "ss01" 0, "cv01" 12"#,
+    );
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::FontFeatureSettings(value) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-feature-settings");
+    };
+    let CssAuthoredFontFeatureSettings::Features(features) = value.settings() else {
+        panic!("expected feature list");
+    };
+    assert_eq!(
+        features
+            .features()
+            .iter()
+            .map(|feature| feature.tag().as_str())
+            .collect::<Vec<_>>(),
+        ["kern", "liga", "zero", "ss01", "cv01"],
+    );
+    assert!(matches!(
+        features.features()[0].value(),
+        CssAuthoredFontFeatureValue::Omitted
+    ));
+    assert!(matches!(
+        features.features()[1].value(),
+        CssAuthoredFontFeatureValue::On
+    ));
+    assert!(matches!(
+        features.features()[2].value(),
+        CssAuthoredFontFeatureValue::Off
+    ));
+    assert!(matches!(
+        features.features()[3].value(),
+        CssAuthoredFontFeatureValue::Index(index) if index.value() == 0
+    ));
+    assert!(matches!(
+        features.features()[4].value(),
+        CssAuthoredFontFeatureValue::Index(index) if index.value() == 12
+    ));
+
+    let Some(CssFontFeatureSettings::Features(legacy)) = value.i01_subset() else {
+        panic!("expected exact I01 projection");
+    };
+    assert_eq!(legacy.features()[0].value(), None);
+    assert_eq!(legacy.features()[1].value(), Some(CssFontFeatureValue::On));
+    assert_eq!(legacy.features()[2].value(), Some(CssFontFeatureValue::Off));
+    assert_eq!(
+        legacy.features()[3].value(),
+        Some(CssFontFeatureValue::Integer(0))
+    );
+    assert_eq!(
+        legacy.features()[4].value(),
+        Some(CssFontFeatureValue::Integer(12))
+    );
+}
+
+#[test]
+fn opentype_tag_length_unicode_and_index_boundaries_recover() {
+    for invalid in [
+        r#"font-feature-settings: "abc""#,
+        r#"font-feature-settings: "abcde""#,
+        r#"font-feature-settings: "éabc""#,
+        r#"font-feature-settings: "😀abc""#,
+        r#"font-feature-settings: "\E9 abc""#,
+        r#"font-feature-settings: "kern" -1"#,
+    ] {
+        let source = format!("{invalid}; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        assert_eq!(report.diagnostics().len(), 1, "{source}");
+        assert_eq!(
+            report.syntax()[0].known().unwrap().property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+    }
 }

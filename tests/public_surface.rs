@@ -1,16 +1,18 @@
 use surgeist_css::{
     CssAnimationDirection, CssAuthoredColorComponent, CssAuthoredColorMix,
-    CssAuthoredColorMixPercentage, CssAuthoredColorSyntax, CssAuthoredSystemColor, CssCalcOperator,
-    CssColorInterpolationMethod, CssColorInterpolationSpace, CssErrorCode, CssExclusionReason,
-    CssFeatureKind, CssFontFamilyNameKind, CssFontSize, CssFontSizeLengthPercentage,
-    CssGenericFontFamily, CssGridAutoFlowAxis, CssHueInterpolationMethod, CssImportance,
-    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLength,
-    CssLineHeightLengthPercentage, CssMediaQueryModifier, CssPredefinedColorSpace,
-    CssPropertyNameRef, CssRecoveryAction, CssRelativeColorChannel, CssRelativeColorEnvironment,
-    CssRelativeColorExpressionValue, CssRelativeColorFunction, CssRelativeColorResultDomain,
-    CssRule, CssSelectorCombinator, CssSpecificationTier, CssSupportStatus, ErrorKind,
-    conformance_exclusion, feature_metadata, parse_sheet, parse_style_attribute, property_metadata,
-    specification_source,
+    CssAuthoredColorMixPercentage, CssAuthoredColorSyntax, CssAuthoredFontFeature,
+    CssAuthoredFontFeatureList, CssAuthoredFontFeatureSettings, CssAuthoredFontFeatureValue,
+    CssAuthoredSystemColor, CssCalcOperator, CssColorInterpolationMethod,
+    CssColorInterpolationSpace, CssErrorCode, CssExclusionReason, CssFeatureKind,
+    CssFontFamilyNameKind, CssFontFeature, CssFontFeatureIndex, CssFontFeatureValue, CssFontSize,
+    CssFontSizeLengthPercentage, CssGenericFontFamily, CssGridAutoFlowAxis,
+    CssHueInterpolationMethod, CssImportance, CssKnownDeclaredValueRef, CssKnownProperty,
+    CssKnownPropertyValueRef, CssLength, CssLineHeightLengthPercentage, CssMediaQueryModifier,
+    CssOpenTypeTag, CssPredefinedColorSpace, CssPropertyNameRef, CssRecoveryAction,
+    CssRelativeColorChannel, CssRelativeColorEnvironment, CssRelativeColorExpressionValue,
+    CssRelativeColorFunction, CssRelativeColorResultDomain, CssRule, CssSelectorCombinator,
+    CssSpecificationTier, CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata,
+    parse_sheet, parse_style_attribute, property_metadata, specification_source,
 };
 
 #[test]
@@ -47,6 +49,36 @@ fn public_surface_exposes_checked_core_font_models() {
     assert!(
         CssLineHeightLengthPercentage::try_new(CssLength::try_percent(-1.0).unwrap()).is_none()
     );
+}
+
+#[test]
+fn public_surface_checks_current_opentype_construction_and_preserves_i01_construction() {
+    let tag = CssOpenTypeTag::try_new("kern").expect("four ASCII characters");
+    assert_eq!(tag.as_str(), "kern");
+    assert!(CssOpenTypeTag::try_new("abc").is_none());
+    assert!(CssOpenTypeTag::try_new("abcde").is_none());
+    assert!(CssOpenTypeTag::try_new("éabc").is_none());
+    assert!(CssOpenTypeTag::try_new("😀abc").is_none());
+
+    let zero = CssFontFeatureIndex::try_new(0).expect("zero index");
+    let positive = CssFontFeatureIndex::try_new(7).expect("positive index");
+    assert_eq!(zero.value(), 0);
+    assert_eq!(positive.value(), 7);
+    assert!(CssFontFeatureIndex::try_new(-1).is_none());
+
+    let feature = CssAuthoredFontFeature::new(tag, CssAuthoredFontFeatureValue::Index(positive));
+    let list = CssAuthoredFontFeatureList::try_new(vec![feature]).expect("nonempty feature list");
+    assert!(CssAuthoredFontFeatureList::try_new(Vec::new()).is_none());
+    let settings = CssAuthoredFontFeatureSettings::Features(list);
+    assert!(matches!(
+        settings,
+        CssAuthoredFontFeatureSettings::Features(_)
+    ));
+
+    let legacy = CssFontFeature::try_new("éabc", Some(CssFontFeatureValue::Integer(-1)))
+        .expect("frozen I01 construction remains source-compatible");
+    assert_eq!(legacy.tag(), "éabc");
+    assert_eq!(legacy.value(), Some(CssFontFeatureValue::Integer(-1)));
 }
 
 #[test]

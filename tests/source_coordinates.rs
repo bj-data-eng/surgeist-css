@@ -49,6 +49,68 @@ fn font_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
 }
 
 #[test]
+fn opentype_tag_error_has_exact_utf16_coordinates_and_full_declaration_span() {
+    let source = "--😀: 1; font-feature-settings: \"😀abc\"; color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("supplementary OpenType tag must recover once");
+    };
+    let responsible = source.find("\"😀abc\"").expect("feature tag");
+    let declaration_start = source
+        .find("font-feature-settings")
+        .expect("feature declaration");
+    let declaration_end = declaration_start
+        + source[declaration_start..]
+            .find(';')
+            .expect("feature declaration terminator")
+        + 1;
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(source[..responsible].encode_utf16().count()).expect("UTF-16 column"),
+    );
+    assert_position(
+        diagnostic.span().start(),
+        declaration_start,
+        0,
+        u32::try_from(source[..declaration_start].encode_utf16().count())
+            .expect("UTF-16 declaration start"),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        declaration_end,
+        0,
+        u32::try_from(source[..declaration_end].encode_utf16().count())
+            .expect("UTF-16 declaration end"),
+    );
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected font feature property error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::FontFeatureSettings);
+    let encountered = detail.encountered().expect("responsible tag token");
+    assert_eq!(encountered.kind(), CssTokenKind::String);
+    assert_eq!(encountered.authored(), "\"😀abc\"");
+    assert_eq!(
+        report.syntax()[1].known().unwrap().property(),
+        CssKnownProperty::Color,
+    );
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects the recovered supplementary tag");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn timing_type_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
     let source = "--😀: 1; transition-duration: calc(1px + 2px); color: red";
     let report = parse_style_attribute(source);

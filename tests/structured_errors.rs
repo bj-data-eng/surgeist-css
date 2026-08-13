@@ -42,6 +42,50 @@ fn invalid_core_font_value_has_exact_property_diagnostic_and_retains_its_sibling
 }
 
 #[test]
+fn font_feature_list_separator_error_has_exact_identity_span_and_recovery() {
+    let source = r#"font-feature-settings: "kern",, "liga" on; color: red"#;
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 1);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("empty feature-list item must recover once");
+    };
+    let responsible = source.find(",,").expect("adjacent separators") + 1;
+    let declaration_end = source.find(';').expect("declaration terminator") + 1;
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    assert_eq!(
+        diagnostic.error().position().byte_offset().value(),
+        responsible
+    );
+    assert_eq!(diagnostic.span().start().byte_offset().value(), 0);
+    assert_eq!(
+        diagnostic.span().end().byte_offset().value(),
+        declaration_end
+    );
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected property value error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::FontFeatureSettings);
+    let encountered = detail.encountered().expect("responsible second comma");
+    assert_eq!(encountered.kind(), CssTokenKind::Comma);
+    assert_eq!(encountered.authored(), ",");
+    assert_eq!(
+        report.syntax()[0].known().unwrap().property(),
+        CssKnownProperty::Color,
+    );
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects the recovered empty list item");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn color_domain_failure_reports_the_responsible_component_and_retains_its_sibling() {
     let source = "color: hsl(20px 30% 40%); opacity: 0.5";
     let report = parse_style_attribute(source);

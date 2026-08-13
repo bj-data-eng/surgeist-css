@@ -61,6 +61,41 @@ fn assert_easing_rejected(value: &str) {
     );
 }
 
+fn assert_filter_rejected(value: &str) {
+    let source = format!("filter: {value}; color: red");
+    let report = parse_style_attribute(&source);
+    assert_eq!(
+        report.syntax().len(),
+        1,
+        "retained invalid filter `{value}`: {:?}",
+        report.syntax()
+    );
+    assert_eq!(
+        report.syntax()[0]
+            .known()
+            .expect("retained color sibling")
+            .property(),
+        CssKnownProperty::Color,
+    );
+    assert_eq!(
+        report.diagnostics().len(),
+        1,
+        "expected one diagnostic for `{value}`"
+    );
+}
+
+#[test]
+fn drop_shadow_rejects_box_shadow_only_components_and_negative_filter_amounts() {
+    for value in [
+        "drop-shadow(inset 1px 2px)",
+        "drop-shadow(1px 2px 3px 4px)",
+        "brightness(-0.01)",
+        "grayscale(-1%)",
+    ] {
+        assert_filter_rejected(value);
+    }
+}
+
 fn parsed_easing_property(value: &str) -> CssTransitionTimingFunctionPropertyValue {
     let report = parse_style_attribute(&format!("transition-timing-function: {value}"));
     assert!(

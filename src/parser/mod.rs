@@ -1312,7 +1312,6 @@ pub(super) fn is_declaration_recovery_unit(failed_unit: &str) -> bool {
 struct StrictRuleParser<'s> {
     source: &'s str,
     top_level_phase: Option<TopLevelPreludePhase>,
-    namespace_bindings: CssNamespaceBindings,
     encoding_allowed: bool,
     source_len: usize,
     encoding: Option<CssEncodingDeclaration>,
@@ -1424,7 +1423,6 @@ impl<'s> StrictRuleParser<'s> {
         Self {
             source,
             top_level_phase: Some(TopLevelPreludePhase::Initial),
-            namespace_bindings: CssNamespaceBindings::default(),
             encoding_allowed: true,
             source_len: source.len(),
             encoding: None,
@@ -1437,7 +1435,6 @@ impl<'s> StrictRuleParser<'s> {
         Self {
             source,
             top_level_phase: None,
-            namespace_bindings: CssNamespaceBindings::default(),
             encoding_allowed: false,
             source_len: usize::MAX,
             encoding: None,
@@ -1476,11 +1473,11 @@ impl<'s> StrictRuleParser<'s> {
             return false;
         };
         self.top_level_phase = Some(next);
-        self.namespace_bindings
-            .activate(prefix.clone(), name.clone());
+        self.recovery
+            .activate_namespace(prefix.clone(), name.clone());
         debug_assert!(
-            self.namespace_bindings
-                .has_active_binding(prefix.as_ref(), &name)
+            self.recovery
+                .has_active_namespace_binding(prefix.as_ref(), &name)
         );
         true
     }
@@ -1976,12 +1973,8 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser<'i> {
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
         self.encoding_allowed = false;
-        let mut recovery = SelectorRecovery::new_with_namespaces(
-            self.source,
-            &mut self.diagnostics,
-            self.recovery.clone(),
-            &self.namespace_bindings,
-        );
+        let mut recovery =
+            SelectorRecovery::new(self.source, &mut self.diagnostics, self.recovery.clone());
         parse_rule_selector_list(input, &mut recovery)
     }
 

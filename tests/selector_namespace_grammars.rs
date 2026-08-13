@@ -397,11 +397,13 @@ fn namespace_bindings_reach_every_selector_consumer_without_changing_recovery() 
         CssRule::Container(container),
         CssRule::LayerBlock(layer),
         CssRule::Style(_),
-        CssRule::Style(_),
         CssRule::Scope(scope),
     ] = report.syntax().rules()
     else {
-        panic!("expected every namespace-aware selector consumer to be retained")
+        panic!(
+            "expected every namespace-aware selector consumer to be retained: {:?}",
+            report.syntax().rules()
+        )
     };
 
     assert!(matches!(media.rules(), [CssRule::Style(_)]));
@@ -414,8 +416,69 @@ fn namespace_bindings_reach_every_selector_consumer_without_changing_recovery() 
     assert!(matches!(layer.rules(), [CssRule::Style(_)]));
     assert!(scope.root().is_some());
     assert!(scope.limit().is_some());
+    assert!(matches!(scope.rules().rules(), [CssScopedRule::Style(_)]));
+}
+
+#[test]
+fn namespace_context_keeps_forgiving_members_and_unforgiving_rules_local() {
+    let source = concat!(
+        "@namespace svg \"urn:svg\";/*🦊*/",
+        "@media screen {",
+        ".kept:is(svg|a, missing|b) { color: red; }",
+        ".failed, missing|b { color: blue; }",
+        "svg|after { color: green; }",
+        "}",
+    );
+    let report = parse_sheet(source);
+
+    let [CssRule::Namespace(_), CssRule::Media(media)] = report.syntax().rules() else {
+        panic!("expected namespace and retained media group")
+    };
     assert!(matches!(
-        scope.rules().rules(),
-        [CssScopedRule::Style(_)]
+        media.rules(),
+        [CssRule::Style(_), CssRule::Style(_)]
     ));
+    let [forgiving, unforgiving] = report.diagnostics() else {
+        panic!("expected one member-local and one whole-rule recovery")
+    };
+    assert_eq!(forgiving.action(), CssRecoveryAction::DropSelectorListItem);
+    assert_eq!(unforgiving.action(), CssRecoveryAction::DropQualifiedRule);
+    assert!(
+        forgiving.span().start().byte_offset().value()
+            < unforgiving.span().start().byte_offset().value()
+    );
+    assert_eq!(
+        source
+            .get(
+                forgiving.span().start().byte_offset().value()
+                    ..forgiving.span().end().byte_offset().value()
+            )
+            .expect("forgiving recovery span"),
+        " missing|b"
+    );
+    assert_eq!(
+        source
+            .get(
+                unforgiving.span().start().byte_offset().value()
+                    ..unforgiving.span().end().byte_offset().value()
+            )
+            .expect("unforgiving recovery span"),
+        ".failed, missing|b { color: blue; }"
+    );
+}
+
+#[test]
+fn namespace_context_survives_implicit_eof_closure_in_nested_groups() {
+    let source = "@namespace svg \"urn:svg\";@media screen { svg|kept { color: red; }";
+    let report = parse_sheet(source);
+
+    let [CssRule::Namespace(_), CssRule::Media(media)] = report.syntax().rules() else {
+        panic!("expected namespace and implicitly closed media group")
+    };
+    assert!(matches!(media.rules(), [CssRule::Style(_)]));
+    assert!(
+        report.diagnostics().iter().all(|diagnostic| {
+            diagnostic.action() == CssRecoveryAction::RetainWithImplicitClosure
+        })
+    );
 }

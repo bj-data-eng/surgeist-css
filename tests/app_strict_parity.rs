@@ -171,6 +171,9 @@ fn app_strict_namespace_qualified_selectors_match_ordinary_results() {
         "@namespace \"urn:default\";",
         "@namespace svg \"urn:svg\";",
         "svg|a,svg|*,*|a,|a,a[svg|href][*|title][|lang][plain] { color: red; }",
+        "@media screen { svg|media { color: red; } }",
+        "@supports selector(svg|supported) { svg|supports { color: red; } }",
+        "@scope (svg|root) to (svg|limit) { svg|scoped { color: red; } }",
     ));
     assert!(clean.is_clean(), "{:?}", clean.diagnostics());
     assert!(matches!(
@@ -183,6 +186,9 @@ fn app_strict_namespace_qualified_selectors_match_ordinary_results() {
             CssRule::Style(_),
             CssRule::Style(_),
             CssRule::Style(_),
+            CssRule::Media(_),
+            CssRule::Supports(_),
+            CssRule::Scope(_),
         ]
     ));
 

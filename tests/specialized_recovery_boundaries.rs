@@ -315,6 +315,40 @@ fn specialized_boundary_selector_depth_is_exact_at_255_256_and_257() {
 }
 
 #[test]
+fn namespace_context_survives_selector_depth_boundaries() {
+    for depth in [255, 256] {
+        let mut source = String::from("@namespace svg \"urn:svg\";");
+        source.push_str(&":is(".repeat(depth));
+        source.push_str("svg|leaf");
+        source.push_str(&")".repeat(depth));
+        source.push_str("{color:red}");
+        let report = parse_sheet(&source);
+        assert!(
+            report.is_clean(),
+            "depth {depth}: {:?}",
+            report.diagnostics()
+        );
+        assert!(matches!(
+            report.syntax().rules(),
+            [CssRule::Namespace(_), CssRule::Style(_)]
+        ));
+    }
+
+    let mut source = String::from("@namespace svg \"urn:svg\";");
+    source.push_str(&":is(".repeat(257));
+    source.push_str("svg|leaf");
+    source.push_str(&")".repeat(257));
+    source.push_str("{color:red}");
+    let report = parse_sheet(&source);
+    assert!(matches!(report.syntax().rules(), [CssRule::Namespace(_)]));
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected one selector nesting diagnostic")
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::NestingLimit);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::StopAtNestingLimit);
+}
+
+#[test]
 fn specialized_boundary_media_depth_is_exact_at_255_256_and_257() {
     for depth in [255, 256] {
         let source = nested_media(depth, true);

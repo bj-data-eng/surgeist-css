@@ -2,7 +2,6 @@ use cssparser::{
     BasicParseErrorKind, Delimiter, ParseError, Parser, ToCss, Token, match_ignore_ascii_case,
 };
 
-use super::CssNamespaceBindings;
 use super::recovery::{RecoveryState, comma_member_span, recovery_action_for_error};
 use crate::error::{CssFeatureId, Error, from_parse_error, invalid_selector, selector_basic};
 use crate::syntax::*;
@@ -25,7 +24,6 @@ pub(super) struct SelectorRecovery<'a> {
     source: &'a str,
     diagnostics: &'a mut Vec<crate::CssRecoveryDiagnostic>,
     state: RecoveryState,
-    namespaces: Option<&'a CssNamespaceBindings>,
 }
 
 impl<'a> SelectorRecovery<'a> {
@@ -38,29 +36,11 @@ impl<'a> SelectorRecovery<'a> {
             source,
             diagnostics,
             state,
-            namespaces: None,
-        }
-    }
-
-    pub(super) fn new_with_namespaces(
-        source: &'a str,
-        diagnostics: &'a mut Vec<crate::CssRecoveryDiagnostic>,
-        state: RecoveryState,
-        namespaces: &'a CssNamespaceBindings,
-    ) -> Self {
-        Self {
-            source,
-            diagnostics,
-            state,
-            namespaces: Some(namespaces),
         }
     }
 
     fn unqualified_type_namespace(&self) -> CssNamespaceConstraint {
-        if self
-            .namespaces
-            .is_some_and(CssNamespaceBindings::has_default)
-        {
+        if self.state.has_default_namespace() {
             CssNamespaceConstraint::Default
         } else {
             CssNamespaceConstraint::Any
@@ -68,9 +48,7 @@ impl<'a> SelectorRecovery<'a> {
     }
 
     fn named_namespace(&self, prefix: &str) -> Option<CssNamespacePrefix> {
-        self.namespaces
-            .and_then(|namespaces| namespaces.active_prefix(prefix))
-            .cloned()
+        self.state.active_namespace_prefix(prefix)
     }
 
     pub(super) fn check_depth<'i, 't>(

@@ -5,7 +5,9 @@ use cssparser::{ParseError, Parser, ParserInput, Token};
 
 use crate::error::{Error, is_nesting_limit_error, nesting_limit};
 use crate::source::CssSourcePosition;
-use crate::syntax::CssSelector;
+use crate::syntax::{CssNamespaceName, CssNamespacePrefix, CssSelector};
+
+use super::CssNamespaceBindings;
 
 pub(super) const STRUCTURAL_NESTING_LIMIT: u32 = 256;
 pub(super) const DIRECT_PARSE_DEPTH: u32 = 128;
@@ -194,6 +196,7 @@ fn function_token_start(source: &[u8], opening_parenthesis: usize) -> usize {
 pub(crate) struct RecoveryState {
     depth: Rc<Cell<u32>>,
     style_context_captures: StyleContextCaptures,
+    namespace_bindings: Rc<RefCell<CssNamespaceBindings>>,
     implicit_openings: Rc<Vec<usize>>,
     retained_implicit_openings: Rc<RefCell<Vec<usize>>>,
 }
@@ -204,12 +207,43 @@ impl RecoveryState {
         depth: u32,
         style_context_captures: StyleContextCaptures,
     ) -> Self {
+        let namespace_bindings = Rc::clone(&style_context_captures.namespace_bindings);
         Self {
             depth: Rc::new(Cell::new(depth)),
             style_context_captures,
+            namespace_bindings,
             implicit_openings: Rc::new(unclosed_openings(source)),
             retained_implicit_openings: Rc::new(RefCell::new(Vec::new())),
         }
+    }
+
+    pub(super) fn activate_namespace(
+        &self,
+        prefix: Option<CssNamespacePrefix>,
+        name: CssNamespaceName,
+    ) {
+        self.namespace_bindings.borrow_mut().activate(prefix, name);
+    }
+
+    pub(super) fn has_active_namespace_binding(
+        &self,
+        prefix: Option<&CssNamespacePrefix>,
+        name: &CssNamespaceName,
+    ) -> bool {
+        self.namespace_bindings
+            .borrow()
+            .has_active_binding(prefix, name)
+    }
+
+    pub(super) fn has_default_namespace(&self) -> bool {
+        self.namespace_bindings.borrow().has_default()
+    }
+
+    pub(super) fn active_namespace_prefix(&self, prefix: &str) -> Option<CssNamespacePrefix> {
+        self.namespace_bindings
+            .borrow()
+            .active_prefix(prefix)
+            .cloned()
     }
 
     pub(super) fn record_style_context(
@@ -397,6 +431,7 @@ impl RecoveryState {
 #[derive(Clone, Default)]
 pub(super) struct StyleContextCaptures {
     entries: Rc<RefCell<Vec<StyleContextCapture>>>,
+    namespace_bindings: Rc<RefCell<CssNamespaceBindings>>,
 }
 
 struct StyleContextCapture {

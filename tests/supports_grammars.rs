@@ -1,6 +1,6 @@
 use surgeist_css::{
-    CssErrorCode, CssImportance, CssRecoveryAction, CssRule, CssScopedRule,
-    CssSupportsConditionKind, parse_sheet,
+    CssErrorCode, CssImportance, CssNamespaceConstraint, CssRecoveryAction, CssRule, CssScopedRule,
+    CssSelector, CssSupportsConditionKind, parse_sheet,
 };
 
 #[test]
@@ -164,6 +164,49 @@ fn supports_general_enclosed_and_selector_fallback_preserve_exact_units() {
         fallback.condition().kind(),
         CssSupportsConditionKind::GeneralEnclosed(value)
             if value.authored() == "selector(svg|a)"
+    ));
+}
+
+#[test]
+fn supports_selector_uses_active_names_and_falls_back_for_balanced_remainders() {
+    let report = parse_sheet(concat!(
+        "@namespace svg \"urn:svg\";",
+        "@supports selector(svg|a) {}",
+        "@supports selector(undeclared|a) {}",
+        "@supports selector(svg|a, svg|b) {}",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [
+        CssRule::Namespace(_),
+        CssRule::Supports(typed),
+        CssRule::Supports(undeclared),
+        CssRule::Supports(remainder),
+    ] = report.syntax().rules()
+    else {
+        panic!("expected retained namespace and three supports conditions")
+    };
+
+    let CssSupportsConditionKind::Selector(CssSelector::Compound(selector)) =
+        typed.condition().kind()
+    else {
+        panic!("expected typed namespace-qualified selector condition")
+    };
+    assert!(matches!(
+        selector
+            .type_selector()
+            .expect("qualified type selector")
+            .namespace(),
+        CssNamespaceConstraint::Named(prefix) if prefix.as_str() == "svg"
+    ));
+    assert!(matches!(
+        undeclared.condition().kind(),
+        CssSupportsConditionKind::GeneralEnclosed(value)
+            if value.authored() == "selector(undeclared|a)"
+    ));
+    assert!(matches!(
+        remainder.condition().kind(),
+        CssSupportsConditionKind::GeneralEnclosed(value)
+            if value.authored() == "selector(svg|a, svg|b)"
     ));
 }
 

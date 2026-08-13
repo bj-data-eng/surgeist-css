@@ -100,6 +100,346 @@ const GRID_PROPERTY_REMAINDER: &str =
     "Subgrid name-repeat and other unselected Grid 2 property grammar remain unsupported.";
 const KEYFRAMES_SUBSET: &str = "Keyframe names, literal selectors, empty rules and blocks, duplicate selectors and blocks in authored order, and supported declarations with recovery are supported.";
 const KEYFRAMES_REMAINDER: &str = "Calculation selectors, string names, and declaration-processing grammar not selected by C07 remain unsupported.";
+const FONT_WEIGHT_RANGE_SUBSET: &str =
+    "Integer font-weight values from 1 through 1000 are supported.";
+const FONT_WEIGHT_RANGE_REMAINDER: &str =
+    "Other unselected Fonts 4 font-weight property grammar remains unsupported.";
+const FONT_FACE_WEIGHT_RANGE_SUBSET: &str = "Font-face font-weight numbers from 1 through 1000 and increasing two-value ranges are supported.";
+const FONT_FACE_WEIGHT_RANGE_REMAINDER: &str =
+    "Other unselected Fonts 4 font-weight descriptor grammar remains unsupported.";
+const FONT_FACE_STYLE_RANGE_SUBSET: &str =
+    "Font-face oblique style with one or two increasing -90deg through 90deg angles is supported.";
+const FONT_FACE_STYLE_RANGE_REMAINDER: &str =
+    "Other unselected Fonts 4 font-style descriptor grammar remains unsupported.";
+const FONT_FACE_STRETCH_RANGE_SUBSET: &str = "Font-face non-negative percentage stretch values and increasing two-value ranges are supported.";
+const FONT_FACE_STRETCH_RANGE_REMAINDER: &str =
+    "Other unselected Fonts 4 font-stretch descriptor grammar remains unsupported.";
+const FONT_SOURCE_HINTS_SUBSET: &str = "The selected keyword format() hints and variations, color, feature, and incremental tech() hints are supported.";
+const FONT_SOURCE_HINTS_REMAINDER: &str =
+    "Other unselected Fonts 4 font source format and technology hints remain unsupported.";
+
+fn assert_complete_fonts3_feature(
+    id: &str,
+    kind: CssFeatureKind,
+    spelling: &str,
+    production: &str,
+) {
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing metadata for {id}"));
+    assert_eq!(metadata.kind(), kind, "{id}");
+    assert_eq!(metadata.spelling(), spelling, "{id}");
+    assert_eq!(metadata.source().id().as_str(), "O-FONTS3", "{id}");
+    assert_eq!(metadata.production(), production, "{id}");
+    assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id}");
+    assert_eq!(metadata.supported_subset(), None, "{id}");
+    assert_eq!(metadata.unsupported_remainder(), None, "{id}");
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id}");
+    assert!(metadata.baseline_alias_targets().is_empty(), "{id}");
+}
+
+fn assert_partial_fonts4_feature(
+    id: &str,
+    kind: CssFeatureKind,
+    spelling: &str,
+    production: &str,
+    subset: &str,
+    remainder: &str,
+) {
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing metadata for {id}"));
+    assert_eq!(metadata.kind(), kind, "{id}");
+    assert_eq!(metadata.spelling(), spelling, "{id}");
+    assert_eq!(metadata.source().id().as_str(), "I-FONTS4", "{id}");
+    assert_eq!(metadata.production(), production, "{id}");
+    assert_eq!(metadata.status(), CssSupportStatus::Partial, "{id}");
+    assert_eq!(metadata.supported_subset(), Some(subset), "{id}");
+    assert_eq!(metadata.unsupported_remainder(), Some(remainder), "{id}");
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id}");
+    assert!(metadata.baseline_alias_targets().is_empty(), "{id}");
+}
+
+#[test]
+fn fonts3_and_preserved_fonts4_metadata_are_truthful() {
+    let fonts3_properties = [
+        ("baseline.property.font", "font", "#propdef-font", "menu"),
+        (
+            "baseline.property.font-family",
+            "font-family",
+            "#propdef-font-family",
+            "\"Avenir Next\", sans-serif",
+        ),
+        (
+            "baseline.property.font-feature-settings",
+            "font-feature-settings",
+            "#propdef-font-feature-settings",
+            "\"kern\" on, \"liga\" 0",
+        ),
+        (
+            "official.property.font-kerning",
+            "font-kerning",
+            "#propdef-font-kerning",
+            "normal",
+        ),
+        (
+            "baseline.property.font-size",
+            "font-size",
+            "#propdef-font-size",
+            "medium",
+        ),
+        (
+            "official.property.font-size-adjust",
+            "font-size-adjust",
+            "#propdef-font-size-adjust",
+            "0.5",
+        ),
+        (
+            "baseline.property.font-stretch",
+            "font-stretch",
+            "#propdef-font-stretch",
+            "condensed",
+        ),
+        (
+            "baseline.property.font-style",
+            "font-style",
+            "#propdef-font-style",
+            "oblique",
+        ),
+        (
+            "official.property.font-synthesis",
+            "font-synthesis",
+            "#propdef-font-synthesis",
+            "weight style",
+        ),
+        (
+            "baseline.property.font-variant",
+            "font-variant",
+            "#propdef-font-variant",
+            "small-caps oldstyle-nums",
+        ),
+        (
+            "official.property.font-variant-caps",
+            "font-variant-caps",
+            "#propdef-font-variant-caps",
+            "all-small-caps",
+        ),
+        (
+            "official.property.font-variant-east-asian",
+            "font-variant-east-asian",
+            "#propdef-font-variant-east-asian",
+            "jis04 ruby",
+        ),
+        (
+            "official.property.font-variant-ligatures",
+            "font-variant-ligatures",
+            "#propdef-font-variant-ligatures",
+            "common-ligatures no-discretionary-ligatures",
+        ),
+        (
+            "official.property.font-variant-numeric",
+            "font-variant-numeric",
+            "#propdef-font-variant-numeric",
+            "lining-nums tabular-nums slashed-zero",
+        ),
+        (
+            "official.property.font-variant-position",
+            "font-variant-position",
+            "#propdef-font-variant-position",
+            "super",
+        ),
+        (
+            "baseline.property.font-weight",
+            "font-weight",
+            "#propdef-font-weight",
+            "700",
+        ),
+    ];
+    for (id, spelling, production, authored) in fonts3_properties {
+        let report = parse_style_attribute(&format!("{spelling}: {authored}"));
+        assert!(report.is_clean(), "{id}: {:?}", report.diagnostics());
+        assert_eq!(report.syntax().len(), 1, "{id}");
+        assert_complete_fonts3_feature(id, CssFeatureKind::Property, spelling, production);
+    }
+
+    let font_face = parse_sheet(concat!(
+        "@font-face { font-family: Demo Sans; ",
+        "src: local(\"Demo Sans\"), url(demo.woff2) format(\"woff2\"); ",
+        "font-style: oblique; font-weight: 700; font-stretch: condensed; ",
+        "unicode-range: U+0-7F; font-feature-settings: \"kern\" on; }"
+    ));
+    assert!(font_face.is_clean(), "{:?}", font_face.diagnostics());
+    assert_eq!(font_face.syntax().rules().len(), 1);
+
+    for (id, kind, spelling, production) in [
+        (
+            "baseline.rule.font-face",
+            CssFeatureKind::Rule,
+            "@font-face",
+            "#font-face-rule",
+        ),
+        (
+            "baseline.descriptor.font-family",
+            CssFeatureKind::Descriptor,
+            "font-family in @font-face",
+            "#font-family-desc",
+        ),
+        (
+            "baseline.descriptor.src",
+            CssFeatureKind::Descriptor,
+            "src in @font-face",
+            "#src-desc",
+        ),
+        (
+            "baseline.descriptor.font-style",
+            CssFeatureKind::Descriptor,
+            "font-style in @font-face",
+            "#font-prop-desc",
+        ),
+        (
+            "baseline.descriptor.font-weight",
+            CssFeatureKind::Descriptor,
+            "font-weight in @font-face",
+            "#font-prop-desc",
+        ),
+        (
+            "baseline.descriptor.font-stretch",
+            CssFeatureKind::Descriptor,
+            "font-stretch in @font-face",
+            "#font-prop-desc",
+        ),
+        (
+            "baseline.descriptor.unicode-range",
+            CssFeatureKind::Descriptor,
+            "unicode-range in @font-face",
+            "#unicode-range-desc",
+        ),
+        (
+            "official.descriptor.font-feature-settings",
+            CssFeatureKind::Descriptor,
+            "font-feature-settings in @font-face",
+            "#font-rend-desc",
+        ),
+        (
+            "official.value.font-source",
+            CssFeatureKind::Value,
+            "@font-face source list",
+            "#src-desc",
+        ),
+        (
+            "official.value.opentype-tag",
+            CssFeatureKind::Value,
+            "OpenType feature tag",
+            "#font-rend-desc",
+        ),
+    ] {
+        assert_complete_fonts3_feature(id, kind, spelling, production);
+    }
+
+    let display =
+        parse_sheet("@font-face { font-family: Demo; src: url(demo.woff2); font-display: swap; }");
+    assert!(display.is_clean(), "{:?}", display.diagnostics());
+    let display_metadata =
+        feature_metadata("baseline.descriptor.font-display").expect("font-display metadata");
+    assert_eq!(display_metadata.kind(), CssFeatureKind::Descriptor);
+    assert_eq!(display_metadata.spelling(), "font-display in @font-face");
+    assert_eq!(display_metadata.source().id().as_str(), "I-FONTS4");
+    assert_eq!(display_metadata.production(), "#font-display-desc");
+    assert_eq!(display_metadata.status(), CssSupportStatus::Complete);
+    assert_eq!(display_metadata.supported_subset(), None);
+    assert_eq!(display_metadata.unsupported_remainder(), None);
+    assert_eq!(display_metadata.recognized_unsupported_code(), None);
+
+    let unsupported = parse_sheet("@font-feature-values Demo { @styleset { nice: 1; } }");
+    assert!(unsupported.syntax().rules().is_empty());
+    assert_eq!(unsupported.diagnostics().len(), 1);
+    assert_eq!(
+        unsupported.diagnostics()[0].error().code(),
+        CssErrorCode::UnsupportedAtRule
+    );
+    let unsupported_metadata =
+        feature_metadata("later.rule.font-feature-values").expect("font-feature-values metadata");
+    assert_eq!(unsupported_metadata.kind(), CssFeatureKind::Rule);
+    assert_eq!(unsupported_metadata.spelling(), "@font-feature-values");
+    assert_eq!(unsupported_metadata.source().id().as_str(), "I-FONTS4");
+    assert_eq!(
+        unsupported_metadata.production(),
+        "#font-feature-values-rule"
+    );
+    assert_eq!(
+        unsupported_metadata.status(),
+        CssSupportStatus::RecognizedUnsupported
+    );
+    assert_eq!(
+        unsupported_metadata.recognized_unsupported_code(),
+        Some(CssErrorCode::UnsupportedAtRule)
+    );
+
+    let numeric_weight = parse_style_attribute("font-weight: 725");
+    assert!(
+        numeric_weight.is_clean(),
+        "{:?}",
+        numeric_weight.diagnostics()
+    );
+    assert_partial_fonts4_feature(
+        "ext.property.font-weight-range",
+        CssFeatureKind::Property,
+        "font-weight numeric range",
+        "#font-weight-prop",
+        FONT_WEIGHT_RANGE_SUBSET,
+        FONT_WEIGHT_RANGE_REMAINDER,
+    );
+
+    for (id, spelling, production, subset, remainder, authored) in [
+        (
+            "ext.descriptor.font-weight-range",
+            "font-weight ranges in @font-face",
+            "#font-weight-desc",
+            FONT_FACE_WEIGHT_RANGE_SUBSET,
+            FONT_FACE_WEIGHT_RANGE_REMAINDER,
+            "font-weight: 300 700",
+        ),
+        (
+            "ext.descriptor.font-style-oblique-range",
+            "font-style oblique ranges in @font-face",
+            "#font-style-desc",
+            FONT_FACE_STYLE_RANGE_SUBSET,
+            FONT_FACE_STYLE_RANGE_REMAINDER,
+            "font-style: oblique -10deg 20deg",
+        ),
+        (
+            "ext.descriptor.font-stretch-range",
+            "font-stretch percentage ranges in @font-face",
+            "#font-stretch-desc",
+            FONT_FACE_STRETCH_RANGE_SUBSET,
+            FONT_FACE_STRETCH_RANGE_REMAINDER,
+            "font-stretch: 75% 125%",
+        ),
+    ] {
+        let report = parse_sheet(&format!(
+            "@font-face {{ font-family: Demo; src: url(demo.woff2); {authored}; }}"
+        ));
+        assert!(report.is_clean(), "{id}: {:?}", report.diagnostics());
+        assert_partial_fonts4_feature(
+            id,
+            CssFeatureKind::Descriptor,
+            spelling,
+            production,
+            subset,
+            remainder,
+        );
+    }
+
+    let modern_hints = parse_sheet(concat!(
+        "@font-face { font-family: Demo; ",
+        "src: url(demo.woff2) format(woff2) tech(variations, color-colrv1); }"
+    ));
+    assert!(modern_hints.is_clean(), "{:?}", modern_hints.diagnostics());
+    assert_partial_fonts4_feature(
+        "ext.value.font-source-modern-hints",
+        CssFeatureKind::Value,
+        "format() keyword and tech() font-source hints",
+        "#font-face-src-parsing",
+        FONT_SOURCE_HINTS_SUBSET,
+        FONT_SOURCE_HINTS_REMAINDER,
+    );
+}
 
 fn assert_clean_color(authored: &str) {
     let source = format!("color: {authored}");

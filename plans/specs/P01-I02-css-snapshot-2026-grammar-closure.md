@@ -417,7 +417,7 @@ provenance for container-query or style-query syntax.
 
 The immutable official coverage universe is
 `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256
-`09d69fd44b112a23c7a3863f11b21a6103f55beb37d0dca06cd021b33ae670e6`.
+`626d176a734d48c3a6202c189daeadc5ff93253c20ac6681d91f93b01ab11b0d`.
 It enumerates exactly 162 property units, 167 non-property units, the one
 normative legacy-shorthand alias, all supersession mappings, and the complete
 selected exclusion remainder. The implementation may consume its stable IDs in

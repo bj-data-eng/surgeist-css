@@ -26,6 +26,14 @@ pub(super) static IMPLEMENTED_DESCRIPTORS: &[CssFeatureId] = &[
     CssFeatureId::new("baseline.descriptor.font-display"),
     CssFeatureId::new("baseline.descriptor.unicode-range"),
     CssFeatureId::new("official.descriptor.font-feature-settings"),
+    CssFeatureId::new("ext.descriptor.font-weight-range"),
+    CssFeatureId::new("ext.descriptor.font-style-oblique-range"),
+    CssFeatureId::new("ext.descriptor.font-stretch-range"),
+];
+
+pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] = &[
+    CssFeatureId::new("official.value.font-source"),
+    CssFeatureId::new("ext.value.font-source-modern-hints"),
 ];
 
 pub(super) fn parse_font_face_rule<'i, 't>(

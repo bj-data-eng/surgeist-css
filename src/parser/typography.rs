@@ -4,9 +4,15 @@ use super::values::{
     CalculationRoot, LengthGrammar, next_is_comma, parse_color, parse_integer, parse_length_with,
     parse_typed_calculation,
 };
-use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
+use crate::error::{CssFeatureId, Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
+
+pub(super) static IMPLEMENTED_PROPERTY_EXTENSIONS: &[CssFeatureId] =
+    &[CssFeatureId::new("ext.property.font-weight-range")];
+
+pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] =
+    &[CssFeatureId::new("official.value.opentype-tag")];
 
 pub(super) fn parse_font_size<'i, 't>(
     input: &mut Parser<'i, 't>,

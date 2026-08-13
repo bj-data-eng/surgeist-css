@@ -85,6 +85,7 @@ pub(crate) enum CssAtomicImplementationKind {
     Selector,
     Media,
     SharedValue,
+    PropertyExtension,
     ContainerExtension,
 }
 
@@ -155,6 +156,11 @@ static ATOMIC_IMPLEMENTATION_INVENTORIES: &[CssAtomicImplementationInventory] = 
         stable_ids: font_face::IMPLEMENTED_DESCRIPTORS,
     },
     CssAtomicImplementationInventory {
+        module: "crate::parser::font_face",
+        kind: CssAtomicImplementationKind::SharedValue,
+        stable_ids: font_face::IMPLEMENTED_SHARED_VALUES,
+    },
+    CssAtomicImplementationInventory {
         module: "crate::parser::keyframes",
         kind: CssAtomicImplementationKind::Rule,
         stable_ids: keyframes::IMPLEMENTED_RULES,
@@ -213,6 +219,16 @@ static ATOMIC_IMPLEMENTATION_INVENTORIES: &[CssAtomicImplementationInventory] = 
         module: "crate::parser::timing",
         kind: CssAtomicImplementationKind::SharedValue,
         stable_ids: timing::IMPLEMENTED_SHARED_VALUES,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::typography",
+        kind: CssAtomicImplementationKind::PropertyExtension,
+        stable_ids: typography::IMPLEMENTED_PROPERTY_EXTENSIONS,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::typography",
+        kind: CssAtomicImplementationKind::SharedValue,
+        stable_ids: typography::IMPLEMENTED_SHARED_VALUES,
     },
 ];
 

@@ -41,10 +41,6 @@ const BASELINE_RULE_SUBSET: &str =
     "The baseline parser spelling and the I01 recovery extensions are supported.";
 const BASELINE_RULE_REMAINDER: &str =
     "Other valid forms of the cited rule production are outside the I01 subset.";
-const DESCRIPTOR_SUBSET: &str =
-    "The baseline descriptor grammar and the I01 recovery extensions are supported.";
-const DESCRIPTOR_REMAINDER: &str =
-    "Other valid forms of the cited descriptor production are outside the I01 subset.";
 const SELECTOR_REMAINDER: &str =
     "Other valid forms of the cited Selectors production are outside the I01 subset.";
 const QUERY_REMAINDER: &str =
@@ -114,7 +110,7 @@ const FONT_FACE_STYLE_RANGE_REMAINDER: &str =
 const FONT_FACE_STRETCH_RANGE_SUBSET: &str = "Font-face non-negative percentage stretch values and increasing two-value ranges are supported.";
 const FONT_FACE_STRETCH_RANGE_REMAINDER: &str =
     "Other unselected Fonts 4 font-stretch descriptor grammar remains unsupported.";
-const FONT_SOURCE_HINTS_SUBSET: &str = "The selected keyword format() hints and variations, color, feature, and incremental tech() hints are supported.";
+const FONT_SOURCE_HINTS_SUBSET: &str = "The woff, woff2, truetype, opentype, collection, embedded-opentype, and svg format() hints and the variations, color-colrv0, color-colrv1, color-svg, color-sbix, color-cbdt, features-opentype, features-aat, features-graphite, and incremental tech() hints are supported.";
 const FONT_SOURCE_HINTS_REMAINDER: &str =
     "Other unselected Fonts 4 font source format and technology hints remain unsupported.";
 
@@ -385,8 +381,15 @@ fn fonts3_and_preserved_fonts4_metadata_are_truthful() {
         FONT_WEIGHT_RANGE_SUBSET,
         FONT_WEIGHT_RANGE_REMAINDER,
     );
+    let invalid_numeric_weight = parse_style_attribute("font-weight: 1001");
+    assert!(invalid_numeric_weight.syntax().is_empty());
+    assert_eq!(invalid_numeric_weight.diagnostics().len(), 1);
+    assert_eq!(
+        invalid_numeric_weight.diagnostics()[0].error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
 
-    for (id, spelling, production, subset, remainder, authored) in [
+    for (id, spelling, production, subset, remainder, authored, rejected) in [
         (
             "ext.descriptor.font-weight-range",
             "font-weight ranges in @font-face",
@@ -394,6 +397,7 @@ fn fonts3_and_preserved_fonts4_metadata_are_truthful() {
             FONT_FACE_WEIGHT_RANGE_SUBSET,
             FONT_FACE_WEIGHT_RANGE_REMAINDER,
             "font-weight: 300 700",
+            "font-weight: 700 300",
         ),
         (
             "ext.descriptor.font-style-oblique-range",
@@ -402,6 +406,7 @@ fn fonts3_and_preserved_fonts4_metadata_are_truthful() {
             FONT_FACE_STYLE_RANGE_SUBSET,
             FONT_FACE_STYLE_RANGE_REMAINDER,
             "font-style: oblique -10deg 20deg",
+            "font-style: oblique 91deg",
         ),
         (
             "ext.descriptor.font-stretch-range",
@@ -410,6 +415,7 @@ fn fonts3_and_preserved_fonts4_metadata_are_truthful() {
             FONT_FACE_STRETCH_RANGE_SUBSET,
             FONT_FACE_STRETCH_RANGE_REMAINDER,
             "font-stretch: 75% 125%",
+            "font-stretch: -1%",
         ),
     ] {
         let report = parse_sheet(&format!(
@@ -423,6 +429,16 @@ fn fonts3_and_preserved_fonts4_metadata_are_truthful() {
             production,
             subset,
             remainder,
+        );
+
+        let rejected_report = parse_sheet(&format!(
+            "@font-face {{ font-family: Demo; src: url(demo.woff2); {rejected}; }}"
+        ));
+        assert_eq!(rejected_report.diagnostics().len(), 1, "{id}");
+        assert_eq!(
+            rejected_report.diagnostics()[0].error().code(),
+            CssErrorCode::InvalidDescriptorValue,
+            "{id}"
         );
     }
 
@@ -438,6 +454,19 @@ fn fonts3_and_preserved_fonts4_metadata_are_truthful() {
         "#font-face-src-parsing",
         FONT_SOURCE_HINTS_SUBSET,
         FONT_SOURCE_HINTS_REMAINDER,
+    );
+    let unknown_hint = parse_sheet(
+        "@font-face { font-family: Demo; src: url(demo.woff2) format(woff3) tech(unknown); }",
+    );
+    assert!(unknown_hint.syntax().rules().is_empty());
+    assert_eq!(unknown_hint.diagnostics().len(), 2);
+    assert_eq!(
+        unknown_hint.diagnostics()[0].error().code(),
+        CssErrorCode::InvalidDescriptorValue
+    );
+    assert_eq!(
+        unknown_hint.diagnostics()[1].error().code(),
+        CssErrorCode::InvalidAtRuleBody
     );
 }
 
@@ -987,17 +1016,14 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "@font-face",
         source: ExpectedSource::Id("O-FONTS3"),
         production: "#font-face-rule",
-        status: CssSupportStatus::Partial,
-        supported_subset: Some(BASELINE_RULE_SUBSET),
-        unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
+        status: CssSupportStatus::Complete,
+        supported_subset: None,
+        unsupported_remainder: None,
         recognized_code: None,
         positive: Some(Input::Sheet(
             "@font-face { font-family: Inter; src: url(inter.woff2); }",
         )),
-        negative: Some((
-            Input::Sheet("@font-face named { font-family: Inter; src: url(inter.woff2); }"),
-            CssErrorCode::InvalidAtRulePrelude,
-        )),
+        negative: None,
     },
     ExpectedFeature {
         id: "baseline.rule.keyframes",
@@ -1248,17 +1274,14 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "font-family in @font-face",
         source: ExpectedSource::Id("O-FONTS3"),
         production: "#font-family-desc",
-        status: CssSupportStatus::Partial,
-        supported_subset: Some(DESCRIPTOR_SUBSET),
-        unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
+        status: CssSupportStatus::Complete,
+        supported_subset: None,
+        unsupported_remainder: None,
         recognized_code: None,
         positive: Some(Input::Sheet(
             "@font-face { font-family: Inter; src: url(inter.woff2); }",
         )),
-        negative: Some((
-            Input::Sheet("@font-face { font-family: serif, sans-serif; src: url(inter.woff2); }"),
-            CssErrorCode::InvalidDescriptorValue,
-        )),
+        negative: None,
     },
     ExpectedFeature {
         id: "baseline.descriptor.src",
@@ -1266,17 +1289,14 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "src in @font-face",
         source: ExpectedSource::Id("O-FONTS3"),
         production: "#src-desc",
-        status: CssSupportStatus::Partial,
-        supported_subset: Some(DESCRIPTOR_SUBSET),
-        unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
+        status: CssSupportStatus::Complete,
+        supported_subset: None,
+        unsupported_remainder: None,
         recognized_code: None,
         positive: Some(Input::Sheet(
-            "@font-face { font-family: Inter; src: url(inter.woff2) format(woff2); }",
+            "@font-face { font-family: Inter; src: url(inter.woff2) format(\"woff2\"); }",
         )),
-        negative: Some((
-            Input::Sheet("@font-face { font-family: Inter; src: url(inter.woff2) format(woff3); }"),
-            CssErrorCode::InvalidDescriptorValue,
-        )),
+        negative: None,
     },
     ExpectedFeature {
         id: "baseline.descriptor.font-weight",
@@ -1284,19 +1304,14 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "font-weight in @font-face",
         source: ExpectedSource::Id("O-FONTS3"),
         production: "#font-prop-desc",
-        status: CssSupportStatus::Partial,
-        supported_subset: Some(DESCRIPTOR_SUBSET),
-        unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
+        status: CssSupportStatus::Complete,
+        supported_subset: None,
+        unsupported_remainder: None,
         recognized_code: None,
         positive: Some(Input::Sheet(
-            "@font-face { font-family: Inter; src: url(inter.woff2); font-weight: 400 700; }",
+            "@font-face { font-family: Inter; src: url(inter.woff2); font-weight: 700; }",
         )),
-        negative: Some((
-            Input::Sheet(
-                "@font-face { font-family: Inter; src: url(inter.woff2); font-weight: bolder; }",
-            ),
-            CssErrorCode::InvalidDescriptorValue,
-        )),
+        negative: None,
     },
     ExpectedFeature {
         id: "baseline.descriptor.font-style",
@@ -1304,19 +1319,14 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "font-style in @font-face",
         source: ExpectedSource::Id("O-FONTS3"),
         production: "#font-prop-desc",
-        status: CssSupportStatus::Partial,
-        supported_subset: Some(DESCRIPTOR_SUBSET),
-        unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
+        status: CssSupportStatus::Complete,
+        supported_subset: None,
+        unsupported_remainder: None,
         recognized_code: None,
         positive: Some(Input::Sheet(
             "@font-face { font-family: Inter; src: url(inter.woff2); font-style: italic; }",
         )),
-        negative: Some((
-            Input::Sheet(
-                "@font-face { font-family: Inter; src: url(inter.woff2); font-style: made-up; }",
-            ),
-            CssErrorCode::InvalidDescriptorValue,
-        )),
+        negative: None,
     },
     ExpectedFeature {
         id: "baseline.descriptor.font-stretch",
@@ -1324,19 +1334,14 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "font-stretch in @font-face",
         source: ExpectedSource::Id("O-FONTS3"),
         production: "#font-prop-desc",
-        status: CssSupportStatus::Partial,
-        supported_subset: Some(DESCRIPTOR_SUBSET),
-        unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
+        status: CssSupportStatus::Complete,
+        supported_subset: None,
+        unsupported_remainder: None,
         recognized_code: None,
         positive: Some(Input::Sheet(
-            "@font-face { font-family: Inter; src: url(inter.woff2); font-stretch: 75% 125%; }",
+            "@font-face { font-family: Inter; src: url(inter.woff2); font-stretch: condensed; }",
         )),
-        negative: Some((
-            Input::Sheet(
-                "@font-face { font-family: Inter; src: url(inter.woff2); font-stretch: wide; }",
-            ),
-            CssErrorCode::InvalidDescriptorValue,
-        )),
+        negative: None,
     },
     ExpectedFeature {
         id: "baseline.descriptor.font-display",
@@ -1344,19 +1349,14 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "font-display in @font-face",
         source: ExpectedSource::Id("I-FONTS4"),
         production: "#font-display-desc",
-        status: CssSupportStatus::Partial,
-        supported_subset: Some(DESCRIPTOR_SUBSET),
-        unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
+        status: CssSupportStatus::Complete,
+        supported_subset: None,
+        unsupported_remainder: None,
         recognized_code: None,
         positive: Some(Input::Sheet(
             "@font-face { font-family: Inter; src: url(inter.woff2); font-display: swap; }",
         )),
-        negative: Some((
-            Input::Sheet(
-                "@font-face { font-family: Inter; src: url(inter.woff2); font-display: made-up; }",
-            ),
-            CssErrorCode::InvalidDescriptorValue,
-        )),
+        negative: None,
     },
     ExpectedFeature {
         id: "baseline.descriptor.unicode-range",
@@ -1364,19 +1364,14 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "unicode-range in @font-face",
         source: ExpectedSource::Id("O-FONTS3"),
         production: "#unicode-range-desc",
-        status: CssSupportStatus::Partial,
-        supported_subset: Some(DESCRIPTOR_SUBSET),
-        unsupported_remainder: Some(DESCRIPTOR_REMAINDER),
+        status: CssSupportStatus::Complete,
+        supported_subset: None,
+        unsupported_remainder: None,
         recognized_code: None,
         positive: Some(Input::Sheet(
             "@font-face { font-family: Inter; src: url(inter.woff2); unicode-range: U+0000-00FF; }",
         )),
-        negative: Some((
-            Input::Sheet(
-                "@font-face { font-family: Inter; src: url(inter.woff2); unicode-range: U+110000-110001; }",
-            ),
-            CssErrorCode::InvalidDescriptorValue,
-        )),
+        negative: None,
     },
     ExpectedFeature {
         id: "baseline.selector.complex",

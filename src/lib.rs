@@ -408,6 +408,47 @@ let _ = validate_style_attribute("color: red");
 //! layout, cascade declarations, evaluate or interpolate keyframes, run
 //! timelines, or lower either syntax family into sibling Surgeist crates.
 //!
+//! # Fonts 3 typography and font-face
+//!
+//! The current authored font surface implements the sixteen Fonts 3 property
+//! grammars, including family/global boundaries, four-ASCII-character OpenType
+//! tags, non-negative feature indices, the explicit and system `font` branches,
+//! synthesis, and the five variant longhands. Concrete property wrappers expose
+//! parser-owned current values through their semantic accessors and retain
+//! `i01_subset()` only as a frozen compatibility projection.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssFontValue, CssKnownPropertyValueRef, CssSystemFont,
+//!     parse_style_attribute,
+//! };
+//!
+//! let report = parse_style_attribute("font: menu; font-weight: 725");
+//! assert!(report.is_clean());
+//! let CssKnownPropertyValueRef::Font(font) = report.syntax()[0]
+//!     .known().expect("known font")
+//!     .property_value().expect("ordinary font")
+//! else { panic!("expected font") };
+//! assert!(matches!(font.font(), CssFontValue::System(CssSystemFont::Menu)));
+//! assert!(font.i01_subset().is_none());
+//! ```
+//!
+//! [`CssFontFaceDescriptors::occurrences`] exposes valid descriptor occurrences
+//! in authored order, while typed effective accessors return the last valid
+//! occurrence. Invalid and unknown occurrences recover with
+//! [`CssRecoveryAction::DropDescriptor`] without erasing valid neighbors. A
+//! [`CssFontFaceRule`] is retained only when valid effective `font-family` and
+//! `src` descriptors remain.
+//!
+//! Fonts 3 property, descriptor, source, and OpenType-tag records cite the dated
+//! `O-FONTS3` source and are Complete. The selected numeric weight, descriptor
+//! range, and modern source-hint deltas cite `I-FONTS4` as separate Partial
+//! records; `font-display` is Complete and `@font-feature-values` remains
+//! RecognizedUnsupported. This crate does not load or match fonts, resolve
+//! fallback or OpenType feature application, shape glyphs, apply cascade or
+//! substitution, evaluate computed values, expose CSSOM, serialize, or lower
+//! into another Surgeist crate.
+//!
 //! # Timing domains and I01 compatibility
 //!
 //! Duration literals are finite and non-negative; delay literals are finite and signed. A range

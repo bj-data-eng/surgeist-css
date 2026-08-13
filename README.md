@@ -377,6 +377,51 @@ This crate does not perform Grid layout, cascade declarations, evaluate or
 interpolate keyframes, run timelines, or lower either syntax family into sibling
 Surgeist crates.
 
+## Fonts 3 typography and font-face
+
+The current authored font surface completes the sixteen Fonts 3 property
+grammars, including family/global boundaries, checked four-ASCII-character
+OpenType tags, non-negative feature indices, the explicit and system `font`
+branches, synthesis, and the five variant longhands. Each generated property
+wrapper exposes its typed current value through the property-specific accessor
+while retaining `i01_subset()` as a separate compatibility projection. A current
+value such as `font: menu` or `font-weight: 725` can be valid even when the frozen
+I01 payload cannot represent it.
+
+```rust
+use surgeist_css::{
+    CssFontValue, CssKnownPropertyValueRef, CssSystemFont,
+    parse_style_attribute,
+};
+
+let report = parse_style_attribute("font: menu; font-weight: 725");
+assert!(report.is_clean());
+let CssKnownPropertyValueRef::Font(font) = report.syntax()[0]
+    .known().expect("known font")
+    .property_value().expect("ordinary font")
+else { panic!("expected font") };
+assert!(matches!(font.font(), CssFontValue::System(CssSystemFont::Menu)));
+assert!(font.i01_subset().is_none());
+```
+
+`@font-face` retains every valid descriptor occurrence in authored order;
+effective typed accessors return the last valid occurrence. Fonts 3 family,
+source, weight, style, stretch, unicode-range, and feature-settings grammar is
+catalogued separately from the selected Fonts 4 additions: `font-display`,
+numeric property weight, descriptor weight/style/stretch ranges, and keyword
+`format()`/`tech()` source hints. An invalid or unknown descriptor is dropped
+with a `DropDescriptor` diagnostic without erasing valid neighbors. A rule is
+retained only when a valid effective `font-family` and `src` remain, and parent
+loss follows child diagnostics.
+
+Fonts 3 rows cite the dated `O-FONTS3` source and are `Complete`. The five
+selected atomic Fonts 4 deltas cite `I-FONTS4` and remain `Partial` with explicit
+subset and remainder text; `font-display` is `Complete`, while
+`@font-feature-values` remains `RecognizedUnsupported`. These authored models do
+not load or match fonts, resolve fallback or feature application, shape glyphs,
+apply cascade or substitution, evaluate computed values, expose CSSOM, serialize,
+or lower into another Surgeist crate.
+
 `CssImportance` and `CssSupportStatus` are deliberately closed and may be
 matched exhaustively. Every other public enum is non-exhaustive and requires a
 wildcard in downstream matches. This declaration inspection migration changes

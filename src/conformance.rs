@@ -2110,82 +2110,18 @@ static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("baseline.property.font"),
     active_coverage!("baseline.property.font-family"),
     active_coverage!("baseline.property.font-feature-settings"),
-    reserved_coverage!(
-        "official.property.font-kerning",
-        Property,
-        O_FONTS3,
-        "#propdef-font-kerning",
-        "crate::parser::typography",
-        "I02-C08",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.font-kerning"),
     active_coverage!("baseline.property.font-size"),
-    reserved_coverage!(
-        "official.property.font-size-adjust",
-        Property,
-        O_FONTS3,
-        "#propdef-font-size-adjust",
-        "crate::parser::typography",
-        "I02-C08",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.font-size-adjust"),
     active_coverage!("baseline.property.font-stretch"),
     active_coverage!("baseline.property.font-style"),
-    reserved_coverage!(
-        "official.property.font-synthesis",
-        Property,
-        O_FONTS3,
-        "#propdef-font-synthesis",
-        "crate::parser::typography",
-        "I02-C08",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.font-synthesis"),
     active_coverage!("baseline.property.font-variant"),
-    reserved_coverage!(
-        "official.property.font-variant-caps",
-        Property,
-        O_FONTS3,
-        "#propdef-font-variant-caps",
-        "crate::parser::typography",
-        "I02-C08",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.font-variant-east-asian",
-        Property,
-        O_FONTS3,
-        "#propdef-font-variant-east-asian",
-        "crate::parser::typography",
-        "I02-C08",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.font-variant-ligatures",
-        Property,
-        O_FONTS3,
-        "#propdef-font-variant-ligatures",
-        "crate::parser::typography",
-        "I02-C08",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.font-variant-numeric",
-        Property,
-        O_FONTS3,
-        "#propdef-font-variant-numeric",
-        "crate::parser::typography",
-        "I02-C08",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.font-variant-position",
-        Property,
-        O_FONTS3,
-        "#propdef-font-variant-position",
-        "crate::parser::typography",
-        "I02-C08",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.font-variant-caps"),
+    active_coverage!("official.property.font-variant-east-asian"),
+    active_coverage!("official.property.font-variant-ligatures"),
+    active_coverage!("official.property.font-variant-numeric"),
+    active_coverage!("official.property.font-variant-position"),
     active_coverage!("baseline.property.font-weight"),
     active_coverage!("baseline.property.direction"),
     reserved_coverage!(
@@ -3081,33 +3017,9 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("baseline.descriptor.font-weight"),
     active_coverage!("baseline.descriptor.font-stretch"),
     active_coverage!("baseline.descriptor.unicode-range"),
-    reserved_coverage!(
-        "official.descriptor.font-feature-settings",
-        Descriptor,
-        O_FONTS3,
-        "#font-rend-desc",
-        "crate::parser::font_face",
-        "I02-C08",
-        DescriptorValueOrderingAndRecovery
-    ),
-    reserved_coverage!(
-        "official.value.font-source",
-        Value,
-        O_FONTS3,
-        "#src-desc",
-        "crate::parser::font_face",
-        "I02-C08",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.opentype-tag",
-        Value,
-        O_FONTS3,
-        "#font-rend-desc",
-        "crate::parser::font_face",
-        "I02-C08",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.descriptor.font-feature-settings"),
+    active_coverage!("official.value.font-source"),
+    active_coverage!("official.value.opentype-tag"),
     active_coverage!("official.value.transform-list"),
     active_coverage!("official.value.transform-function"),
     active_coverage!("official.value.transform.matrix"),
@@ -3339,10 +3251,6 @@ const BASELINE_RULE_SUBSET: &str =
     "The baseline parser spelling and the I01 recovery extensions are supported.";
 const BASELINE_RULE_REMAINDER: &str =
     "Other valid forms of the cited rule production are outside the I01 subset.";
-const DESCRIPTOR_SUBSET: &str =
-    "The baseline descriptor grammar and the I01 recovery extensions are supported.";
-const DESCRIPTOR_REMAINDER: &str =
-    "Other valid forms of the cited descriptor production are outside the I01 subset.";
 const SELECTOR_REMAINDER: &str =
     "Other valid forms of the cited Selectors production are outside the I01 subset.";
 const QUERY_REMAINDER: &str =
@@ -3400,6 +3308,23 @@ const GRID_PROPERTY_REMAINDER: &str =
     "Subgrid name-repeat and other unselected Grid 2 property grammar remain unsupported.";
 const KEYFRAMES_SUBSET: &str = "Keyframe names, literal selectors, empty rules and blocks, duplicate selectors and blocks in authored order, and supported declarations with recovery are supported.";
 const KEYFRAMES_REMAINDER: &str = "Calculation selectors, string names, and declaration-processing grammar not selected by C07 remain unsupported.";
+const FONT_WEIGHT_RANGE_SUBSET: &str =
+    "Integer font-weight values from 1 through 1000 are supported.";
+const FONT_WEIGHT_RANGE_REMAINDER: &str =
+    "Other unselected Fonts 4 font-weight property grammar remains unsupported.";
+const FONT_FACE_WEIGHT_RANGE_SUBSET: &str = "Font-face font-weight numbers from 1 through 1000 and increasing two-value ranges are supported.";
+const FONT_FACE_WEIGHT_RANGE_REMAINDER: &str =
+    "Other unselected Fonts 4 font-weight descriptor grammar remains unsupported.";
+const FONT_FACE_STYLE_RANGE_SUBSET: &str =
+    "Font-face oblique style with one or two increasing -90deg through 90deg angles is supported.";
+const FONT_FACE_STYLE_RANGE_REMAINDER: &str =
+    "Other unselected Fonts 4 font-style descriptor grammar remains unsupported.";
+const FONT_FACE_STRETCH_RANGE_SUBSET: &str = "Font-face non-negative percentage stretch values and increasing two-value ranges are supported.";
+const FONT_FACE_STRETCH_RANGE_REMAINDER: &str =
+    "Other unselected Fonts 4 font-stretch descriptor grammar remains unsupported.";
+const FONT_SOURCE_HINTS_SUBSET: &str = "The woff, woff2, truetype, opentype, collection, embedded-opentype, and svg format() hints and the variations, color-colrv0, color-colrv1, color-svg, color-sbix, color-cbdt, features-opentype, features-aat, features-graphite, and incremental tech() hints are supported.";
+const FONT_SOURCE_HINTS_REMAINDER: &str =
+    "Other unselected Fonts 4 font source format and technology hints remain unsupported.";
 
 const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
     match property {
@@ -3721,7 +3646,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 337] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 353] = [
     CssFeatureMetadata::partial(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -3749,14 +3674,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 337] = [
         BASELINE_RULE_SUBSET,
         BASELINE_RULE_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "baseline.rule.font-face",
         CssFeatureKind::Rule,
         "@font-face",
         O_FONTS3,
         "#font-face-rule",
-        BASELINE_RULE_SUBSET,
-        BASELINE_RULE_REMAINDER,
     ),
     CssFeatureMetadata::partial(
         "baseline.rule.keyframes",
@@ -4520,68 +4443,111 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 337] = [
         "#font-feature-values-rule",
         CssErrorCode::UnsupportedAtRule,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "baseline.descriptor.font-family",
         CssFeatureKind::Descriptor,
         "font-family in @font-face",
         O_FONTS3,
         "#font-family-desc",
-        DESCRIPTOR_SUBSET,
-        DESCRIPTOR_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "baseline.descriptor.src",
         CssFeatureKind::Descriptor,
         "src in @font-face",
         O_FONTS3,
         "#src-desc",
-        DESCRIPTOR_SUBSET,
-        DESCRIPTOR_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "baseline.descriptor.font-weight",
         CssFeatureKind::Descriptor,
         "font-weight in @font-face",
         O_FONTS3,
         "#font-prop-desc",
-        DESCRIPTOR_SUBSET,
-        DESCRIPTOR_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "baseline.descriptor.font-style",
         CssFeatureKind::Descriptor,
         "font-style in @font-face",
         O_FONTS3,
         "#font-prop-desc",
-        DESCRIPTOR_SUBSET,
-        DESCRIPTOR_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "baseline.descriptor.font-stretch",
         CssFeatureKind::Descriptor,
         "font-stretch in @font-face",
         O_FONTS3,
         "#font-prop-desc",
-        DESCRIPTOR_SUBSET,
-        DESCRIPTOR_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "baseline.descriptor.font-display",
         CssFeatureKind::Descriptor,
         "font-display in @font-face",
         I_FONTS4,
         "#font-display-desc",
-        DESCRIPTOR_SUBSET,
-        DESCRIPTOR_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "baseline.descriptor.unicode-range",
         CssFeatureKind::Descriptor,
         "unicode-range in @font-face",
         O_FONTS3,
         "#unicode-range-desc",
-        DESCRIPTOR_SUBSET,
-        DESCRIPTOR_REMAINDER,
+    ),
+    CssFeatureMetadata::complete(
+        "official.descriptor.font-feature-settings",
+        CssFeatureKind::Descriptor,
+        "font-feature-settings in @font-face",
+        O_FONTS3,
+        "#font-rend-desc",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.font-source",
+        CssFeatureKind::Value,
+        "@font-face source list",
+        O_FONTS3,
+        "#src-desc",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.opentype-tag",
+        CssFeatureKind::Value,
+        "OpenType feature tag",
+        O_FONTS3,
+        "#font-rend-desc",
+    ),
+    CssFeatureMetadata::partial(
+        "ext.descriptor.font-weight-range",
+        CssFeatureKind::Descriptor,
+        "font-weight ranges in @font-face",
+        I_FONTS4,
+        "#font-weight-desc",
+        FONT_FACE_WEIGHT_RANGE_SUBSET,
+        FONT_FACE_WEIGHT_RANGE_REMAINDER,
+    ),
+    CssFeatureMetadata::partial(
+        "ext.descriptor.font-style-oblique-range",
+        CssFeatureKind::Descriptor,
+        "font-style oblique ranges in @font-face",
+        I_FONTS4,
+        "#font-style-desc",
+        FONT_FACE_STYLE_RANGE_SUBSET,
+        FONT_FACE_STYLE_RANGE_REMAINDER,
+    ),
+    CssFeatureMetadata::partial(
+        "ext.descriptor.font-stretch-range",
+        CssFeatureKind::Descriptor,
+        "font-stretch percentage ranges in @font-face",
+        I_FONTS4,
+        "#font-stretch-desc",
+        FONT_FACE_STRETCH_RANGE_SUBSET,
+        FONT_FACE_STRETCH_RANGE_REMAINDER,
+    ),
+    CssFeatureMetadata::partial(
+        "ext.value.font-source-modern-hints",
+        CssFeatureKind::Value,
+        "format() keyword and tech() font-source hints",
+        I_FONTS4,
+        "#font-face-src-parsing",
+        FONT_SOURCE_HINTS_SUBSET,
+        FONT_SOURCE_HINTS_REMAINDER,
     ),
     CssFeatureMetadata::partial(
         "baseline.selector.complex",
@@ -5010,10 +4976,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 337] = [
         GRID_PROPERTY_SUBSET,
         GRID_PROPERTY_REMAINDER,
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.font-size",
         CssKnownProperty::FontSize,
         "font-size",
-        "baseline.property.font-size"
+        "#propdef-font-size",
+        &[],
     ),
     property_feature!(
         CssKnownProperty::LineHeight,
@@ -5045,36 +5013,119 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 337] = [
         "vertical-align",
         "baseline.property.vertical-align"
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.font-family",
         CssKnownProperty::FontFamily,
         "font-family",
-        "baseline.property.font-family"
+        "#propdef-font-family",
+        &[],
     ),
-    property_feature!(CssKnownProperty::Font, "font", "baseline.property.font"),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.font",
+        CssKnownProperty::Font,
+        "font",
+        "#propdef-font",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "baseline.property.font-weight",
         CssKnownProperty::FontWeight,
         "font-weight",
-        "baseline.property.font-weight"
+        "#propdef-font-weight",
+        &[],
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.font-style",
         CssKnownProperty::FontStyle,
         "font-style",
-        "baseline.property.font-style"
+        "#propdef-font-style",
+        &[],
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.font-stretch",
         CssKnownProperty::FontStretch,
         "font-stretch",
-        "baseline.property.font-stretch"
+        "#propdef-font-stretch",
+        &[],
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.font-variant",
         CssKnownProperty::FontVariant,
         "font-variant",
-        "baseline.property.font-variant"
+        "#propdef-font-variant",
+        &[],
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "official.property.font-variant-caps",
+        CssKnownProperty::FontVariantCaps,
+        "font-variant-caps",
+        "#propdef-font-variant-caps",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.font-variant-east-asian",
+        CssKnownProperty::FontVariantEastAsian,
+        "font-variant-east-asian",
+        "#propdef-font-variant-east-asian",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.font-variant-ligatures",
+        CssKnownProperty::FontVariantLigatures,
+        "font-variant-ligatures",
+        "#propdef-font-variant-ligatures",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.font-variant-numeric",
+        CssKnownProperty::FontVariantNumeric,
+        "font-variant-numeric",
+        "#propdef-font-variant-numeric",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.font-variant-position",
+        CssKnownProperty::FontVariantPosition,
+        "font-variant-position",
+        "#propdef-font-variant-position",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "baseline.property.font-feature-settings",
         CssKnownProperty::FontFeatureSettings,
         "font-feature-settings",
-        "baseline.property.font-feature-settings"
+        "#propdef-font-feature-settings",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.font-kerning",
+        CssKnownProperty::FontKerning,
+        "font-kerning",
+        "#propdef-font-kerning",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.font-size-adjust",
+        CssKnownProperty::FontSizeAdjust,
+        "font-size-adjust",
+        "#propdef-font-size-adjust",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.font-synthesis",
+        CssKnownProperty::FontSynthesis,
+        "font-synthesis",
+        "#propdef-font-synthesis",
+        &[],
+    ),
+    CssFeatureMetadata::partial(
+        "ext.property.font-weight-range",
+        CssFeatureKind::Property,
+        "font-weight numeric range",
+        I_FONTS4,
+        "#font-weight-prop",
+        FONT_WEIGHT_RANGE_SUBSET,
+        FONT_WEIGHT_RANGE_REMAINDER,
     ),
     property_feature!(
         CssKnownProperty::LetterSpacing,

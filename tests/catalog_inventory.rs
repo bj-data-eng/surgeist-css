@@ -4,8 +4,8 @@ mod catalog_inventory {
 
 use catalog_inventory::vectors::{PROPERTY_NEGATIVE_VECTORS, PROPERTY_POSITIVE_VECTORS};
 use surgeist_css::{
-    CssErrorCode, CssFeatureKind, ErrorKind, feature_metadata, parse_style_attribute,
-    property_metadata,
+    CssErrorCode, CssFeatureKind, CssSupportStatus, ErrorKind, feature_metadata,
+    parse_style_attribute, property_metadata,
 };
 
 const CSS_WIDE_KEYWORDS: &[&str] = &["inherit", "initial", "unset", "revert", "revert-layer"];
@@ -214,5 +214,85 @@ fn authored_property_cases_exercise_public_parser_behavior() {
         };
         assert_eq!(detail.property().canonical_name(), vector.canonical_name);
         assert_eq!(detail.property().stable_id(), vector.id);
+    }
+}
+
+#[test]
+fn added_fonts3_property_rows_expose_complete_authored_metadata() {
+    for (id, name, production, authored) in [
+        (
+            "official.property.font-kerning",
+            "font-kerning",
+            "#propdef-font-kerning",
+            "normal",
+        ),
+        (
+            "official.property.font-size-adjust",
+            "font-size-adjust",
+            "#propdef-font-size-adjust",
+            "0.5",
+        ),
+        (
+            "official.property.font-synthesis",
+            "font-synthesis",
+            "#propdef-font-synthesis",
+            "style weight",
+        ),
+        (
+            "official.property.font-variant-caps",
+            "font-variant-caps",
+            "#propdef-font-variant-caps",
+            "all-small-caps",
+        ),
+        (
+            "official.property.font-variant-east-asian",
+            "font-variant-east-asian",
+            "#propdef-font-variant-east-asian",
+            "jis04 ruby",
+        ),
+        (
+            "official.property.font-variant-ligatures",
+            "font-variant-ligatures",
+            "#propdef-font-variant-ligatures",
+            "common-ligatures no-discretionary-ligatures",
+        ),
+        (
+            "official.property.font-variant-numeric",
+            "font-variant-numeric",
+            "#propdef-font-variant-numeric",
+            "lining-nums tabular-nums slashed-zero",
+        ),
+        (
+            "official.property.font-variant-position",
+            "font-variant-position",
+            "#propdef-font-variant-position",
+            "super",
+        ),
+    ] {
+        let report = parse_style_attribute(&format!("{name}: {authored}"));
+        assert!(report.is_clean(), "{id}: {:?}", report.diagnostics());
+        let [declaration] = report.syntax().as_slice() else {
+            panic!("{id}: expected one retained declaration");
+        };
+        assert_eq!(
+            declaration
+                .known()
+                .expect("known Fonts 3 declaration")
+                .property()
+                .stable_id(),
+            id,
+        );
+
+        let metadata = property_metadata(name).unwrap_or_else(|| panic!("missing {id}"));
+        assert_eq!(metadata.feature().id().as_str(), id);
+        assert_eq!(metadata.feature().source().id().as_str(), "O-FONTS3");
+        assert_eq!(metadata.feature().status(), CssSupportStatus::Complete);
+        assert_eq!(metadata.feature().supported_subset(), None);
+        assert_eq!(metadata.feature().unsupported_remainder(), None);
+        assert_eq!(metadata.canonical_name(), name);
+        assert_eq!(
+            feature_metadata(id).map(|feature| feature.production()),
+            Some(production),
+        );
     }
 }

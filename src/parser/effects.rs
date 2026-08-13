@@ -379,7 +379,18 @@ fn parse_transform_angle<'i, 't>(
                 })
         }
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
-            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Angle))
+            .parse_nested_block(|input| {
+                let location = input.current_source_location();
+                let expression = parse_typed_calculation(input, CalculationRoot::Angle)?;
+                if expression.result_type() != CssCalculationType::Angle {
+                    return Err(unsupported_value_at(
+                        location,
+                        None,
+                        "transform angle calculation must have an angle result",
+                    ));
+                }
+                Ok(expression)
+            })
             .map(CssAngleCalculation::from_expression)
             .map(CssTransformAngle::Calculation),
         token => Err(location.new_unexpected_token_error::<Error>(token.clone())),

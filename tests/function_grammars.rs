@@ -162,6 +162,10 @@ fn basic_shape_radius_arity_and_separator_mutations_are_rejected() {
         "ellipse(-1px 2px)",
         "ellipse(1px)",
         "ellipse(1px 2px 3px)",
+        "inset(1px 2px 3px 4px 5px)",
+        "inset(1px round / 2px)",
+        "inset(1px round 2px /)",
+        "inset(1px round 2px / 3px / 4px)",
         "polygon(0 0, 100% 0)",
         "polygon(evenodd 0 0, 100% 0)",
         "polygon(round -1px, 0 0)",
@@ -283,6 +287,20 @@ fn omitted_shape_branches_are_explicit() {
     assert!(matches!(ellipse.radius(), CssEllipseRadius::Default));
     assert!(ellipse.position().is_some());
 
+    for (value, count) in [
+        ("inset(1px)", 1),
+        ("inset(1px 2px)", 2),
+        ("inset(1px 2px 3px)", 3),
+        ("inset(1px 2px 3px 4px)", 4),
+    ] {
+        let inset = parsed_clip_path_property(value);
+        let Some(CssClipPathValue::BasicShape(CssBasicShapeValue::Inset(inset))) = inset.current()
+        else {
+            panic!("expected typed `{value}`");
+        };
+        assert_eq!(inset.offsets().values().len(), count);
+    }
+
     let polygon = parsed_clip_path_property("polygon(, 0 0)");
     let Some(CssClipPathValue::BasicShape(CssBasicShapeValue::Polygon(polygon))) =
         polygon.current()
@@ -292,6 +310,15 @@ fn omitted_shape_branches_are_explicit() {
     assert_eq!(polygon.fill_rule(), None);
     assert!(polygon.round().is_none());
     assert_eq!(polygon.points().points().len(), 1);
+
+    let polygon = parsed_clip_path_property("polygon(round 1px nonzero, -1px -2%)");
+    let Some(CssClipPathValue::BasicShape(CssBasicShapeValue::Polygon(polygon))) =
+        polygon.current()
+    else {
+        panic!("expected round-first polygon prefix");
+    };
+    assert_eq!(polygon.fill_rule(), Some(CssPolygonFillRule::Nonzero));
+    assert!(polygon.round().is_some());
 }
 
 #[test]
@@ -310,6 +337,39 @@ fn deferred_basic_shape_functions_remain_unrecognized() {
         "xywh(0 0 1px 1px)",
     ] {
         assert_clip_path_rejected(value);
+    }
+}
+
+#[test]
+fn basic_shape_calculations_preserve_the_exact_depth_boundary() {
+    let source = format!(
+        "clip-path: circle({}1px{}); color: red",
+        "calc(".repeat(255),
+        ")".repeat(255),
+    );
+    let report = parse_style_attribute(&source);
+    assert!(report.is_clean(), "depth 255: {:?}", report.diagnostics());
+    assert_eq!(report.syntax().len(), 2);
+
+    for depth in [256_usize, 257] {
+        let source = format!(
+            "clip-path: circle({}1px{}); color: red",
+            "calc(".repeat(depth),
+            ")".repeat(depth),
+        );
+        let first_over_limit = source.match_indices("calc(").nth(255).unwrap().0;
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "depth {depth}");
+        let [diagnostic] = report.diagnostics() else {
+            panic!("depth {depth}: expected one diagnostic");
+        };
+        assert_eq!(diagnostic.error().code(), CssErrorCode::NestingLimit);
+        assert_eq!(diagnostic.action(), CssRecoveryAction::StopAtNestingLimit);
+        assert_eq!(
+            diagnostic.error().position().byte_offset().value(),
+            first_over_limit,
+            "depth {depth}",
+        );
     }
 }
 

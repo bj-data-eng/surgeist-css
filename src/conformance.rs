@@ -2112,7 +2112,7 @@ static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
         O_IMAGES3,
         "#propdef-object-position",
         "crate::parser::background",
-        "I02-C04",
+        "I02-C13",
         PropertyValueGlobalSubstitutionAndRecovery
     ),
     active_coverage!("baseline.property.font"),
@@ -3781,7 +3781,6 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
         | CssKnownProperty::BorderBottomRightRadius
         | CssKnownProperty::BorderBottomLeftRadius
         | CssKnownProperty::BoxShadow => O_BACKGROUNDS3,
-        CssKnownProperty::ObjectPosition => O_IMAGES3,
         CssKnownProperty::FontSize
         | CssKnownProperty::FontFamily
         | CssKnownProperty::Font

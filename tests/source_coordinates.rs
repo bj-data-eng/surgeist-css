@@ -98,11 +98,7 @@ fn object_position_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span
     assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
     let responsible = source.find("10px").expect("responsible third component");
     let declaration_start = source.find("object-position").expect("property start");
-    let declaration_end = declaration_start
-        + source[declaration_start..]
-            .find(';')
-            .expect("declaration end")
-        + 1;
+    let declaration_end = source.find(';').expect("declaration end") + 1;
     assert_position(
         diagnostic.error().position(),
         responsible,

@@ -8355,14 +8355,13 @@ impl CssTransitionValue {
     }
 
     #[must_use]
-    pub const fn timing_function(&self) -> Option<&CssEasing> {
-        self.legacy_timing_function.as_ref()
+    pub const fn timing_function(&self) -> Option<&CssEasingValue> {
+        self.timing_function.as_ref()
     }
 
-    /// Returns the exact current authored easing value.
     #[must_use]
-    pub const fn current_timing_function(&self) -> Option<&CssEasingValue> {
-        self.timing_function.as_ref()
+    pub(crate) const fn legacy_timing_function(&self) -> Option<&CssEasing> {
+        self.legacy_timing_function.as_ref()
     }
 }
 
@@ -8466,14 +8465,13 @@ impl CssAnimationValue {
     }
 
     #[must_use]
-    pub const fn timing_function(&self) -> Option<&CssEasing> {
-        self.legacy_timing_function.as_ref()
+    pub const fn timing_function(&self) -> Option<&CssEasingValue> {
+        self.timing_function.as_ref()
     }
 
-    /// Returns the exact current authored easing value.
     #[must_use]
-    pub const fn current_timing_function(&self) -> Option<&CssEasingValue> {
-        self.timing_function.as_ref()
+    pub(crate) const fn legacy_timing_function(&self) -> Option<&CssEasing> {
+        self.legacy_timing_function.as_ref()
     }
 
     #[must_use]

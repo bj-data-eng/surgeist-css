@@ -537,6 +537,56 @@ macro_rules! define_color_property_value {
     };
 }
 
+macro_rules! define_authored_color_aggregate_property_value {
+    ($canonical:literal, $wrapper:ident, $representation:ident, $value:ty) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: $value,
+        }
+
+        #[doc = concat!("A parser-produced authored ordinary value for `", $canonical, "`.")]
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) const fn new(
+                authored: CssAuthoredDeclarationValue,
+                current: $value,
+            ) -> Self {
+                Self {
+                    authored,
+                    representation: $representation { current },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            /// Returns the exact checked current authored aggregate value.
+            #[must_use]
+            pub const fn current(&self) -> &$value {
+                &self.representation.current
+            }
+
+            /// Returns the frozen I01 payload only when every authored component projects exactly.
+            #[must_use]
+            pub const fn i01_subset(&self) -> Option<&$value> {
+                if self.representation.current.has_exact_i01_projection() {
+                    Some(&self.representation.current)
+                } else {
+                    None
+                }
+            }
+        }
+    };
+}
+
 macro_rules! define_property_value {
     (
         Color, $canonical:literal, $value:ty, $wrapper:ident,
@@ -599,12 +649,90 @@ macro_rules! define_property_value {
         define_color_property_value!($canonical, $wrapper, $representation);
     };
     (
+        TextDecoration, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_authored_color_aggregate_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssTextDecoration
+        );
+    };
+    (
+        Border, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_authored_color_aggregate_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBorder
+        );
+    };
+    (
+        BorderTop, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_authored_color_aggregate_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBorder
+        );
+    };
+    (
+        BorderRight, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_authored_color_aggregate_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBorder
+        );
+    };
+    (
+        BorderBottom, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_authored_color_aggregate_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBorder
+        );
+    };
+    (
+        BorderLeft, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_authored_color_aggregate_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBorder
+        );
+    };
+    (
+        Outline, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_authored_color_aggregate_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssOutline
+        );
+    };
+    (
         BoxShadow, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident
     ) => {
         #[derive(Clone, Debug, PartialEq)]
         pub(crate) struct $representation {
             current: CssBoxShadow,
+            has_i01_subset: bool,
         }
 
         /// A parser-produced authored ordinary `box-shadow` value.
@@ -616,13 +744,17 @@ macro_rules! define_property_value {
 
         impl $wrapper {
             #[must_use]
-            pub(crate) const fn new(
+            pub(crate) fn new(
                 authored: CssAuthoredDeclarationValue,
                 current: CssBoxShadow,
             ) -> Self {
+                let has_i01_subset = current.has_exact_i01_projection();
                 Self {
                     authored,
-                    representation: $representation { current },
+                    representation: $representation {
+                        current,
+                        has_i01_subset,
+                    },
                 }
             }
 
@@ -639,7 +771,11 @@ macro_rules! define_property_value {
 
             #[must_use]
             pub const fn i01_subset(&self) -> Option<&CssBoxShadow> {
-                Some(&self.representation.current)
+                if self.representation.has_i01_subset {
+                    Some(&self.representation.current)
+                } else {
+                    None
+                }
             }
         }
     };

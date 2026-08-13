@@ -1043,7 +1043,12 @@ fn legacy_filter_function(name: &str, authored: &str) -> Option<CssFilterFunctio
             "brightness" | "contrast" | "grayscale" | "invert" | "opacity" | "saturate"
             | "sepia" => validate_number_or_percent(input),
             "hue-rotate" => validate_angle(input) && input.is_exhausted(),
-            "drop-shadow" => input.try_parse(parse_shadow).is_ok() && input.is_exhausted(),
+            "drop-shadow" => {
+                input
+                    .try_parse(parse_shadow)
+                    .is_ok_and(|shadow| shadow.has_exact_i01_projection())
+                    && input.is_exhausted()
+            }
             _ => false,
         }
     });

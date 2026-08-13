@@ -1098,6 +1098,119 @@ fn shadow_and_filter_wrappers_expose_current_values_and_frozen_i01_projections()
 }
 
 #[test]
+fn every_aggregate_color_consumer_retains_current_color_mix_without_an_i01_projection() {
+    let report = parse_style_attribute(concat!(
+        "border: 1px solid color-mix(in srgb, lab(calc(50% + 10%) 20 30), blue); ",
+        "border-top: solid color-mix(in srgb, lab(calc(50% + 10%) 20 30), blue); ",
+        "border-right: solid color-mix(in srgb, lab(calc(50% + 10%) 20 30), blue); ",
+        "border-bottom: solid color-mix(in srgb, lab(calc(50% + 10%) 20 30), blue); ",
+        "border-left: solid color-mix(in srgb, lab(calc(50% + 10%) 20 30), blue); ",
+        "text-decoration: underline color-mix(in srgb, lab(calc(50% + 10%) 20 30), blue); ",
+        "outline: solid color-mix(in srgb, lab(calc(50% + 10%) 20 30), blue); ",
+        "box-shadow: 1px 2px color-mix(in srgb, lab(calc(50% + 10%) 20 30), blue); ",
+        "filter: drop-shadow(1px 2px color-mix(in srgb, lab(calc(50% + 10%) 20 30), blue)); ",
+        "backdrop-filter: drop-shadow(1px 2px color-mix(in srgb, lab(calc(50% + 10%) 20 30), blue))",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    for declaration in &report.syntax()[..5] {
+        let known = declaration.known().unwrap();
+        let (current, projection) = match known.property_value().unwrap() {
+            CssKnownPropertyValueRef::Border(value) => (value.current(), value.i01_subset()),
+            CssKnownPropertyValueRef::BorderTop(value) => (value.current(), value.i01_subset()),
+            CssKnownPropertyValueRef::BorderRight(value) => (value.current(), value.i01_subset()),
+            CssKnownPropertyValueRef::BorderBottom(value) => (value.current(), value.i01_subset()),
+            CssKnownPropertyValueRef::BorderLeft(value) => (value.current(), value.i01_subset()),
+            _ => panic!("expected border shorthand wrapper"),
+        };
+        assert!(current.current_color().unwrap().color_mix_value().is_some());
+        assert!(current.color().is_none());
+        assert!(projection.is_none());
+    }
+
+    let CssKnownPropertyValueRef::TextDecoration(decoration) = report.syntax()[5]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected text-decoration wrapper");
+    };
+    assert!(
+        decoration
+            .current()
+            .current_color()
+            .unwrap()
+            .color_mix_value()
+            .is_some()
+    );
+    assert!(decoration.current().color().is_none());
+    assert!(decoration.i01_subset().is_none());
+
+    let CssKnownPropertyValueRef::Outline(outline) = report.syntax()[6]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected outline wrapper");
+    };
+    assert!(
+        outline
+            .current()
+            .current_color()
+            .unwrap()
+            .color_mix_value()
+            .is_some()
+    );
+    assert!(outline.current().color().is_none());
+    assert!(outline.i01_subset().is_none());
+
+    let CssKnownPropertyValueRef::BoxShadow(shadow) = report.syntax()[7]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected box-shadow wrapper");
+    };
+    let CssBoxShadow::Shadows(shadows) = shadow.current() else {
+        panic!("expected box-shadow list");
+    };
+    assert!(
+        shadows.shadows()[0]
+            .current_color()
+            .unwrap()
+            .color_mix_value()
+            .is_some()
+    );
+    assert!(shadows.shadows()[0].color().is_none());
+    assert!(shadow.i01_subset().is_none());
+
+    for declaration in &report.syntax()[8..] {
+        let current = match declaration.known().unwrap().property_value().unwrap() {
+            CssKnownPropertyValueRef::Filter(value) => {
+                assert!(value.i01_subset().is_none());
+                value.current()
+            }
+            CssKnownPropertyValueRef::BackdropFilter(value) => {
+                assert!(value.i01_subset().is_none());
+                value.current()
+            }
+            _ => panic!("expected filter wrapper"),
+        };
+        let CssFilterValue::Functions(functions) = current else {
+            panic!("expected filter function list");
+        };
+        let [CssFilterFunctionValue::DropShadow(shadow)] = functions.functions() else {
+            panic!("expected one drop-shadow");
+        };
+        assert!(shadow.current_color().unwrap().color_mix_value().is_some());
+        assert!(shadow.color().is_none());
+    }
+}
+
+#[test]
 fn clip_path_wrapper_separates_current_legacy_global_and_substitution_values() {
     let report = parse_style_attribute(concat!(
         "clip-path: inset(1px round 2px); ",

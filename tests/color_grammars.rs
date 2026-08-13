@@ -1,8 +1,8 @@
 use surgeist_css::{
     CssAuthoredColorComponent, CssAuthoredColorSyntax, CssAuthoredHue, CssAuthoredSystemColor,
-    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssOpacityValue,
-    CssPredefinedColorSpace, CssRelativeColorEnvironment, CssRelativeColorFunction,
-    parse_style_attribute,
+    CssColorInterpolationSpace, CssHueInterpolationMethod, CssKnownDeclaredValueRef,
+    CssKnownProperty, CssKnownPropertyValueRef, CssOpacityValue, CssPredefinedColorSpace,
+    CssRelativeColorEnvironment, CssRelativeColorFunction, parse_style_attribute,
 };
 
 fn color_value(source: &str) -> surgeist_css::CssColorPropertyValue {
@@ -82,15 +82,144 @@ fn relative_rgb_rejects_untyped_channel_identifiers_and_retains_its_valid_siblin
 
 #[test]
 fn color_mix_preserved_subset_rejects_cross_space_hue_methods() {
-    let report = parse_style_attribute(
-        "color: color-mix(in srgb longer hue, red, blue); opacity: 0.5",
-    );
+    let report =
+        parse_style_attribute("color: color-mix(in srgb longer hue, red, blue); opacity: 0.5");
 
     assert_eq!(report.syntax().len(), 1, "{:?}", report.diagnostics());
     assert_eq!(report.diagnostics().len(), 1);
     assert_eq!(
         report.syntax()[0].known().map(|known| known.property()),
         Some(CssKnownProperty::Opacity),
+    );
+}
+
+#[test]
+fn color_mix_preserved_subset_retains_space_hue_components_and_order() {
+    let value = color_value(concat!(
+        "color: color-mix(in oklch longer hue, ",
+        "lab(calc(50% + 10%) 20 30) 25%, ",
+        "rgb(from blue r g b / alpha) 75%)",
+    ));
+    let color_mix = value
+        .current()
+        .color_mix_value()
+        .expect("checked current color-mix branch");
+    assert_eq!(
+        color_mix.interpolation().space(),
+        CssColorInterpolationSpace::Oklch,
+    );
+    assert_eq!(
+        color_mix.interpolation().hue(),
+        Some(CssHueInterpolationMethod::Longer),
+    );
+    assert!(color_mix.left().color().lab_value().is_some());
+    assert_eq!(color_mix.left().percentage().unwrap().value(), 25.0);
+    assert!(color_mix.right().color().relative_value().is_some());
+    assert_eq!(color_mix.right().percentage().unwrap().value(), 75.0);
+    assert!(value.i01_subset().is_none());
+}
+
+#[test]
+fn color_mix_preserved_subset_accepts_supported_spaces_and_polar_hue_methods() {
+    for source in [
+        "color: color-mix(in srgb, red, blue)",
+        "color: color-mix(in srgb-linear, red 0%, blue 100%)",
+        "color: color-mix(in display-p3, red, blue)",
+        "color: color-mix(in a98-rgb, red, blue)",
+        "color: color-mix(in prophoto-rgb, red, blue)",
+        "color: color-mix(in rec2020, red, blue)",
+        "color: color-mix(in xyz-d50, red, blue)",
+        "color: color-mix(in xyz, red, blue)",
+        "color: color-mix(in hsl shorter hue, red, blue)",
+        "color: color-mix(in hwb increasing hue, red, blue)",
+        "color: color-mix(in lab, red, blue)",
+        "color: color-mix(in lch decreasing hue, red, blue)",
+        "color: color-mix(in oklab, red, blue)",
+        "color: color-mix(in oklch longer hue, red, blue)",
+    ] {
+        let value = color_value(source);
+        assert!(value.current().color_mix_value().is_some(), "{source}");
+    }
+
+    let compatible = color_value("color: color-mix(in srgb, red 25%, blue)");
+    assert!(matches!(
+        compatible.i01_subset(),
+        Some(surgeist_css::CssColor::ColorMix(_))
+    ));
+}
+
+#[test]
+fn color_mix_preserved_subset_rejects_unsupported_remainder_and_malformed_components() {
+    for invalid in [
+        "color-mix(srgb, red, blue)",
+        "color-mix(in --custom, red, blue)",
+        "color-mix(in srgb longer hue, red, blue)",
+        "color-mix(in lab shorter hue, red, blue)",
+        "color-mix(in srgb, 25% red, blue)",
+        "color-mix(in srgb, red)",
+        "color-mix(in srgb, red, blue, green)",
+        "color-mix(in srgb, red 101%, blue)",
+        "color-mix(in srgb, red -1%, blue)",
+        "color-mix(in srgb, red 25% 30%, blue)",
+        "color-mix(in srgb, red,, blue)",
+        "color-mix(red, blue)",
+        "light-dark(red, blue)",
+        "device-cmyk(0 0 0 1)",
+    ] {
+        let source = format!("color: {invalid}; opacity: 0.5");
+        let report = parse_style_attribute(&source);
+        assert_eq!(
+            report.syntax().len(),
+            1,
+            "{invalid}: {:?}",
+            report.diagnostics()
+        );
+        assert_eq!(report.diagnostics().len(), 1, "{invalid}");
+        assert_eq!(
+            report.syntax()[0].known().map(|known| known.property()),
+            Some(CssKnownProperty::Opacity),
+            "{invalid}",
+        );
+    }
+}
+
+#[test]
+fn color_mix_nesting_preserves_the_exact_parser_boundary() {
+    for depth in [255_usize, 256] {
+        let nested = format!(
+            "{}red{}",
+            "color-mix(in srgb, ".repeat(depth),
+            ", blue)".repeat(depth),
+        );
+        let source = format!("color: {nested}; opacity: 0.5");
+        let report = parse_style_attribute(&source);
+        assert!(
+            report.is_clean(),
+            "depth {depth}: {:?}",
+            report.diagnostics()
+        );
+        assert_eq!(report.syntax().len(), 2, "depth {depth}");
+    }
+
+    let depth = 257_usize;
+    let nested = format!(
+        "{}red{}",
+        "color-mix(in srgb, ".repeat(depth),
+        ", blue)".repeat(depth),
+    );
+    let source = format!("color: {nested}; opacity: 0.5");
+    let report = parse_style_attribute(&source);
+    assert_eq!(report.syntax().len(), 1);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("depth {depth}: expected one diagnostic");
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        surgeist_css::CssErrorCode::NestingLimit,
+    );
+    assert_eq!(
+        diagnostic.action(),
+        surgeist_css::CssRecoveryAction::StopAtNestingLimit,
     );
 }
 

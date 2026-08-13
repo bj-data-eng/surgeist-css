@@ -593,6 +593,23 @@ fn drop_shadow_accepts_interleaved_color_between_offsets() {
 }
 
 #[test]
+fn drop_shadow_retains_an_authored_color_mix_without_a_lossy_filter_projection() {
+    let property = parsed_filter_property(concat!(
+        "drop-shadow(1px 2px ",
+        "color-mix(in srgb, lab(calc(50% + 10%) 20 30), blue))",
+    ));
+    let CssFilterValue::Functions(functions) = property.current() else {
+        panic!("expected current filter function list");
+    };
+    let [CssFilterFunctionValue::DropShadow(shadow)] = functions.functions() else {
+        panic!("expected one typed drop-shadow");
+    };
+    assert!(shadow.current_color().unwrap().color_mix_value().is_some());
+    assert!(shadow.color().is_none());
+    assert!(property.i01_subset().is_none());
+}
+
+#[test]
 fn filter_lists_reject_empty_unknown_repeated_and_trailing_mutations() {
     for value in [
         "none blur(1px)",

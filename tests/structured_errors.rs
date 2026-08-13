@@ -105,6 +105,66 @@ fn relative_color_environment_failure_reports_the_foreign_channel_and_recovers_o
 }
 
 #[test]
+fn color_mix_hue_method_failure_reports_the_responsible_token_and_retains_its_sibling() {
+    let source = "color: color-mix(in srgb longer hue, red, blue); opacity: 0.5";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 1);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("rectangular-space hue method must recover once");
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::InvalidColorSyntax);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    let ErrorKind::InvalidColorSyntax(detail) = diagnostic.error().kind() else {
+        panic!("expected structured color-mix detail");
+    };
+    assert_eq!(
+        detail.component().map(|component| component.as_str()),
+        Some("hue interpolation"),
+    );
+    let encountered = detail.encountered().expect("responsible hue method");
+    assert_eq!(encountered.kind(), CssTokenKind::Ident);
+    assert_eq!(encountered.authored(), "longer");
+    assert_eq!(
+        report.syntax()[0].known().unwrap().property(),
+        CssKnownProperty::Opacity,
+    );
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects rectangular-space hue methods");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
+fn repeated_color_mix_failures_make_progress_and_preserve_later_siblings() {
+    let source = concat!(
+        "color: color-mix(in srgb longer hue, red, blue); ",
+        "background-color: color-mix(in lab shorter hue, red, blue); ",
+        "opacity: 0.5",
+    );
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 1);
+    assert_eq!(report.diagnostics().len(), 2);
+    assert!(report.diagnostics().iter().all(|diagnostic| {
+        diagnostic.error().code() == CssErrorCode::InvalidColorSyntax
+            && diagnostic.action() == CssRecoveryAction::DropDeclaration
+    }));
+    assert_eq!(
+        report.syntax()[0].known().unwrap().property(),
+        CssKnownProperty::Opacity,
+    );
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects repeated invalid color-mix declarations");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn repeated_relative_color_failures_make_progress_and_preserve_later_siblings() {
     let source = concat!(
         "color: rgb(from red bogus g b); ",

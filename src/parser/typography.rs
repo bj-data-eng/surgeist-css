@@ -1,8 +1,6 @@
 use cssparser::{ParseError, Parser, Token, match_ignore_ascii_case};
 
-use super::values::{
-    LengthGrammar, next_is_comma, parse_compatibility_color, parse_integer, parse_length_with,
-};
+use super::values::{LengthGrammar, next_is_comma, parse_color, parse_integer, parse_length_with};
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
@@ -579,7 +577,7 @@ pub(super) fn parse_text_decoration<'i, 't>(
             continue;
         }
         if color.is_none()
-            && let Ok(parsed_color) = input.try_parse(parse_compatibility_color)
+            && let Ok(parsed_color) = input.try_parse(parse_color)
         {
             color = Some(parsed_color);
             continue;
@@ -600,8 +598,14 @@ pub(super) fn parse_text_decoration<'i, 't>(
         Some(CssTextDecorationLine::new(line_components))
     };
 
-    CssTextDecoration::try_new(line, color, style, thickness)
-        .ok_or_else(|| unsupported_value(input, None, "text-decoration shorthand is empty"))
+    if line.is_none() && color.is_none() && style.is_none() && thickness.is_none() {
+        None
+    } else {
+        Some(CssTextDecoration::new_current(
+            line, color, style, thickness,
+        ))
+    }
+    .ok_or_else(|| unsupported_value(input, None, "text-decoration shorthand is empty"))
 }
 
 pub(super) fn parse_text_decoration_line<'i, 't>(

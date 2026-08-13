@@ -1,8 +1,8 @@
 use cssparser::{ParseError, Parser, match_ignore_ascii_case};
 
 use super::values::{
-    parse_border_width_component, parse_compatibility_color, parse_radius_component,
-    parse_shadow_blur_length, parse_shadow_length,
+    parse_border_width_component, parse_color, parse_radius_component, parse_shadow_blur_length,
+    parse_shadow_length,
 };
 use crate::error::{Error, basic, unsupported_value};
 use crate::syntax::*;
@@ -143,7 +143,7 @@ pub(super) fn parse_border<'i, 't>(
             }
             continue;
         }
-        if let Ok(parsed_color) = input.try_parse(parse_compatibility_color) {
+        if let Ok(parsed_color) = input.try_parse(parse_color) {
             if color.replace(parsed_color).is_some() {
                 return Err(unsupported_value(input, None, "duplicate border color"));
             }
@@ -164,7 +164,7 @@ pub(super) fn parse_border<'i, 't>(
             "border shorthand is missing a component",
         ))
     } else {
-        Ok(CssBorder::new(width, style, color))
+        Ok(CssBorder::new_current(width, style, color))
     }
 }
 
@@ -332,7 +332,7 @@ pub(super) fn parse_shadow<'i, 't>(
             continue;
         }
 
-        if let Ok(parsed_color) = input.try_parse(parse_compatibility_color) {
+        if let Ok(parsed_color) = input.try_parse(parse_color) {
             if color.replace(parsed_color).is_some() {
                 return Err(unsupported_value(input, None, "duplicate box-shadow color"));
             }
@@ -357,7 +357,7 @@ pub(super) fn parse_shadow<'i, 't>(
     }
 
     match lengths.as_slice() {
-        [offset_x, offset_y] => Ok(CssShadow::new(
+        [offset_x, offset_y] => Ok(CssShadow::new_current(
             inset,
             offset_x.clone(),
             offset_y.clone(),
@@ -365,7 +365,7 @@ pub(super) fn parse_shadow<'i, 't>(
             None,
             color,
         )),
-        [offset_x, offset_y, blur] => Ok(CssShadow::new(
+        [offset_x, offset_y, blur] => Ok(CssShadow::new_current(
             inset,
             offset_x.clone(),
             offset_y.clone(),
@@ -373,7 +373,7 @@ pub(super) fn parse_shadow<'i, 't>(
             None,
             color,
         )),
-        [offset_x, offset_y, blur, spread] => Ok(CssShadow::new(
+        [offset_x, offset_y, blur, spread] => Ok(CssShadow::new_current(
             inset,
             offset_x.clone(),
             offset_y.clone(),
@@ -396,7 +396,7 @@ pub(super) fn parse_drop_shadow<'i, 't>(
     let mut lengths = Vec::new();
 
     while !input.is_exhausted() {
-        if let Ok(parsed_color) = input.try_parse(parse_compatibility_color) {
+        if let Ok(parsed_color) = input.try_parse(parse_color) {
             if color.replace(parsed_color).is_some() {
                 return Err(unsupported_value(
                     input,
@@ -426,9 +426,9 @@ pub(super) fn parse_drop_shadow<'i, 't>(
 
     match lengths.as_slice() {
         [offset_x, offset_y] => {
-            CssDropShadow::try_new(offset_x.clone(), offset_y.clone(), None, color)
+            CssDropShadow::try_new_current(offset_x.clone(), offset_y.clone(), None, color)
         }
-        [offset_x, offset_y, blur] => CssDropShadow::try_new(
+        [offset_x, offset_y, blur] => CssDropShadow::try_new_current(
             offset_x.clone(),
             offset_y.clone(),
             Some(blur.clone()),

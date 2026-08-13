@@ -1031,8 +1031,11 @@ pub(super) fn parse_color<'i, 't>(
         let i01_subset = parse_compatibility_color_text(input.slice_from(start));
         return Ok(CssParsedColor::new(current, i01_subset));
     }
-    if let Ok(color) = input.try_parse(parse_color_mix) {
-        return Ok(CssParsedColor::from_i01(color));
+    if next_is_color_mix(input) {
+        let current =
+            parse_authored_color_mix(input).map_err(|error| with_color_context(error, None))?;
+        let i01_subset = parse_compatibility_color_text(input.slice_from(start));
+        return Ok(CssParsedColor::new(current, i01_subset));
     }
     if let Ok(color) = input.try_parse(parse_compatibility_only_predefined_color) {
         return Ok(CssParsedColor::from_i01(color));
@@ -1050,6 +1053,16 @@ pub(super) fn parse_color<'i, 't>(
     parse_color_inner(input)
         .map(CssParsedColor::from_i01)
         .map_err(|error| with_color_context(error, None))
+}
+
+fn next_is_color_mix<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let is_color_mix = matches!(
+        input.next(),
+        Ok(Token::Function(name)) if name.eq_ignore_ascii_case("color-mix")
+    );
+    input.reset(&state);
+    is_color_mix
 }
 
 fn next_is_authored_relative_color<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
@@ -1104,12 +1117,6 @@ fn next_is_selected_authored_color<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
     };
     input.reset(&state);
     selected
-}
-
-pub(super) fn parse_compatibility_color<'i, 't>(
-    input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssColor, ParseError<'i, Error>> {
-    parse_color_inner(input).map_err(|error| with_color_context(error, None))
 }
 
 fn parse_compatibility_color_text(source: &str) -> Option<CssColor> {
@@ -2278,6 +2285,80 @@ fn parse_color_mix<'i, 't>(
             Err(location.new_unexpected_token_error::<Error>(token))
         }
     }
+}
+
+fn parse_authored_color_mix<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredColor, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let token = input.next().map_err(basic)?.clone();
+    match token {
+        Token::Function(name) if name.eq_ignore_ascii_case("color-mix") => input
+            .parse_nested_block(parse_authored_color_mix_arguments)
+            .map(CssAuthoredColor::color_mix),
+        token => Err(location.new_unexpected_token_error::<Error>(token)),
+    }
+}
+
+fn parse_authored_color_mix_arguments<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredColorMix, ParseError<'i, Error>> {
+    input.expect_ident_matching("in").map_err(basic)?;
+    let interpolation = parse_authored_color_mix_interpolation_method(input)?;
+    input.expect_comma().map_err(basic)?;
+    let left = parse_authored_color_mix_component(input)?;
+    input.expect_comma().map_err(basic)?;
+    let right = parse_authored_color_mix_component(input)?;
+    input.expect_exhausted().map_err(basic)?;
+
+    CssAuthoredColorMix::try_new(interpolation, left, right).ok_or_else(|| {
+        invalid_color(
+            input.current_source_location(),
+            Some("color-mix interpolation"),
+        )
+    })
+}
+
+fn parse_authored_color_mix_interpolation_method<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColorInterpolationMethod, ParseError<'i, Error>> {
+    let space = parse_color_mix_interpolation_space(input)?;
+    let hue_location = input.current_source_location();
+    let hue = input.try_parse(parse_color_mix_hue_interpolation).ok();
+    let interpolation = CssColorInterpolationMethod::new(space, hue);
+    if hue.is_some() && !space.is_polar() {
+        Err(invalid_color(hue_location, Some("hue interpolation")))
+    } else {
+        Ok(interpolation)
+    }
+}
+
+fn parse_authored_color_mix_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredColorMixComponent, ParseError<'i, Error>> {
+    let (color, _) = parse_color(input)?.into_parts();
+    let percentage = if next_is_percentage(input) {
+        Some(parse_authored_color_mix_percentage(input)?)
+    } else {
+        None
+    };
+    Ok(CssAuthoredColorMixComponent::new(color, percentage))
+}
+
+fn next_is_percentage<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let is_percentage = matches!(input.next(), Ok(Token::Percentage { .. }));
+    input.reset(&state);
+    is_percentage
+}
+
+fn parse_authored_color_mix_percentage<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredColorMixPercentage, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let percentage = input.expect_percentage().map_err(basic)? * 100.0;
+    CssAuthoredColorMixPercentage::try_new(percentage)
+        .ok_or_else(|| invalid_color(location, Some("color-mix component percentage")))
 }
 
 fn parse_color_mix_arguments<'i, 't>(

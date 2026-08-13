@@ -1,13 +1,14 @@
 use surgeist_css::{
-    CssAnimationDirection, CssAuthoredColorComponent, CssAuthoredColorSyntax,
-    CssAuthoredSystemColor, CssCalcOperator, CssErrorCode, CssExclusionReason, CssFeatureKind,
-    CssGridAutoFlowAxis, CssImportance, CssKnownDeclaredValueRef, CssKnownProperty,
-    CssKnownPropertyValueRef, CssMediaQueryModifier, CssPredefinedColorSpace, CssPropertyNameRef,
-    CssRecoveryAction, CssRelativeColorChannel, CssRelativeColorEnvironment,
-    CssRelativeColorExpressionValue, CssRelativeColorFunction, CssRelativeColorResultDomain,
-    CssRule, CssSelectorCombinator, CssSpecificationTier, CssSupportStatus, ErrorKind,
-    conformance_exclusion, feature_metadata, parse_sheet, parse_style_attribute, property_metadata,
-    specification_source,
+    CssAnimationDirection, CssAuthoredColorComponent, CssAuthoredColorMix,
+    CssAuthoredColorMixPercentage, CssAuthoredColorSyntax, CssAuthoredSystemColor, CssCalcOperator,
+    CssColorInterpolationMethod, CssColorInterpolationSpace, CssErrorCode, CssExclusionReason,
+    CssFeatureKind, CssGridAutoFlowAxis, CssHueInterpolationMethod, CssImportance,
+    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssMediaQueryModifier,
+    CssPredefinedColorSpace, CssPropertyNameRef, CssRecoveryAction, CssRelativeColorChannel,
+    CssRelativeColorEnvironment, CssRelativeColorExpressionValue, CssRelativeColorFunction,
+    CssRelativeColorResultDomain, CssRule, CssSelectorCombinator, CssSpecificationTier,
+    CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata, parse_sheet,
+    parse_style_attribute, property_metadata, specification_source,
 };
 
 #[test]
@@ -115,6 +116,44 @@ fn public_surface_exposes_typed_relative_color_inspection_without_resolution() {
         value.i01_subset(),
         Some(surgeist_css::CssColor::Relative(_))
     ));
+}
+
+#[test]
+fn public_color_mix_construction_rejects_hue_in_a_rectangular_space() {
+    let report = parse_style_attribute("color: color-mix(in oklch, red 25%, blue 75%)");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Color(value) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected color wrapper");
+    };
+    let color_mix = value.current().color_mix_value().unwrap();
+    let invalid = CssAuthoredColorMix::try_new(
+        CssColorInterpolationMethod::new(
+            CssColorInterpolationSpace::Predefined(CssPredefinedColorSpace::Srgb),
+            Some(CssHueInterpolationMethod::Longer),
+        ),
+        color_mix.left().clone(),
+        color_mix.right().clone(),
+    );
+    assert!(invalid.is_none());
+
+    assert_eq!(
+        CssAuthoredColorMixPercentage::try_new(0.0).unwrap().value(),
+        0.0
+    );
+    assert_eq!(
+        CssAuthoredColorMixPercentage::try_new(100.0)
+            .unwrap()
+            .value(),
+        100.0,
+    );
+    for invalid in [-1.0, 101.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        assert!(CssAuthoredColorMixPercentage::try_new(invalid).is_none());
+    }
 }
 
 fn known_declared_value_kind(value: CssKnownDeclaredValueRef<'_>) -> &'static str {

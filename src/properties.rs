@@ -485,7 +485,119 @@ macro_rules! define_easing_property_value {
     };
 }
 
+macro_rules! define_color_property_value {
+    ($canonical:literal, $wrapper:ident, $representation:ident) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: CssAuthoredColor,
+            i01_subset: Option<CssColor>,
+        }
+
+        #[doc = concat!("A parser-produced authored ordinary value for `", $canonical, "`.")]
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) fn new(
+                authored: CssAuthoredDeclarationValue,
+                parsed: CssParsedColor,
+            ) -> Self {
+                let (current, i01_subset) = parsed.into_parts();
+                Self {
+                    authored,
+                    representation: $representation {
+                        current,
+                        i01_subset,
+                    },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            /// Returns the exact checked current authored color.
+            #[must_use]
+            pub const fn current(&self) -> &CssAuthoredColor {
+                &self.representation.current
+            }
+
+            /// Returns the frozen I01 compatibility payload when the authored value has an exact
+            /// representation in that model.
+            #[must_use]
+            pub const fn i01_subset(&self) -> Option<&CssColor> {
+                self.representation.i01_subset.as_ref()
+            }
+        }
+    };
+}
+
 macro_rules! define_property_value {
+    (
+        Color, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_color_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        Background, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_color_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        BackgroundColor, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_color_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        BorderColor, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_color_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        BorderTopColor, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_color_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        BorderRightColor, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_color_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        BorderBottomColor, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_color_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        BorderLeftColor, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_color_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        OutlineColor, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_color_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        TextDecorationColor, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_color_property_value!($canonical, $wrapper, $representation);
+    };
     (
         BoxShadow, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident

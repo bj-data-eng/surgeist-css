@@ -2,11 +2,56 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssBasicShapeValue, CssBoxShadow, CssClipPathValue, CssEasingValue, CssErrorCode,
-    CssFilterFunctionValue, CssFilterValue, CssImportance, CssKnownDeclaredValueRef,
+    CssAuthoredSystemColor, CssBasicShapeValue, CssBoxShadow, CssClipPathValue, CssEasingValue,
+    CssErrorCode, CssFilterFunctionValue, CssFilterValue, CssImportance, CssKnownDeclaredValueRef,
     CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction, CssRule,
     CssTransformFunctionValue, CssTransformValue, ErrorKind, parse_sheet, parse_style_attribute,
 };
+
+#[test]
+fn direct_color_wrappers_keep_current_i01_global_and_substitution_branches_distinct() {
+    let report = parse_style_attribute(concat!(
+        "color: ActiveBorder; ",
+        "background-color: red; ",
+        "outline-color: inherit; ",
+        "text-decoration-color: var(--decoration)",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::Color(deprecated) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected color wrapper");
+    };
+    assert_eq!(
+        deprecated.current().system(),
+        Some(CssAuthoredSystemColor::ActiveBorder)
+    );
+    assert!(deprecated.i01_subset().is_none());
+
+    let CssKnownPropertyValueRef::BackgroundColor(named) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected background-color wrapper");
+    };
+    assert_eq!(named.current().named().unwrap().name(), "red");
+    assert!(named.i01_subset().is_some());
+
+    assert!(matches!(
+        report.syntax()[2].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::Global(_)
+    ));
+    assert!(matches!(
+        report.syntax()[3].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::SubstitutionDependent(_)
+    ));
+}
 
 macro_rules! assert_property_specific_css {
     ($declaration:expr, $value:expr, $expected:expr; $($variant:ident),+ $(,)?) => {

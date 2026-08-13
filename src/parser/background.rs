@@ -2,7 +2,7 @@ use cssparser::{ParseError, Parser, ParserState, match_ignore_ascii_case};
 
 use super::box_model::parse_border_style;
 use super::values::{
-    LengthGrammar, next_is_comma, next_is_delim, parse_color, parse_length_with,
+    LengthGrammar, next_is_comma, next_is_delim, parse_compatibility_color, parse_length_with,
     parse_length_with_context, parse_length_with_context_legacy,
 };
 use crate::error::{CssFeatureId, Error, basic, unsupported_value};
@@ -967,7 +967,7 @@ pub(super) fn parse_outline<'i, 't>(
             continue;
         }
         if color.is_none()
-            && let Ok(parsed_color) = input.try_parse(parse_color)
+            && let Ok(parsed_color) = input.try_parse(parse_compatibility_color)
         {
             color = Some(parsed_color);
             continue;

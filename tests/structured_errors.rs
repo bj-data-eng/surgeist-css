@@ -7,6 +7,38 @@ use surgeist_css::{
 };
 
 #[test]
+fn color_domain_failure_reports_the_responsible_component_and_retains_its_sibling() {
+    let source = "color: hsl(20px 30% 40%); opacity: 0.5";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 1);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid hue unit must recover once");
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::InvalidColorSyntax);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    let ErrorKind::InvalidColorSyntax(detail) = diagnostic.error().kind() else {
+        panic!("expected structured color detail");
+    };
+    assert_eq!(detail.component().map(|value| value.as_str()), Some("hue"));
+    assert_eq!(
+        detail.encountered().unwrap().kind(),
+        CssTokenKind::Dimension
+    );
+    assert_eq!(detail.encountered().unwrap().authored(), "20px");
+    assert_eq!(
+        report.syntax()[0].known().unwrap().property(),
+        CssKnownProperty::Opacity
+    );
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered hue unit error");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn transform_separator_and_domain_failures_report_exact_tokens_and_retain_siblings() {
     for (value, responsible, token_kind) in [
         ("matrix(1 0 0 1 10 20)", "0", CssTokenKind::Number),

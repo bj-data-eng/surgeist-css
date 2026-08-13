@@ -82,6 +82,63 @@ fn opacity_domain_error_after_non_bmp_text_has_exact_coordinates_and_span() {
 }
 
 #[test]
+fn color_component_error_after_non_bmp_text_has_exact_coordinates_and_span() {
+    let source = "--😀: 1; color: rgb(1px 2 3); opacity: 0.5";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid RGB component must recover once");
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::InvalidColorSyntax);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    let responsible = source.find("1px").expect("responsible RGB component");
+    let declaration_start = source.find("color").expect("color declaration");
+    let declaration_end = source.find(';').expect("custom property terminator")
+        + 1
+        + source[source.find(';').unwrap() + 1..]
+            .find(';')
+            .expect("color declaration terminator")
+        + 1;
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(responsible - 2).expect("UTF-16 column"),
+    );
+    assert_position(
+        diagnostic.span().start(),
+        declaration_start,
+        0,
+        u32::try_from(declaration_start - 2).expect("UTF-16 column"),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        declaration_end,
+        0,
+        u32::try_from(declaration_end - 2).expect("UTF-16 column"),
+    );
+    let ErrorKind::InvalidColorSyntax(detail) = diagnostic.error().kind() else {
+        panic!("expected structured color error");
+    };
+    assert_eq!(
+        detail.component().map(|value| value.as_str()),
+        Some("component")
+    );
+    assert_eq!(
+        detail.encountered().unwrap().kind(),
+        CssTokenKind::Dimension
+    );
+    assert_eq!(detail.encountered().unwrap().authored(), "1px");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered color component error");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn easing_count_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
     let source = "--😀: 1; transition-timing-function: steps(1, jump-none); color: red";
     let report = parse_style_attribute(source);

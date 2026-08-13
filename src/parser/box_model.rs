@@ -1,8 +1,8 @@
 use cssparser::{ParseError, Parser, match_ignore_ascii_case};
 
 use super::values::{
-    parse_border_width_component, parse_color, parse_radius_component, parse_shadow_blur_length,
-    parse_shadow_length,
+    parse_border_width_component, parse_compatibility_color, parse_radius_component,
+    parse_shadow_blur_length, parse_shadow_length,
 };
 use crate::error::{Error, basic, unsupported_value};
 use crate::syntax::*;
@@ -143,7 +143,7 @@ pub(super) fn parse_border<'i, 't>(
             }
             continue;
         }
-        if let Ok(parsed_color) = input.try_parse(parse_color) {
+        if let Ok(parsed_color) = input.try_parse(parse_compatibility_color) {
             if color.replace(parsed_color).is_some() {
                 return Err(unsupported_value(input, None, "duplicate border color"));
             }
@@ -332,7 +332,7 @@ pub(super) fn parse_shadow<'i, 't>(
             continue;
         }
 
-        if let Ok(parsed_color) = input.try_parse(parse_color) {
+        if let Ok(parsed_color) = input.try_parse(parse_compatibility_color) {
             if color.replace(parsed_color).is_some() {
                 return Err(unsupported_value(input, None, "duplicate box-shadow color"));
             }
@@ -396,7 +396,7 @@ pub(super) fn parse_drop_shadow<'i, 't>(
     let mut lengths = Vec::new();
 
     while !input.is_exhausted() {
-        if let Ok(parsed_color) = input.try_parse(parse_color) {
+        if let Ok(parsed_color) = input.try_parse(parse_compatibility_color) {
             if color.replace(parsed_color).is_some() {
                 return Err(unsupported_value(
                     input,

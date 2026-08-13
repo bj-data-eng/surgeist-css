@@ -1,6 +1,8 @@
 use cssparser::{ParseError, Parser, Token, match_ignore_ascii_case};
 
-use super::values::{LengthGrammar, next_is_comma, parse_color, parse_integer, parse_length_with};
+use super::values::{
+    LengthGrammar, next_is_comma, parse_compatibility_color, parse_integer, parse_length_with,
+};
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
@@ -577,7 +579,7 @@ pub(super) fn parse_text_decoration<'i, 't>(
             continue;
         }
         if color.is_none()
-            && let Ok(parsed_color) = input.try_parse(parse_color)
+            && let Ok(parsed_color) = input.try_parse(parse_compatibility_color)
         {
             color = Some(parsed_color);
             continue;

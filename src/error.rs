@@ -1525,6 +1525,15 @@ pub(crate) fn with_color_context<'i>(
     mut error: ParseError<'i, Error>,
     component: Option<&str>,
 ) -> ParseError<'i, Error> {
+    if matches!(
+        error.kind,
+        ParseErrorKind::Custom(Error {
+            kind: ErrorKind::InvalidColorSyntax(_),
+            ..
+        })
+    ) {
+        return error;
+    }
     let encountered = take_encountered(&mut error.kind);
     error.kind = ParseErrorKind::Custom(Error::at(
         error.location,

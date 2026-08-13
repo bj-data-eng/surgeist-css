@@ -1,11 +1,51 @@
 use surgeist_css::{
-    CssAnimationDirection, CssCalcOperator, CssErrorCode, CssExclusionReason, CssFeatureKind,
+    CssAnimationDirection, CssAuthoredColorComponent, CssAuthoredColorSyntax,
+    CssAuthoredSystemColor, CssCalcOperator, CssErrorCode, CssExclusionReason, CssFeatureKind,
     CssGridAutoFlowAxis, CssImportance, CssKnownDeclaredValueRef, CssKnownProperty,
     CssKnownPropertyValueRef, CssMediaQueryModifier, CssPropertyNameRef, CssRecoveryAction,
     CssRelativeColorFunction, CssRule, CssSelectorCombinator, CssSpecificationTier,
     CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata, parse_sheet,
     parse_style_attribute, property_metadata, specification_source,
 };
+
+#[test]
+fn public_surface_exposes_typed_authored_color_inspection() {
+    let report = parse_style_attribute("color: rgb(none 120% calc(1 + 2)); color: WindowText");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::Color(rgb) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected RGB color wrapper");
+    };
+    let rgb = rgb.current().rgb_value().expect("typed RGB branch");
+    assert_eq!(rgb.syntax(), CssAuthoredColorSyntax::Modern);
+    assert!(matches!(
+        rgb.channels(),
+        [
+            CssAuthoredColorComponent::None,
+            CssAuthoredColorComponent::Percentage(_),
+            CssAuthoredColorComponent::NumberCalculation(_),
+        ]
+    ));
+
+    let CssKnownPropertyValueRef::Color(system) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected system color wrapper");
+    };
+    let category = match system.current().system().unwrap() {
+        CssAuthoredSystemColor::WindowText => "deprecated system",
+        _ => "other future system color",
+    };
+    assert_eq!(category, "deprecated system");
+}
 
 fn known_declared_value_kind(value: CssKnownDeclaredValueRef<'_>) -> &'static str {
     match value {

@@ -9072,6 +9072,445 @@ pub(crate) fn calc_has_negative_component(calc: &CssCalcLength) -> bool {
     }
 }
 
+/// A parser-owned authored color that preserves its specified Color 4 branch.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAuthoredColor {
+    representation: CssAuthoredColorRepresentation,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum CssAuthoredColorRepresentation {
+    CurrentColor,
+    Transparent,
+    Hex(CssHexColor),
+    Named(CssNamedColor),
+    System(CssAuthoredSystemColor),
+    Rgb(CssAuthoredRgbColor),
+    Hsl(CssAuthoredHslColor),
+    Hwb(CssAuthoredHwbColor),
+    PreservedI01(CssColor),
+}
+
+impl CssAuthoredColor {
+    pub(crate) const fn current_color() -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::CurrentColor,
+        }
+    }
+
+    pub(crate) const fn transparent() -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Transparent,
+        }
+    }
+
+    pub(crate) const fn hex(value: CssHexColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Hex(value),
+        }
+    }
+
+    pub(crate) const fn from_named(value: CssNamedColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Named(value),
+        }
+    }
+
+    pub(crate) const fn from_system(value: CssAuthoredSystemColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::System(value),
+        }
+    }
+
+    pub(crate) const fn rgb(value: CssAuthoredRgbColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Rgb(value),
+        }
+    }
+
+    pub(crate) const fn hsl(value: CssAuthoredHslColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Hsl(value),
+        }
+    }
+
+    pub(crate) const fn hwb(value: CssAuthoredHwbColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Hwb(value),
+        }
+    }
+
+    pub(crate) const fn preserved_i01(value: CssColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::PreservedI01(value),
+        }
+    }
+
+    #[must_use]
+    pub const fn is_current_color(&self) -> bool {
+        matches!(
+            self.representation,
+            CssAuthoredColorRepresentation::CurrentColor
+        )
+    }
+
+    #[must_use]
+    pub const fn is_transparent(&self) -> bool {
+        matches!(
+            self.representation,
+            CssAuthoredColorRepresentation::Transparent
+        )
+    }
+
+    #[must_use]
+    pub const fn hex_value(&self) -> Option<&CssHexColor> {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Hex(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn named(&self) -> Option<&CssNamedColor> {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Named(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn system(&self) -> Option<CssAuthoredSystemColor> {
+        match self.representation {
+            CssAuthoredColorRepresentation::System(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn rgb_value(&self) -> Option<&CssAuthoredRgbColor> {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Rgb(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn hsl_value(&self) -> Option<&CssAuthoredHslColor> {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Hsl(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn hwb_value(&self) -> Option<&CssAuthoredHwbColor> {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Hwb(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn kind_name(&self) -> &'static str {
+        match &self.representation {
+            CssAuthoredColorRepresentation::CurrentColor => "currentcolor",
+            CssAuthoredColorRepresentation::Transparent => "transparent",
+            CssAuthoredColorRepresentation::Hex(_) => "hex",
+            CssAuthoredColorRepresentation::Named(_) => "named",
+            CssAuthoredColorRepresentation::System(_) => "system",
+            CssAuthoredColorRepresentation::Rgb(_) => "rgb",
+            CssAuthoredColorRepresentation::Hsl(_) => "hsl",
+            CssAuthoredColorRepresentation::Hwb(_) => "hwb",
+            CssAuthoredColorRepresentation::PreservedI01(value) => value.kind_name(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssHexColor {
+    digits: String,
+}
+
+impl CssHexColor {
+    pub(crate) fn new(digits: impl Into<String>) -> Self {
+        Self {
+            digits: digits.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn digits(&self) -> &str {
+        &self.digits
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssNamedColor {
+    name: String,
+}
+
+impl CssNamedColor {
+    pub(crate) fn new(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssAuthoredSystemColor {
+    Canvas,
+    CanvasText,
+    LinkText,
+    VisitedText,
+    ActiveText,
+    ButtonFace,
+    ButtonText,
+    ButtonBorder,
+    Field,
+    FieldText,
+    Highlight,
+    HighlightText,
+    Mark,
+    MarkText,
+    GrayText,
+    SelectedItem,
+    SelectedItemText,
+    AccentColor,
+    AccentColorText,
+    ActiveBorder,
+    ActiveCaption,
+    AppWorkspace,
+    Background,
+    ButtonHighlight,
+    ButtonShadow,
+    CaptionText,
+    InactiveBorder,
+    InactiveCaption,
+    InactiveCaptionText,
+    InfoBackground,
+    InfoText,
+    Menu,
+    MenuText,
+    Scrollbar,
+    ThreeDDarkShadow,
+    ThreeDFace,
+    ThreeDHighlight,
+    ThreeDLightShadow,
+    ThreeDShadow,
+    Window,
+    WindowFrame,
+    WindowText,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssAuthoredColorSyntax {
+    Legacy,
+    Modern,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssAuthoredColorComponent {
+    None,
+    Number(CssFiniteNumber),
+    Percentage(CssFiniteNumber),
+    NumberCalculation(CssNumberCalculation),
+    PercentageCalculation(CssPercentageCalculation),
+}
+
+impl CssAuthoredColorComponent {
+    pub(crate) const fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+
+    pub(crate) const fn domain(&self) -> Option<CssCalculationType> {
+        match self {
+            Self::None => None,
+            Self::Number(_) | Self::NumberCalculation(_) => Some(CssCalculationType::Number),
+            Self::Percentage(_) | Self::PercentageCalculation(_) => {
+                Some(CssCalculationType::Percentage)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssAuthoredHue {
+    None,
+    Number(CssFiniteNumber),
+    Angle(CssAngleLiteral),
+    NumberCalculation(CssNumberCalculation),
+    AngleCalculation(CssAngleCalculation),
+}
+
+impl CssAuthoredHue {
+    pub(crate) const fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAuthoredRgbColor {
+    syntax: CssAuthoredColorSyntax,
+    channels: [CssAuthoredColorComponent; 3],
+    alpha: Option<CssAuthoredColorComponent>,
+}
+
+impl CssAuthoredRgbColor {
+    pub(crate) const fn new(
+        syntax: CssAuthoredColorSyntax,
+        channels: [CssAuthoredColorComponent; 3],
+        alpha: Option<CssAuthoredColorComponent>,
+    ) -> Self {
+        Self {
+            syntax,
+            channels,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn syntax(&self) -> CssAuthoredColorSyntax {
+        self.syntax
+    }
+
+    #[must_use]
+    pub const fn channels(&self) -> &[CssAuthoredColorComponent; 3] {
+        &self.channels
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<&CssAuthoredColorComponent> {
+        self.alpha.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAuthoredHslColor {
+    syntax: CssAuthoredColorSyntax,
+    hue: CssAuthoredHue,
+    saturation: CssAuthoredColorComponent,
+    lightness: CssAuthoredColorComponent,
+    alpha: Option<CssAuthoredColorComponent>,
+}
+
+impl CssAuthoredHslColor {
+    pub(crate) const fn new(
+        syntax: CssAuthoredColorSyntax,
+        hue: CssAuthoredHue,
+        saturation: CssAuthoredColorComponent,
+        lightness: CssAuthoredColorComponent,
+        alpha: Option<CssAuthoredColorComponent>,
+    ) -> Self {
+        Self {
+            syntax,
+            hue,
+            saturation,
+            lightness,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn syntax(&self) -> CssAuthoredColorSyntax {
+        self.syntax
+    }
+
+    #[must_use]
+    pub const fn hue(&self) -> &CssAuthoredHue {
+        &self.hue
+    }
+
+    #[must_use]
+    pub const fn saturation(&self) -> &CssAuthoredColorComponent {
+        &self.saturation
+    }
+
+    #[must_use]
+    pub const fn lightness(&self) -> &CssAuthoredColorComponent {
+        &self.lightness
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<&CssAuthoredColorComponent> {
+        self.alpha.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAuthoredHwbColor {
+    hue: CssAuthoredHue,
+    whiteness: CssAuthoredColorComponent,
+    blackness: CssAuthoredColorComponent,
+    alpha: Option<CssAuthoredColorComponent>,
+}
+
+impl CssAuthoredHwbColor {
+    pub(crate) const fn new(
+        hue: CssAuthoredHue,
+        whiteness: CssAuthoredColorComponent,
+        blackness: CssAuthoredColorComponent,
+        alpha: Option<CssAuthoredColorComponent>,
+    ) -> Self {
+        Self {
+            hue,
+            whiteness,
+            blackness,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn hue(&self) -> &CssAuthoredHue {
+        &self.hue
+    }
+
+    #[must_use]
+    pub const fn whiteness(&self) -> &CssAuthoredColorComponent {
+        &self.whiteness
+    }
+
+    #[must_use]
+    pub const fn blackness(&self) -> &CssAuthoredColorComponent {
+        &self.blackness
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<&CssAuthoredColorComponent> {
+        self.alpha.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CssParsedColor {
+    current: CssAuthoredColor,
+    i01_subset: Option<CssColor>,
+}
+
+impl CssParsedColor {
+    pub(crate) const fn new(current: CssAuthoredColor, i01_subset: Option<CssColor>) -> Self {
+        Self {
+            current,
+            i01_subset,
+        }
+    }
+
+    pub(crate) fn from_i01(value: CssColor) -> Self {
+        Self::new(CssAuthoredColor::preserved_i01(value.clone()), Some(value))
+    }
+
+    pub(crate) fn into_parts(self) -> (CssAuthoredColor, Option<CssColor>) {
+        (self.current, self.i01_subset)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum CssColor {

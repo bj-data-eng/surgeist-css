@@ -1,6 +1,6 @@
 use cssparser::{
-    ParseError, Parser, ToCss, Token, color::PredefinedColorSpace as ParsedPredefinedColorSpace,
-    match_ignore_ascii_case,
+    ParseError, Parser, ParserInput, ToCss, Token,
+    color::PredefinedColorSpace as ParsedPredefinedColorSpace, match_ignore_ascii_case,
 };
 use cssparser_color::{Color as ParsedColor, DefaultColorParser, parse_color_with};
 
@@ -1023,8 +1023,386 @@ pub(super) fn next_is_ident<'i, 't>(input: &mut Parser<'i, 't>, expected: &str) 
 
 pub(super) fn parse_color<'i, 't>(
     input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssParsedColor, ParseError<'i, Error>> {
+    if let Ok(color) = input.try_parse(parse_relative_color) {
+        return Ok(CssParsedColor::from_i01(color));
+    }
+    if let Ok(color) = input.try_parse(parse_color_mix) {
+        return Ok(CssParsedColor::from_i01(color));
+    }
+    let start = input.position();
+    if next_is_selected_authored_color(input) {
+        let current = parse_selected_authored_color(input)
+            .map_err(|error| with_color_context(error, None))?;
+        let i01_subset = parse_compatibility_color_text(input.slice_from(start));
+        return Ok(CssParsedColor::new(current, i01_subset));
+    }
+    parse_color_inner(input)
+        .map(CssParsedColor::from_i01)
+        .map_err(|error| with_color_context(error, None))
+}
+
+fn next_is_selected_authored_color<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let selected = match input.next() {
+        Ok(Token::Ident(_) | Token::Hash(_) | Token::IDHash(_)) => true,
+        Ok(Token::Function(name)) => {
+            name.eq_ignore_ascii_case("rgb")
+                || name.eq_ignore_ascii_case("rgba")
+                || name.eq_ignore_ascii_case("hsl")
+                || name.eq_ignore_ascii_case("hsla")
+                || name.eq_ignore_ascii_case("hwb")
+        }
+        Ok(_) | Err(_) => false,
+    };
+    input.reset(&state);
+    selected
+}
+
+pub(super) fn parse_compatibility_color<'i, 't>(
+    input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssColor, ParseError<'i, Error>> {
     parse_color_inner(input).map_err(|error| with_color_context(error, None))
+}
+
+fn parse_compatibility_color_text(source: &str) -> Option<CssColor> {
+    let mut input = ParserInput::new(source);
+    let mut parser = Parser::new(&mut input);
+    let color = parse_color_inner(&mut parser).ok()?;
+    parser.expect_exhausted().ok()?;
+    Some(color)
+}
+
+fn parse_selected_authored_color<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredColor, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let token = input.next().map_err(basic)?.clone();
+    match token {
+        Token::Ident(ident) if ident.eq_ignore_ascii_case("currentcolor") => {
+            Ok(CssAuthoredColor::current_color())
+        }
+        Token::Ident(ident) if ident.eq_ignore_ascii_case("transparent") => {
+            Ok(CssAuthoredColor::transparent())
+        }
+        Token::Ident(ident) => {
+            if let Some(system) = authored_system_color(&ident) {
+                return Ok(CssAuthoredColor::from_system(system));
+            }
+            if parse_compatibility_color_text(&ident).is_some() {
+                return Ok(CssAuthoredColor::from_named(CssNamedColor::new(
+                    ident.to_ascii_lowercase(),
+                )));
+            }
+            Err(invalid_color(location, None))
+        }
+        Token::Hash(digits) | Token::IDHash(digits)
+            if matches!(digits.len(), 3 | 4 | 6 | 8)
+                && digits.bytes().all(|byte| byte.is_ascii_hexdigit()) =>
+        {
+            Ok(CssAuthoredColor::hex(CssHexColor::new(digits.as_ref())))
+        }
+        Token::Function(name)
+            if name.eq_ignore_ascii_case("rgb") || name.eq_ignore_ascii_case("rgba") =>
+        {
+            input
+                .parse_nested_block(parse_authored_rgb)
+                .map(CssAuthoredColor::rgb)
+        }
+        Token::Function(name)
+            if name.eq_ignore_ascii_case("hsl") || name.eq_ignore_ascii_case("hsla") =>
+        {
+            input
+                .parse_nested_block(parse_authored_hsl)
+                .map(CssAuthoredColor::hsl)
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("hwb") => input
+            .parse_nested_block(parse_authored_hwb)
+            .map(CssAuthoredColor::hwb),
+        token => Err(with_color_context(
+            location.new_unexpected_token_error::<Error>(token),
+            None,
+        )),
+    }
+}
+
+fn parse_authored_rgb<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredRgbColor, ParseError<'i, Error>> {
+    let first = parse_authored_color_component(input, true)?;
+    if input.try_parse(Parser::expect_comma).is_ok() {
+        if first.is_none() {
+            return Err(invalid_color(input.current_source_location(), Some("red")));
+        }
+        let domain = first.domain();
+        let second = parse_authored_color_component(input, false)?;
+        input.expect_comma().map_err(basic)?;
+        let third = parse_authored_color_component(input, false)?;
+        if second.domain() != domain || third.domain() != domain {
+            return Err(invalid_color(
+                input.current_source_location(),
+                Some("component"),
+            ));
+        }
+        let alpha = if input.try_parse(Parser::expect_comma).is_ok() {
+            Some(parse_authored_alpha(input, false)?)
+        } else {
+            None
+        };
+        input.expect_exhausted().map_err(basic)?;
+        Ok(CssAuthoredRgbColor::new(
+            CssAuthoredColorSyntax::Legacy,
+            [first, second, third],
+            alpha,
+        ))
+    } else {
+        let second = parse_authored_color_component(input, true)?;
+        let third = parse_authored_color_component(input, true)?;
+        let alpha = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+            Some(parse_authored_alpha(input, true)?)
+        } else {
+            None
+        };
+        input.expect_exhausted().map_err(basic)?;
+        Ok(CssAuthoredRgbColor::new(
+            CssAuthoredColorSyntax::Modern,
+            [first, second, third],
+            alpha,
+        ))
+    }
+}
+
+fn parse_authored_hsl<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredHslColor, ParseError<'i, Error>> {
+    let hue = parse_authored_hue(input, true)?;
+    if input.try_parse(Parser::expect_comma).is_ok() {
+        if hue.is_none() {
+            return Err(invalid_color(input.current_source_location(), Some("hue")));
+        }
+        let saturation = parse_authored_percentage_component(input, false)?;
+        input.expect_comma().map_err(basic)?;
+        let lightness = parse_authored_percentage_component(input, false)?;
+        let alpha = if input.try_parse(Parser::expect_comma).is_ok() {
+            Some(parse_authored_alpha(input, false)?)
+        } else {
+            None
+        };
+        input.expect_exhausted().map_err(basic)?;
+        Ok(CssAuthoredHslColor::new(
+            CssAuthoredColorSyntax::Legacy,
+            hue,
+            saturation,
+            lightness,
+            alpha,
+        ))
+    } else {
+        let saturation = parse_authored_percentage_component(input, true)?;
+        let lightness = parse_authored_percentage_component(input, true)?;
+        let alpha = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+            Some(parse_authored_alpha(input, true)?)
+        } else {
+            None
+        };
+        input.expect_exhausted().map_err(basic)?;
+        Ok(CssAuthoredHslColor::new(
+            CssAuthoredColorSyntax::Modern,
+            hue,
+            saturation,
+            lightness,
+            alpha,
+        ))
+    }
+}
+
+fn parse_authored_hwb<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredHwbColor, ParseError<'i, Error>> {
+    let hue = parse_authored_hue(input, true)?;
+    let whiteness = parse_authored_percentage_component(input, true)?;
+    let blackness = parse_authored_percentage_component(input, true)?;
+    let alpha = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+        Some(parse_authored_alpha(input, true)?)
+    } else {
+        None
+    };
+    input.expect_exhausted().map_err(basic)?;
+    Ok(CssAuthoredHwbColor::new(hue, whiteness, blackness, alpha))
+}
+
+fn parse_authored_color_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    allow_none: bool,
+) -> std::result::Result<CssAuthoredColorComponent, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)?.clone() {
+        Token::Ident(ident) if allow_none && ident.eq_ignore_ascii_case("none") => {
+            Ok(CssAuthoredColorComponent::None)
+        }
+        Token::Number { value, .. } => CssFiniteNumber::try_new(value)
+            .map(CssAuthoredColorComponent::Number)
+            .ok_or_else(|| invalid_color(location, Some("component"))),
+        Token::Percentage { unit_value, .. } => CssFiniteNumber::try_new(unit_value * 100.0)
+            .map(CssAuthoredColorComponent::Percentage)
+            .ok_or_else(|| invalid_color(location, Some("component"))),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            parse_authored_number_or_percentage_calculation(input, location)
+        }
+        token => Err(with_color_context(
+            location.new_unexpected_token_error::<Error>(token),
+            Some("component"),
+        )),
+    }
+}
+
+fn parse_authored_percentage_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    allow_none: bool,
+) -> std::result::Result<CssAuthoredColorComponent, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let value = parse_authored_color_component(input, allow_none)?;
+    if matches!(
+        value,
+        CssAuthoredColorComponent::None
+            | CssAuthoredColorComponent::Percentage(_)
+            | CssAuthoredColorComponent::PercentageCalculation(_)
+    ) {
+        Ok(value)
+    } else {
+        Err(invalid_color(location, Some("percentage")))
+    }
+}
+
+fn parse_authored_alpha<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    allow_none: bool,
+) -> std::result::Result<CssAuthoredColorComponent, ParseError<'i, Error>> {
+    parse_authored_color_component(input, allow_none)
+}
+
+fn parse_authored_number_or_percentage_calculation<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    location: cssparser::SourceLocation,
+) -> std::result::Result<CssAuthoredColorComponent, ParseError<'i, Error>> {
+    if let Ok(expression) = input.try_parse(|input| {
+        input.parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Number))
+    }) {
+        return Ok(CssAuthoredColorComponent::NumberCalculation(
+            CssNumberCalculation::from_expression(expression),
+        ));
+    }
+    input
+        .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Percentage))
+        .map(CssPercentageCalculation::from_expression)
+        .map(CssAuthoredColorComponent::PercentageCalculation)
+        .map_err(|_| invalid_color(location, Some("component")))
+}
+
+fn parse_authored_hue<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    allow_none: bool,
+) -> std::result::Result<CssAuthoredHue, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)?.clone() {
+        Token::Ident(ident) if allow_none && ident.eq_ignore_ascii_case("none") => {
+            Ok(CssAuthoredHue::None)
+        }
+        Token::Number { value, .. } => CssFiniteNumber::try_new(value)
+            .map(CssAuthoredHue::Number)
+            .ok_or_else(|| invalid_color(location, Some("hue"))),
+        token @ Token::Dimension { .. } => {
+            let Token::Dimension {
+                value, ref unit, ..
+            } = token
+            else {
+                unreachable!("matched dimension token")
+            };
+            let unit = match unit.to_ascii_lowercase().as_str() {
+                "deg" => CssAngleUnit::Degrees,
+                "grad" => CssAngleUnit::Gradians,
+                "rad" => CssAngleUnit::Radians,
+                "turn" => CssAngleUnit::Turns,
+                _ => {
+                    return Err(with_color_context(
+                        location.new_unexpected_token_error::<Error>(token),
+                        Some("hue"),
+                    ));
+                }
+            };
+            CssAngleLiteral::try_new(value, unit)
+                .map(CssAuthoredHue::Angle)
+                .ok_or_else(|| invalid_color(location, Some("hue")))
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            if let Ok(expression) = input.try_parse(|input| {
+                input.parse_nested_block(|input| {
+                    parse_typed_calculation(input, CalculationRoot::Number)
+                })
+            }) {
+                return Ok(CssAuthoredHue::NumberCalculation(
+                    CssNumberCalculation::from_expression(expression),
+                ));
+            }
+            input
+                .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Angle))
+                .map(CssAngleCalculation::from_expression)
+                .map(CssAuthoredHue::AngleCalculation)
+                .map_err(|_| invalid_color(location, Some("hue")))
+        }
+        token => Err(with_color_context(
+            location.new_unexpected_token_error::<Error>(token),
+            Some("hue"),
+        )),
+    }
+}
+
+fn authored_system_color(ident: &str) -> Option<CssAuthoredSystemColor> {
+    let value = match_ignore_ascii_case! { ident,
+        "canvas" => CssAuthoredSystemColor::Canvas,
+        "canvastext" => CssAuthoredSystemColor::CanvasText,
+        "linktext" => CssAuthoredSystemColor::LinkText,
+        "visitedtext" => CssAuthoredSystemColor::VisitedText,
+        "activetext" => CssAuthoredSystemColor::ActiveText,
+        "buttonface" => CssAuthoredSystemColor::ButtonFace,
+        "buttontext" => CssAuthoredSystemColor::ButtonText,
+        "buttonborder" => CssAuthoredSystemColor::ButtonBorder,
+        "field" => CssAuthoredSystemColor::Field,
+        "fieldtext" => CssAuthoredSystemColor::FieldText,
+        "highlight" => CssAuthoredSystemColor::Highlight,
+        "highlighttext" => CssAuthoredSystemColor::HighlightText,
+        "mark" => CssAuthoredSystemColor::Mark,
+        "marktext" => CssAuthoredSystemColor::MarkText,
+        "graytext" => CssAuthoredSystemColor::GrayText,
+        "selecteditem" => CssAuthoredSystemColor::SelectedItem,
+        "selecteditemtext" => CssAuthoredSystemColor::SelectedItemText,
+        "accentcolor" => CssAuthoredSystemColor::AccentColor,
+        "accentcolortext" => CssAuthoredSystemColor::AccentColorText,
+        "activeborder" => CssAuthoredSystemColor::ActiveBorder,
+        "activecaption" => CssAuthoredSystemColor::ActiveCaption,
+        "appworkspace" => CssAuthoredSystemColor::AppWorkspace,
+        "background" => CssAuthoredSystemColor::Background,
+        "buttonhighlight" => CssAuthoredSystemColor::ButtonHighlight,
+        "buttonshadow" => CssAuthoredSystemColor::ButtonShadow,
+        "captiontext" => CssAuthoredSystemColor::CaptionText,
+        "inactiveborder" => CssAuthoredSystemColor::InactiveBorder,
+        "inactivecaption" => CssAuthoredSystemColor::InactiveCaption,
+        "inactivecaptiontext" => CssAuthoredSystemColor::InactiveCaptionText,
+        "infobackground" => CssAuthoredSystemColor::InfoBackground,
+        "infotext" => CssAuthoredSystemColor::InfoText,
+        "menu" => CssAuthoredSystemColor::Menu,
+        "menutext" => CssAuthoredSystemColor::MenuText,
+        "scrollbar" => CssAuthoredSystemColor::Scrollbar,
+        "threeddarkshadow" => CssAuthoredSystemColor::ThreeDDarkShadow,
+        "threedface" => CssAuthoredSystemColor::ThreeDFace,
+        "threedhighlight" => CssAuthoredSystemColor::ThreeDHighlight,
+        "threedlightshadow" => CssAuthoredSystemColor::ThreeDLightShadow,
+        "threedshadow" => CssAuthoredSystemColor::ThreeDShadow,
+        "window" => CssAuthoredSystemColor::Window,
+        "windowframe" => CssAuthoredSystemColor::WindowFrame,
+        "windowtext" => CssAuthoredSystemColor::WindowText,
+        _ => return None,
+    };
+    Some(value)
 }
 
 fn parse_color_inner<'i, 't>(

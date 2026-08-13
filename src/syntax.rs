@@ -1892,7 +1892,6 @@ impl CssMediaQueryList {
 
     #[must_use]
     pub(crate) fn new(queries: Vec<CssMediaQuery>) -> Self {
-        debug_assert!(!queries.is_empty());
         Self { queries }
     }
 
@@ -2038,6 +2037,14 @@ pub enum CssMediaType {
     All,
     Screen,
     Print,
+    Aural,
+    Braille,
+    Embossed,
+    Handheld,
+    Projection,
+    Speech,
+    Tty,
+    Tv,
 }
 
 /// A parser-produced authored media condition with exact first non-trivia provenance.
@@ -2224,12 +2231,20 @@ impl CssMediaConditionList {
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum CssMediaFeatureQuery {
+    Boolean(CssMediaFeatureKind),
     Width(CssRangeFeature<CssQueryLength>),
     Height(CssRangeFeature<CssQueryLength>),
+    DeviceWidth(CssRangeFeature<CssQueryLength>),
+    DeviceHeight(CssRangeFeature<CssQueryLength>),
+    AspectRatio(CssRangeFeature<CssMediaRatio>),
+    DeviceAspectRatio(CssRangeFeature<CssMediaRatio>),
     Resolution(CssRangeFeature<CssResolution>),
     Color(CssRangeFeature<CssNonNegativeInteger>),
+    ColorIndex(CssRangeFeature<CssNonNegativeInteger>),
     Monochrome(CssRangeFeature<CssNonNegativeInteger>),
     Orientation(CssOrientation),
+    Scan(CssScanMode),
+    Grid(CssGridMode),
     PrefersColorScheme(CssColorSchemePreference),
     PrefersReducedMotion(CssReducedMotionPreference),
     PrefersReducedTransparency(CssReducedTransparencyPreference),
@@ -2246,12 +2261,20 @@ impl CssMediaFeatureQuery {
     #[must_use]
     pub const fn name(&self) -> &'static str {
         match self {
+            Self::Boolean(feature) => feature.name(),
             Self::Width(_) => "width",
             Self::Height(_) => "height",
+            Self::DeviceWidth(_) => "device-width",
+            Self::DeviceHeight(_) => "device-height",
+            Self::AspectRatio(_) => "aspect-ratio",
+            Self::DeviceAspectRatio(_) => "device-aspect-ratio",
             Self::Resolution(_) => "resolution",
             Self::Color(_) => "color",
+            Self::ColorIndex(_) => "color-index",
             Self::Monochrome(_) => "monochrome",
             Self::Orientation(_) => "orientation",
+            Self::Scan(_) => "scan",
+            Self::Grid(_) => "grid",
             Self::PrefersColorScheme(_) => "prefers-color-scheme",
             Self::PrefersReducedMotion(_) => "prefers-reduced-motion",
             Self::PrefersReducedTransparency(_) => "prefers-reduced-transparency",
@@ -2262,6 +2285,47 @@ impl CssMediaFeatureQuery {
             Self::Pointer(_) => "pointer",
             Self::AnyPointer(_) => "any-pointer",
             Self::DisplayMode(_) => "display-mode",
+        }
+    }
+}
+
+/// The recognized Media Queries Level 3 feature named by a value-less boolean expression.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub enum CssMediaFeatureKind {
+    Width,
+    Height,
+    DeviceWidth,
+    DeviceHeight,
+    Orientation,
+    AspectRatio,
+    DeviceAspectRatio,
+    Color,
+    ColorIndex,
+    Monochrome,
+    Resolution,
+    Scan,
+    Grid,
+}
+
+impl CssMediaFeatureKind {
+    /// Returns the canonical ASCII spelling of this media feature.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Width => "width",
+            Self::Height => "height",
+            Self::DeviceWidth => "device-width",
+            Self::DeviceHeight => "device-height",
+            Self::Orientation => "orientation",
+            Self::AspectRatio => "aspect-ratio",
+            Self::DeviceAspectRatio => "device-aspect-ratio",
+            Self::Color => "color",
+            Self::ColorIndex => "color-index",
+            Self::Monochrome => "monochrome",
+            Self::Resolution => "resolution",
+            Self::Scan => "scan",
+            Self::Grid => "grid",
         }
     }
 }
@@ -2321,6 +2385,33 @@ impl CssNonNegativeInteger {
 pub enum CssOrientation {
     Portrait,
     Landscape,
+}
+
+/// The authored scanning mode of the Media Queries Level 3 `scan` feature.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssScanMode {
+    Progressive,
+    Interlace,
+}
+
+/// The authored binary state of the Media Queries Level 3 `grid` feature.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssGridMode {
+    Bitmap,
+    Grid,
+}
+
+impl CssGridMode {
+    /// Returns the authored integer meaning of this grid mode.
+    #[must_use]
+    pub const fn value(self) -> u8 {
+        match self {
+            Self::Bitmap => 0,
+            Self::Grid => 1,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -2420,6 +2511,41 @@ pub enum CssResolutionUnit {
     Dppx,
 }
 
+/// A positive-integer ratio used by Media Queries Level 3 aspect-ratio features.
+///
+/// This distinct model preserves MQ3's integer-only grammar without narrowing the general
+/// [`CssRatio`] value used by later authored syntax.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssMediaRatio {
+    numerator: u32,
+    denominator: u32,
+}
+
+impl CssMediaRatio {
+    /// Constructs a ratio only when both integer components are positive.
+    #[must_use]
+    pub const fn try_new(numerator: u32, denominator: u32) -> Option<Self> {
+        if numerator == 0 || denominator == 0 {
+            None
+        } else {
+            Some(Self {
+                numerator,
+                denominator,
+            })
+        }
+    }
+
+    #[must_use]
+    pub const fn numerator(self) -> u32 {
+        self.numerator
+    }
+
+    #[must_use]
+    pub const fn denominator(self) -> u32 {
+        self.denominator
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CssRatio {
     numerator: CssFiniteNumber,
@@ -2453,16 +2579,28 @@ impl CssRatio {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CssQueryLength {
     value: CssFiniteNumber,
-    unit: CssLengthUnit,
+    unit: Option<CssLengthUnit>,
 }
 
 impl CssQueryLength {
     #[must_use]
     pub fn try_new(value: f32, unit: CssLengthUnit) -> Option<Self> {
         if value >= 0.0 {
-            CssFiniteNumber::try_new(value).map(|value| Self { value, unit })
+            CssFiniteNumber::try_new(value).map(|value| Self {
+                value,
+                unit: Some(unit),
+            })
         } else {
             None
+        }
+    }
+
+    /// Constructs the exact unitless-zero spelling accepted by the CSS length grammar.
+    #[must_use]
+    pub fn unitless_zero() -> Self {
+        Self {
+            value: CssFiniteNumber::try_new(0.0).expect("zero is finite"),
+            unit: None,
         }
     }
 
@@ -2471,8 +2609,19 @@ impl CssQueryLength {
         self.value
     }
 
+    /// Returns the explicit unit, or the `px`-equivalent compatibility projection for unitless
+    /// zero. Use [`Self::authored_unit`] when exact authored-unit presence matters.
     #[must_use]
     pub const fn unit(self) -> CssLengthUnit {
+        match self.unit {
+            Some(unit) => unit,
+            None => CssLengthUnit::Px,
+        }
+    }
+
+    /// Returns the exact authored unit, or `None` for a valid unitless zero.
+    #[must_use]
+    pub const fn authored_unit(self) -> Option<CssLengthUnit> {
         self.unit
     }
 }

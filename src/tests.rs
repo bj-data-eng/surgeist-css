@@ -4843,6 +4843,9 @@ fn media_feature_numeric_constructors_enforce_query_invariants() {
     );
     assert_eq!(CssQueryLength::try_new(-0.1, CssLengthUnit::Px), None);
     assert_eq!(CssQueryLength::try_new(f32::NAN, CssLengthUnit::Px), None);
+    assert_eq!(CssQueryLength::unitless_zero().value().value(), 0.0);
+    assert_eq!(CssQueryLength::unitless_zero().authored_unit(), None);
+    assert_eq!(CssQueryLength::unitless_zero().unit(), CssLengthUnit::Px);
 
     assert_eq!(
         CssRatio::try_new(16.0, 9.0).unwrap().numerator().value(),
@@ -4894,7 +4897,14 @@ fn media_query_parser_accepts_supported_types_ranges_and_conditions() {
     for css in [
         "screen",
         "print",
+        "speech",
+        "tv",
         "screen and (min-width: 600px)",
+        "(device-width: 800px)",
+        "(aspect-ratio: 16/9)",
+        "(color-index)",
+        "(scan: progressive)",
+        "(grid: 1)",
         "(width >= 600px)",
         "(orientation: landscape)",
         "(prefers-color-scheme: dark)",
@@ -4911,7 +4921,6 @@ fn media_query_parser_accepts_supported_types_ranges_and_conditions() {
 #[test]
 fn media_query_parser_rejects_unknown_types_features_and_malformed_conditions() {
     for css in [
-        "tv",
         "(unknown-feature: yes)",
         "(width: auto)",
         "(width: min-content)",

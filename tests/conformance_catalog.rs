@@ -1551,7 +1551,7 @@ const EXPECTED: &[ExpectedFeature] = &[
         recognized_code: None,
         positive: Some(Input::Sheet("@media print { .x { color: red; } }")),
         negative: Some((
-            Input::Sheet("@media speech { .x { color: red; } }"),
+            Input::Sheet("@media only and or { .x { color: red; } }"),
             CssErrorCode::InvalidMediaQuery,
         )),
     },
@@ -1569,7 +1569,7 @@ const EXPECTED: &[ExpectedFeature] = &[
         recognized_code: None,
         positive: Some(Input::Sheet("@media (width >= 1px) { .x { color: red; } }")),
         negative: Some((
-            Input::Sheet("@media (device-width: 1px) { .x { color: red; } }"),
+            Input::Sheet("@media (min-width) { .x { color: red; } }"),
             CssErrorCode::InvalidMediaQuery,
         )),
     },

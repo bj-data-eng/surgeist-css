@@ -5,8 +5,8 @@ use surgeist_css::{
     CssFrequencyUnit, CssHorizontalPosition, CssIntegerCalculation, CssKnownProperty,
     CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthDimension, CssLengthUnit,
     CssNumberCalculation, CssPercentageCalculation, CssRecoveryAction, CssResolution,
-    CssResolutionUnit, CssSpecificationTier, CssSupportStatus, CssTimeCalculation, CssTimeUnit,
-    CssTransformFunctionValue, CssTransformPerspective, CssTransformScaleComponent,
+    CssResolutionUnit, CssRule, CssSpecificationTier, CssSupportStatus, CssTimeCalculation,
+    CssTimeUnit, CssTransformFunctionValue, CssTransformPerspective, CssTransformScaleComponent,
     CssTransformValue, CssVerticalPosition, ErrorKind, conformance_exclusion,
     conformance_exclusions, feature_metadata, parse_sheet, parse_style_attribute,
     property_metadata, specification_source, specification_sources,
@@ -92,6 +92,14 @@ const COLOR5_RELATIVE_REMAINDER: &str = "alpha(), custom-profile parameters, and
 const COLOR5_MIX_SUBSET: &str = "The preserved color-mix() subset requires an interpolation method, exactly two colors, optional trailing percentages, and a predefined or polar color space.";
 const COLOR5_MIX_REMAINDER: &str =
     "Other valid forms of the dated CSS Color 5 color-mix() production remain unsupported.";
+const GRID_REPEAT_SUBSET: &str = "Non-recursive integer track and fixed repeats, plus one fixed-size automatic repeat where the consumer permits it, are supported.";
+const GRID_REPEAT_REMAINDER: &str =
+    "Subgrid name-repeat and other unselected Grid 2 forms remain unsupported.";
+const GRID_PROPERTY_SUBSET: &str = "The C07 structural grammar supports non-recursive integer track and fixed repeats, one fixed-size automatic repeat where permitted, and repeat-free automatic track-size lists.";
+const GRID_PROPERTY_REMAINDER: &str =
+    "Subgrid name-repeat and other unselected Grid 2 property grammar remain unsupported.";
+const KEYFRAMES_SUBSET: &str = "Keyframe names, literal selectors, empty rules and blocks, duplicate selectors and blocks in authored order, and supported declarations with recovery are supported.";
+const KEYFRAMES_REMAINDER: &str = "Calculation selectors, string names, and declaration-processing grammar not selected by C07 remain unsupported.";
 
 fn assert_clean_color(authored: &str) {
     let source = format!("color: {authored}");
@@ -408,6 +416,189 @@ fn color_mix_preserved_subset_rejects_cross_space_hue_methods() {
         "color-mix(in oklch longer hue, red 25%, blue 75%)",
         "color-mix(in srgb longer hue, red, blue)",
     );
+}
+
+fn record_partial_metadata_mismatch(
+    mismatches: &mut Vec<String>,
+    id: &str,
+    kind: CssFeatureKind,
+    spelling: &str,
+    source: &str,
+    production: &str,
+    subset: &str,
+    remainder: &str,
+) {
+    let Some(metadata) = feature_metadata(id) else {
+        mismatches.push(format!("{id} is absent"));
+        return;
+    };
+    if metadata.kind() != kind {
+        mismatches.push(format!("{id} has stale kind {:?}", metadata.kind()));
+    }
+    if metadata.spelling() != spelling {
+        mismatches.push(format!("{id} has stale spelling {:?}", metadata.spelling()));
+    }
+    if metadata.source().id().as_str() != source {
+        mismatches.push(format!(
+            "{id} has stale source {:?}",
+            metadata.source().id().as_str()
+        ));
+    }
+    if metadata.production() != production {
+        mismatches.push(format!(
+            "{id} has stale production {:?}",
+            metadata.production()
+        ));
+    }
+    if metadata.status() != CssSupportStatus::Partial {
+        mismatches.push(format!("{id} has stale status {:?}", metadata.status()));
+    }
+    if metadata.supported_subset() != Some(subset) {
+        mismatches.push(format!(
+            "{id} has stale supported subset {:?}",
+            metadata.supported_subset()
+        ));
+    }
+    if metadata.unsupported_remainder() != Some(remainder) {
+        mismatches.push(format!(
+            "{id} has stale unsupported remainder {:?}",
+            metadata.unsupported_remainder()
+        ));
+    }
+}
+
+#[test]
+fn grid_and_keyframe_metadata_matches_preserved_boundaries() {
+    let grid = parse_style_attribute(concat!(
+        "grid-template-columns: repeat(auto-fit, 10px); ",
+        "grid-auto-rows: minmax(10px, auto)",
+    ));
+    assert!(grid.is_clean(), "{:?}", grid.diagnostics());
+    assert_eq!(grid.syntax().len(), 2);
+    assert_eq!(
+        grid.syntax()[0].known().map(|known| known.property()),
+        Some(CssKnownProperty::GridTemplateColumns),
+    );
+    assert_eq!(
+        grid.syntax()[1].known().map(|known| known.property()),
+        Some(CssKnownProperty::GridAutoRows),
+    );
+
+    let invalid_grid =
+        parse_style_attribute("grid-template-columns: repeat(auto-fit, 1fr); color: red");
+    assert_eq!(invalid_grid.syntax().len(), 1);
+    assert_eq!(
+        invalid_grid.syntax()[0]
+            .known()
+            .map(|known| known.property()),
+        Some(CssKnownProperty::Color),
+    );
+    assert_eq!(
+        invalid_grid.diagnostics()[0].action(),
+        CssRecoveryAction::DropDeclaration
+    );
+
+    let keyframes = parse_sheet(concat!(
+        "@keyframes fade { ",
+        "from, 0%, from { } ",
+        "from { opacity: 0; } ",
+        "0% { opacity: 1; } ",
+        "} ",
+        "@keyframes empty {}",
+    ));
+    assert!(keyframes.is_clean(), "{:?}", keyframes.diagnostics());
+    let [CssRule::Keyframes(fade), CssRule::Keyframes(empty)] = keyframes.syntax().rules() else {
+        panic!("expected authored duplicate and empty keyframe rules");
+    };
+    assert_eq!(fade.blocks().len(), 3);
+    assert!(fade.blocks()[0].declarations().is_empty());
+    assert!(empty.blocks().is_empty());
+
+    let mut mismatches = Vec::new();
+    record_partial_metadata_mismatch(
+        &mut mismatches,
+        "ext.value.grid-repeat",
+        CssFeatureKind::Value,
+        "repeat()",
+        "R-GRID2",
+        "#repeat-notation",
+        GRID_REPEAT_SUBSET,
+        GRID_REPEAT_REMAINDER,
+    );
+    record_partial_metadata_mismatch(
+        &mut mismatches,
+        "baseline.property.grid-template-rows",
+        CssFeatureKind::Property,
+        "grid-template-rows",
+        "R-GRID2",
+        "#propdef-grid-template-rows",
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
+    );
+    record_partial_metadata_mismatch(
+        &mut mismatches,
+        "baseline.property.grid-template-columns",
+        CssFeatureKind::Property,
+        "grid-template-columns",
+        "R-GRID2",
+        "#propdef-grid-template-columns",
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
+    );
+    record_partial_metadata_mismatch(
+        &mut mismatches,
+        "baseline.property.grid-template",
+        CssFeatureKind::Property,
+        "grid-template",
+        "R-GRID2",
+        "#propdef-grid-template",
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
+    );
+    record_partial_metadata_mismatch(
+        &mut mismatches,
+        "baseline.property.grid-auto-rows",
+        CssFeatureKind::Property,
+        "grid-auto-rows",
+        "R-GRID2",
+        "#propdef-grid-auto-rows",
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
+    );
+    record_partial_metadata_mismatch(
+        &mut mismatches,
+        "baseline.property.grid-auto-columns",
+        CssFeatureKind::Property,
+        "grid-auto-columns",
+        "R-GRID2",
+        "#propdef-grid-auto-columns",
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
+    );
+    record_partial_metadata_mismatch(
+        &mut mismatches,
+        "baseline.property.grid",
+        CssFeatureKind::Property,
+        "grid",
+        "R-GRID2",
+        "#propdef-grid",
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
+    );
+    record_partial_metadata_mismatch(
+        &mut mismatches,
+        "baseline.rule.keyframes",
+        CssFeatureKind::Rule,
+        "@keyframes",
+        "I-ANIMATIONS1",
+        "#keyframes",
+        KEYFRAMES_SUBSET,
+        KEYFRAMES_REMAINDER,
+    );
+
+    if !mismatches.is_empty() {
+        panic!("stale Grid/keyframe metadata:\n{}", mismatches.join("\n"));
+    }
 }
 
 const EXPECTED: &[ExpectedFeature] = &[

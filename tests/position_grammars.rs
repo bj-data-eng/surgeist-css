@@ -138,6 +138,226 @@ fn deferred_transform_origin_preserves_vertical_length_legacy_projection() {
 }
 
 #[test]
+fn object_position_parser_preserves_ordinary_global_and_substitution_branches() {
+    let source = concat!(
+        "object-position: right 5% bottom 2px; ",
+        "object-position: inherit; ",
+        "object-position: var(--position)",
+    );
+    let report = parse_style_attribute(source);
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [ordinary, global, substitution] = report.syntax().as_slice() else {
+        panic!("expected three retained object-position declarations");
+    };
+
+    let ordinary = ordinary.known().expect("known ordinary object-position");
+    assert!(ordinary.property_value().is_some());
+    assert!(ordinary.global().is_none());
+    assert!(ordinary.substitution_dependent().is_none());
+
+    let global = global.known().expect("known global object-position");
+    assert!(global.property_value().is_none());
+    assert_eq!(
+        global.global(),
+        Some(surgeist_css::CssGlobalKeyword::Inherit)
+    );
+    assert!(global.substitution_dependent().is_none());
+
+    let substitution = substitution
+        .known()
+        .expect("known substitution-dependent object-position");
+    assert!(substitution.property_value().is_none());
+    assert!(substitution.global().is_none());
+    assert_eq!(
+        substitution
+            .substitution_dependent()
+            .expect("substitution branch")
+            .as_css(),
+        "var(--position)",
+    );
+}
+
+#[test]
+fn transform_origin_accepts_every_directed_two_dimension_and_z_branch() {
+    for value in [
+        "left",
+        "top",
+        "25%",
+        "left top",
+        "top left",
+        "left 50px",
+        "center 50px",
+        "50px top",
+        "50px center",
+        "50px 75%",
+        "top 50px",
+        "bottom 50px",
+        "left top 50px",
+        "top left 50px",
+        "50px top calc(1px * 2)",
+    ] {
+        let source = format!("transform-origin: {value}");
+        let report = parse_style_attribute(&source);
+        assert!(report.is_clean(), "{source}: {:?}", report.diagnostics());
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        let declaration = report.syntax()[0]
+            .known()
+            .expect("known transform-origin declaration");
+        assert_eq!(declaration.property(), CssKnownProperty::TransformOrigin);
+        let CssKnownPropertyValueRef::TransformOrigin(value) = declaration
+            .property_value()
+            .expect("ordinary transform-origin value")
+        else {
+            panic!("expected transform-origin value");
+        };
+        assert_eq!(
+            value.as_css(),
+            source.trim_start_matches("transform-origin: ")
+        );
+    }
+}
+
+#[test]
+fn object_and_transform_origin_invalid_z_mutations_drop_only_the_declaration() {
+    let cases = [
+        (
+            "object-position",
+            None,
+            "left top 10px",
+            "10px",
+            CssTokenKind::Dimension,
+        ),
+        (
+            "transform-origin",
+            Some(CssKnownProperty::TransformOrigin),
+            "left top 50%",
+            "50%",
+            CssTokenKind::Percentage,
+        ),
+        (
+            "transform-origin",
+            Some(CssKnownProperty::TransformOrigin),
+            "left top calc(10%)",
+            "calc(",
+            CssTokenKind::Function,
+        ),
+        (
+            "transform-origin",
+            Some(CssKnownProperty::TransformOrigin),
+            "left top calc(1px + 10%)",
+            "calc(",
+            CssTokenKind::Function,
+        ),
+        (
+            "transform-origin",
+            Some(CssKnownProperty::TransformOrigin),
+            "top 10px 20px",
+            "20px",
+            CssTokenKind::Dimension,
+        ),
+        (
+            "transform-origin",
+            Some(CssKnownProperty::TransformOrigin),
+            "left top 10px 20px",
+            "20px",
+            CssTokenKind::Dimension,
+        ),
+        (
+            "transform-origin",
+            Some(CssKnownProperty::TransformOrigin),
+            "left top bottom",
+            "bottom",
+            CssTokenKind::Ident,
+        ),
+    ];
+    let mut mismatches = Vec::new();
+
+    for (property, known_property, value, responsible, token_kind) in cases {
+        let source = format!("{property}: {value}; color: red");
+        let report = parse_style_attribute(&source);
+        let declaration_end = source.find(';').expect("declaration semicolon") + 1;
+        let responsible_offset = source.rfind(responsible).expect("responsible token");
+        let mut reasons = Vec::new();
+
+        if report.syntax().len() != 1 {
+            reasons.push(format!("retained {} declarations", report.syntax().len()));
+        }
+        let [diagnostic] = report.diagnostics() else {
+            reasons.push(format!(
+                "produced {} diagnostics",
+                report.diagnostics().len()
+            ));
+            mismatches.push(format!("{source}: {}", reasons.join(", ")));
+            continue;
+        };
+        if diagnostic.error().code() != CssErrorCode::InvalidPropertyValue {
+            reasons.push(format!("code {:?}", diagnostic.error().code()));
+        }
+        if diagnostic.action() != CssRecoveryAction::DropDeclaration {
+            reasons.push(format!("action {:?}", diagnostic.action()));
+        }
+        let position = diagnostic.error().position();
+        if position.byte_offset().value() != responsible_offset
+            || position.line().value() != 0
+            || position.column().value() as usize != responsible_offset
+        {
+            reasons.push(format!("position {position:?}"));
+        }
+        if diagnostic.span().start().byte_offset().value() != 0
+            || diagnostic.span().start().line().value() != 0
+            || diagnostic.span().start().column().value() != 0
+            || diagnostic.span().end().byte_offset().value() != declaration_end
+            || diagnostic.span().end().line().value() != 0
+            || diagnostic.span().end().column().value() as usize != declaration_end
+        {
+            reasons.push(format!("span {:?}", diagnostic.span()));
+        }
+        match diagnostic.error().kind() {
+            ErrorKind::InvalidPropertyValue(detail) => {
+                if let Some(known_property) = known_property
+                    && detail.property() != known_property
+                {
+                    reasons.push(format!("property {:?}", detail.property()));
+                }
+                match detail.encountered() {
+                    Some(encountered)
+                        if encountered.kind() == token_kind
+                            && encountered.authored() == responsible => {}
+                    encountered => reasons.push(format!("token {encountered:?}")),
+                }
+            }
+            kind => reasons.push(format!("root {kind:?}")),
+        }
+        if report
+            .syntax()
+            .first()
+            .and_then(|declaration| declaration.known())
+            .map(|known| known.property())
+            != Some(CssKnownProperty::Color)
+        {
+            reasons.push("valid color sibling was not retained".to_owned());
+        }
+
+        #[cfg(feature = "app-strict")]
+        {
+            match surgeist_css::validate_style_attribute(&source) {
+                Ok(_) => reasons.push("app-strict unexpectedly accepted the source".to_owned()),
+                Err(failure) if failure.diagnostics() != report.diagnostics() => {
+                    reasons.push("app-strict diagnostics differed".to_owned());
+                }
+                Err(_) => {}
+            }
+        }
+
+        if !reasons.is_empty() {
+            mismatches.push(format!("{source}: {}", reasons.join(", ")));
+        }
+    }
+
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
+}
+
+#[test]
 fn position_offset_construction_accepts_only_authored_length_percentages() {
     for value in [
         CssLength::try_px(10.0).expect("finite px"),

@@ -6,7 +6,7 @@
 | --- | --- |
 | Cycle ID | `P01-I02-C04` |
 | Owning repository | `surgeist-css` |
-| Status | `draft` |
+| Status | `in_progress` |
 | Cycle base | `966229264fdbfd101aa8688ca23c650875d2617a` |
 | Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `e290a7fef9bf6b6e9bde764140e5f7fac34156bb8f644d999e6bba58dc92ca2b`, P01.9 |
 | Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `c6a9984521e23d5c010c3890902b70730db42eda092ad0e77f7d9e8e6168dfa1`, sections 3.1, 4.2-4.4, 8.2 positions, 9-10, 11 finding 2.9, and 12 |

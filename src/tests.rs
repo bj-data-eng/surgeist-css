@@ -5442,7 +5442,6 @@ fn font_face_rule_parser_rejects_invalid_descriptor_blocks() {
         "@font-face { font-family: Inter; }",
         "@font-face { src: url(a.woff2); }",
         "@font-face { font-family: Inter; src: url(a.woff2); unknown: x; }",
-        "@font-face { font-family: Inter; font-family: Other; src: url(a.woff2); }",
         "@font-face { font-family: Inter; src: url(a.woff2); @media screen {} }",
         "@font-face { font-family: Inter; src: url(a.woff2); .nested {} }",
         "@font-face { font-family: Inter; src: url(a.woff2); font-weight: bolder; }",

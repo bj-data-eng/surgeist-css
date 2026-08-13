@@ -1668,25 +1668,6 @@ pub(crate) fn invalid_descriptor_annotation<'i>(
     )
 }
 
-pub(crate) fn invalid_descriptor_combination<'i>(
-    location: cssparser::SourceLocation,
-    at_rule: &str,
-    responsible: &str,
-    conflicting: &[&str],
-) -> ParseError<'i, Error> {
-    error_at(
-        location,
-        ErrorKind::InvalidDescriptorCombination(CssDescriptorCombinationError {
-            at_rule: CssAtRuleName::new(at_rule),
-            responsible: CssDescriptorName::new(responsible),
-            conflicting: conflicting
-                .iter()
-                .map(|name| CssDescriptorName::new(*name))
-                .collect(),
-        }),
-    )
-}
-
 pub(crate) fn error_at<'i>(
     location: cssparser::SourceLocation,
     kind: ErrorKind,

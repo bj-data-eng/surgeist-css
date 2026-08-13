@@ -5,15 +5,11 @@ use cssparser::{
 };
 
 use super::recovery::{RecoveryLoopOutcome, RecoveryProgress, RecoveryState};
-use super::typography::parse_non_generic_font_family_name;
-use super::{
-    block_item_diagnostic, block_item_diagnostic_from_start, is_declaration_recovery_unit,
-    parse_descriptor_boundary,
-};
+use super::typography::{parse_font_feature_settings, parse_non_generic_font_family_name};
+use super::{block_item_diagnostic, is_declaration_recovery_unit, parse_descriptor_boundary};
 use crate::error::{
-    CssFeatureId, Error, basic, descriptor_name_error, invalid_at_rule_body,
-    invalid_descriptor_combination, unsupported_value, unsupported_value_at,
-    with_descriptor_context,
+    CssFeatureId, Error, basic, descriptor_name_error, invalid_at_rule_body, unsupported_value,
+    unsupported_value_at, with_descriptor_context,
 };
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
@@ -29,6 +25,7 @@ pub(super) static IMPLEMENTED_DESCRIPTORS: &[CssFeatureId] = &[
     CssFeatureId::new("baseline.descriptor.font-stretch"),
     CssFeatureId::new("baseline.descriptor.font-display"),
     CssFeatureId::new("baseline.descriptor.unicode-range"),
+    CssFeatureId::new("official.descriptor.font-feature-settings"),
 ];
 
 pub(super) fn parse_font_face_rule<'i, 't>(
@@ -38,7 +35,7 @@ pub(super) fn parse_font_face_rule<'i, 't>(
     diagnostics: &mut Vec<crate::CssRecoveryDiagnostic>,
     recovery: RecoveryState,
 ) -> std::result::Result<CssFontFaceRule, ParseError<'i, Error>> {
-    let mut descriptors = ParsedFontFaceDescriptors::default();
+    let mut descriptors = Vec::new();
     let mut descriptor_parser = FontFaceDescriptorParser { source, recovery };
 
     let mut items = RuleBodyParser::new(input, &mut descriptor_parser);
@@ -52,18 +49,7 @@ pub(super) fn parse_font_face_rule<'i, 't>(
         let unit_end = items.input.position().byte_index();
         match item {
             Ok(descriptor) => {
-                let unit_start = descriptor.position().byte_offset().value();
-                if let Err(error) = descriptors.set(descriptor)
-                    && let Some(diagnostic) = block_item_diagnostic_from_start(
-                        source,
-                        error,
-                        unit_start,
-                        unit_end,
-                        crate::CssRecoveryAction::DropDescriptor,
-                    )
-                {
-                    diagnostics.push(diagnostic);
-                }
+                descriptors.push(descriptor);
             }
             Err((error, failed_unit)) if is_declaration_recovery_unit(failed_unit) => {
                 if let Some(diagnostic) = block_item_diagnostic(
@@ -83,16 +69,7 @@ pub(super) fn parse_font_face_rule<'i, 't>(
         }
     }
 
-    let descriptors = CssFontFaceDescriptors::try_new(
-        descriptors.font_family,
-        descriptors.src,
-        descriptors.font_weight,
-        descriptors.font_style,
-        descriptors.font_stretch,
-        descriptors.font_display,
-        descriptors.unicode_range,
-    )
-    .ok_or_else(|| {
+    let descriptors = CssFontFaceDescriptors::from_occurrences(descriptors).ok_or_else(|| {
         invalid_at_rule_body(
             input,
             "font-face",
@@ -107,111 +84,6 @@ pub(super) fn parse_font_face_rule<'i, 't>(
     ))
 }
 
-#[derive(Default)]
-struct ParsedFontFaceDescriptors {
-    font_family: Option<CssDescriptorOccurrence<CssFontFaceFamily>>,
-    src: Option<CssDescriptorOccurrence<CssFontFaceSourceList>>,
-    font_weight: Option<CssDescriptorOccurrence<CssFontFaceWeight>>,
-    font_style: Option<CssDescriptorOccurrence<CssFontFaceStyle>>,
-    font_stretch: Option<CssDescriptorOccurrence<CssFontFaceStretch>>,
-    font_display: Option<CssDescriptorOccurrence<CssFontDisplay>>,
-    unicode_range: Option<CssDescriptorOccurrence<CssUnicodeRangeList>>,
-}
-
-impl ParsedFontFaceDescriptors {
-    fn set<'i>(
-        &mut self,
-        descriptor: FontFaceDescriptor,
-    ) -> std::result::Result<(), ParseError<'i, Error>> {
-        match descriptor {
-            FontFaceDescriptor::FontFamily(value, location) => {
-                set_descriptor(&mut self.font_family, value, location, "font-family")
-            }
-            FontFaceDescriptor::Src(value, location) => {
-                set_descriptor(&mut self.src, value, location, "src")
-            }
-            FontFaceDescriptor::FontWeight(value, location) => {
-                set_descriptor(&mut self.font_weight, value, location, "font-weight")
-            }
-            FontFaceDescriptor::FontStyle(value, location) => {
-                set_descriptor(&mut self.font_style, value, location, "font-style")
-            }
-            FontFaceDescriptor::FontStretch(value, location) => {
-                set_descriptor(&mut self.font_stretch, value, location, "font-stretch")
-            }
-            FontFaceDescriptor::FontDisplay(value, location) => {
-                set_descriptor(&mut self.font_display, value, location, "font-display")
-            }
-            FontFaceDescriptor::UnicodeRange(value, location) => {
-                set_descriptor(&mut self.unicode_range, value, location, "unicode-range")
-            }
-        }
-    }
-}
-
-fn set_descriptor<'i, T>(
-    slot: &mut Option<T>,
-    value: T,
-    location: cssparser::SourceLocation,
-    name: &str,
-) -> std::result::Result<(), ParseError<'i, Error>> {
-    if slot.is_some() {
-        return Err(invalid_descriptor_combination(
-            location,
-            "font-face",
-            name,
-            &[name],
-        ));
-    }
-    *slot = Some(value);
-    Ok(())
-}
-
-enum FontFaceDescriptor {
-    FontFamily(
-        CssDescriptorOccurrence<CssFontFaceFamily>,
-        cssparser::SourceLocation,
-    ),
-    Src(
-        CssDescriptorOccurrence<CssFontFaceSourceList>,
-        cssparser::SourceLocation,
-    ),
-    FontWeight(
-        CssDescriptorOccurrence<CssFontFaceWeight>,
-        cssparser::SourceLocation,
-    ),
-    FontStyle(
-        CssDescriptorOccurrence<CssFontFaceStyle>,
-        cssparser::SourceLocation,
-    ),
-    FontStretch(
-        CssDescriptorOccurrence<CssFontFaceStretch>,
-        cssparser::SourceLocation,
-    ),
-    FontDisplay(
-        CssDescriptorOccurrence<CssFontDisplay>,
-        cssparser::SourceLocation,
-    ),
-    UnicodeRange(
-        CssDescriptorOccurrence<CssUnicodeRangeList>,
-        cssparser::SourceLocation,
-    ),
-}
-
-impl FontFaceDescriptor {
-    fn position(&self) -> crate::CssSourcePosition {
-        match self {
-            Self::FontFamily(value, _) => value.position(),
-            Self::Src(value, _) => value.position(),
-            Self::FontWeight(value, _) => value.position(),
-            Self::FontStyle(value, _) => value.position(),
-            Self::FontStretch(value, _) => value.position(),
-            Self::FontDisplay(value, _) => value.position(),
-            Self::UnicodeRange(value, _) => value.position(),
-        }
-    }
-}
-
 struct FontFaceDescriptorParser<'s> {
     source: &'s str,
     recovery: RecoveryState,
@@ -219,17 +91,17 @@ struct FontFaceDescriptorParser<'s> {
 
 impl<'i> AtRuleParser<'i> for FontFaceDescriptorParser<'i> {
     type Prelude = ();
-    type AtRule = FontFaceDescriptor;
+    type AtRule = CssFontFaceDescriptor;
     type Error = Error;
 }
 
 impl<'i> QualifiedRuleParser<'i> for FontFaceDescriptorParser<'i> {
     type Prelude = ();
-    type QualifiedRule = FontFaceDescriptor;
+    type QualifiedRule = CssFontFaceDescriptor;
     type Error = Error;
 }
 
-impl<'i> RuleBodyItemParser<'i, FontFaceDescriptor, Error> for FontFaceDescriptorParser<'i> {
+impl<'i> RuleBodyItemParser<'i, CssFontFaceDescriptor, Error> for FontFaceDescriptorParser<'i> {
     fn parse_declarations(&self) -> bool {
         true
     }
@@ -240,7 +112,7 @@ impl<'i> RuleBodyItemParser<'i, FontFaceDescriptor, Error> for FontFaceDescripto
 }
 
 impl<'i> DeclarationParser<'i> for FontFaceDescriptorParser<'i> {
-    type Declaration = FontFaceDescriptor;
+    type Declaration = CssFontFaceDescriptor;
     type Error = Error;
 
     fn parse_value<'t>(
@@ -252,61 +124,64 @@ impl<'i> DeclarationParser<'i> for FontFaceDescriptorParser<'i> {
         let implicit_closures =
             self.recovery
                 .check_component_values(self.source, input, "css.descriptor")?;
-        let location = declaration_start.source_location();
         let position = crate::source::CssSourcePosition::from_cssparser(
             declaration_start.position(),
             declaration_start.source_location(),
         );
         let result = (|| {
             Ok(match_ignore_ascii_case! { &name,
-                "font-family" => FontFaceDescriptor::FontFamily(
+                "font-family" => CssFontFaceDescriptor::FontFamily(
                     CssDescriptorOccurrence::new(
                         parse_descriptor_boundary(input, "font-face", "font-family", parse_font_face_family)?,
                         position,
                     ),
-                    location,
                 ),
-                "src" => FontFaceDescriptor::Src(
+                "src" => CssFontFaceDescriptor::Src(
                     CssDescriptorOccurrence::new(
                         parse_descriptor_boundary(input, "font-face", "src", parse_font_face_source_list)?,
                         position,
                     ),
-                    location,
                 ),
-                "font-weight" => FontFaceDescriptor::FontWeight(
+                "font-weight" => CssFontFaceDescriptor::FontWeight(
                     CssDescriptorOccurrence::new(
                         parse_descriptor_boundary(input, "font-face", "font-weight", parse_font_face_weight)?,
                         position,
                     ),
-                    location,
                 ),
-                "font-style" => FontFaceDescriptor::FontStyle(
+                "font-style" => CssFontFaceDescriptor::FontStyle(
                     CssDescriptorOccurrence::new(
                         parse_descriptor_boundary(input, "font-face", "font-style", parse_font_face_style)?,
                         position,
                     ),
-                    location,
                 ),
-                "font-stretch" => FontFaceDescriptor::FontStretch(
+                "font-stretch" => CssFontFaceDescriptor::FontStretch(
                     CssDescriptorOccurrence::new(
                         parse_descriptor_boundary(input, "font-face", "font-stretch", parse_font_face_stretch)?,
                         position,
                     ),
-                    location,
                 ),
-                "font-display" => FontFaceDescriptor::FontDisplay(
+                "font-display" => CssFontFaceDescriptor::FontDisplay(
                     CssDescriptorOccurrence::new(
                         parse_descriptor_boundary(input, "font-face", "font-display", parse_font_display)?,
                         position,
                     ),
-                    location,
                 ),
-                "unicode-range" => FontFaceDescriptor::UnicodeRange(
+                "unicode-range" => CssFontFaceDescriptor::UnicodeRange(
                     CssDescriptorOccurrence::new(
                         parse_descriptor_boundary(input, "font-face", "unicode-range", parse_unicode_range_list)?,
                         position,
                     ),
-                    location,
+                ),
+                "font-feature-settings" => CssFontFaceDescriptor::FontFeatureSettings(
+                    CssDescriptorOccurrence::new(
+                        parse_descriptor_boundary(
+                            input,
+                            "font-face",
+                            "font-feature-settings",
+                            parse_font_feature_settings,
+                        )?,
+                        position,
+                    ),
                 ),
                 _ => return Err(descriptor_name_error(
                     declaration_start.source_location(),
@@ -547,6 +422,19 @@ fn font_tech_hint_from_str(value: &str) -> Option<CssFontTechHint> {
 fn parse_font_face_weight<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssFontFaceWeight, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        return match_ignore_ascii_case! { &ident,
+            "normal" => Ok(CssFontFaceWeight::normal()),
+            "bold" => Ok(CssFontFaceWeight::bold()),
+            _ => Err(unsupported_value_at(
+                location,
+                None,
+                unsupported_keyword_reason("font-weight descriptor", ident.as_ref()),
+            )),
+        };
+    }
+
     let first = parse_font_weight_number(input)?;
     if input.is_exhausted() {
         CssFontFaceWeight::try_single(first)
@@ -621,6 +509,27 @@ fn parse_angle_degrees<'i, 't>(
 fn parse_font_face_stretch<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssFontFaceStretch, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        let keyword = match_ignore_ascii_case! { &ident,
+            "ultra-condensed" => CssFontFaceStretchKeyword::UltraCondensed,
+            "extra-condensed" => CssFontFaceStretchKeyword::ExtraCondensed,
+            "condensed" => CssFontFaceStretchKeyword::Condensed,
+            "semi-condensed" => CssFontFaceStretchKeyword::SemiCondensed,
+            "normal" => CssFontFaceStretchKeyword::Normal,
+            "semi-expanded" => CssFontFaceStretchKeyword::SemiExpanded,
+            "expanded" => CssFontFaceStretchKeyword::Expanded,
+            "extra-expanded" => CssFontFaceStretchKeyword::ExtraExpanded,
+            "ultra-expanded" => CssFontFaceStretchKeyword::UltraExpanded,
+            _ => return Err(unsupported_value_at(
+                location,
+                None,
+                unsupported_keyword_reason("font-stretch descriptor", ident.as_ref()),
+            )),
+        };
+        return Ok(CssFontFaceStretch::from_keyword(keyword));
+    }
+
     let first = parse_font_stretch_percent(input)?;
     if input.is_exhausted() {
         CssFontFaceStretch::try_single_percent(first)

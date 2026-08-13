@@ -211,7 +211,8 @@ sets/counts, workflow state, or call counts is prohibited repository-wide.
 ### T3 Publish Grid And Keyframe Metadata, Docs, And Handoff
 
 - **Files/area:** `src/conformance.rs`; inventory-only Grid parser declaration;
-  explicit named public metadata tests; README and crate rustdoc; new SHA-free
+  explicit named public metadata tests; README and crate rustdoc; new
+  revision-SHA-free
   `plans/handoffs/P01-I02-C07-grid-repetition-and-keyframe-structure.md`. No
   grammar/model/property/fixture/manifest/root/sibling/artifact edit.
 - **RED:** base-compilable explicit metadata behavior fails because
@@ -222,7 +223,13 @@ sets/counts, workflow state, or call counts is prohibited repository-wide.
 - **Acceptance:** section 4 exact IDs/source/fragments/status/owner/named behavior;
   unrelated rows unchanged; docs state compatibility/current boundaries,
   source-backed oracle correction, and exclusions; handoff contains no SHA,
-  review/publication/completion state, or command manifest.
+  review/publication/completion state, or command manifest, except that P01.10
+  requires it to record the old fixture SHA-256
+  `98bda43ab3c0d1be1c6663ad36afeca33ca03c2cac742fc5a5e3c9983084ece8`
+  and replacement fixture SHA-256
+  `99bbb897710969949d7b596d14fbd352d5d3121a6c4cf663b8ca100154057f8b`.
+  These two product-artifact digests are not commit, review, or publication
+  revisions.
 - **Focused targets:** `conformance_catalog`, `catalog_inventory`,
   `grid_repetition`, `keyframe_structures`, `property_schema`, `public_surface`,
   `structured_errors`, `source_coordinates`, and `i01_c01_observables`, followed

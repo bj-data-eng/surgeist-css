@@ -4,7 +4,7 @@
 
 This is the JIT implementation contract for `P01-I02` in `surgeist-css`.
 It is subordinate to the reviewed P01 program at semantic SHA-256
-`e290a7fef9bf6b6e9bde764140e5f7fac34156bb8f644d999e6bba58dc92ca2b`
+`fc53da090fdef779582bb4480d3e7943816470977af6abefe3468b2c10d3e064`
 and incorporates its I02-entry reconciliation. The initiative base is the
 published, fetchable I01 candidate
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; the P01 reconciliation commit
@@ -195,6 +195,35 @@ public report to every retained row in both feature modes; the only allowed
 difference is the documented compile-time API shape. The complete pre-existing
 default and `app-strict` I01 behavioral matrices also remain green. A second
 required breaking change stops I02 and returns to P01.
+
+### 3.3 C07 Source-Backed Oracle Correction
+
+P01.10 reconciles the one discovered conflict between the C01 behavioral oracle
+and findings 2.14/2.17. C07 shall replace only the expected observables for
+these seven stable scenario IDs while preserving their authored inputs:
+
+- Grid: `catalog.property.baseline.property.grid.positive`,
+  `focused.property-schema.baseline.property.grid.important`, and
+  `focused.property-schema.baseline.property.grid.ordinary` recover from the
+  invalid flexible auto-repeat instead of retaining it;
+- keyframes: `focused.importance.05`, `focused.importance.06`,
+  `focused.nested-structural.keyframes-child-loss`, and
+  `focused.structural.misc.03` retain the valid now-empty keyframe block and
+  rule after the invalid declaration is dropped, without obsolete
+  `DropKeyframeBlock` or `DropAtRule` diagnostics.
+
+The existing fixture SHA-256 before C07 is
+`98bda43ab3c0d1be1c6663ad36afeca33ca03c2cac742fc5a5e3c9983084ece8`.
+The C07 plan freezes the hand-authored replacement rows and their new digest;
+its task review verifies the exact seven-row diff. No Rust test asserts either
+digest, derives expected values from production, masks the corrected cases, or
+weakens comparison. Every unaffected row remains byte-for-byte identical and
+all non-contradictory I01 behavioral suites remain green.
+
+This is the only post-C01 oracle correction authorized by the reviewed P01.
+It changes parser outcomes solely where the dated grammar proves the C01
+expectation nonconforming; section 3.1 contracts and compatibility signatures
+remain frozen. Any additional contradiction stops for P01 reconciliation.
 
 ## 4. Conformance Profile And Catalog
 
@@ -541,7 +570,8 @@ clean reports, the breaking C01 declaration/value migration, selectors,
 namespaces, rules/descriptors, queries, calculations, and property-specific
 inspection. They reiterate the excluded downstream semantics.
 
-I01 behavioral tests remain baseline-preservation evidence. At I02 completion,
+I01 behavioral tests remain baseline-preservation evidence, subject only to the
+seven source-backed C07 corrections in section 3.3. At I02 completion,
 the coordinator and reviewers map every acceptance item to direct source
 inspection, compiler-visible API evidence, behavioral tests, or deterministic
 checks of declared product artifacts as appropriate. No Rust test encodes an
@@ -567,9 +597,10 @@ source/code shape as completion evidence.
 | `2.16` | section 8.2: typography tags/indices/global-list rules |
 | `2.17` | section 5: duplicate/empty keyframe structures |
 
-I02 also preserves all I01 finding evidence. If closing a row would change a
-frozen section 3.1 semantic, require unsafe, cross an ownership boundary, or
-require another breaking cycle, stop and reconcile P01.
+I02 also preserves all I01 finding evidence after the reviewed section 3.3
+correction. If closing a row would change another frozen section 3.1 semantic,
+require unsafe, cross an ownership boundary, or require another breaking cycle,
+stop and reconcile P01.
 
 ## 12. Initiative Acceptance
 
@@ -583,10 +614,12 @@ I02 is complete only when all predicates hold:
    behavioral evidence. Completeness is reconciled directly from the ledger and
    owning artifacts, not inferred by a Rust test from owner identity sets or
    counts.
-3. The exact 219-row I01 feature baseline remains classified and its accepted
-   vectors do not regress; extension status and provenance are truthful.
+3. The exact 219-row I01 feature baseline remains classified; the seven C07
+   scenario IDs in section 3.3 carry their reviewed source-backed replacement
+   observables and every other accepted vector does not regress; extension
+   status and provenance are truthful.
 4. All fourteen allocated findings in section 11 have implemented source and
-   focused exact evidence, while I01 evidence stays green.
+   focused exact evidence, while the reconciled I01 evidence stays green.
 5. Both ordinary front doors retain valid siblings and report every recovery;
    both validators reject exactly non-clean reports under either feature graph.
 6. All current public authored states are valid by construction; non-finite

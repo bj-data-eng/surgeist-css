@@ -312,3 +312,42 @@ cycle, the remaining I02 work is additive against the repaired evolution
 surface. Any need to break a frozen item in points 3 or 4, weaken I01 evidence,
 or create a second breaking cycle stops implementation and returns to P01
 reconciliation. This repair does not authorize I03 production-API changes.
+
+## P01.10 C07 Source-Contradiction Reconciliation
+
+C06 is published and read back at
+`597265b574be01c88a3ce559cc2bc07e02791da3`. JIT discovery for I02-C07 proved
+that seven C01 oracle rows encode the two defects that reviewed findings 2.14
+and 2.17 allocate to C07:
+
+- `catalog.property.baseline.property.grid.positive`,
+  `focused.property-schema.baseline.property.grid.important`, and
+  `focused.property-schema.baseline.property.grid.ordinary` accept
+  `repeat(auto-fit, 1fr)`, although dated Grid 2 restricts auto-repeat content
+  to fixed sizes;
+- `focused.importance.05`, `focused.importance.06`,
+  `focused.nested-structural.keyframes-child-loss`, and
+  `focused.structural.misc.03` cascade an invalid declaration into loss of its
+  now-empty keyframe block and rule, although dated Animations 1 admits empty
+  keyframe block and rule lists.
+
+Preserving those observations would preserve the allocated defects and make the
+P01.6 closure claim false. P01 therefore authorizes one source-backed behavioral
+oracle correction in C07. The seven case IDs and authored inputs remain; their
+expected retained syntax, projections, and diagnostics change only as required
+by the dated Grid 2 and Animations 1 grammars. Every other C01 case and observable
+remains byte-for-byte unchanged. C07 records the old and replacement fixture
+digests in its reviewed plan and handoff, never in Rust tests, and independently
+reviews the exact fixture diff. Existing duplicate stale assertions outside the
+fixture are replaced with the same source-backed behavior rather than deleted or
+masked.
+
+This correction is not another public-API breaking cycle. The parser entry-point
+signatures, report and recovery-action meanings, diagnostic ordering and source
+coordinates, property/value coupling, and ordinary/`app-strict` relationship in
+P01.9 points 3 and 4 remain frozen. Current Grid models are added alongside
+source-compatible I01 payloads; parser-produced projections exist only for
+conforming values. Keyframe structure becomes permissive exactly where the
+owning grammar admits empty or duplicate authored occurrences, without sorting,
+merging, cascading, or evaluating them. Any further C01-oracle contradiction or
+public-contract break stops again for a new P01 reconciliation.

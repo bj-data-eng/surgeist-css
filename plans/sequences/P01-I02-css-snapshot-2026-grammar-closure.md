@@ -4,11 +4,11 @@
 
 This sequence implements the reviewed P01-I02 specification at
 `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
-`c6a9984521e23d5c010c3890902b70730db42eda092ad0e77f7d9e8e6168dfa1`,
+`0d5a0484ab226fdd01dd62764ce3d5e20a46eb1f16534fa71b7e55c46e876725`,
 and its official ledger at SHA-256
 `09ecbf2dcaafbd402b24642f1244ce0be3568fd8a85b993c0218e2e7c0deac6d`.
 It is subordinate to reviewed P01 semantic SHA-256
-`e290a7fef9bf6b6e9bde764140e5f7fac34156bb8f644d999e6bba58dc92ca2b`.
+`fc53da090fdef779582bb4480d3e7943816470977af6abefe3468b2c10d3e064`.
 The published I01 base is
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; planning commits after that base
 belong to the I02 candidate range.
@@ -17,10 +17,12 @@ Only the next cycle plan may be authored. Entry to each later cycle requires the
 prior cycle's reviewed, verified, published/read-back handoff and the
 user-required clean, process-free post-cycle state. C14 additionally requires a
 separate exact-range initiative review before its publication. No grammar task
-begins before C01 publication. A need for a second breaking cycle, a frozen I01
-semantic change, unsafe, external acquisition, or root/sibling edit stops and
-returns to P01. Exact commands and gate choreography belong to each JIT cycle
-plan and the canonical Surgeist workflow.
+begins before C01 publication. Except for the exact seven-scenario
+source-backed C07 oracle correction reviewed in specification section 3.3, a
+need for a second breaking cycle, another frozen I01 semantic change, unsafe,
+external acquisition, or root/sibling edit stops and returns to P01. Exact
+commands and gate choreography belong to each JIT cycle plan and the canonical
+Surgeist workflow.
 
 ## 2. Ordered Cycles
 
@@ -143,13 +145,18 @@ published/read-back C06 SHA.
 
 - **Owner/source:** `surgeist-css`; specification sections 3.1, 4.3-4.4, 5
   keyframes, 8.2 Grid, 10, 11 findings 2.14/2.17, and 12.
-- **Prerequisite/entry:** C03 published/read back; finite numeric wrappers and
-  repaired non-exhaustive models are available.
+- **Prerequisite/entry:** C06 published/read back; finite numeric wrappers and
+  repaired non-exhaustive models are available; P01.10 and I02 section 3.3 are
+  reviewed for the exact seven-scenario oracle correction.
 
 Close findings 2.14 and 2.17. Make fixed/auto repeat states structurally
 distinct, prohibit nested repeat and flexible auto-repeat tracks, accept empty
 keyframe structures, and preserve duplicate selector blocks/offsets in source
-order. Retain I01 declaration/recovery meanings.
+order. Retain I01 declaration/recovery meanings. Replace only the seven
+contradictory C01 expected-observable rows named by specification section 3.3;
+their authored inputs remain, every unaffected fixture row is byte-identical,
+and the plan/handoff record the old and replacement fixture digests outside
+Rust tests.
 
 Exit: invalid Grid repeat states are unconstructable and valid empty/duplicate
 keyframes are publicly observable in order. **Handoff:** Grid/keyframe IDs,
@@ -268,7 +275,8 @@ reviews/matrix/cleanup, and published/read-back C13 SHA.
 - **Owner/source:** `surgeist-css`; specification sections 4, 9-12 in full;
   ledger in full.
 - **Prerequisite/entry:** C01-C13 published/read back; every non-C14 ledger row
-  is Complete/excluded truthfully; all prior audits and I01 oracle are clean.
+  is Complete/excluded truthfully; all prior audits and the reconciled I01
+  oracle are clean.
 
 Complete Flexbox 1, Multicolumn 1, and any official property ledger row not
 closed by C03-C13. Reconcile exact 162 property and 167 non-property totals,
@@ -288,7 +296,9 @@ cleanup, then published/read-back I02 SHA and root-only actions.
 ## 3. Cross-Cycle Invariants
 
 Every cycle preserves the I01 behavioral corpus's authored inputs and public
-observables, all prior completed I02 vectors, parser progress/depth guarantees,
+observables except for C07's exact seven reviewed source-backed replacement
+observables; every unaffected row remains byte-identical. Every cycle also
+preserves all prior completed I02 vectors, parser progress/depth guarantees,
 diagnostic ordering and coordinates, custom/substitution authored text,
 declaration importance, parser-owned valid states, and ordinary/`app-strict`
 parity. Catalog status moves only with the grammar, implementation inventory,

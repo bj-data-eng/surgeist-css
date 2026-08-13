@@ -68,6 +68,19 @@ fn perceptual_color_with_typed_math_is_retained_with_its_valid_sibling() {
 }
 
 #[test]
+fn relative_rgb_rejects_untyped_channel_identifiers_and_retains_its_valid_sibling() {
+    let report =
+        parse_style_attribute("color: rgb(from red bogus bogus bogus); opacity: 0.5");
+
+    assert_eq!(report.syntax().len(), 1, "{:?}", report.diagnostics());
+    assert_eq!(report.diagnostics().len(), 1);
+    assert_eq!(
+        report.syntax()[0].known().map(|known| known.property()),
+        Some(CssKnownProperty::Opacity),
+    );
+}
+
+#[test]
 fn authored_keyword_and_hex_colors_preserve_their_current_branches() {
     let current = color_value("color: CurrentColor");
     assert!(current.current().is_current_color());

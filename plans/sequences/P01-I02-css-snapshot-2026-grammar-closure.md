@@ -4,11 +4,11 @@
 
 This sequence implements the reviewed P01-I02 specification at
 `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
-`2ec98603e28bb3b1b50f5bce801ab9d87fa6ff2ae5cac4596781908b7f75c418`,
+`0d26ae87704ecc16c09a59f3684a3af15edfdc5082259ca2bec0135377d97f62`,
 and its official ledger at SHA-256
 `626d176a734d48c3a6202c189daeadc5ff93253c20ac6681d91f93b01ab11b0d`.
 It is subordinate to reviewed P01 semantic SHA-256
-`7a8e26a1cd961d42e3a1275b49e278851e314d6b2df77128dcffc3654679114b`.
+`db899aea31b168128b4d8bd5c4be58057a9860e0de4d0d4b00f049955b16eb22`.
 The published I01 base is
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; planning commits after that base
 belong to the I02 candidate range.
@@ -18,7 +18,7 @@ prior cycle's reviewed, verified, published/read-back handoff and the
 user-required clean, process-free post-cycle state. C14 additionally requires a
 separate exact-range initiative review before its publication. No grammar task
 begins before C01 publication. Except for the exact seven-scenario C07,
-one-scenario C08, eight-scenario C09, and five-scenario C10 source-backed oracle
+one-scenario C08, eight-scenario C09, and six-scenario C10 source-backed oracle
 corrections reviewed in specification sections 3.3-3.6, a need for a second
 breaking cycle, another frozen I01 semantic change, unsafe, external
 acquisition, or root/sibling edit stops and returns to P01. Exact commands and
@@ -239,13 +239,14 @@ permits imports but permanently blocks later namespaces. Keep
 namespace-aware complex-selector parser and retain other balanced Selectors 4
 content as general-enclosed without a recovery diagnostic. Preserve I01
 Selectors 4 forgiving/unforgiving, nesting, and scope behavior. Apply only
-section 3.6's five reviewed fixture replacements.
+section 3.6's six reviewed fixture replacements, including the diagnostic-only
+late-namespace recovery correction.
 
 Exit: exactly the 20 `O-SELECTORS3` and 2 `O-NAMESPACES3` official rows are
 Complete with public AST, tokenization, namespace, diagnostic, recovery, and
 mutation evidence; the fixture digest is
-`085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`.
-**Handoff:** namespace/selector IDs, exact five-row fixture diff, public/recovery
+`96be045dc181fe5fc258e76b09458b441139504a3cae13c41897995ab3ae8f5d`.
+**Handoff:** namespace/selector IDs, exact six-row fixture diff, public/recovery
 matrices, reviews/matrix/cleanup, and published/read-back C10 SHA.
 
 ### I02-C11 Counter Styles And Page Rules
@@ -326,7 +327,7 @@ cleanup, then published/read-back I02 SHA and root-only actions.
 
 Every cycle preserves the I01 behavioral corpus's authored inputs and public
 observables except for C07's exact seven, C08's exact one, C09's exact eight,
-and C10's exact five reviewed source-backed replacement observables; every
+and C10's exact six reviewed source-backed replacement observables; every
 unaffected row remains byte-identical. Every cycle also
 preserves all prior completed I02 vectors, parser progress/depth guarantees,
 diagnostic ordering and coordinates, custom/substitution authored text,

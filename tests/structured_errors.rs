@@ -152,6 +152,47 @@ fn repeated_filter_failures_make_progress_to_valid_filter_and_color_siblings() {
 }
 
 #[test]
+fn basic_shape_failures_report_clip_path_and_retain_valid_siblings() {
+    for (value, responsible, token_kind) in [
+        ("circle(-1px)", "-1px", CssTokenKind::Dimension),
+        ("ellipse(1px)", ")", CssTokenKind::CloseParenthesis),
+        ("polygon(round 10%, 0 0)", "10%", CssTokenKind::Percentage),
+        ("polygon(, 0 0, 100%)", ")", CssTokenKind::CloseParenthesis),
+    ] {
+        let source = format!("clip-path: {value}; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        assert_eq!(
+            report.syntax()[0].known().unwrap().property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{source}: expected one diagnostic");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue
+        );
+        assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("{source}: expected property-value detail");
+        };
+        assert_eq!(detail.property(), CssKnownProperty::ClipPath, "{source}");
+        let encountered = detail.encountered().expect("responsible shape token");
+        assert_eq!(encountered.kind(), token_kind, "{source}");
+        assert_eq!(encountered.authored(), responsible, "{source}");
+
+        #[cfg(feature = "app-strict")]
+        {
+            let failure = surgeist_css::validate_style_attribute(&source)
+                .expect_err("strict validation rejects invalid basic shape");
+            assert_eq!(failure.diagnostics(), report.diagnostics(), "{source}");
+        }
+    }
+}
+
+#[test]
 fn error_unknown_and_recognized_unsupported_at_rules_have_distinct_codes() {
     let unknown = parse_sheet("@not-a-css-rule;").expect_err("unknown at-rule must fail");
     assert_eq!(unknown.code(), CssErrorCode::UnknownAtRule);

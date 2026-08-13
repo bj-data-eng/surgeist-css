@@ -1,8 +1,8 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use surgeist_css::{
-    CssErrorCode, CssRecoveryAction, CssRule, CssScopedRule, CssSelector, CssSelectorCombinator,
-    CssSourcePosition, ErrorKind, parse_sheet,
+    CssErrorCode, CssNamespaceConstraint, CssRecoveryAction, CssRule, CssScopedRule, CssSelector,
+    CssSelectorCombinator, CssSourcePosition, ErrorKind, parse_sheet,
 };
 
 fn nested_layers(depth: usize, tail: &str) -> String {
@@ -17,6 +17,15 @@ fn nested_supports(depth: usize, tail: &str) -> String {
     source.push_str(&"}".repeat(depth));
     source.push_str(tail);
     source
+}
+
+fn namespace_nested_layers(total_depth: usize) -> String {
+    let layer_depth = total_depth.saturating_sub(1);
+    format!(
+        "@namespace svg \"urn:svg\";{}svg|leaf{{color:red}}{}.after{{color:blue}}",
+        "@layer{".repeat(layer_depth),
+        "}".repeat(layer_depth),
+    )
 }
 
 fn component_value(total_depth: usize, opener: &str, closer: &str) -> String {
@@ -190,6 +199,89 @@ fn structural_recovery_accepts_256_rule_blocks_and_drops_only_level_257() {
             .byte_offset()
             .value(),
         failed_start + "@layer".len(),
+    );
+}
+
+#[test]
+fn structural_split_preserves_namespace_bindings_through_the_256_level_boundary() {
+    for depth in [255, 256] {
+        let source = namespace_nested_layers(depth);
+        let report = parse_sheet(&source);
+        assert!(
+            report.is_clean(),
+            "depth {depth}: {:?}",
+            report.diagnostics()
+        );
+        let [
+            CssRule::Namespace(_),
+            CssRule::LayerBlock(layer),
+            CssRule::Style(after),
+        ] = report.syntax().rules()
+        else {
+            panic!(
+                "expected namespace, retained layer parent, and later sibling at depth {depth}: {:#?}",
+                report.syntax().rules()
+            );
+        };
+
+        let mut layer = layer;
+        for _ in 1..depth - 1 {
+            let [CssRule::LayerBlock(nested)] = layer.rules() else {
+                panic!("expected retained layer chain at depth {depth}: {layer:#?}");
+            };
+            layer = nested;
+        }
+        let [CssRule::Style(leaf)] = layer.rules() else {
+            panic!("expected retained namespace-qualified child at depth {depth}: {layer:#?}");
+        };
+        let CssSelector::Compound(selector) = leaf.selector() else {
+            panic!("expected namespace-qualified compound selector at depth {depth}");
+        };
+        assert!(matches!(
+            selector
+                .type_selector()
+                .expect("namespace-qualified type selector")
+                .namespace(),
+            CssNamespaceConstraint::Named(prefix) if prefix.as_str() == "svg"
+        ));
+        assert_eq!(leaf.declarations().len(), 1);
+        assert_eq!(after.declarations().len(), 1);
+    }
+
+    let source = namespace_nested_layers(257);
+    let report = parse_sheet(&source);
+    let [
+        CssRule::Namespace(_),
+        CssRule::LayerBlock(layer),
+        CssRule::Style(after),
+    ] = report.syntax().rules()
+    else {
+        panic!(
+            "expected namespace, retained parents, and later sibling at depth 257: {:#?}",
+            report.syntax().rules()
+        );
+    };
+    let mut layer = layer;
+    for _ in 1..256 {
+        let [CssRule::LayerBlock(nested)] = layer.rules() else {
+            panic!("expected all 256 retained layer parents: {layer:#?}");
+        };
+        layer = nested;
+    }
+    assert!(layer.rules().is_empty());
+    assert_eq!(after.declarations().len(), 1);
+
+    let (detail, span) = nesting_detail(&report);
+    assert_eq!(detail.limit(), 256);
+    assert_eq!(
+        detail.enclosing_production().as_str(),
+        "baseline.rule.style"
+    );
+    let failed_start = source.find("svg|leaf").expect("level 257 style");
+    assert_eq!(span.start().byte_offset().value(), failed_start);
+    assert_eq!(
+        span.end().byte_offset().value(),
+        failed_start + "svg|leaf{color:red}".len()
     );
 }
 

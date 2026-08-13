@@ -347,18 +347,33 @@ pub fn parse_sheet(source: &str) -> crate::CssParseReport<CssSheet> {
                 .name("surgeist-css-bounded-parser".to_owned())
                 .stack_size(16 * 1024 * 1024)
                 .spawn_scoped(scope, || {
-                    parse_sheet_bounded(source, 0, BoundedParseContext::Sheet)
+                    parse_sheet_bounded(
+                        source,
+                        0,
+                        BoundedParseContext::Sheet,
+                        StyleContextCaptures::default(),
+                    )
                 });
             match parser {
                 Ok(parser) => match parser.join() {
                     Ok(report) => report,
                     Err(panic) => std::panic::resume_unwind(panic),
                 },
-                Err(_) => parse_sheet_bounded(source, 0, BoundedParseContext::Sheet),
+                Err(_) => parse_sheet_bounded(
+                    source,
+                    0,
+                    BoundedParseContext::Sheet,
+                    StyleContextCaptures::default(),
+                ),
             }
         });
     }
-    parse_sheet_bounded(source, 0, BoundedParseContext::Sheet)
+    parse_sheet_bounded(
+        source,
+        0,
+        BoundedParseContext::Sheet,
+        StyleContextCaptures::default(),
+    )
 }
 
 /// Parses a UTF-8 style attribute into valid ordinary declarations and recovery diagnostics.
@@ -456,13 +471,10 @@ fn parse_sheet_bounded(
     source: &str,
     base_depth: u32,
     context: BoundedParseContext,
+    style_context_captures: StyleContextCaptures,
 ) -> crate::CssParseReport<CssSheet> {
-    let report = parse_sheet_bounded_with_captures(
-        source,
-        base_depth,
-        context,
-        StyleContextCaptures::default(),
-    );
+    let report =
+        parse_sheet_bounded_with_captures(source, base_depth, context, style_context_captures);
     let (sheet, mut diagnostics) = report.into_parts();
     let eof_limit = diagnostics.iter().any(|diagnostic| {
         diagnostic.action() == crate::CssRecoveryAction::StopAtNestingLimit
@@ -553,7 +565,12 @@ fn parse_sheet_bounded_with_captures(
                         position,
                     }
                 });
-            let child = parse_sheet_bounded(&isolated, preflight.parent_depth, child_context);
+            let child = parse_sheet_bounded(
+                &isolated,
+                preflight.parent_depth,
+                child_context,
+                style_context_captures,
+            );
             let (child_sheet, mut child_diagnostics) = child.into_parts();
             diagnostics.append(&mut child_diagnostics);
             let sheet = splice_preflight_rules(

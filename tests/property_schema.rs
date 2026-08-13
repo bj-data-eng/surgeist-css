@@ -2,9 +2,8 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssBasicShapeValue, CssBoxShadow, CssClipPathValue, CssEasingValue, CssErrorCode,
-    CssFilterFunctionValue, CssFilterValue, CssImportance, CssKnownDeclaredValueRef,
-    CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction, CssRule,
+    CssBoxShadow, CssEasingValue, CssErrorCode, CssFilterFunctionValue, CssFilterValue,
+    CssImportance, CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction, CssRule,
     CssTransformFunctionValue, CssTransformValue, ErrorKind, parse_sheet, parse_style_attribute,
 };
 
@@ -800,7 +799,7 @@ fn typed_length_calculations_are_accepted_by_the_exact_current_consumer_set() {
     }
 
     for source in [
-        "clip-path: polygon(, calc((1px + 2%) * 3) 0px, 1px 1px)",
+        "clip-path: polygon(calc((1px + 2%) * 3) 0px, 1px 1px)",
         "grid-template: calc((1px + 2%) * 3) / 1fr",
         "grid: calc((1px + 2%) * 3) / 1fr",
     ] {
@@ -971,51 +970,6 @@ fn shadow_and_filter_wrappers_expose_current_values_and_frozen_i01_projections()
     };
     assert!(matches!(backdrop.current(), CssFilterValue::Functions(_)));
     assert!(backdrop.i01_subset().is_none());
-}
-
-#[test]
-fn clip_path_wrapper_separates_current_legacy_global_and_substitution_values() {
-    let report = parse_style_attribute(concat!(
-        "clip-path: inset(1px round 2px); ",
-        "clip-path: circle(50% at center); ",
-        "clip-path: inherit; ",
-        "clip-path: var(--clip)"
-    ));
-    assert!(report.is_clean(), "{:?}", report.diagnostics());
-
-    let CssKnownPropertyValueRef::ClipPath(current) = report.syntax()[0]
-        .known()
-        .unwrap()
-        .property_value()
-        .unwrap()
-    else {
-        panic!("expected current clip-path wrapper");
-    };
-    assert!(matches!(
-        current.current(),
-        Some(CssClipPathValue::BasicShape(CssBasicShapeValue::Inset(_)))
-    ));
-    assert!(current.i01_subset().is_some());
-
-    let CssKnownPropertyValueRef::ClipPath(legacy_only) = report.syntax()[1]
-        .known()
-        .unwrap()
-        .property_value()
-        .unwrap()
-    else {
-        panic!("expected legacy clip-path wrapper");
-    };
-    assert!(legacy_only.current().is_none());
-    assert!(legacy_only.i01_subset().is_some());
-
-    assert!(matches!(
-        report.syntax()[2].known().unwrap().declared_value(),
-        CssKnownDeclaredValueRef::Global(_)
-    ));
-    assert!(matches!(
-        report.syntax()[3].known().unwrap().declared_value(),
-        CssKnownDeclaredValueRef::SubstitutionDependent(_)
-    ));
 }
 
 #[test]

@@ -152,6 +152,83 @@ fn repeated_filter_failures_make_progress_to_valid_filter_and_color_siblings() {
 }
 
 #[test]
+fn basic_shape_failures_report_clip_path_and_retain_valid_siblings() {
+    for (value, responsible, token_kind) in [
+        ("circle(-1px)", "-1px", CssTokenKind::Dimension),
+        ("ellipse(1px)", ")", CssTokenKind::CloseParenthesis),
+        (
+            "polygon(round 10%, 0 0)",
+            "10%",
+            CssTokenKind::Percentage,
+        ),
+        ("polygon(, 0 0, 100%)", ")", CssTokenKind::CloseParenthesis),
+    ] {
+        let source = format!("clip-path: {value}; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        assert_eq!(
+            report.syntax()[0].known().unwrap().property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{source}: expected one recovered shape declaration");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue,
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.action(),
+            CssRecoveryAction::DropDeclaration,
+            "{source}",
+        );
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("{source}: expected property-value detail");
+        };
+        assert_eq!(detail.property(), CssKnownProperty::ClipPath, "{source}");
+        let encountered = detail.encountered().expect("responsible shape token");
+        assert_eq!(encountered.kind(), token_kind, "{source}");
+        assert_eq!(encountered.authored(), responsible, "{source}");
+
+        #[cfg(feature = "app-strict")]
+        {
+            let failure = surgeist_css::validate_style_attribute(&source)
+                .expect_err("strict validation rejects recovered basic shape");
+            assert_eq!(failure.diagnostics(), report.diagnostics(), "{source}");
+        }
+    }
+}
+
+#[test]
+fn repeated_basic_shape_failures_make_progress_to_valid_shape_and_color_siblings() {
+    let source = concat!(
+        "clip-path: ellipse(1px); ",
+        "clip-path: polygon(round -1px, 0 0); ",
+        "clip-path: polygon(, 0 0, 100%); ",
+        "clip-path: circle(closest-side); color: red",
+    );
+    let report = parse_style_attribute(source);
+    assert_eq!(report.diagnostics().len(), 3);
+    assert_eq!(report.syntax().len(), 2);
+    assert_eq!(
+        report.syntax()[0].known().unwrap().property(),
+        CssKnownProperty::ClipPath
+    );
+    assert_eq!(
+        report.syntax()[1].known().unwrap().property(),
+        CssKnownProperty::Color
+    );
+    assert!(
+        report
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.action() == CssRecoveryAction::DropDeclaration)
+    );
+}
+
+#[test]
 fn error_unknown_and_recognized_unsupported_at_rules_have_distinct_codes() {
     let unknown = parse_sheet("@not-a-css-rule;").expect_err("unknown at-rule must fail");
     assert_eq!(unknown.code(), CssErrorCode::UnknownAtRule);

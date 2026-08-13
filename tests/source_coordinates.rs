@@ -50,65 +50,6 @@ fn timing_type_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
 }
 
 #[test]
-fn easing_count_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
-    let source = "--😀: 1; transition-timing-function: steps(1, jump-none); color: red";
-    let report = parse_style_attribute(source);
-    assert_eq!(report.syntax().len(), 2);
-    let [diagnostic] = report.diagnostics() else {
-        panic!("invalid jump-none count must recover once");
-    };
-    assert_eq!(
-        diagnostic.error().code(),
-        CssErrorCode::InvalidPropertyValue
-    );
-    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
-    let responsible = source.find("steps(1").expect("steps function") + "steps(".len();
-    let declaration_start = source
-        .find("transition-timing-function")
-        .expect("timing declaration start");
-    let declaration_end = declaration_start
-        + source[declaration_start..]
-            .find(';')
-            .expect("timing declaration end")
-        + 1;
-    assert_position(
-        diagnostic.error().position(),
-        responsible,
-        0,
-        u32::try_from(responsible - 2).expect("UTF-16 column"),
-    );
-    assert_position(
-        diagnostic.span().start(),
-        declaration_start,
-        0,
-        u32::try_from(declaration_start - 2).expect("UTF-16 column"),
-    );
-    assert_position(
-        diagnostic.span().end(),
-        declaration_end,
-        0,
-        u32::try_from(declaration_end - 2).expect("UTF-16 column"),
-    );
-    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
-        panic!("expected structured easing property error");
-    };
-    assert_eq!(
-        detail.property(),
-        CssKnownProperty::TransitionTimingFunction
-    );
-    let encountered = detail.encountered().expect("responsible step count");
-    assert_eq!(encountered.kind(), CssTokenKind::Number);
-    assert_eq!(encountered.authored(), "1");
-
-    #[cfg(feature = "app-strict")]
-    {
-        let failure = surgeist_css::validate_style_attribute(source)
-            .expect_err("strict validation rejects recovered easing count error");
-        assert_eq!(failure.diagnostics(), report.diagnostics());
-    }
-}
-
-#[test]
 fn generic_position_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
     let source = "--😀: 1; mask-position: 50% left; color: red";
     let report = parse_style_attribute(source);

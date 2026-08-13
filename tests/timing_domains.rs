@@ -2,10 +2,9 @@ use surgeist_css::{
     CssAnimationDirection, CssAnimationFillMode, CssAnimationIterationNumber,
     CssAnimationIterationValue, CssAnimationIterationValueList, CssAnimationName,
     CssAnimationPlayState, CssCalculationExpressionRef, CssCalculationType, CssDelay, CssDelayList,
-    CssDelayLiteral, CssDuration, CssDurationList, CssDurationLiteral, CssEasingKeyword,
-    CssEasingValue, CssErrorCode, CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction,
-    CssSourcePosition, CssStepPosition, CssTimeUnit, CssTokenKind, CssTransitionProperty,
-    ErrorKind, parse_style_attribute,
+    CssDelayLiteral, CssDuration, CssDurationList, CssDurationLiteral, CssEasing, CssErrorCode,
+    CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction, CssSourcePosition, CssTimeUnit,
+    CssTokenKind, CssTransitionProperty, ErrorKind, parse_style_attribute,
 };
 
 fn for_each_permutation(
@@ -357,7 +356,7 @@ fn transition_shorthand_assigns_first_time_to_duration_and_second_to_signed_dela
     ));
     assert!(matches!(
         transitions[0].timing_function(),
-        Some(CssEasingValue::Keyword(CssEasingKeyword::Ease))
+        Some(CssEasing::Ease)
     ));
     assert!(matches!(
         transitions[1].duration(),
@@ -393,10 +392,7 @@ fn animation_shorthand_exposes_all_eight_current_components() {
         Some(CssDuration::Calculation(_))
     ));
     assert!(matches!(animation.delay(), Some(CssDelay::Calculation(_))));
-    assert!(matches!(
-        animation.timing_function(),
-        Some(CssEasingValue::Keyword(CssEasingKeyword::Ease))
-    ));
+    assert!(matches!(animation.timing_function(), Some(CssEasing::Ease)));
     assert!(matches!(
         animation.iteration_count(),
         Some(CssAnimationIterationValue::Calculation(_))
@@ -405,53 +401,6 @@ fn animation_shorthand_exposes_all_eight_current_components() {
     assert_eq!(animation.fill_mode(), Some(CssAnimationFillMode::Both));
     assert_eq!(animation.play_state(), Some(CssAnimationPlayState::Paused));
     assert!(value.i01_subset().is_none());
-}
-
-#[test]
-fn timing_shorthands_propagate_typed_cubic_and_step_values() {
-    let report = parse_style_attribute(concat!(
-        "transition: opacity 1s cubic-bezier(0.1, -2, 0.9, 3), ",
-        "transform 2s steps(2, jump-none); ",
-        "animation: fade 1s steps(3, jump-both)"
-    ));
-    assert!(report.is_clean(), "{:?}", report.diagnostics());
-
-    let CssKnownPropertyValueRef::Transition(transition) = report.syntax()[0]
-        .known()
-        .expect("known transition")
-        .property_value()
-        .expect("ordinary transition")
-    else {
-        panic!("expected transition wrapper");
-    };
-    assert!(matches!(
-        transition.transitions().values()[0].timing_function(),
-        Some(CssEasingValue::CubicBezier(_))
-    ));
-    assert!(matches!(
-        transition.transitions().values()[1].timing_function(),
-        Some(CssEasingValue::Steps(steps))
-            if steps.count().literal() == Some(2)
-                && steps.position() == Some(CssStepPosition::JumpNone)
-    ));
-
-    let CssKnownPropertyValueRef::Animation(animation) = report.syntax()[1]
-        .known()
-        .expect("known animation")
-        .property_value()
-        .expect("ordinary animation")
-    else {
-        panic!("expected animation wrapper");
-    };
-    assert!(matches!(
-        animation.animations().values()[0].timing_function(),
-        Some(CssEasingValue::Steps(steps))
-            if steps.count().literal() == Some(3)
-                && steps.position() == Some(CssStepPosition::JumpBoth)
-    ));
-
-    assert!(transition.i01_subset().is_some());
-    assert!(animation.i01_subset().is_some());
 }
 
 #[test]
@@ -500,10 +449,7 @@ fn every_transition_component_order_preserves_first_time_and_second_time_domains
             "{source}",
         );
         assert!(
-            matches!(
-                transition.timing_function(),
-                Some(CssEasingValue::Keyword(CssEasingKeyword::EaseIn))
-            ),
+            matches!(transition.timing_function(), Some(CssEasing::EaseIn)),
             "{source}",
         );
 
@@ -565,10 +511,7 @@ fn every_animation_component_order_preserves_all_eight_typed_domains() {
             "{source}",
         );
         assert!(
-            matches!(
-                animation.timing_function(),
-                Some(CssEasingValue::Keyword(CssEasingKeyword::EaseIn))
-            ),
+            matches!(animation.timing_function(), Some(CssEasing::EaseIn)),
             "{source}",
         );
         assert!(

@@ -1,7 +1,8 @@
 use surgeist_css::{
     CssAngleCalculation, CssAngleUnit, CssAspectRatioValue, CssCalcLength,
     CssCalculationExpressionRef, CssCalculationProductOperator, CssCalculationType,
-    CssCalculationValueRef, CssErrorCode, CssFlexValue, CssFrequencyCalculation, CssFrequencyUnit,
+    CssCalculationValueRef, CssErrorCode, CssFilterAmount, CssFilterFunctionValue, CssFilterNumber,
+    CssFilterPercentage, CssFilterValue, CssFlexValue, CssFrequencyCalculation, CssFrequencyUnit,
     CssGridFlowToleranceValue, CssIntegerCalculation, CssIntegerValue, CssKnownPropertyValueRef,
     CssLength, CssLengthCalculation, CssLengthUnit, CssNonNegativeNumberValue,
     CssNumberCalculation, CssOpacityValue, CssPercentageCalculation, CssPositiveNumber,
@@ -492,4 +493,36 @@ fn positive_number_model_checks_literals_while_calculation_range_stays_authored(
     let calculation_report = parse_style_attribute("aspect-ratio: calc(-1 * 2); color: red");
     assert!(calculation_report.is_clean());
     assert_eq!(calculation_report.syntax().len(), 2);
+}
+
+#[test]
+fn filter_amount_calculations_keep_number_and_percentage_roots_symbolic() {
+    let report = parse_style_attribute(
+        "filter: brightness(calc(-1 + 2)) opacity(calc(25% + 25%)); color: red",
+    );
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Filter(filter) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected filter wrapper");
+    };
+    let CssFilterValue::Functions(functions) = filter.current() else {
+        panic!("expected filter functions");
+    };
+    assert!(matches!(
+        functions.functions()[0],
+        CssFilterFunctionValue::Brightness(CssFilterAmount::Number(CssFilterNumber::Calculation(
+            _
+        )))
+    ));
+    assert!(matches!(
+        functions.functions()[1],
+        CssFilterFunctionValue::Opacity(CssFilterAmount::Percentage(
+            CssFilterPercentage::Calculation(_)
+        ))
+    ));
+    assert!(filter.i01_subset().is_none());
 }

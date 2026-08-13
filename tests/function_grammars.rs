@@ -1,10 +1,13 @@
 use surgeist_css::{
-    CssCubicBezier, CssEasingKeyword, CssEasingNumber, CssEasingValue, CssEasingValueList,
-    CssErrorCode, CssFiniteNumber, CssKnownProperty, CssKnownPropertyValueRef, CssLength,
-    CssRecoveryAction, CssStepCount, CssStepPosition, CssSteps, CssTransform, CssTransformAngle,
-    CssTransformFunctionKind, CssTransformFunctionValue, CssTransformFunctionValueList,
-    CssTransformLength, CssTransformLengthPercentage, CssTransformNonNegativeLength,
-    CssTransformNumber, CssTransformPercentage, CssTransformPerspective, CssTransformPropertyValue,
+    CssBoxShadow, CssCubicBezier, CssDropShadow, CssEasingKeyword, CssEasingNumber, CssEasingValue,
+    CssEasingValueList, CssErrorCode, CssFilterAmount, CssFilterAngle, CssFilterBlur,
+    CssFilterFunctionValue, CssFilterFunctionValueList, CssFilterNumber, CssFilterPercentage,
+    CssFilterPropertyValue, CssFilterValue, CssFiniteNumber, CssKnownDeclaredValueRef,
+    CssKnownProperty, CssKnownPropertyValueRef, CssLength, CssRecoveryAction, CssStepCount,
+    CssStepPosition, CssSteps, CssTransform, CssTransformAngle, CssTransformFunctionKind,
+    CssTransformFunctionValue, CssTransformFunctionValueList, CssTransformLength,
+    CssTransformLengthPercentage, CssTransformNonNegativeLength, CssTransformNumber,
+    CssTransformPercentage, CssTransformPerspective, CssTransformPropertyValue,
     CssTransformScaleComponent, CssTransformValue, CssTransitionTimingFunctionPropertyValue,
     parse_style_attribute,
 };
@@ -84,6 +87,24 @@ fn assert_filter_rejected(value: &str) {
     );
 }
 
+fn parsed_filter_property(value: &str) -> CssFilterPropertyValue {
+    let report = parse_style_attribute(&format!("filter: {value}"));
+    assert!(
+        report.is_clean(),
+        "expected `{value}` to parse cleanly, got {:?}",
+        report.diagnostics()
+    );
+    let declaration = report.syntax()[0]
+        .known()
+        .expect("known filter declaration");
+    let CssKnownPropertyValueRef::Filter(value) =
+        declaration.property_value().expect("ordinary filter value")
+    else {
+        panic!("expected filter property value");
+    };
+    value.clone()
+}
+
 #[test]
 fn drop_shadow_rejects_box_shadow_only_components_and_negative_filter_amounts() {
     for value in [
@@ -94,6 +115,245 @@ fn drop_shadow_rejects_box_shadow_only_components_and_negative_filter_amounts() 
     ] {
         assert_filter_rejected(value);
     }
+}
+
+#[test]
+fn filter_function_list_preserves_typed_authored_order() {
+    let property = parsed_filter_property(concat!(
+        "url(\"filters.svg#rough\") blur(4px) brightness() contrast(25%) ",
+        "drop-shadow(red -1px 2px calc(1px + 2px)) grayscale(.5) ",
+        "hue-rotate(calc(1turn - 90deg)) invert(10%) opacity(.75) saturate(2) sepia(30%)"
+    ));
+    let CssFilterValue::Functions(functions) = property.current() else {
+        panic!("expected current filter function list");
+    };
+    assert!(matches!(
+        functions.functions(),
+        [
+            CssFilterFunctionValue::Url(_),
+            CssFilterFunctionValue::Blur(_),
+            CssFilterFunctionValue::Brightness(_),
+            CssFilterFunctionValue::Contrast(_),
+            CssFilterFunctionValue::DropShadow(_),
+            CssFilterFunctionValue::Grayscale(_),
+            CssFilterFunctionValue::HueRotate(_),
+            CssFilterFunctionValue::Invert(_),
+            CssFilterFunctionValue::Opacity(_),
+            CssFilterFunctionValue::Saturate(_),
+            CssFilterFunctionValue::Sepia(_),
+        ]
+    ));
+    assert!(property.i01_subset().is_none());
+}
+
+#[test]
+fn every_filter_amount_function_has_exact_typed_domain() {
+    let property = parsed_filter_property(concat!(
+        "brightness() contrast(2) grayscale(25%) invert(calc(1 - .25)) ",
+        "opacity(calc(50%)) saturate(3) sepia(75%)"
+    ));
+    let CssFilterValue::Functions(functions) = property.current() else {
+        panic!("expected current filter function list");
+    };
+    assert!(matches!(
+        functions.functions()[0],
+        CssFilterFunctionValue::Brightness(CssFilterAmount::Default)
+    ));
+    assert!(matches!(
+        functions.functions()[1],
+        CssFilterFunctionValue::Contrast(CssFilterAmount::Number(
+            CssFilterNumber::Literal(value)
+        )) if value.value() == 2.0
+    ));
+    assert!(matches!(
+        functions.functions()[2],
+        CssFilterFunctionValue::Grayscale(CssFilterAmount::Percentage(
+            CssFilterPercentage::Literal(value)
+        )) if value.value() == 25.0
+    ));
+    assert!(matches!(
+        functions.functions()[3],
+        CssFilterFunctionValue::Invert(CssFilterAmount::Number(CssFilterNumber::Calculation(_)))
+    ));
+    assert!(matches!(
+        functions.functions()[4],
+        CssFilterFunctionValue::Opacity(CssFilterAmount::Percentage(
+            CssFilterPercentage::Calculation(_)
+        ))
+    ));
+
+    for value in [
+        "brightness(-1)",
+        "contrast(-0.1%)",
+        "opacity(1 2)",
+        "saturate(1, 2)",
+        "sepia(auto)",
+    ] {
+        assert_filter_rejected(value);
+    }
+}
+
+#[test]
+fn blur_hue_rotate_and_drop_shadow_expose_distinct_typed_payloads() {
+    let property = parsed_filter_property(
+        "blur(calc(1px + 2em)) hue-rotate(-.25turn) drop-shadow(1px -2px blue)",
+    );
+    let CssFilterValue::Functions(functions) = property.current() else {
+        panic!("expected current filter function list");
+    };
+    assert!(matches!(
+        &functions.functions()[0],
+        CssFilterFunctionValue::Blur(blur) if matches!(blur.length(), CssLength::Calc(_))
+    ));
+    assert!(matches!(
+        functions.functions()[1],
+        CssFilterFunctionValue::HueRotate(CssFilterAngle::Literal(value))
+            if value.value() == -0.25
+    ));
+    let CssFilterFunctionValue::DropShadow(shadow) = &functions.functions()[2] else {
+        panic!("expected typed drop-shadow");
+    };
+    assert!(matches!(shadow.offset_x(), CssLength::Px(value) if value.value() == 1.0));
+    assert!(matches!(shadow.offset_y(), CssLength::Px(value) if value.value() == -2.0));
+    assert!(shadow.blur_radius().is_none());
+    assert!(shadow.color().is_some());
+}
+
+#[test]
+fn box_shadow_accepts_component_orders_and_rejects_interleaved_lengths() {
+    let report = parse_style_attribute(concat!(
+        "box-shadow: red inset -1px 2px 3px -4px, ",
+        "5px 6px blue inset, inset 7px 8px; color: red"
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::BoxShadow(value) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected box-shadow");
+    };
+    let CssBoxShadow::Shadows(shadows) = value.current() else {
+        panic!("expected shadow list");
+    };
+    assert_eq!(shadows.shadows().len(), 3);
+    assert!(shadows.shadows()[0].inset());
+    assert!(
+        matches!(shadows.shadows()[0].spread_radius(), Some(CssLength::Px(value)) if value.value() == -4.0)
+    );
+    assert!(shadows.shadows()[1].color().is_some());
+
+    for value in [
+        "1px red 2px",
+        "1px 2px -3px",
+        "1px 2px red blue",
+        "inset inset 1px 2px",
+        "1px 2px,",
+    ] {
+        let report = parse_style_attribute(&format!("box-shadow: {value}; color: red"));
+        assert_eq!(report.syntax().len(), 1, "retained `{value}`");
+        assert_eq!(report.diagnostics().len(), 1, "{value}");
+    }
+}
+
+#[test]
+fn filter_lists_reject_empty_unknown_repeated_and_trailing_mutations() {
+    for value in [
+        "none blur(1px)",
+        "blur()",
+        "hue-rotate()",
+        "hue-rotate(1deg, 2deg)",
+        "drop-shadow()",
+        "drop-shadow(red red 1px 2px)",
+        "drop-shadow(1px red 2px)",
+        "unknown(1)",
+        "blur(1px), opacity(1)",
+        "blur(1px) trailing",
+    ] {
+        assert_filter_rejected(value);
+    }
+}
+
+#[test]
+fn filter_checked_scalars_and_lists_reject_unrepresentable_states() {
+    assert!(CssFilterBlur::try_new(CssLength::try_px(-1.0).unwrap()).is_none());
+    assert!(
+        CssDropShadow::try_new(
+            CssLength::try_percent(1.0).unwrap(),
+            CssLength::Zero,
+            None,
+            None,
+        )
+        .is_none()
+    );
+    assert!(CssFilterFunctionValueList::try_new(Vec::new()).is_none());
+}
+
+#[test]
+fn filter_calculations_preserve_the_exact_depth_boundary() {
+    let source = format!(
+        "filter: brightness({}1{}); color: red",
+        "calc(".repeat(255),
+        ")".repeat(255),
+    );
+    let report = parse_style_attribute(&source);
+    assert!(report.is_clean(), "depth 255: {:?}", report.diagnostics());
+    assert_eq!(report.syntax().len(), 2);
+
+    for depth in [256_usize, 257] {
+        let source = format!(
+            "filter: brightness({}1{}); color: red",
+            "calc(".repeat(depth),
+            ")".repeat(depth),
+        );
+        let first_over_limit = source
+            .match_indices("calc(")
+            .nth(255)
+            .expect("256th authored nested calculation")
+            .0;
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "depth {depth}");
+        let [diagnostic] = report.diagnostics() else {
+            panic!("depth {depth}: expected one diagnostic");
+        };
+        assert_eq!(diagnostic.error().code(), CssErrorCode::NestingLimit);
+        assert_eq!(diagnostic.action(), CssRecoveryAction::StopAtNestingLimit);
+        assert_eq!(
+            diagnostic.error().position().byte_offset().value(),
+            first_over_limit,
+            "depth {depth}"
+        );
+    }
+}
+
+#[test]
+fn filter_ordinary_global_and_substitution_values_remain_distinct() {
+    let report = parse_style_attribute(concat!(
+        "filter: blur(1px); backdrop-filter: inherit; filter: var(--filters); ",
+        "box-shadow: initial; box-shadow: var(--shadow)"
+    ));
+    assert!(report.is_clean());
+    assert!(matches!(
+        report.syntax()[0].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::Property(CssKnownPropertyValueRef::Filter(_))
+    ));
+    assert!(matches!(
+        report.syntax()[1].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::Global(_)
+    ));
+    assert!(matches!(
+        report.syntax()[2].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::SubstitutionDependent(_)
+    ));
+    assert!(matches!(
+        report.syntax()[3].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::Global(_)
+    ));
+    assert!(matches!(
+        report.syntax()[4].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::SubstitutionDependent(_)
+    ));
 }
 
 fn parsed_easing_property(value: &str) -> CssTransitionTimingFunctionPropertyValue {

@@ -312,7 +312,7 @@ pub(super) fn parse_shadow<'i, 't>(
 ) -> std::result::Result<CssShadow, ParseError<'i, Error>> {
     let mut inset = false;
     let mut color = None;
-    let mut lengths = Vec::new();
+    let mut lengths = None;
 
     while !input.is_exhausted() {
         let state = input.state();
@@ -339,14 +339,10 @@ pub(super) fn parse_shadow<'i, 't>(
             continue;
         }
 
-        if lengths.len() < 4
-            && let Ok(length) = if lengths.len() == 2 {
-                input.try_parse(parse_shadow_blur_length)
-            } else {
-                input.try_parse(parse_shadow_length)
-            }
+        if lengths.is_none()
+            && let Ok(parsed_lengths) = input.try_parse(parse_box_shadow_lengths)
         {
-            lengths.push(length);
+            lengths = Some(parsed_lengths);
             continue;
         }
 
@@ -357,6 +353,7 @@ pub(super) fn parse_shadow<'i, 't>(
         ));
     }
 
+    let lengths = lengths.unwrap_or_default();
     match lengths.as_slice() {
         [offset_x, offset_y] => Ok(CssShadow::new(
             inset,
@@ -388,4 +385,81 @@ pub(super) fn parse_shadow<'i, 't>(
             "box-shadow requires at least two offsets",
         )),
     }
+}
+
+fn parse_box_shadow_lengths<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Vec<CssLength>, ParseError<'i, Error>> {
+    let mut lengths = vec![parse_shadow_length(input)?, parse_shadow_length(input)?];
+    if let Ok(blur) = input.try_parse(parse_shadow_blur_length) {
+        lengths.push(blur);
+        if let Ok(spread) = input.try_parse(parse_shadow_length) {
+            lengths.push(spread);
+        }
+    }
+    Ok(lengths)
+}
+
+pub(super) fn parse_drop_shadow<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssDropShadow, ParseError<'i, Error>> {
+    let mut color = None;
+    let mut lengths = None;
+
+    while !input.is_exhausted() {
+        if let Ok(parsed_color) = input.try_parse(parse_color) {
+            if color.replace(parsed_color).is_some() {
+                return Err(unsupported_value(
+                    input,
+                    None,
+                    "duplicate drop-shadow color",
+                ));
+            }
+            continue;
+        }
+
+        if lengths.is_none()
+            && let Ok(parsed_lengths) = input.try_parse(parse_drop_shadow_lengths)
+        {
+            lengths = Some(parsed_lengths);
+            continue;
+        }
+
+        return Err(unsupported_value(
+            input,
+            None,
+            "unsupported drop-shadow component",
+        ));
+    }
+
+    let lengths = lengths.unwrap_or_default();
+    match lengths.as_slice() {
+        [offset_x, offset_y] => {
+            CssDropShadow::try_new(offset_x.clone(), offset_y.clone(), None, color)
+        }
+        [offset_x, offset_y, blur] => CssDropShadow::try_new(
+            offset_x.clone(),
+            offset_y.clone(),
+            Some(blur.clone()),
+            color,
+        ),
+        _ => None,
+    }
+    .ok_or_else(|| {
+        unsupported_value(
+            input,
+            None,
+            "drop-shadow requires two offsets and an optional non-negative blur",
+        )
+    })
+}
+
+fn parse_drop_shadow_lengths<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Vec<CssLength>, ParseError<'i, Error>> {
+    let mut lengths = vec![parse_shadow_length(input)?, parse_shadow_length(input)?];
+    if let Ok(blur) = input.try_parse(parse_shadow_blur_length) {
+        lengths.push(blur);
+    }
+    Ok(lengths)
 }

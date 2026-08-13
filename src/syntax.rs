@@ -7290,6 +7290,176 @@ pub enum CssFilterFunction {
     Url(CssUrl),
 }
 
+/// A checked authored non-negative filter `<number>`.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssFilterNumber {
+    Literal(CssNonNegativeNumber),
+    Calculation(CssNumberCalculation),
+}
+
+/// A checked authored non-negative filter `<percentage>`.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssFilterPercentage {
+    Literal(CssNonNegativeNumber),
+    Calculation(CssPercentageCalculation),
+}
+
+/// The optional amount accepted by a filter amount function.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssFilterAmount {
+    Default,
+    Number(CssFilterNumber),
+    Percentage(CssFilterPercentage),
+}
+
+/// A checked authored filter blur length.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssFilterBlur {
+    length: CssLength,
+}
+
+impl CssFilterBlur {
+    #[must_use]
+    pub fn try_new(length: CssLength) -> Option<Self> {
+        if is_shadow_length(&length) && !length_has_negative_component(&length) {
+            Some(Self { length })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn length(&self) -> &CssLength {
+        &self.length
+    }
+}
+
+/// A typed authored angle accepted by `hue-rotate()`.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssFilterAngle {
+    Zero,
+    Literal(CssAngleLiteral),
+    Calculation(CssAngleCalculation),
+}
+
+/// A filter `drop-shadow()` value, distinct from a box shadow.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssDropShadow {
+    offset_x: CssLength,
+    offset_y: CssLength,
+    blur_radius: Option<CssLength>,
+    color: Option<CssColor>,
+}
+
+impl CssDropShadow {
+    #[must_use]
+    pub fn try_new(
+        offset_x: CssLength,
+        offset_y: CssLength,
+        blur_radius: Option<CssLength>,
+        color: Option<CssColor>,
+    ) -> Option<Self> {
+        if !is_shadow_length(&offset_x)
+            || !is_shadow_length(&offset_y)
+            || blur_radius
+                .as_ref()
+                .is_some_and(|blur| !is_shadow_length(blur) || length_has_negative_component(blur))
+        {
+            None
+        } else {
+            Some(Self {
+                offset_x,
+                offset_y,
+                blur_radius,
+                color,
+            })
+        }
+    }
+
+    #[must_use]
+    pub const fn offset_x(&self) -> &CssLength {
+        &self.offset_x
+    }
+
+    #[must_use]
+    pub const fn offset_y(&self) -> &CssLength {
+        &self.offset_y
+    }
+
+    #[must_use]
+    pub const fn blur_radius(&self) -> Option<&CssLength> {
+        self.blur_radius.as_ref()
+    }
+
+    #[must_use]
+    pub const fn color(&self) -> Option<&CssColor> {
+        self.color.as_ref()
+    }
+}
+
+/// A parser-produced authored filter function with an exact typed payload.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssFilterFunctionValue {
+    Blur(CssFilterBlur),
+    Brightness(CssFilterAmount),
+    Contrast(CssFilterAmount),
+    DropShadow(CssDropShadow),
+    Grayscale(CssFilterAmount),
+    HueRotate(CssFilterAngle),
+    Invert(CssFilterAmount),
+    Opacity(CssFilterAmount),
+    Saturate(CssFilterAmount),
+    Sepia(CssFilterAmount),
+    Url(CssUrl),
+}
+
+/// A non-empty ordered list of current authored filter functions.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssFilterFunctionValueList {
+    functions: Vec<CssFilterFunctionValue>,
+}
+
+impl CssFilterFunctionValueList {
+    #[must_use]
+    pub fn try_new(functions: Vec<CssFilterFunctionValue>) -> Option<Self> {
+        (!functions.is_empty()).then_some(Self { functions })
+    }
+
+    #[must_use]
+    pub fn functions(&self) -> &[CssFilterFunctionValue] {
+        &self.functions
+    }
+}
+
+/// The current authored value of `filter` or `backdrop-filter`.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssFilterValue {
+    None,
+    Functions(CssFilterFunctionValueList),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CssParsedFilter {
+    current: CssFilterValue,
+    legacy: Option<CssFilter>,
+}
+
+impl CssParsedFilter {
+    pub(crate) const fn new(current: CssFilterValue, legacy: Option<CssFilter>) -> Self {
+        Self { current, legacy }
+    }
+
+    pub(crate) fn into_parts(self) -> (CssFilterValue, Option<CssFilter>) {
+        (self.current, self.legacy)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssFilterFunctionList {
     functions: Vec<CssFilterFunction>,

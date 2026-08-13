@@ -113,6 +113,45 @@ fn repeated_transform_failures_make_progress_to_a_valid_sibling() {
 }
 
 #[test]
+fn repeated_filter_failures_make_progress_to_valid_filter_and_color_siblings() {
+    let source = concat!(
+        "filter: drop-shadow(inset 1px 2px); ",
+        "filter: brightness(-1); ",
+        "filter: blur(); ",
+        "filter: opacity(50%); color: red",
+    );
+    let report = parse_style_attribute(source);
+    assert_eq!(report.diagnostics().len(), 3);
+    assert_eq!(report.syntax().len(), 2);
+    assert_eq!(
+        report.syntax()[0].known().unwrap().property(),
+        CssKnownProperty::Filter
+    );
+    assert_eq!(
+        report.syntax()[1].known().unwrap().property(),
+        CssKnownProperty::Color
+    );
+    for diagnostic in report.diagnostics() {
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue
+        );
+        assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("expected filter property-value error");
+        };
+        assert_eq!(detail.property(), CssKnownProperty::Filter);
+    }
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered filter mutations");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn error_unknown_and_recognized_unsupported_at_rules_have_distinct_codes() {
     let unknown = parse_sheet("@not-a-css-rule;").expect_err("unknown at-rule must fail");
     assert_eq!(unknown.code(), CssErrorCode::UnknownAtRule);

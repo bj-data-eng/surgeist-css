@@ -484,6 +484,63 @@ macro_rules! define_easing_property_value {
 
 macro_rules! define_property_value {
     (
+        BoxShadow, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: CssBoxShadow,
+        }
+
+        /// A parser-produced authored ordinary `box-shadow` value.
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) const fn new(
+                authored: CssAuthoredDeclarationValue,
+                current: CssBoxShadow,
+            ) -> Self {
+                Self {
+                    authored,
+                    representation: $representation { current },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            /// Returns the exact checked current authored shadow value.
+            #[must_use]
+            pub const fn current(&self) -> &CssBoxShadow {
+                &self.representation.current
+            }
+
+            #[must_use]
+            pub const fn i01_subset(&self) -> Option<&CssBoxShadow> {
+                Some(&self.representation.current)
+            }
+        }
+    };
+    (
+        Filter, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_filter_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        BackdropFilter, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_filter_property_value!($canonical, $wrapper, $representation);
+    };
+    (
         Transform, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident
     ) => {
@@ -936,6 +993,57 @@ macro_rules! define_property_value {
                 match &self.representation {
                     $representation::I01(value) => Some(value),
                 }
+            }
+        }
+    };
+}
+
+macro_rules! define_filter_property_value {
+    ($canonical:literal, $wrapper:ident, $representation:ident) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: CssFilterValue,
+            i01_subset: Option<CssFilter>,
+        }
+
+        #[doc = concat!("A parser-produced authored ordinary value for `", $canonical, "`.")]
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) fn new(
+                authored: CssAuthoredDeclarationValue,
+                parsed: CssParsedFilter,
+            ) -> Self {
+                let (current, i01_subset) = parsed.into_parts();
+                Self {
+                    authored,
+                    representation: $representation {
+                        current,
+                        i01_subset,
+                    },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            /// Returns the exact checked current authored filter value.
+            #[must_use]
+            pub const fn current(&self) -> &CssFilterValue {
+                &self.representation.current
+            }
+
+            /// Returns the frozen authored-arguments compatibility projection.
+            #[must_use]
+            pub const fn i01_subset(&self) -> Option<&CssFilter> {
+                self.representation.i01_subset.as_ref()
             }
         }
     };

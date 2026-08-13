@@ -4,7 +4,7 @@ use super::background::{
     parse_background_repeat, parse_background_size, parse_css_position, parse_css_position_legacy,
     parse_image_layer, parse_url,
 };
-use super::box_model::parse_shadow;
+use super::box_model::{parse_drop_shadow, parse_shadow};
 use super::values::{
     CalculationRoot, LengthGrammar, checked_percentage_value, next_is_comma, next_is_ident,
     parse_length_with_context, parse_length_with_context_legacy, parse_number,
@@ -421,23 +421,6 @@ fn parse_transform_length<'i, 't>(
     })
 }
 
-pub(super) fn parse_filter_function_arguments<'i, 't>(
-    input: &mut Parser<'i, 't>,
-    name: &str,
-) -> std::result::Result<CssFilterArguments, ParseError<'i, Error>> {
-    parse_validated_function_arguments(input, "filter function", |input| {
-        match name.to_ascii_lowercase().as_str() {
-            "blur" => validate_non_negative_length(input),
-            "brightness" | "contrast" | "grayscale" | "invert" | "opacity" | "saturate"
-            | "sepia" => validate_number_or_percent(input),
-            "hue-rotate" => validate_angle(input) && input.is_exhausted(),
-            "drop-shadow" => input.try_parse(parse_shadow).is_ok() && input.is_exhausted(),
-            _ => false,
-        }
-    })
-    .map(CssFilterArguments::new)
-}
-
 pub(super) fn parse_basic_shape_arguments<'i, 't>(
     input: &mut Parser<'i, 't>,
     name: &str,
@@ -748,51 +731,221 @@ pub(super) fn parse_scale<'i, 't>(
 
 pub(super) fn parse_filter<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssFilter, ParseError<'i, Error>> {
+) -> std::result::Result<CssParsedFilter, ParseError<'i, Error>> {
     if input
         .try_parse(|input| input.expect_ident_matching("none"))
         .is_ok()
     {
-        return Ok(CssFilter::None);
+        return Ok(CssParsedFilter::new(
+            CssFilterValue::None,
+            Some(CssFilter::None),
+        ));
     }
-    let mut functions = Vec::new();
+    let mut current_functions = Vec::new();
+    let mut legacy_functions = Vec::new();
+    let mut belongs_to_i01 = true;
     while !input.is_exhausted() {
-        functions.push(parse_filter_function(input)?);
+        let (current, legacy) = parse_filter_function(input)?;
+        current_functions.push(current);
+        match legacy {
+            Some(legacy) => legacy_functions.push(legacy),
+            None => belongs_to_i01 = false,
+        }
     }
-    CssFilterFunctionList::try_new(functions)
-        .map(CssFilter::Functions)
-        .ok_or_else(|| unsupported_value(input, None, "filter function list is empty"))
+    let current = CssFilterFunctionValueList::try_new(current_functions)
+        .map(CssFilterValue::Functions)
+        .ok_or_else(|| unsupported_value(input, None, "filter function list is empty"))?;
+    let legacy = if belongs_to_i01 {
+        CssFilterFunctionList::try_new(legacy_functions).map(CssFilter::Functions)
+    } else {
+        None
+    };
+    Ok(CssParsedFilter::new(current, legacy))
 }
 
 pub(super) fn parse_filter_function<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssFilterFunction, ParseError<'i, Error>> {
+) -> std::result::Result<(CssFilterFunctionValue, Option<CssFilterFunction>), ParseError<'i, Error>>
+{
     if let Ok(url) = input.try_parse(parse_url) {
-        return Ok(CssFilterFunction::Url(url));
+        return Ok((
+            CssFilterFunctionValue::Url(url.clone()),
+            Some(CssFilterFunction::Url(url)),
+        ));
     }
     let location = input.current_source_location();
     let name = match input.next().map_err(basic)? {
         Token::Function(name) => name.clone(),
         token => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
     };
-    let arguments =
-        input.parse_nested_block(|input| parse_filter_function_arguments(input, name.as_ref()))?;
+    input.parse_nested_block(|input| {
+        let state = input.state();
+        let authored = collect_transform_authored_tokens(input)?;
+        input.reset(&state);
+        let current = parse_filter_function_value(input, name.as_ref())?;
+        let legacy = legacy_filter_function(name.as_ref(), &authored);
+        Ok((current, legacy))
+    })
+}
+
+fn parse_filter_function_value<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    name: &str,
+) -> std::result::Result<CssFilterFunctionValue, ParseError<'i, Error>> {
     match name.to_ascii_lowercase().as_str() {
-        "blur" => Ok(CssFilterFunction::Blur(arguments)),
-        "brightness" => Ok(CssFilterFunction::Brightness(arguments)),
-        "contrast" => Ok(CssFilterFunction::Contrast(arguments)),
-        "drop-shadow" => Ok(CssFilterFunction::DropShadow(arguments)),
-        "grayscale" => Ok(CssFilterFunction::Grayscale(arguments)),
-        "hue-rotate" => Ok(CssFilterFunction::HueRotate(arguments)),
-        "invert" => Ok(CssFilterFunction::Invert(arguments)),
-        "opacity" => Ok(CssFilterFunction::Opacity(arguments)),
-        "saturate" => Ok(CssFilterFunction::Saturate(arguments)),
-        "sepia" => Ok(CssFilterFunction::Sepia(arguments)),
+        "blur" => {
+            let length = super::values::parse_shadow_blur_length(input)?;
+            input.expect_exhausted().map_err(basic)?;
+            CssFilterBlur::try_new(length)
+                .map(CssFilterFunctionValue::Blur)
+                .ok_or_else(|| {
+                    unsupported_value(input, None, "blur() requires a non-negative length")
+                })
+        }
+        "brightness" => parse_filter_amount(input).map(CssFilterFunctionValue::Brightness),
+        "contrast" => parse_filter_amount(input).map(CssFilterFunctionValue::Contrast),
+        "drop-shadow" => {
+            let shadow = parse_drop_shadow(input)?;
+            input.expect_exhausted().map_err(basic)?;
+            Ok(CssFilterFunctionValue::DropShadow(shadow))
+        }
+        "grayscale" => parse_filter_amount(input).map(CssFilterFunctionValue::Grayscale),
+        "hue-rotate" => parse_filter_angle(input).map(CssFilterFunctionValue::HueRotate),
+        "invert" => parse_filter_amount(input).map(CssFilterFunctionValue::Invert),
+        "opacity" => parse_filter_amount(input).map(CssFilterFunctionValue::Opacity),
+        "saturate" => parse_filter_amount(input).map(CssFilterFunctionValue::Saturate),
+        "sepia" => parse_filter_amount(input).map(CssFilterFunctionValue::Sepia),
         _ => Err(unsupported_value(
             input,
             None,
             format!("unsupported filter function `{name}`"),
         )),
+    }
+}
+
+fn parse_filter_amount<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFilterAmount, ParseError<'i, Error>> {
+    if input.is_exhausted() {
+        return Ok(CssFilterAmount::Default);
+    }
+    let amount = if let Ok(number) = input.try_parse(parse_filter_number) {
+        CssFilterAmount::Number(number)
+    } else {
+        CssFilterAmount::Percentage(parse_filter_percentage(input)?)
+    };
+    input.expect_exhausted().map_err(basic)?;
+    Ok(amount)
+}
+
+fn parse_filter_number<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFilterNumber, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Number { value, .. } => CssNonNegativeNumber::try_new(*value)
+            .map(CssFilterNumber::Literal)
+            .ok_or_else(|| {
+                unsupported_value_at(
+                    location,
+                    None,
+                    "filter amount must be a finite non-negative number",
+                )
+            }),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Number))
+            .map(CssNumberCalculation::from_expression)
+            .map(CssFilterNumber::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+fn parse_filter_percentage<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFilterPercentage, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Percentage { unit_value, .. } => {
+            let value = checked_percentage_value(
+                location,
+                *unit_value,
+                "filter percentage must be finite",
+            )?;
+            CssNonNegativeNumber::try_new(value)
+                .map(CssFilterPercentage::Literal)
+                .ok_or_else(|| {
+                    unsupported_value_at(location, None, "filter percentage must be non-negative")
+                })
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Percentage))
+            .map(CssPercentageCalculation::from_expression)
+            .map(CssFilterPercentage::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+fn parse_filter_angle<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFilterAngle, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let angle = match input.next().map_err(basic)? {
+        Token::Number { value, .. } if *value == 0.0 => CssFilterAngle::Zero,
+        Token::Dimension { value, unit, .. } => {
+            let unit = match_ignore_ascii_case! { unit,
+                "deg" => CssAngleUnit::Degrees,
+                "grad" => CssAngleUnit::Gradians,
+                "rad" => CssAngleUnit::Radians,
+                "turn" => CssAngleUnit::Turns,
+                _ => return Err(unsupported_value_at(location, None, "hue-rotate() requires an angle")),
+            };
+            let value = CssAngleLiteral::try_new(*value, unit).ok_or_else(|| {
+                unsupported_value_at(location, None, "filter angle must be finite")
+            })?;
+            CssFilterAngle::Literal(value)
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            let expression = input.parse_nested_block(|input| {
+                parse_typed_calculation(input, CalculationRoot::Angle)
+            })?;
+            CssFilterAngle::Calculation(CssAngleCalculation::from_expression(expression))
+        }
+        token => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    };
+    input.expect_exhausted().map_err(basic)?;
+    Ok(angle)
+}
+
+fn legacy_filter_function(name: &str, authored: &str) -> Option<CssFilterFunction> {
+    if authored.is_empty() {
+        return None;
+    }
+    let is_i01 = validate_authored_function_arguments(authored, |input| {
+        match name.to_ascii_lowercase().as_str() {
+            "blur" => validate_non_negative_length(input),
+            "brightness" | "contrast" | "grayscale" | "invert" | "opacity" | "saturate"
+            | "sepia" => validate_number_or_percent(input),
+            "hue-rotate" => validate_angle(input) && input.is_exhausted(),
+            "drop-shadow" => input.try_parse(parse_shadow).is_ok() && input.is_exhausted(),
+            _ => false,
+        }
+    });
+    if !is_i01 {
+        return None;
+    }
+    let arguments = CssFilterArguments::new(CssAuthoredFunctionArguments::new(authored));
+    match name.to_ascii_lowercase().as_str() {
+        "blur" => Some(CssFilterFunction::Blur(arguments)),
+        "brightness" => Some(CssFilterFunction::Brightness(arguments)),
+        "contrast" => Some(CssFilterFunction::Contrast(arguments)),
+        "drop-shadow" => Some(CssFilterFunction::DropShadow(arguments)),
+        "grayscale" => Some(CssFilterFunction::Grayscale(arguments)),
+        "hue-rotate" => Some(CssFilterFunction::HueRotate(arguments)),
+        "invert" => Some(CssFilterFunction::Invert(arguments)),
+        "opacity" => Some(CssFilterFunction::Opacity(arguments)),
+        "saturate" => Some(CssFilterFunction::Saturate(arguments)),
+        "sepia" => Some(CssFilterFunction::Sepia(arguments)),
+        _ => None,
     }
 }
 

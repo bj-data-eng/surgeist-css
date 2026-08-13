@@ -250,6 +250,60 @@ fn transform_domain_error_after_non_bmp_text_has_exact_utf16_coordinates_and_spa
     }
 }
 
+#[test]
+fn filter_domain_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
+    let source = "--😀: 1; filter: brightness(-1); color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid filter amount must recover once");
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    let responsible = source.find("-1").expect("responsible filter amount");
+    let declaration_start = source.find("filter").expect("property start");
+    let declaration_end = declaration_start
+        + source[declaration_start..]
+            .find(';')
+            .expect("declaration end")
+        + 1;
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(responsible - 2).expect("UTF-16 column"),
+    );
+    assert_position(
+        diagnostic.span().start(),
+        declaration_start,
+        0,
+        u32::try_from(declaration_start - 2).expect("UTF-16 column"),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        declaration_end,
+        0,
+        u32::try_from(declaration_end - 2).expect("UTF-16 column"),
+    );
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected structured filter property error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::Filter);
+    let encountered = detail.encountered().expect("responsible filter number");
+    assert_eq!(encountered.kind(), CssTokenKind::Number);
+    assert_eq!(encountered.authored(), "-1");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered filter input");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
 fn first_declaration_position(source: &str) -> CssSourcePosition {
     let sheet = parse_sheet(source).expect("valid stylesheet");
     let CssRule::Style(rule) = &sheet.rules()[0] else {

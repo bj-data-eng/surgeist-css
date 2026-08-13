@@ -2,9 +2,9 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssEasingValue, CssErrorCode, CssImportance, CssKnownProperty, CssKnownPropertyValueRef,
-    CssRecoveryAction, CssRule, CssTransformFunctionValue, CssTransformValue, ErrorKind,
-    parse_sheet, parse_style_attribute,
+    CssBoxShadow, CssEasingValue, CssErrorCode, CssFilterFunctionValue, CssFilterValue,
+    CssImportance, CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction, CssRule,
+    CssTransformFunctionValue, CssTransformValue, ErrorKind, parse_sheet, parse_style_attribute,
 };
 
 macro_rules! assert_property_specific_css {
@@ -918,6 +918,58 @@ fn timing_function_wrappers_keep_current_i01_global_and_substitution_branches_di
     assert!(substitution.property_value().is_none());
     assert!(substitution.global().is_none());
     assert!(substitution.substitution_dependent().is_some());
+}
+
+#[test]
+fn shadow_and_filter_wrappers_expose_current_values_and_frozen_i01_projections() {
+    let report = parse_style_attribute(concat!(
+        "box-shadow: inset 1px 2px red; ",
+        "filter: blur(4px) opacity(50%); ",
+        "backdrop-filter: brightness()"
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::BoxShadow(shadow) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected box-shadow wrapper");
+    };
+    assert!(matches!(shadow.current(), CssBoxShadow::Shadows(_)));
+    assert!(shadow.i01_subset().is_some());
+
+    let CssKnownPropertyValueRef::Filter(filter) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected filter wrapper");
+    };
+    let CssFilterValue::Functions(functions) = filter.current() else {
+        panic!("expected filter functions");
+    };
+    assert!(matches!(
+        functions.functions(),
+        [
+            CssFilterFunctionValue::Blur(_),
+            CssFilterFunctionValue::Opacity(_)
+        ]
+    ));
+    assert!(filter.i01_subset().is_some());
+
+    let CssKnownPropertyValueRef::BackdropFilter(backdrop) = report.syntax()[2]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected backdrop-filter wrapper");
+    };
+    assert!(matches!(backdrop.current(), CssFilterValue::Functions(_)));
+    assert!(backdrop.i01_subset().is_none());
 }
 
 #[test]

@@ -4,8 +4,9 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssByteOffset, CssLineIndex, CssRule, CssSourcePosition, CssSourceSpan, CssUtf16ColumnIndex,
-    parse_sheet,
+    CssByteOffset, CssErrorCode, CssKnownProperty, CssRecoveryAction, CssRule, CssSourcePosition,
+    CssSourceSpan, CssTokenKind, CssUtf16ColumnIndex, ErrorKind, parse_sheet,
+    parse_style_attribute,
 };
 
 fn assert_copy_hash_ord<T: Copy + Eq + Ord + Hash>() {}
@@ -14,6 +15,38 @@ fn assert_position(position: CssSourcePosition, byte_offset: usize, line: u32, c
     assert_eq!(position.byte_offset().value(), byte_offset);
     assert_eq!(position.line().value(), line);
     assert_eq!(position.column().value(), column);
+}
+
+#[test]
+fn timing_type_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
+    let source = "--😀: 1; transition-duration: calc(1px + 2px); color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid time calculation must recover once");
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    assert_position(diagnostic.error().position(), 37, 0, 35);
+    assert_position(diagnostic.span().start(), 11, 0, 9);
+    assert_position(diagnostic.span().end(), 48, 0, 46);
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected structured timing property error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::TransitionDuration);
+    let encountered = detail.encountered().expect("responsible length token");
+    assert_eq!(encountered.kind(), CssTokenKind::Dimension);
+    assert_eq!(encountered.authored(), "1px");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered timing type error");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
 }
 
 fn first_declaration_position(source: &str) -> CssSourcePosition {

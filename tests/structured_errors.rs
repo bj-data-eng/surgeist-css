@@ -411,3 +411,39 @@ fn typed_calculation_operator_and_divisor_errors_retain_later_siblings() {
         assert_eq!(encountered.kind(), kind, "{source}");
     }
 }
+
+#[test]
+fn timing_first_duration_failure_has_exact_payload_span_action_and_sibling_recovery() {
+    let source = "transition: opacity -1s 2s; color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 1);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("negative first shorthand time must recover once");
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    assert_eq!(diagnostic.error().position().byte_offset().value(), 20);
+    assert_eq!(diagnostic.error().position().line().value(), 0);
+    assert_eq!(diagnostic.error().position().column().value(), 20);
+    assert_eq!(diagnostic.span().start().byte_offset().value(), 0);
+    assert_eq!(diagnostic.span().start().column().value(), 0);
+    assert_eq!(diagnostic.span().end().byte_offset().value(), 27);
+    assert_eq!(diagnostic.span().end().column().value(), 27);
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected structured property-value error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::Transition);
+    let encountered = detail.encountered().expect("responsible negative duration");
+    assert_eq!(encountered.kind(), CssTokenKind::Dimension);
+    assert_eq!(encountered.authored(), "-1s");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered transition input");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}

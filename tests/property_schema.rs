@@ -554,6 +554,51 @@ fn explicit_property_dispatch_cases_preserve_ordinary_and_important_behavior() {
 }
 
 #[test]
+fn timing_wrappers_expose_exact_property_specific_current_accessors() {
+    let report = parse_style_attribute(concat!(
+        "transition-duration: calc(1s + 2s); transition-delay: -1s; ",
+        "animation-duration: calc(3ms * 2); animation-delay: -4ms; ",
+        "animation-iteration-count: calc(1 + 2); ",
+        "transition: opacity 1s -2s; animation: fade 3s -4s 2"
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    for declaration in report.syntax() {
+        match declaration.known().unwrap().property_value().unwrap() {
+            CssKnownPropertyValueRef::TransitionDuration(value) => {
+                assert_eq!(value.durations().values().len(), 1);
+                assert!(value.i01_subset().is_none());
+            }
+            CssKnownPropertyValueRef::TransitionDelay(value) => {
+                assert_eq!(value.delays().values().len(), 1);
+                assert!(value.i01_subset().is_none());
+            }
+            CssKnownPropertyValueRef::AnimationDuration(value) => {
+                assert_eq!(value.durations().values().len(), 1);
+                assert!(value.i01_subset().is_none());
+            }
+            CssKnownPropertyValueRef::AnimationDelay(value) => {
+                assert_eq!(value.delays().values().len(), 1);
+                assert!(value.i01_subset().is_none());
+            }
+            CssKnownPropertyValueRef::AnimationIterationCount(value) => {
+                assert_eq!(value.iteration_counts().values().len(), 1);
+                assert!(value.i01_subset().is_none());
+            }
+            CssKnownPropertyValueRef::Transition(value) => {
+                assert_eq!(value.transitions().values().len(), 1);
+                assert!(value.i01_subset().is_none());
+            }
+            CssKnownPropertyValueRef::Animation(value) => {
+                assert_eq!(value.animations().values().len(), 1);
+                assert!(value.i01_subset().is_none());
+            }
+            _ => panic!("unexpected property wrapper"),
+        }
+    }
+}
+
+#[test]
 fn typed_length_calculations_are_accepted_by_the_exact_current_consumer_set() {
     for (property, value) in [
         ("width", "calc((1px + 2%) * 3)"),

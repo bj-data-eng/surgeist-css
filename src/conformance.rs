@@ -3508,7 +3508,10 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
         | CssKnownProperty::FontStyle
         | CssKnownProperty::FontStretch
         | CssKnownProperty::FontVariant
-        | CssKnownProperty::FontFeatureSettings => O_FONTS3,
+        | CssKnownProperty::FontFeatureSettings
+        | CssKnownProperty::FontKerning
+        | CssKnownProperty::FontSizeAdjust
+        | CssKnownProperty::FontSynthesis => O_FONTS3,
         CssKnownProperty::OverflowX | CssKnownProperty::OverflowY => X_OVERFLOW3,
         CssKnownProperty::JustifyItems
         | CssKnownProperty::JustifySelf

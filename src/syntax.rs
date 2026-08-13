@@ -5391,6 +5391,59 @@ pub enum CssFontVariant {
     SmallCaps,
 }
 
+/// The current authored `font-kerning` value.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssFontKerning {
+    Auto,
+    Normal,
+    None,
+}
+
+/// The current authored `font-size-adjust` value.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssFontSizeAdjust {
+    None,
+    Number(CssNonNegativeNumber),
+}
+
+/// A nonempty checked set of `font-synthesis` capabilities.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssFontSynthesisValues {
+    weight: bool,
+    style: bool,
+}
+
+impl CssFontSynthesisValues {
+    #[must_use]
+    pub const fn try_new(weight: bool, style: bool) -> Option<Self> {
+        if weight || style {
+            Some(Self { weight, style })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn weight(self) -> bool {
+        self.weight
+    }
+
+    #[must_use]
+    pub const fn style(self) -> bool {
+        self.style
+    }
+}
+
+/// The current authored `font-synthesis` value.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssFontSynthesis {
+    None,
+    Values(CssFontSynthesisValues),
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CssFontFeatureSettings {

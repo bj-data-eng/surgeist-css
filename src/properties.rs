@@ -81,6 +81,9 @@ macro_rules! property_schema {
             FontStretch, "font-stretch", [], "baseline.property.font-stretch", CssFontStretch, CssFontStretchPropertyValue, CssFontStretchPropertyValueRepresentation, parse_font_stretch, { parse_font_stretch($input)? };
             FontVariant, "font-variant", [], "baseline.property.font-variant", CssFontVariant, CssFontVariantPropertyValue, CssFontVariantPropertyValueRepresentation, parse_font_variant, { parse_font_variant($input)? };
             FontFeatureSettings, "font-feature-settings", [], "baseline.property.font-feature-settings", CssFontFeatureSettings, CssFontFeatureSettingsPropertyValue, CssFontFeatureSettingsPropertyValueRepresentation, parse_font_feature_settings, { parse_font_feature_settings($input)? };
+            FontKerning, "font-kerning", [], "official.property.font-kerning", CssFontKerning, CssFontKerningPropertyValue, CssFontKerningPropertyValueRepresentation, parse_font_kerning, { parse_font_kerning($input)? };
+            FontSizeAdjust, "font-size-adjust", [], "official.property.font-size-adjust", CssFontSizeAdjust, CssFontSizeAdjustPropertyValue, CssFontSizeAdjustPropertyValueRepresentation, parse_font_size_adjust, { parse_font_size_adjust($input)? };
+            FontSynthesis, "font-synthesis", [], "official.property.font-synthesis", CssFontSynthesis, CssFontSynthesisPropertyValue, CssFontSynthesisPropertyValueRepresentation, parse_font_synthesis, { parse_font_synthesis($input)? };
             LetterSpacing, "letter-spacing", [], "baseline.property.letter-spacing", CssLetterSpacing, CssLetterSpacingPropertyValue, CssLetterSpacingPropertyValueRepresentation, parse_letter_spacing, { parse_letter_spacing($input)? };
             TextWrap, "text-wrap", [], "baseline.property.text-wrap", CssTextWrap, CssTextWrapPropertyValue, CssTextWrapPropertyValueRepresentation, parse_text_wrap, { parse_text_wrap($input)? };
             WhiteSpace, "white-space", [], "baseline.property.white-space", CssWhiteSpace, CssWhiteSpacePropertyValue, CssWhiteSpacePropertyValueRepresentation, parse_white_space, { parse_white_space($input)? };
@@ -519,6 +522,48 @@ macro_rules! define_current_property_value {
     };
 }
 
+macro_rules! define_additive_current_property_value {
+    (
+        $canonical:literal, $wrapper:ident, $representation:ident,
+        $current:ty, $accessor:ident
+    ) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: $current,
+        }
+
+        #[doc = concat!("A parser-produced current authored value for `", $canonical, "`.")]
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) const fn new(
+                authored: CssAuthoredDeclarationValue,
+                current: $current,
+            ) -> Self {
+                Self {
+                    authored,
+                    representation: $representation { current },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            #[must_use]
+            pub const fn $accessor(&self) -> &$current {
+                &self.representation.current
+            }
+        }
+    };
+}
+
 macro_rules! define_easing_property_value {
     ($canonical:literal, $wrapper:ident, $representation:ident) => {
         #[derive(Clone, Debug, PartialEq)]
@@ -793,6 +838,42 @@ macro_rules! define_property_value {
             CssFontFeatureSettings,
             settings,
             |value| Some(font_feature_settings_i01_projection(value))
+        );
+    };
+    (
+        FontKerning, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontKerning,
+            kerning
+        );
+    };
+    (
+        FontSizeAdjust, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontSizeAdjust,
+            size_adjust
+        );
+    };
+    (
+        FontSynthesis, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontSynthesis,
+            synthesis
         );
     };
     (

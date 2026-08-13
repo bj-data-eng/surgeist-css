@@ -1,12 +1,12 @@
 use surgeist_css::{
     CssAnimationIterationCount, CssAnimationIterationNumber, CssAspectRatio, CssErrorCode,
     CssFiniteNumber, CssFlexFactor, CssFontFaceObliqueRange, CssFontFaceStretchValue,
-    CssFontFaceWeightValue, CssFontWeightNumber, CssGridFlowTolerance, CssGridFlowToleranceValue,
-    CssGridRepeatInteger, CssGridTrackBreadth, CssKeyframePercent, CssKnownProperty,
-    CssKnownPropertyValueRef, CssLength, CssLengthDimension, CssLengthUnit, CssNonNegativeNumber,
-    CssOpacity, CssRatio, CssRecoveryAction, CssResolution, CssResolutionUnit, CssRule,
-    CssScaleValues, CssTime, CssTimeUnit, CssTokenKind, ErrorKind, parse_sheet,
-    parse_style_attribute,
+    CssFontFaceWeightValue, CssFontSizeAdjust, CssFontWeightNumber, CssGridFlowTolerance,
+    CssGridFlowToleranceValue, CssGridRepeatInteger, CssGridTrackBreadth, CssKeyframePercent,
+    CssKnownProperty, CssKnownPropertyValueRef, CssLength, CssLengthDimension, CssLengthUnit,
+    CssNonNegativeNumber, CssOpacity, CssRatio, CssRecoveryAction, CssResolution,
+    CssResolutionUnit, CssRule, CssScaleValues, CssTime, CssTimeUnit, CssTokenKind, ErrorKind,
+    parse_sheet, parse_style_attribute,
 };
 
 #[test]
@@ -43,6 +43,10 @@ fn checked_numeric_constructors_reject_non_finite_values_and_preserve_finite_bou
         f32::MAX
     );
     assert_eq!(CssNonNegativeNumber::try_new(-0.0).unwrap().value(), -0.0);
+    assert!(matches!(
+        CssFontSizeAdjust::Number(CssNonNegativeNumber::try_new(f32::MAX).unwrap()),
+        CssFontSizeAdjust::Number(value) if value.value() == f32::MAX
+    ));
     assert_eq!(CssOpacity::try_new(1.0).unwrap().value(), 1.0);
     assert_eq!(CssFlexFactor::try_new(f32::MAX).unwrap().value(), f32::MAX);
     assert_eq!(

@@ -111,6 +111,60 @@ fn opentype_tag_error_has_exact_utf16_coordinates_and_full_declaration_span() {
 }
 
 #[test]
+fn size_adjust_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
+    let source = "--😀: 1; font-size-adjust: -1; color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("negative size adjustment must recover once");
+    };
+    let responsible = source.find("-1").unwrap();
+    let declaration_start = source.find("font-size-adjust").unwrap();
+    let declaration_end = declaration_start + source[declaration_start..].find(';').unwrap() + 1;
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(source[..responsible].encode_utf16().count()).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().start(),
+        declaration_start,
+        0,
+        u32::try_from(source[..declaration_start].encode_utf16().count()).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        declaration_end,
+        0,
+        u32::try_from(source[..declaration_end].encode_utf16().count()).unwrap(),
+    );
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected font-size-adjust property error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::FontSizeAdjust);
+    let encountered = detail.encountered().expect("responsible negative number");
+    assert_eq!(encountered.kind(), CssTokenKind::Number);
+    assert_eq!(encountered.authored(), "-1");
+    assert_eq!(
+        report.syntax()[1].known().unwrap().property(),
+        CssKnownProperty::Color,
+    );
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered negative size adjustment");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn timing_type_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
     let source = "--😀: 1; transition-duration: calc(1px + 2px); color: red";
     let report = parse_style_attribute(source);

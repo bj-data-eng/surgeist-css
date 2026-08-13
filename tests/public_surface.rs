@@ -5,14 +5,15 @@ use surgeist_css::{
     CssAuthoredSystemColor, CssCalcOperator, CssColorInterpolationMethod,
     CssColorInterpolationSpace, CssErrorCode, CssExclusionReason, CssFeatureKind,
     CssFontFamilyNameKind, CssFontFeature, CssFontFeatureIndex, CssFontFeatureValue, CssFontSize,
-    CssFontSizeLengthPercentage, CssGenericFontFamily, CssGridAutoFlowAxis,
-    CssHueInterpolationMethod, CssImportance, CssKnownDeclaredValueRef, CssKnownProperty,
-    CssKnownPropertyValueRef, CssLength, CssLineHeightLengthPercentage, CssMediaQueryModifier,
-    CssOpenTypeTag, CssPredefinedColorSpace, CssPropertyNameRef, CssRecoveryAction,
-    CssRelativeColorChannel, CssRelativeColorEnvironment, CssRelativeColorExpressionValue,
-    CssRelativeColorFunction, CssRelativeColorResultDomain, CssRule, CssSelectorCombinator,
-    CssSpecificationTier, CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata,
-    parse_sheet, parse_style_attribute, property_metadata, specification_source,
+    CssFontSizeAdjust, CssFontSizeLengthPercentage, CssFontSynthesis, CssFontSynthesisValues,
+    CssGenericFontFamily, CssGridAutoFlowAxis, CssHueInterpolationMethod, CssImportance,
+    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLength,
+    CssLineHeightLengthPercentage, CssMediaQueryModifier, CssOpenTypeTag, CssPredefinedColorSpace,
+    CssPropertyNameRef, CssRecoveryAction, CssRelativeColorChannel, CssRelativeColorEnvironment,
+    CssRelativeColorExpressionValue, CssRelativeColorFunction, CssRelativeColorResultDomain,
+    CssRule, CssSelectorCombinator, CssSpecificationTier, CssSupportStatus, ErrorKind,
+    conformance_exclusion, feature_metadata, parse_sheet, parse_style_attribute, property_metadata,
+    specification_source,
 };
 
 #[test]
@@ -79,6 +80,30 @@ fn public_surface_checks_current_opentype_construction_and_preserves_i01_constru
         .expect("frozen I01 construction remains source-compatible");
     assert_eq!(legacy.tag(), "éabc");
     assert_eq!(legacy.value(), Some(CssFontFeatureValue::Integer(-1)));
+}
+
+#[test]
+fn public_surface_exposes_checked_font_control_models() {
+    assert!(CssFontSynthesisValues::try_new(false, false).is_none());
+    let weight = CssFontSynthesisValues::try_new(true, false).expect("nonempty synthesis set");
+    assert!(weight.weight());
+    assert!(!weight.style());
+    assert!(matches!(
+        CssFontSynthesis::Values(weight),
+        CssFontSynthesis::Values(values) if values.weight() && !values.style()
+    ));
+
+    let report = parse_style_attribute("font-size-adjust: none; font-synthesis: style weight");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::FontSizeAdjust(adjust) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-size-adjust");
+    };
+    assert!(matches!(adjust.size_adjust(), CssFontSizeAdjust::None));
 }
 
 #[test]

@@ -488,6 +488,69 @@ pub(super) fn parse_font_variant<'i, 't>(
     }
 }
 
+pub(super) fn parse_font_kerning<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontKerning, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Ident(ident) => match_ignore_ascii_case! { ident,
+            "auto" => Ok(CssFontKerning::Auto),
+            "normal" => Ok(CssFontKerning::Normal),
+            "none" => Ok(CssFontKerning::None),
+            _ => Err(location.new_unexpected_token_error::<Error>(Token::Ident(ident.clone()))),
+        },
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+pub(super) fn parse_font_size_adjust<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontSizeAdjust, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Ident(ident) if ident.eq_ignore_ascii_case("none") => Ok(CssFontSizeAdjust::None),
+        token @ Token::Number { value, .. } => CssNonNegativeNumber::try_new(*value)
+            .map(CssFontSizeAdjust::Number)
+            .ok_or_else(|| location.new_unexpected_token_error::<Error>(token.clone())),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+pub(super) fn parse_font_synthesis<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontSynthesis, ParseError<'i, Error>> {
+    let state = input.state();
+    if input
+        .try_parse(|input| input.expect_ident_matching("none"))
+        .is_ok()
+    {
+        return Ok(CssFontSynthesis::None);
+    }
+    input.reset(&state);
+
+    let mut weight = false;
+    let mut style = false;
+    while !input.is_exhausted() {
+        let location = input.current_source_location();
+        let token = input.next().map_err(basic)?;
+        match token {
+            Token::Ident(ident) if ident.eq_ignore_ascii_case("weight") && !weight => {
+                weight = true;
+            }
+            Token::Ident(ident) if ident.eq_ignore_ascii_case("style") && !style => {
+                style = true;
+            }
+            token => {
+                return Err(location.new_unexpected_token_error::<Error>(token.clone()));
+            }
+        }
+    }
+
+    CssFontSynthesisValues::try_new(weight, style)
+        .map(CssFontSynthesis::Values)
+        .ok_or_else(|| unsupported_value(input, None, "font-synthesis requires a value"))
+}
+
 pub(super) fn parse_font_feature_settings<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssAuthoredFontFeatureSettings, ParseError<'i, Error>> {

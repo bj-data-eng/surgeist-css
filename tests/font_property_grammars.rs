@@ -1,9 +1,9 @@
 use surgeist_css::{
-    CssAuthoredFontFeatureSettings, CssAuthoredFontFeatureValue, CssFontFamilyNameKind,
-    CssErrorCode, CssFontFeatureSettings, CssFontFeatureValue, CssFontSize, CssFontStyle,
-    CssFontValue, CssGenericFontFamily, CssKnownDeclaredValueRef, CssKnownProperty,
-    CssKnownPropertyValueRef, CssLineHeight, CssNonNegativeNumberValue, CssSystemFont,
-    parse_style_attribute,
+    CssAuthoredFontFeatureSettings, CssAuthoredFontFeatureValue, CssErrorCode,
+    CssFontFamilyNameKind, CssFontFeatureSettings, CssFontFeatureValue, CssFontSize, CssFontStyle,
+    CssFontSynthesis, CssFontValue, CssGenericFontFamily, CssKnownDeclaredValueRef,
+    CssKnownProperty, CssKnownPropertyValueRef, CssLineHeight, CssNonNegativeNumberValue,
+    CssSystemFont, parse_style_attribute,
 };
 
 #[test]
@@ -17,10 +17,12 @@ fn kerning_size_adjust_and_synthesis_follow_fonts3() {
 
     if !report.is_clean() {
         assert_eq!(report.diagnostics().len(), 3);
-        assert!(report
-            .diagnostics()
-            .iter()
-            .all(|diagnostic| diagnostic.error().code() == CssErrorCode::UnknownProperty));
+        assert!(
+            report
+                .diagnostics()
+                .iter()
+                .all(|diagnostic| diagnostic.error().code() == CssErrorCode::UnknownProperty)
+        );
         assert_eq!(report.syntax().len(), 1);
         assert_eq!(
             report.syntax()[0].known().unwrap().property(),
@@ -43,6 +45,111 @@ fn kerning_size_adjust_and_synthesis_follow_fonts3() {
             "color",
         ],
     );
+
+    let CssKnownPropertyValueRef::FontKerning(kerning) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-kerning");
+    };
+    assert!(matches!(
+        kerning.kerning(),
+        surgeist_css::CssFontKerning::Normal
+    ));
+    assert_eq!(kerning.as_css(), "normal");
+
+    let CssKnownPropertyValueRef::FontSizeAdjust(size_adjust) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-size-adjust");
+    };
+    assert!(matches!(
+        size_adjust.size_adjust(),
+        surgeist_css::CssFontSizeAdjust::Number(value) if value.value() == 0.5
+    ));
+
+    let CssKnownPropertyValueRef::FontSynthesis(synthesis) = report.syntax()[2]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-synthesis");
+    };
+    assert!(matches!(
+        synthesis.synthesis(),
+        CssFontSynthesis::Values(values) if values.weight() && values.style()
+    ));
+}
+
+#[test]
+fn font_control_branches_globals_substitution_and_mutations_are_exact() {
+    let branches = parse_style_attribute(concat!(
+        "font-kerning: auto; font-kerning: normal; font-kerning: none; ",
+        "font-size-adjust: none; font-size-adjust: 0; ",
+        "font-synthesis: none; font-synthesis: weight; font-synthesis: style; ",
+        "font-synthesis: weight style; font-synthesis: style weight; ",
+        "font-kerning: inherit; font-size-adjust: var(--ratio); font-synthesis: unset",
+    ));
+    assert!(branches.is_clean(), "{:?}", branches.diagnostics());
+    assert_eq!(branches.syntax().len(), 13);
+    assert!(matches!(
+        branches.syntax()[10].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::Global(_)
+    ));
+    assert!(matches!(
+        branches.syntax()[11].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::SubstitutionDependent(_)
+    ));
+    assert!(matches!(
+        branches.syntax()[12].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::Global(_)
+    ));
+
+    for invalid in [
+        "font-kerning: optimizeSpeed",
+        "font-kerning: normal none",
+        "font-size-adjust: -0.01",
+        "font-size-adjust: 1e999",
+        "font-size-adjust: 1px",
+        "font-size-adjust: calc(1)",
+        "font-size-adjust: none 1",
+        "font-synthesis: weight weight",
+        "font-synthesis: style style",
+        "font-synthesis: none weight",
+        "font-synthesis: weight none",
+        "font-synthesis: weightstyle",
+        "font-synthesis: weight, style",
+    ] {
+        let source = format!("{invalid}; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        assert_eq!(report.diagnostics().len(), 1, "{source}");
+        assert_eq!(
+            report.diagnostics()[0].error().code(),
+            CssErrorCode::InvalidPropertyValue,
+            "{source}",
+        );
+        assert_eq!(
+            report.syntax()[0].known().unwrap().property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+
+        #[cfg(feature = "app-strict")]
+        assert_eq!(
+            surgeist_css::validate_style_attribute(&source)
+                .expect_err("strict parsing rejects the recovered declaration")
+                .diagnostics(),
+            report.diagnostics(),
+            "{source}",
+        );
+    }
 }
 
 #[test]

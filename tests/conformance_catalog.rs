@@ -974,8 +974,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         recognized_code: None,
         positive: Some(Input::Sheet("@import \"theme.css\";")),
         negative: Some((
-            Input::Sheet("@import url(theme.css) supports(display: grid);"),
-            CssErrorCode::InvalidMediaQuery,
+            Input::Sheet("@import url(theme.css) supports(display: grid) layer(theme);"),
+            CssErrorCode::InvalidAtRulePrelude,
         )),
     },
     ExpectedFeature {

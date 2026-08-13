@@ -191,7 +191,7 @@ fn parse_condition_operand<'i, 't>(
     }
 }
 
-fn parse_supports_declaration<'i, 't>(
+pub(super) fn parse_supports_declaration<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> Result<CssSupportsDeclaration, ParseError<'i, Error>> {
     let start = input.state();

@@ -43,6 +43,20 @@ fn public_surface_exposes_private_field_supports_models_and_checked_lists() {
     ])
     .expect("two conditions form a checked operator list");
     assert_eq!(list.conditions().len(), 2);
+
+    let import = parse_sheet("@import 'theme.css' supports(display: grid);");
+    assert!(import.is_clean(), "{:?}", import.diagnostics());
+    let [CssRule::Import(import)] = import.syntax().rules() else {
+        panic!("expected import rule")
+    };
+    assert!(matches!(
+        import
+            .supports()
+            .expect("import supports")
+            .condition()
+            .kind(),
+        CssSupportsConditionKind::Declaration(_)
+    ));
 }
 
 #[test]

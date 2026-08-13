@@ -127,6 +127,7 @@ pub enum CssRule {
 pub struct CssImportRule {
     target: CssImportTarget,
     layer: Option<CssImportLayer>,
+    supports: Option<CssImportSupports>,
     media: Option<CssMediaQueryList>,
     position: CssSourcePosition,
 }
@@ -136,12 +137,14 @@ impl CssImportRule {
     pub(crate) const fn new(
         target: CssImportTarget,
         layer: Option<CssImportLayer>,
+        supports: Option<CssImportSupports>,
         media: Option<CssMediaQueryList>,
         position: CssSourcePosition,
     ) -> Self {
         Self {
             target,
             layer,
+            supports,
             media,
             position,
         }
@@ -155,6 +158,13 @@ impl CssImportRule {
     #[must_use]
     pub const fn layer(&self) -> Option<&CssImportLayer> {
         self.layer.as_ref()
+    }
+
+    /// Returns the optional authored supports condition that follows the import
+    /// target and layer clause.
+    #[must_use]
+    pub const fn supports(&self) -> Option<&CssImportSupports> {
+        self.supports.as_ref()
     }
 
     #[must_use]
@@ -238,6 +248,28 @@ impl CssImportString {
 pub enum CssImportLayer {
     Anonymous,
     Named(CssLayerName),
+}
+
+/// One parser-produced Cascade 4 supports condition on an import rule.
+///
+/// The condition preserves authored syntax only. It is not evaluated and does
+/// not load the imported resource.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssImportSupports {
+    condition: CssSupportsCondition,
+}
+
+impl CssImportSupports {
+    #[must_use]
+    pub(crate) const fn new(condition: CssSupportsCondition) -> Self {
+        Self { condition }
+    }
+
+    /// Returns the authored declaration test or full supports condition.
+    #[must_use]
+    pub const fn condition(&self) -> &CssSupportsCondition {
+        &self.condition
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

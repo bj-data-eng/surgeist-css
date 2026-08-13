@@ -103,6 +103,34 @@ fn app_strict_supports_conditions_match_ordinary_retention_and_recovery() {
     );
 }
 
+#[test]
+fn app_strict_conditional_imports_and_prelude_phases_match_ordinary_reports() {
+    let clean = assert_sheet_parity(concat!(
+        "@layer reset; ",
+        "@import 'theme.css' layer(theme) supports(display: grid) screen;",
+    ));
+    assert!(clean.is_clean());
+    assert!(matches!(
+        clean.syntax().rules(),
+        [CssRule::LayerStatement(_), CssRule::Import(_)]
+    ));
+
+    for source in [
+        "@import 'x.css' supports(display: grid) layer(theme);",
+        "@import 'x.css'; @layer theme; @import 'late.css';",
+        "@media screen { @import 'nested.css'; }",
+    ] {
+        let recovered = assert_sheet_parity(source);
+        assert!(!recovered.is_clean(), "{source}");
+        assert!(
+            recovered
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.action() == CssRecoveryAction::DropAtRule)
+        );
+    }
+}
+
 fn nested_selector(depth: usize) -> String {
     format!("{}{}{}", ":is(".repeat(depth), ".leaf", ")".repeat(depth)) + "{color:red}"
 }

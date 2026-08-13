@@ -860,12 +860,14 @@ fn import_rule_accessors_expose_authored_structure() {
     let rule = CssImportRule::new(
         target.clone(),
         Some(layer.clone()),
+        None,
         Some(media.clone()),
         location,
     );
 
     assert_eq!(rule.target(), &target);
     assert_eq!(rule.layer(), Some(&layer));
+    assert_eq!(rule.supports(), None);
     assert_eq!(rule.media(), Some(&media));
     assert_eq!(rule.position(), location);
     assert_eq!(CssRule::Import(rule.clone()), CssRule::Import(rule));
@@ -975,9 +977,8 @@ fn import_rule_parser_rejects_late_nested_unsupported_and_malformed_imports() {
     for css in [
         r#".panel { color: black; } @import "late.css";"#,
         r#"@media screen { @import "nested.css"; }"#,
-        r#"@layer base; @import "late.css";"#,
         r#"@scope { @import "nested.css"; }"#,
-        r#"@import url("theme.css") supports(display: grid);"#,
+        r#"@import url("theme.css") supports(display: grid) supports(color: red);"#,
         r#"@import url("theme.css") screen layer(components);"#,
         "@import;",
     ] {
@@ -5788,7 +5789,7 @@ fn advanced_css_surface_matrix_accepts_supported_forms() {
 fn advanced_css_surface_matrix_rejects_unsupported_forms() {
     let rejected = [
         r#"@import url("late.css"); .panel { color: black; } @import url("later.css");"#,
-        r#"@import url("theme.css") supports(display: grid);"#,
+        r#"@import url("theme.css") supports(display: grid) layer(theme);"#,
         "@font-face { font-family: Inter; }",
         ".field:has(::before) { color: black; }",
         "[svg|href] { color: black; }",

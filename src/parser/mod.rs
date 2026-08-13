@@ -54,7 +54,9 @@ use selectors::{
     SelectorRecovery, parse_rule_selector_list, parse_scope_boundary_selector_list,
     parse_scoped_style_selector_list,
 };
-use supports::{parse_supports_condition, with_supports_prelude_context};
+use supports::{
+    parse_supports_condition, parse_supports_declaration, with_supports_prelude_context,
+};
 use timing::*;
 use typography::*;
 use values::*;
@@ -1292,8 +1294,7 @@ pub(super) fn is_declaration_recovery_unit(failed_unit: &str) -> bool {
 
 struct StrictRuleParser<'s> {
     source: &'s str,
-    is_top_level: bool,
-    imports_allowed: bool,
+    top_level_phase: Option<TopLevelPreludePhase>,
     encoding_allowed: bool,
     source_len: usize,
     encoding: Option<CssEncodingDeclaration>,
@@ -1301,12 +1302,50 @@ struct StrictRuleParser<'s> {
     recovery: RecoveryState,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TopLevelPreludePhase {
+    Initial,
+    Imports,
+    Namespaces,
+    Body,
+}
+
+impl TopLevelPreludePhase {
+    const fn accepts_import(self) -> bool {
+        matches!(self, Self::Initial | Self::Imports)
+    }
+
+    const fn after_import(self) -> Self {
+        match self {
+            Self::Initial | Self::Imports => Self::Imports,
+            Self::Namespaces | Self::Body => self,
+        }
+    }
+
+    const fn after_layer_statement(self) -> Self {
+        match self {
+            Self::Initial => Self::Initial,
+            Self::Imports | Self::Namespaces | Self::Body => Self::Body,
+        }
+    }
+
+    const fn after_body_rule(self) -> Self {
+        Self::Body
+    }
+
+    const fn after_namespace(self) -> Option<Self> {
+        match self {
+            Self::Initial | Self::Imports | Self::Namespaces => Some(Self::Namespaces),
+            Self::Body => None,
+        }
+    }
+}
+
 impl<'s> StrictRuleParser<'s> {
     fn top_level(source: &'s str, recovery: RecoveryState) -> Self {
         Self {
             source,
-            is_top_level: true,
-            imports_allowed: true,
+            top_level_phase: Some(TopLevelPreludePhase::Initial),
             encoding_allowed: true,
             source_len: source.len(),
             encoding: None,
@@ -1318,8 +1357,7 @@ impl<'s> StrictRuleParser<'s> {
     fn nested(source: &'s str, recovery: RecoveryState) -> Self {
         Self {
             source,
-            is_top_level: false,
-            imports_allowed: false,
+            top_level_phase: None,
             encoding_allowed: false,
             source_len: usize::MAX,
             encoding: None,
@@ -1328,10 +1366,42 @@ impl<'s> StrictRuleParser<'s> {
         }
     }
 
-    fn mark_non_import_top_level_rule(&mut self) {
-        if self.is_top_level {
-            self.imports_allowed = false;
+    fn mark_successful_import(&mut self) {
+        if let Some(phase) = self.top_level_phase.as_mut() {
+            *phase = phase.after_import();
         }
+    }
+
+    fn mark_successful_layer_statement(&mut self) {
+        if let Some(phase) = self.top_level_phase.as_mut() {
+            *phase = phase.after_layer_statement();
+        }
+    }
+
+    fn mark_successful_body_rule(&mut self) {
+        if let Some(phase) = self.top_level_phase.as_mut() {
+            *phase = phase.after_body_rule();
+        }
+    }
+
+    #[expect(
+        dead_code,
+        reason = "C10 activates the reserved namespace phase transition after successful parsing"
+    )]
+    fn mark_successful_namespace(&mut self) -> bool {
+        let Some(phase) = self.top_level_phase else {
+            return false;
+        };
+        let Some(next) = phase.after_namespace() else {
+            return false;
+        };
+        self.top_level_phase = Some(next);
+        true
+    }
+
+    fn import_is_allowed(&self) -> Option<bool> {
+        self.top_level_phase
+            .map(TopLevelPreludePhase::accepts_import)
     }
 }
 
@@ -1366,6 +1436,7 @@ impl StrictAtRulePrelude {
 struct CssImportPrelude {
     target: CssImportTarget,
     layer: Option<CssImportLayer>,
+    supports: Option<CssImportSupports>,
     media: Option<CssMediaQueryList>,
     implicit_media_closures: Vec<usize>,
 }
@@ -1427,14 +1498,14 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
         self.encoding_allowed = false;
         match_ignore_ascii_case! { &name,
             "import" => {
-                if !self.is_top_level {
+                let Some(import_is_allowed) = self.import_is_allowed() else {
                     return Err(invalid_at_rule_placement(
                         input.current_source_location(),
                         "import",
                         "the stylesheet top level",
                     ));
-                }
-                if !self.imports_allowed {
+                };
+                if !import_is_allowed {
                     return Err(invalid_at_rule_placement(
                         input.current_source_location(),
                         "import",
@@ -1584,19 +1655,22 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
             StrictAtRulePrelude::Import(prelude) => {
                 self.recovery
                     .retain_component_closures(prelude.implicit_media_closures);
-                Ok(vec![CssRule::Import(CssImportRule::new(
+                let rule = CssRule::Import(CssImportRule::new(
                     prelude.target,
                     prelude.layer,
+                    prelude.supports,
                     prelude.media,
                     crate::source::CssSourcePosition::from_cssparser(
                         start.position(),
                         start.source_location(),
                     ),
-                ))])
+                ));
+                self.mark_successful_import();
+                Ok(vec![rule])
             }
             StrictAtRulePrelude::Layer(names) => {
                 let names = CssLayerNameList::try_new(names).ok_or(())?;
-                self.mark_non_import_top_level_rule();
+                self.mark_successful_layer_statement();
                 Ok(vec![CssRule::LayerStatement(CssLayerStatementRule::new(
                     names,
                     crate::source::CssSourcePosition::from_cssparser(
@@ -1647,7 +1721,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                     parse_nested_group_rules(self.source, input, self.recovery.clone())?;
                 self.diagnostics.extend(recovered.diagnostics);
                 let rules = recovered.syntax;
-                self.mark_non_import_top_level_rule();
+                self.mark_successful_body_rule();
                 Ok(vec![CssRule::LayerBlock(CssLayerBlockRule::new(
                     name,
                     rules,
@@ -1665,7 +1739,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                     &mut self.diagnostics,
                     self.recovery.clone(),
                 )?;
-                self.mark_non_import_top_level_rule();
+                self.mark_successful_body_rule();
                 Ok(vec![CssRule::FontFace(rule)])
             }
             StrictAtRulePrelude::Keyframes(name) => {
@@ -1677,7 +1751,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                     &mut self.diagnostics,
                     self.recovery.clone(),
                 )?;
-                self.mark_non_import_top_level_rule();
+                self.mark_successful_body_rule();
                 Ok(vec![CssRule::Keyframes(rule)])
             }
             StrictAtRulePrelude::Media(query) => {
@@ -1685,7 +1759,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                     parse_nested_group_rules(self.source, input, self.recovery.clone())?;
                 self.diagnostics.extend(recovered.diagnostics);
                 let rules = recovered.syntax;
-                self.mark_non_import_top_level_rule();
+                self.mark_successful_body_rule();
                 Ok(vec![CssRule::Media(CssMediaRule::new(
                     query,
                     rules,
@@ -1700,7 +1774,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                     parse_nested_group_rules(self.source, input, self.recovery.clone())?;
                 self.diagnostics.extend(recovered.diagnostics);
                 let rules = recovered.syntax;
-                self.mark_non_import_top_level_rule();
+                self.mark_successful_body_rule();
                 Ok(vec![CssRule::Supports(CssSupportsRule::new(
                     condition,
                     rules,
@@ -1715,7 +1789,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                     parse_nested_group_rules(self.source, input, self.recovery.clone())?;
                 self.diagnostics.extend(recovered.diagnostics);
                 let rules = recovered.syntax;
-                self.mark_non_import_top_level_rule();
+                self.mark_successful_body_rule();
                 Ok(vec![CssRule::Container(CssContainerRule::new(
                     prelude.name,
                     prelude.condition,
@@ -1730,7 +1804,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 let recovered = parse_scoped_rule_list(self.source, input, self.recovery.clone())?;
                 self.diagnostics.extend(recovered.diagnostics);
                 let rules = recovered.syntax;
-                self.mark_non_import_top_level_rule();
+                self.mark_successful_body_rule();
                 Ok(vec![CssRule::Scope(CssScopeRule::new(
                     prelude.root,
                     prelude.limit,
@@ -1785,7 +1859,7 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser<'i> {
         )?;
         self.diagnostics.extend(recovered.diagnostics);
         let rules = recovered.syntax;
-        self.mark_non_import_top_level_rule();
+        self.mark_successful_body_rule();
         depth.retain();
         Ok(rules)
     }
@@ -1807,13 +1881,15 @@ impl<'i> RuleBodyItemParser<'i, Vec<CssRule>, Error> for StrictRuleParser<'i> {
 }
 
 fn parse_import_prelude<'i, 't>(
-    source: &str,
+    source: &'i str,
     input: &mut Parser<'i, 't>,
     diagnostics: &mut Vec<crate::CssRecoveryDiagnostic>,
     recovery: &RecoveryState,
 ) -> std::result::Result<CssImportPrelude, ParseError<'i, Error>> {
     let target = parse_import_target(input)?;
     let layer = parse_import_layer(input)?;
+    let supports = parse_import_supports(source, input, diagnostics, recovery)?;
+    reject_misordered_import_clauses(input)?;
     let (media, implicit_media_closures) = if input.is_exhausted() {
         (None, Vec::new())
     } else {
@@ -1839,9 +1915,101 @@ fn parse_import_prelude<'i, 't>(
     Ok(CssImportPrelude {
         target,
         layer,
+        supports,
         media,
         implicit_media_closures,
     })
+}
+
+fn parse_import_supports<'i, 't>(
+    source: &'i str,
+    input: &mut Parser<'i, 't>,
+    diagnostics: &mut Vec<crate::CssRecoveryDiagnostic>,
+    recovery: &RecoveryState,
+) -> std::result::Result<Option<CssImportSupports>, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_function_matching("supports"))
+        .is_err()
+    {
+        return Ok(None);
+    }
+
+    let condition = input.parse_nested_block(|nested| {
+        if let Ok(declaration) = nested.try_parse(|nested| {
+            let declaration = parse_supports_declaration(nested)?;
+            nested.expect_exhausted().map_err(basic)?;
+            Ok::<_, ParseError<'i, Error>>(declaration)
+        }) {
+            let position = declaration.position();
+            return Ok(CssSupportsCondition::new(
+                CssSupportsConditionKind::Declaration(Box::new(declaration)),
+                position,
+            ));
+        }
+
+        parse_supports_condition(source, nested, diagnostics, recovery)
+    })?;
+
+    Ok(Some(CssImportSupports::new(condition)))
+}
+
+fn reject_misordered_import_clauses<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<(), ParseError<'i, Error>> {
+    let state = input.state();
+    let result = find_misordered_import_clause(input);
+    input.reset(&state);
+    if let Some(location) = result? {
+        return Err(invalid_syntax(
+            location,
+            "import layer and supports clauses must precede media and appear at most once",
+        ));
+    }
+    Ok(())
+}
+
+fn find_misordered_import_clause<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Option<cssparser::SourceLocation>, ParseError<'i, Error>> {
+    while !input.is_exhausted() {
+        let location = input.current_source_location();
+        let token = input.next_including_whitespace_and_comments()?.clone();
+        match token {
+            Token::Ident(name) if name.eq_ignore_ascii_case("layer") => {
+                return Ok(Some(location));
+            }
+            Token::Function(name)
+                if name.eq_ignore_ascii_case("layer") || name.eq_ignore_ascii_case("supports") =>
+            {
+                return Ok(Some(location));
+            }
+            Token::Function(_)
+            | Token::ParenthesisBlock
+            | Token::SquareBracketBlock
+            | Token::CurlyBracketBlock => {
+                input.parse_nested_block(skip_import_clause_scan_block)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(None)
+}
+
+fn skip_import_clause_scan_block<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<(), ParseError<'i, Error>> {
+    while !input.is_exhausted() {
+        match input.next_including_whitespace_and_comments()?.clone() {
+            Token::Function(_)
+            | Token::ParenthesisBlock
+            | Token::SquareBracketBlock
+            | Token::CurlyBracketBlock => {
+                input.parse_nested_block(skip_import_clause_scan_block)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 fn parse_container_prelude<'i, 't>(

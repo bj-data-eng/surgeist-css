@@ -383,6 +383,31 @@ let _ = validate_style_attribute("color: red");
 //! resolve a mix, apply contrast, serialize computed colors, or lower colors
 //! into a sibling crate.
 //!
+//! # Authored Grid repetition and keyframe structure
+//!
+//! The six Grid repetition consumers expose parser-owned current values through
+//! their `current()` accessors while retaining the frozen `i01_subset()`
+//! compatibility view. [`CssAuthoredGridTrackList`] distinguishes general track
+//! lists from lists containing exactly one [`CssAuthoredGridAutoRepeat`]. Integer
+//! repetition is non-recursive; automatic repetition and surrounding tracks use
+//! fixed sizes; and `grid-auto-rows` and `grid-auto-columns` expose
+//! [`CssAuthoredGridTrackSizeList`] values without `repeat()`.
+//!
+//! [`CssKeyframesRule`] and [`CssKeyframeBlock`] preserve source structure. Empty
+//! rules and blocks remain present, while repeated selector blocks, equivalent
+//! offsets across blocks, and repeated equivalent selectors within one
+//! [`CssKeyframeSelectorList`] remain in authored order. Dropping an invalid
+//! declaration leaves its valid empty parents; an invalid selector still drops
+//! the smallest invalid block. The parser does not sort, merge, or deduplicate
+//! keyframes.
+//!
+//! Grid repetition and the six consuming Grid properties remain Partial for
+//! subgrid name-repeat and other unselected Grid 2 property grammar.
+//! `@keyframes` remains Partial for calculation selectors, string names, and
+//! unselected declaration-processing grammar. This crate does not perform Grid
+//! layout, cascade declarations, evaluate or interpolate keyframes, run
+//! timelines, or lower either syntax family into sibling Surgeist crates.
+//!
 //! # Timing domains and I01 compatibility
 //!
 //! Duration literals are finite and non-negative; delay literals are finite and signed. A range

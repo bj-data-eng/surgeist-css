@@ -7,10 +7,14 @@ use super::values::{
     parse_calc_length_with_grammar, parse_custom_ident_from_str_at, parse_length_with_context,
     parse_positive_integer,
 };
+use crate::CssFeatureId;
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::properties::CssGridFlowTolerancePropertyValueRepresentation;
 use crate::syntax::*;
 use crate::validation::{LengthUnitStatus, classify_length_unit, unsupported_keyword_reason};
+
+pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] =
+    &[CssFeatureId::new("ext.value.grid-repeat")];
 
 pub(super) fn parse_grid_flow_tolerance<'i, 't>(
     input: &mut Parser<'i, 't>,

@@ -349,6 +349,34 @@ channels or calculations, perform color conversion or gamut mapping, resolve a
 mix, apply contrast, serialize computed colors, or lower colors into a sibling
 crate.
 
+## Authored Grid repetition and keyframe structure
+
+The six Grid repetition consumers expose a parser-owned current value through
+`current()` while preserving their existing `i01_subset()` compatibility view.
+Current Grid track lists distinguish general lists from lists containing exactly
+one automatic repetition. Integer repetition is non-recursive; automatic
+repetition and every surrounding track use fixed sizes; and `grid-auto-rows` and
+`grid-auto-columns` accept track sizes rather than `repeat()`. A conforming value
+that uses newly typed calculation structure can therefore be current even when
+its frozen I01 projection is absent.
+
+Keyframe rules preserve authored structure rather than a merged animation
+timeline. Empty rules and blocks remain present. Repeated selector blocks,
+equivalent offsets in different blocks, and repeated equivalent selectors within
+one list remain in source order without sorting, merging, or deduplication. When
+an invalid declaration is dropped, its now-empty block and rule remain; an
+invalid selector still drops the smallest invalid keyframe block. These recovery
+observables replace older expectations that accepted structurally invalid Grid
+cross-products or discarded valid empty keyframe parents.
+
+The Grid repetition value, the six Grid property records, and the keyframe rule
+record remain `Partial`. Subgrid name-repeat and other unselected Grid 2 property
+grammar remain unsupported. Calculation keyframe selectors, string names, and
+unselected declaration-processing grammar remain outside the keyframe boundary.
+This crate does not perform Grid layout, cascade declarations, evaluate or
+interpolate keyframes, run timelines, or lower either syntax family into sibling
+Surgeist crates.
+
 `CssImportance` and `CssSupportStatus` are deliberately closed and may be
 matched exhaustively. Every other public enum is non-exhaustive and requires a
 wildcard in downstream matches. This declaration inspection migration changes

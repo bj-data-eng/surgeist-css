@@ -420,14 +420,13 @@ fn color_mix_preserved_subset_rejects_cross_space_hue_methods() {
 
 fn record_partial_metadata_mismatch(
     mismatches: &mut Vec<String>,
-    id: &str,
-    kind: CssFeatureKind,
-    spelling: &str,
-    source: &str,
-    production: &str,
-    subset: &str,
-    remainder: &str,
+    identity: (&str, CssFeatureKind, &str),
+    provenance: (&str, &str),
+    boundary: (&str, &str),
 ) {
+    let (id, kind, spelling) = identity;
+    let (source, production) = provenance;
+    let (subset, remainder) = boundary;
     let Some(metadata) = feature_metadata(id) else {
         mismatches.push(format!("{id} is absent"));
         return;
@@ -517,83 +516,75 @@ fn grid_and_keyframe_metadata_matches_preserved_boundaries() {
     let mut mismatches = Vec::new();
     record_partial_metadata_mismatch(
         &mut mismatches,
-        "ext.value.grid-repeat",
-        CssFeatureKind::Value,
-        "repeat()",
-        "R-GRID2",
-        "#repeat-notation",
-        GRID_REPEAT_SUBSET,
-        GRID_REPEAT_REMAINDER,
+        ("ext.value.grid-repeat", CssFeatureKind::Value, "repeat()"),
+        ("R-GRID2", "#repeat-notation"),
+        (GRID_REPEAT_SUBSET, GRID_REPEAT_REMAINDER),
     );
     record_partial_metadata_mismatch(
         &mut mismatches,
-        "baseline.property.grid-template-rows",
-        CssFeatureKind::Property,
-        "grid-template-rows",
-        "R-GRID2",
-        "#propdef-grid-template-rows",
-        GRID_PROPERTY_SUBSET,
-        GRID_PROPERTY_REMAINDER,
+        (
+            "baseline.property.grid-template-rows",
+            CssFeatureKind::Property,
+            "grid-template-rows",
+        ),
+        ("R-GRID2", "#propdef-grid-template-rows"),
+        (GRID_PROPERTY_SUBSET, GRID_PROPERTY_REMAINDER),
     );
     record_partial_metadata_mismatch(
         &mut mismatches,
-        "baseline.property.grid-template-columns",
-        CssFeatureKind::Property,
-        "grid-template-columns",
-        "R-GRID2",
-        "#propdef-grid-template-columns",
-        GRID_PROPERTY_SUBSET,
-        GRID_PROPERTY_REMAINDER,
+        (
+            "baseline.property.grid-template-columns",
+            CssFeatureKind::Property,
+            "grid-template-columns",
+        ),
+        ("R-GRID2", "#propdef-grid-template-columns"),
+        (GRID_PROPERTY_SUBSET, GRID_PROPERTY_REMAINDER),
     );
     record_partial_metadata_mismatch(
         &mut mismatches,
-        "baseline.property.grid-template",
-        CssFeatureKind::Property,
-        "grid-template",
-        "R-GRID2",
-        "#propdef-grid-template",
-        GRID_PROPERTY_SUBSET,
-        GRID_PROPERTY_REMAINDER,
+        (
+            "baseline.property.grid-template",
+            CssFeatureKind::Property,
+            "grid-template",
+        ),
+        ("R-GRID2", "#propdef-grid-template"),
+        (GRID_PROPERTY_SUBSET, GRID_PROPERTY_REMAINDER),
     );
     record_partial_metadata_mismatch(
         &mut mismatches,
-        "baseline.property.grid-auto-rows",
-        CssFeatureKind::Property,
-        "grid-auto-rows",
-        "R-GRID2",
-        "#propdef-grid-auto-rows",
-        GRID_PROPERTY_SUBSET,
-        GRID_PROPERTY_REMAINDER,
+        (
+            "baseline.property.grid-auto-rows",
+            CssFeatureKind::Property,
+            "grid-auto-rows",
+        ),
+        ("R-GRID2", "#propdef-grid-auto-rows"),
+        (GRID_PROPERTY_SUBSET, GRID_PROPERTY_REMAINDER),
     );
     record_partial_metadata_mismatch(
         &mut mismatches,
-        "baseline.property.grid-auto-columns",
-        CssFeatureKind::Property,
-        "grid-auto-columns",
-        "R-GRID2",
-        "#propdef-grid-auto-columns",
-        GRID_PROPERTY_SUBSET,
-        GRID_PROPERTY_REMAINDER,
+        (
+            "baseline.property.grid-auto-columns",
+            CssFeatureKind::Property,
+            "grid-auto-columns",
+        ),
+        ("R-GRID2", "#propdef-grid-auto-columns"),
+        (GRID_PROPERTY_SUBSET, GRID_PROPERTY_REMAINDER),
     );
     record_partial_metadata_mismatch(
         &mut mismatches,
-        "baseline.property.grid",
-        CssFeatureKind::Property,
-        "grid",
-        "R-GRID2",
-        "#propdef-grid",
-        GRID_PROPERTY_SUBSET,
-        GRID_PROPERTY_REMAINDER,
+        ("baseline.property.grid", CssFeatureKind::Property, "grid"),
+        ("R-GRID2", "#propdef-grid"),
+        (GRID_PROPERTY_SUBSET, GRID_PROPERTY_REMAINDER),
     );
     record_partial_metadata_mismatch(
         &mut mismatches,
-        "baseline.rule.keyframes",
-        CssFeatureKind::Rule,
-        "@keyframes",
-        "I-ANIMATIONS1",
-        "#keyframes",
-        KEYFRAMES_SUBSET,
-        KEYFRAMES_REMAINDER,
+        (
+            "baseline.rule.keyframes",
+            CssFeatureKind::Rule,
+            "@keyframes",
+        ),
+        ("I-ANIMATIONS1", "#keyframes"),
+        (KEYFRAMES_SUBSET, KEYFRAMES_REMAINDER),
     );
 
     if !mismatches.is_empty() {
@@ -675,8 +666,8 @@ const EXPECTED: &[ExpectedFeature] = &[
         source: ExpectedSource::Id("I-ANIMATIONS1"),
         production: "#keyframes",
         status: CssSupportStatus::Partial,
-        supported_subset: Some(BASELINE_RULE_SUBSET),
-        unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
+        supported_subset: Some(KEYFRAMES_SUBSET),
+        unsupported_remainder: Some(KEYFRAMES_REMAINDER),
         recognized_code: None,
         positive: Some(Input::Sheet(
             "@keyframes fade { from { opacity: 0; } to { opacity: 1; } }",

@@ -3392,6 +3392,14 @@ const COLOR5_RELATIVE_REMAINDER: &str = "alpha(), custom-profile parameters, and
 const COLOR5_MIX_SUBSET: &str = "The preserved color-mix() subset requires an interpolation method, exactly two colors, optional trailing percentages, and a predefined or polar color space.";
 const COLOR5_MIX_REMAINDER: &str =
     "Other valid forms of the dated CSS Color 5 color-mix() production remain unsupported.";
+const GRID_REPEAT_SUBSET: &str = "Non-recursive integer track and fixed repeats, plus one fixed-size automatic repeat where the consumer permits it, are supported.";
+const GRID_REPEAT_REMAINDER: &str =
+    "Subgrid name-repeat and other unselected Grid 2 forms remain unsupported.";
+const GRID_PROPERTY_SUBSET: &str = "The C07 structural grammar supports non-recursive integer track and fixed repeats, one fixed-size automatic repeat where permitted, and repeat-free automatic track-size lists.";
+const GRID_PROPERTY_REMAINDER: &str =
+    "Subgrid name-repeat and other unselected Grid 2 property grammar remain unsupported.";
+const KEYFRAMES_SUBSET: &str = "Keyframe names, literal selectors, empty rules and blocks, duplicate selectors and blocks in authored order, and supported declarations with recovery are supported.";
+const KEYFRAMES_REMAINDER: &str = "Calculation selectors, string names, and declaration-processing grammar not selected by C07 remain unsupported.";
 
 const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
     match property {
@@ -3705,7 +3713,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 336] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 337] = [
     CssFeatureMetadata::partial(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -3748,8 +3756,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 336] = [
         "@keyframes",
         I_ANIMATIONS1,
         "#keyframes",
-        BASELINE_RULE_SUBSET,
-        BASELINE_RULE_REMAINDER,
+        KEYFRAMES_SUBSET,
+        KEYFRAMES_REMAINDER,
     ),
     CssFeatureMetadata::partial(
         "baseline.rule.style",
@@ -4121,6 +4129,15 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 336] = [
         "#funcdef-color-mix",
         COLOR5_MIX_SUBSET,
         COLOR5_MIX_REMAINDER,
+    ),
+    CssFeatureMetadata::partial(
+        "ext.value.grid-repeat",
+        CssFeatureKind::Value,
+        "repeat()",
+        R_GRID2,
+        "#repeat-notation",
+        GRID_REPEAT_SUBSET,
+        GRID_REPEAT_REMAINDER,
     ),
     CssFeatureMetadata::complete(
         "official.value.position",
@@ -4886,35 +4903,55 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 336] = [
         "grid-flow-tolerance",
         "baseline.property.grid-flow-tolerance"
     ),
-    property_feature!(
+    CssFeatureMetadata::partial_property_with_boundary(
+        "baseline.property.grid-template-rows",
         CssKnownProperty::GridTemplateRows,
         "grid-template-rows",
-        "baseline.property.grid-template-rows"
+        "#propdef-grid-template-rows",
+        &[],
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
     ),
-    property_feature!(
+    CssFeatureMetadata::partial_property_with_boundary(
+        "baseline.property.grid-template-columns",
         CssKnownProperty::GridTemplateColumns,
         "grid-template-columns",
-        "baseline.property.grid-template-columns"
+        "#propdef-grid-template-columns",
+        &[],
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
     ),
     property_feature!(
         CssKnownProperty::GridTemplateAreas,
         "grid-template-areas",
         "baseline.property.grid-template-areas"
     ),
-    property_feature!(
+    CssFeatureMetadata::partial_property_with_boundary(
+        "baseline.property.grid-template",
         CssKnownProperty::GridTemplate,
         "grid-template",
-        "baseline.property.grid-template"
+        "#propdef-grid-template",
+        &[],
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
     ),
-    property_feature!(
+    CssFeatureMetadata::partial_property_with_boundary(
+        "baseline.property.grid-auto-rows",
         CssKnownProperty::GridAutoRows,
         "grid-auto-rows",
-        "baseline.property.grid-auto-rows"
+        "#propdef-grid-auto-rows",
+        &[],
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
     ),
-    property_feature!(
+    CssFeatureMetadata::partial_property_with_boundary(
+        "baseline.property.grid-auto-columns",
         CssKnownProperty::GridAutoColumns,
         "grid-auto-columns",
-        "baseline.property.grid-auto-columns"
+        "#propdef-grid-auto-columns",
+        &[],
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
     ),
     property_feature!(
         CssKnownProperty::GridAutoFlow,
@@ -4956,7 +4993,15 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 336] = [
         "grid-area",
         "baseline.property.grid-area"
     ),
-    property_feature!(CssKnownProperty::Grid, "grid", "baseline.property.grid"),
+    CssFeatureMetadata::partial_property_with_boundary(
+        "baseline.property.grid",
+        CssKnownProperty::Grid,
+        "grid",
+        "#propdef-grid",
+        &[],
+        GRID_PROPERTY_SUBSET,
+        GRID_PROPERTY_REMAINDER,
+    ),
     property_feature!(
         CssKnownProperty::FontSize,
         "font-size",

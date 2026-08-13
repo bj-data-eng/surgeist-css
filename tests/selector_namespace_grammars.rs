@@ -1,6 +1,7 @@
 use surgeist_css::{
     CssCompoundSelector, CssErrorCode, CssNamespaceConstraint, CssNamespaceName,
-    CssNamespacePrefix, CssRecoveryAction, CssRule, CssSelector, ErrorKind, parse_sheet,
+    CssNamespacePrefix, CssRecoveryAction, CssRule, CssScopedRule, CssSelector,
+    CssSupportsConditionKind, ErrorKind, parse_sheet,
 };
 
 fn compound_selector(rule: &CssRule) -> &CssCompoundSelector {
@@ -372,4 +373,49 @@ fn malformed_namespace_qualified_names_drop_one_rule_and_keep_siblings() {
             "{failed}"
         );
     }
+}
+
+#[test]
+fn namespace_bindings_reach_every_selector_consumer_without_changing_recovery() {
+    let report = parse_sheet(concat!(
+        "@namespace svg \"urn:svg\";",
+        "svg|top { color: red; }",
+        "@media screen { svg|media { color: red; } }",
+        "@supports selector(svg|supported) { svg|supports { color: red; } }",
+        "@container (width > 1px) { svg|container { color: red; } }",
+        "@layer theme { svg|layer { color: red; } }",
+        ".host { & > svg|nested { color: red; } }",
+        "@scope (svg|root) to (svg|limit) { svg|scoped { color: red; } }",
+    ));
+
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [
+        CssRule::Namespace(_),
+        CssRule::Style(_),
+        CssRule::Media(media),
+        CssRule::Supports(supports),
+        CssRule::Container(container),
+        CssRule::LayerBlock(layer),
+        CssRule::Style(_),
+        CssRule::Style(_),
+        CssRule::Scope(scope),
+    ] = report.syntax().rules()
+    else {
+        panic!("expected every namespace-aware selector consumer to be retained")
+    };
+
+    assert!(matches!(media.rules(), [CssRule::Style(_)]));
+    assert!(matches!(
+        supports.condition().kind(),
+        CssSupportsConditionKind::Selector(_)
+    ));
+    assert!(matches!(supports.rules(), [CssRule::Style(_)]));
+    assert!(matches!(container.rules(), [CssRule::Style(_)]));
+    assert!(matches!(layer.rules(), [CssRule::Style(_)]));
+    assert!(scope.root().is_some());
+    assert!(scope.limit().is_some());
+    assert!(matches!(
+        scope.rules().rules(),
+        [CssScopedRule::Style(_)]
+    ));
 }

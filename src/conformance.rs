@@ -3508,6 +3508,11 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
         | CssKnownProperty::FontStyle
         | CssKnownProperty::FontStretch
         | CssKnownProperty::FontVariant
+        | CssKnownProperty::FontVariantCaps
+        | CssKnownProperty::FontVariantEastAsian
+        | CssKnownProperty::FontVariantLigatures
+        | CssKnownProperty::FontVariantNumeric
+        | CssKnownProperty::FontVariantPosition
         | CssKnownProperty::FontFeatureSettings
         | CssKnownProperty::FontKerning
         | CssKnownProperty::FontSizeAdjust

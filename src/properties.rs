@@ -79,7 +79,12 @@ macro_rules! property_schema {
             FontWeight, "font-weight", [], "baseline.property.font-weight", CssFontWeight, CssFontWeightPropertyValue, CssFontWeightPropertyValueRepresentation, parse_font_weight, { parse_font_weight($input)? };
             FontStyle, "font-style", [], "baseline.property.font-style", CssFontStyle, CssFontStylePropertyValue, CssFontStylePropertyValueRepresentation, parse_font_style, { parse_font_style($input)? };
             FontStretch, "font-stretch", [], "baseline.property.font-stretch", CssFontStretch, CssFontStretchPropertyValue, CssFontStretchPropertyValueRepresentation, parse_font_stretch, { parse_font_stretch($input)? };
-            FontVariant, "font-variant", [], "baseline.property.font-variant", CssFontVariant, CssFontVariantPropertyValue, CssFontVariantPropertyValueRepresentation, parse_font_variant, { parse_font_variant($input)? };
+            FontVariant, "font-variant", [], "baseline.property.font-variant", CssFontVariantValue, CssFontVariantPropertyValue, CssFontVariantPropertyValueRepresentation, parse_font_variant, { parse_font_variant($input)? };
+            FontVariantCaps, "font-variant-caps", [], "official.property.font-variant-caps", CssFontVariantCaps, CssFontVariantCapsPropertyValue, CssFontVariantCapsPropertyValueRepresentation, parse_font_variant_caps, { parse_font_variant_caps($input)? };
+            FontVariantEastAsian, "font-variant-east-asian", [], "official.property.font-variant-east-asian", CssFontVariantEastAsian, CssFontVariantEastAsianPropertyValue, CssFontVariantEastAsianPropertyValueRepresentation, parse_font_variant_east_asian, { parse_font_variant_east_asian($input)? };
+            FontVariantLigatures, "font-variant-ligatures", [], "official.property.font-variant-ligatures", CssFontVariantLigatures, CssFontVariantLigaturesPropertyValue, CssFontVariantLigaturesPropertyValueRepresentation, parse_font_variant_ligatures, { parse_font_variant_ligatures($input)? };
+            FontVariantNumeric, "font-variant-numeric", [], "official.property.font-variant-numeric", CssFontVariantNumeric, CssFontVariantNumericPropertyValue, CssFontVariantNumericPropertyValueRepresentation, parse_font_variant_numeric, { parse_font_variant_numeric($input)? };
+            FontVariantPosition, "font-variant-position", [], "official.property.font-variant-position", CssFontVariantPosition, CssFontVariantPositionPropertyValue, CssFontVariantPositionPropertyValueRepresentation, parse_font_variant_position, { parse_font_variant_position($input)? };
             FontFeatureSettings, "font-feature-settings", [], "baseline.property.font-feature-settings", CssFontFeatureSettings, CssFontFeatureSettingsPropertyValue, CssFontFeatureSettingsPropertyValueRepresentation, parse_font_feature_settings, { parse_font_feature_settings($input)? };
             FontKerning, "font-kerning", [], "official.property.font-kerning", CssFontKerning, CssFontKerningPropertyValue, CssFontKerningPropertyValueRepresentation, parse_font_kerning, { parse_font_kerning($input)? };
             FontSizeAdjust, "font-size-adjust", [], "official.property.font-size-adjust", CssFontSizeAdjust, CssFontSizeAdjustPropertyValue, CssFontSizeAdjustPropertyValueRepresentation, parse_font_size_adjust, { parse_font_size_adjust($input)? };
@@ -445,6 +450,22 @@ fn font_i01_projection(value: &CssFontValue) -> Option<CssFont> {
         line_height,
         font_family_i01_projection(value.families())?,
     )
+}
+
+fn font_variant_i01_projection(value: &CssFontVariantValue) -> Option<CssFontVariant> {
+    match value {
+        CssFontVariantValue::Normal => Some(CssFontVariant::Normal),
+        CssFontVariantValue::Values(values)
+            if values.ligatures().is_none()
+                && values.position().is_none()
+                && values.caps() == Some(CssFontVariantCaps::SmallCaps)
+                && values.numeric().is_none()
+                && values.east_asian().is_none() =>
+        {
+            Some(CssFontVariant::SmallCaps)
+        }
+        CssFontVariantValue::None | CssFontVariantValue::Values(_) => None,
+    }
 }
 
 fn font_feature_settings_i01_projection(
@@ -824,6 +845,80 @@ macro_rules! define_property_value {
             CssFont,
             font,
             font_i01_projection
+        );
+    };
+    (
+        FontVariant, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontVariantValue,
+            CssFontVariant,
+            variant,
+            font_variant_i01_projection
+        );
+    };
+    (
+        FontVariantCaps, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontVariantCaps,
+            caps
+        );
+    };
+    (
+        FontVariantEastAsian, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontVariantEastAsian,
+            east_asian
+        );
+    };
+    (
+        FontVariantLigatures, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontVariantLigatures,
+            ligatures
+        );
+    };
+    (
+        FontVariantNumeric, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontVariantNumeric,
+            numeric
+        );
+    };
+    (
+        FontVariantPosition, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontVariantPosition,
+            position
         );
     };
     (

@@ -1,9 +1,13 @@
 use surgeist_css::{
     CssAuthoredFontFeatureSettings, CssAuthoredFontFeatureValue, CssErrorCode,
     CssFontFamilyNameKind, CssFontFeatureSettings, CssFontFeatureValue, CssFontSize, CssFontStyle,
-    CssFontSynthesis, CssFontValue, CssGenericFontFamily, CssKnownDeclaredValueRef,
-    CssKnownProperty, CssKnownPropertyValueRef, CssLineHeight, CssNonNegativeNumberValue,
-    CssSystemFont, parse_style_attribute,
+    CssFontSynthesis, CssFontValue, CssFontVariant, CssFontVariantCaps, CssFontVariantEastAsian,
+    CssFontVariantEastAsianVariant, CssFontVariantEastAsianWidth, CssFontVariantLigatureState,
+    CssFontVariantLigatures, CssFontVariantNumeric, CssFontVariantNumericFigure,
+    CssFontVariantNumericFraction, CssFontVariantNumericSpacing, CssFontVariantPosition,
+    CssFontVariantValue, CssGenericFontFamily, CssKnownDeclaredValueRef, CssKnownProperty,
+    CssKnownPropertyValueRef, CssLineHeight, CssNonNegativeNumberValue, CssSystemFont,
+    parse_style_attribute,
 };
 
 #[test]
@@ -55,6 +59,349 @@ fn font_variant_longhands_and_shorthand_enforce_keyword_groups() {
             "color",
         ],
     );
+
+    let CssKnownPropertyValueRef::FontVariantCaps(caps) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-variant-caps");
+    };
+    assert_eq!(caps.caps(), &CssFontVariantCaps::AllSmallCaps);
+
+    let CssKnownPropertyValueRef::FontVariantEastAsian(east_asian) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-variant-east-asian");
+    };
+    let CssFontVariantEastAsian::Values(east_asian) = east_asian.east_asian() else {
+        panic!("expected East Asian values");
+    };
+    assert_eq!(
+        east_asian.variant(),
+        Some(CssFontVariantEastAsianVariant::Jis04)
+    );
+    assert_eq!(
+        east_asian.width(),
+        Some(CssFontVariantEastAsianWidth::FullWidth)
+    );
+    assert!(east_asian.ruby());
+
+    let CssKnownPropertyValueRef::FontVariantLigatures(ligatures) = report.syntax()[2]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-variant-ligatures");
+    };
+    let CssFontVariantLigatures::Values(ligatures) = ligatures.ligatures() else {
+        panic!("expected ligature values");
+    };
+    assert_eq!(
+        ligatures.common(),
+        Some(CssFontVariantLigatureState::Enabled)
+    );
+    assert_eq!(
+        ligatures.contextual(),
+        Some(CssFontVariantLigatureState::Disabled)
+    );
+
+    let CssKnownPropertyValueRef::FontVariantNumeric(numeric) = report.syntax()[3]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-variant-numeric");
+    };
+    let CssFontVariantNumeric::Values(numeric) = numeric.numeric() else {
+        panic!("expected numeric values");
+    };
+    assert_eq!(
+        numeric.figure(),
+        Some(CssFontVariantNumericFigure::OldstyleNums)
+    );
+    assert_eq!(
+        numeric.spacing(),
+        Some(CssFontVariantNumericSpacing::TabularNums)
+    );
+    assert_eq!(
+        numeric.fraction(),
+        Some(CssFontVariantNumericFraction::DiagonalFractions)
+    );
+    assert!(numeric.ordinal());
+    assert!(numeric.slashed_zero());
+
+    let CssKnownPropertyValueRef::FontVariantPosition(position) = report.syntax()[4]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-variant-position");
+    };
+    assert_eq!(position.position(), &CssFontVariantPosition::Super);
+
+    let CssKnownPropertyValueRef::FontVariant(variant) = report.syntax()[5]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-variant");
+    };
+    let CssFontVariantValue::Values(values) = variant.variant() else {
+        panic!("expected shorthand component values");
+    };
+    assert_eq!(values.caps(), Some(CssFontVariantCaps::AllSmallCaps));
+    assert_eq!(values.position(), Some(CssFontVariantPosition::Super));
+    assert!(values.ligatures().is_some());
+    assert!(values.numeric().is_some());
+    assert!(values.east_asian().is_some());
+    assert!(variant.i01_subset().is_none());
+}
+
+#[test]
+fn font_variant_keywords_unordered_groups_and_i01_projection_are_exact() {
+    for keyword in [
+        "normal",
+        "small-caps",
+        "all-small-caps",
+        "petite-caps",
+        "all-petite-caps",
+        "unicase",
+        "titling-caps",
+    ] {
+        let report = parse_style_attribute(&format!("font-variant-caps: {keyword}"));
+        assert!(report.is_clean(), "{keyword}: {:?}", report.diagnostics());
+    }
+
+    for keyword in [
+        "normal",
+        "none",
+        "common-ligatures",
+        "no-common-ligatures",
+        "discretionary-ligatures",
+        "no-discretionary-ligatures",
+        "historical-ligatures",
+        "no-historical-ligatures",
+        "contextual",
+        "no-contextual",
+        "small-caps",
+        "all-small-caps",
+        "petite-caps",
+        "all-petite-caps",
+        "unicase",
+        "titling-caps",
+        "sub",
+        "super",
+        "lining-nums",
+        "oldstyle-nums",
+        "proportional-nums",
+        "tabular-nums",
+        "diagonal-fractions",
+        "stacked-fractions",
+        "ordinal",
+        "slashed-zero",
+        "jis78",
+        "jis83",
+        "jis90",
+        "jis04",
+        "simplified",
+        "traditional",
+        "full-width",
+        "proportional-width",
+        "ruby",
+    ] {
+        let report = parse_style_attribute(&format!("font-variant: {keyword}"));
+        assert!(report.is_clean(), "{keyword}: {:?}", report.diagnostics());
+    }
+    for keyword in ["normal", "sub", "super"] {
+        let report = parse_style_attribute(&format!("font-variant-position: {keyword}"));
+        assert!(report.is_clean(), "{keyword}: {:?}", report.diagnostics());
+    }
+    for keyword in [
+        "normal",
+        "none",
+        "common-ligatures",
+        "no-common-ligatures",
+        "discretionary-ligatures",
+        "no-discretionary-ligatures",
+        "historical-ligatures",
+        "no-historical-ligatures",
+        "contextual",
+        "no-contextual",
+    ] {
+        let report = parse_style_attribute(&format!("font-variant-ligatures: {keyword}"));
+        assert!(report.is_clean(), "{keyword}: {:?}", report.diagnostics());
+    }
+    for keyword in [
+        "normal",
+        "lining-nums",
+        "oldstyle-nums",
+        "proportional-nums",
+        "tabular-nums",
+        "diagonal-fractions",
+        "stacked-fractions",
+        "ordinal",
+        "slashed-zero",
+    ] {
+        let report = parse_style_attribute(&format!("font-variant-numeric: {keyword}"));
+        assert!(report.is_clean(), "{keyword}: {:?}", report.diagnostics());
+    }
+    for keyword in [
+        "normal",
+        "jis78",
+        "jis83",
+        "jis90",
+        "jis04",
+        "simplified",
+        "traditional",
+        "full-width",
+        "proportional-width",
+        "ruby",
+    ] {
+        let report = parse_style_attribute(&format!("font-variant-east-asian: {keyword}"));
+        assert!(report.is_clean(), "{keyword}: {:?}", report.diagnostics());
+    }
+
+    let unordered = parse_style_attribute(concat!(
+        "font-variant-ligatures: contextual historical-ligatures common-ligatures discretionary-ligatures; ",
+        "font-variant-numeric: ordinal stacked-fractions proportional-nums slashed-zero lining-nums; ",
+        "font-variant-east-asian: ruby proportional-width traditional",
+    ));
+    assert!(unordered.is_clean(), "{:?}", unordered.diagnostics());
+
+    let compatibility =
+        parse_style_attribute("font-variant: normal; font-variant: small-caps; font-variant: none");
+    assert!(
+        compatibility.is_clean(),
+        "{:?}",
+        compatibility.diagnostics()
+    );
+    for (index, expected) in [CssFontVariant::Normal, CssFontVariant::SmallCaps]
+        .iter()
+        .enumerate()
+    {
+        let CssKnownPropertyValueRef::FontVariant(value) = compatibility.syntax()[index]
+            .known()
+            .unwrap()
+            .property_value()
+            .unwrap()
+        else {
+            panic!("expected font-variant");
+        };
+        assert_eq!(value.i01_subset(), Some(expected));
+    }
+    let CssKnownPropertyValueRef::FontVariant(none) = compatibility.syntax()[2]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-variant none");
+    };
+    assert!(matches!(none.variant(), CssFontVariantValue::None));
+    assert!(none.i01_subset().is_none());
+}
+
+#[test]
+fn font_variant_globals_substitution_duplicates_and_conflicts_are_exact() {
+    let symbolic = parse_style_attribute(concat!(
+        "font-variant-caps: inherit; ",
+        "font-variant-east-asian: var(--east); ",
+        "font-variant-ligatures: unset; ",
+        "font-variant-numeric: var(--numeric); ",
+        "font-variant-position: revert-layer; ",
+        "font-variant: initial",
+    ));
+    assert!(symbolic.is_clean(), "{:?}", symbolic.diagnostics());
+    for (index, declaration) in symbolic.syntax().iter().enumerate() {
+        assert!(
+            if index == 1 || index == 3 {
+                matches!(
+                    declaration.known().unwrap().declared_value(),
+                    CssKnownDeclaredValueRef::SubstitutionDependent(_)
+                )
+            } else {
+                matches!(
+                    declaration.known().unwrap().declared_value(),
+                    CssKnownDeclaredValueRef::Global(_)
+                )
+            },
+            "symbolic declaration {index}",
+        );
+    }
+
+    for invalid in [
+        "font-variant-caps: small-caps all-small-caps",
+        "font-variant-caps: none",
+        "font-variant-position: sub super",
+        "font-variant-position: none",
+        "font-variant-ligatures: common-ligatures no-common-ligatures",
+        "font-variant-ligatures: discretionary-ligatures no-discretionary-ligatures",
+        "font-variant-ligatures: historical-ligatures no-historical-ligatures",
+        "font-variant-ligatures: contextual no-contextual",
+        "font-variant-ligatures: contextual contextual",
+        "font-variant-ligatures: normal common-ligatures",
+        "font-variant-ligatures: none contextual",
+        "font-variant-numeric: lining-nums oldstyle-nums",
+        "font-variant-numeric: proportional-nums tabular-nums",
+        "font-variant-numeric: diagonal-fractions stacked-fractions",
+        "font-variant-numeric: ordinal ordinal",
+        "font-variant-numeric: normal ordinal",
+        "font-variant-numeric: none",
+        "font-variant-east-asian: jis78 traditional",
+        "font-variant-east-asian: full-width proportional-width",
+        "font-variant-east-asian: ruby ruby",
+        "font-variant-east-asian: normal ruby",
+        "font-variant-east-asian: none",
+        "font-variant: normal small-caps",
+        "font-variant: none common-ligatures",
+        "font-variant: small-caps petite-caps",
+        "font-variant: sub super",
+        "font-variant: common-ligatures no-common-ligatures",
+        "font-variant: discretionary-ligatures no-discretionary-ligatures",
+        "font-variant: historical-ligatures no-historical-ligatures",
+        "font-variant: contextual no-contextual",
+        "font-variant: lining-nums oldstyle-nums",
+        "font-variant: proportional-nums tabular-nums",
+        "font-variant: diagonal-fractions stacked-fractions",
+        "font-variant: ordinal ordinal",
+        "font-variant: jis78 jis90",
+        "font-variant: full-width proportional-width",
+        "font-variant: ruby ruby",
+        "font-variant: small-caps, ordinal",
+    ] {
+        let source = format!("{invalid}; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        assert_eq!(report.diagnostics().len(), 1, "{source}");
+        assert_eq!(
+            report.diagnostics()[0].error().code(),
+            CssErrorCode::InvalidPropertyValue,
+            "{source}",
+        );
+        assert_eq!(
+            report.syntax()[0].known().unwrap().property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+
+        #[cfg(feature = "app-strict")]
+        assert_eq!(
+            surgeist_css::validate_style_attribute(&source)
+                .expect_err("strict parsing rejects the recovered declaration")
+                .diagnostics(),
+            report.diagnostics(),
+            "{source}",
+        );
+    }
 }
 
 #[test]

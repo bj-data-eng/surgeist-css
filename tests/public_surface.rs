@@ -6,14 +6,16 @@ use surgeist_css::{
     CssColorInterpolationSpace, CssErrorCode, CssExclusionReason, CssFeatureKind,
     CssFontFamilyNameKind, CssFontFeature, CssFontFeatureIndex, CssFontFeatureValue, CssFontSize,
     CssFontSizeAdjust, CssFontSizeLengthPercentage, CssFontSynthesis, CssFontSynthesisValues,
-    CssGenericFontFamily, CssGridAutoFlowAxis, CssHueInterpolationMethod, CssImportance,
-    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLength,
-    CssLineHeightLengthPercentage, CssMediaQueryModifier, CssOpenTypeTag, CssPredefinedColorSpace,
-    CssPropertyNameRef, CssRecoveryAction, CssRelativeColorChannel, CssRelativeColorEnvironment,
-    CssRelativeColorExpressionValue, CssRelativeColorFunction, CssRelativeColorResultDomain,
-    CssRule, CssSelectorCombinator, CssSpecificationTier, CssSupportStatus, ErrorKind,
-    conformance_exclusion, feature_metadata, parse_sheet, parse_style_attribute, property_metadata,
-    specification_source,
+    CssFontVariantCaps, CssFontVariantEastAsianValues, CssFontVariantLigatureState,
+    CssFontVariantLigatureValues, CssFontVariantNumericFigure, CssFontVariantNumericValues,
+    CssFontVariantPosition, CssFontVariantValues, CssGenericFontFamily, CssGridAutoFlowAxis,
+    CssHueInterpolationMethod, CssImportance, CssKnownDeclaredValueRef, CssKnownProperty,
+    CssKnownPropertyValueRef, CssLength, CssLineHeightLengthPercentage, CssMediaQueryModifier,
+    CssOpenTypeTag, CssPredefinedColorSpace, CssPropertyNameRef, CssRecoveryAction,
+    CssRelativeColorChannel, CssRelativeColorEnvironment, CssRelativeColorExpressionValue,
+    CssRelativeColorFunction, CssRelativeColorResultDomain, CssRule, CssSelectorCombinator,
+    CssSpecificationTier, CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata,
+    parse_sheet, parse_style_attribute, property_metadata, specification_source,
 };
 
 #[test]
@@ -104,6 +106,59 @@ fn public_surface_exposes_checked_font_control_models() {
         panic!("expected font-size-adjust");
     };
     assert!(matches!(adjust.size_adjust(), CssFontSizeAdjust::None));
+}
+
+#[test]
+fn public_surface_exposes_checked_font_variant_group_models() {
+    assert!(CssFontVariantLigatureValues::try_new(None, None, None, None).is_none());
+    let ligatures = CssFontVariantLigatureValues::try_new(
+        Some(CssFontVariantLigatureState::Enabled),
+        None,
+        None,
+        Some(CssFontVariantLigatureState::Disabled),
+    )
+    .expect("nonempty ligature set");
+    assert_eq!(
+        ligatures.common(),
+        Some(CssFontVariantLigatureState::Enabled)
+    );
+
+    assert!(CssFontVariantNumericValues::try_new(None, None, None, false, false).is_none());
+    let numeric = CssFontVariantNumericValues::try_new(
+        Some(CssFontVariantNumericFigure::OldstyleNums),
+        None,
+        None,
+        true,
+        false,
+    )
+    .expect("nonempty numeric set");
+    assert!(numeric.ordinal());
+
+    assert!(CssFontVariantEastAsianValues::try_new(None, None, false).is_none());
+    assert!(
+        CssFontVariantValues::try_new(
+            None,
+            Some(CssFontVariantPosition::Normal),
+            None,
+            None,
+            None,
+        )
+        .is_none()
+    );
+    assert!(
+        CssFontVariantValues::try_new(None, None, Some(CssFontVariantCaps::Normal), None, None,)
+            .is_none()
+    );
+    let values = CssFontVariantValues::try_new(
+        Some(ligatures),
+        Some(CssFontVariantPosition::Super),
+        Some(CssFontVariantCaps::SmallCaps),
+        Some(numeric),
+        None,
+    )
+    .expect("compatible nonempty shorthand union");
+    assert_eq!(values.position(), Some(CssFontVariantPosition::Super));
+    assert_eq!(values.caps(), Some(CssFontVariantCaps::SmallCaps));
 }
 
 #[test]

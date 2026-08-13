@@ -105,6 +105,71 @@ fn core_font_wrappers_keep_current_i01_global_and_substitution_branches_distinct
 }
 
 #[test]
+fn font_variant_wrappers_keep_current_i01_global_and_substitution_branches_distinct() {
+    let report = parse_style_attribute(concat!(
+        "font-variant: small-caps; font-variant: all-small-caps; ",
+        "font-variant-caps: petite-caps; font-variant-east-asian: ruby; ",
+        "font-variant-ligatures: none; font-variant-numeric: ordinal; ",
+        "font-variant-position: sub; font-variant-caps: inherit; ",
+        "font-variant-numeric: var(--numeric)",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::FontVariant(legacy) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-variant");
+    };
+    assert!(legacy.i01_subset().is_some());
+    let CssKnownPropertyValueRef::FontVariant(current) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-variant");
+    };
+    assert!(current.i01_subset().is_none());
+
+    assert!(matches!(
+        report.syntax()[2].known().unwrap().property_value(),
+        Some(CssKnownPropertyValueRef::FontVariantCaps(value))
+            if value.as_css() == "petite-caps"
+    ));
+    assert!(matches!(
+        report.syntax()[3].known().unwrap().property_value(),
+        Some(CssKnownPropertyValueRef::FontVariantEastAsian(value))
+            if value.as_css() == "ruby"
+    ));
+    assert!(matches!(
+        report.syntax()[4].known().unwrap().property_value(),
+        Some(CssKnownPropertyValueRef::FontVariantLigatures(value))
+            if value.as_css() == "none"
+    ));
+    assert!(matches!(
+        report.syntax()[5].known().unwrap().property_value(),
+        Some(CssKnownPropertyValueRef::FontVariantNumeric(value))
+            if value.as_css() == "ordinal"
+    ));
+    assert!(matches!(
+        report.syntax()[6].known().unwrap().property_value(),
+        Some(CssKnownPropertyValueRef::FontVariantPosition(value))
+            if value.as_css() == "sub"
+    ));
+    assert!(matches!(
+        report.syntax()[7].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::Global(_)
+    ));
+    assert!(matches!(
+        report.syntax()[8].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::SubstitutionDependent(_)
+    ));
+}
+
+#[test]
 fn direct_color_wrappers_expose_perceptual_current_values_without_lossy_projection() {
     let report = parse_style_attribute(concat!(
         "color: lab(calc(40% + 10%) 20 30); ",

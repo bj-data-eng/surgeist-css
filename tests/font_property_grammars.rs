@@ -1,9 +1,49 @@
 use surgeist_css::{
     CssAuthoredFontFeatureSettings, CssAuthoredFontFeatureValue, CssFontFamilyNameKind,
-    CssFontFeatureSettings, CssFontFeatureValue, CssFontSize, CssFontStyle, CssFontValue,
-    CssGenericFontFamily, CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef,
-    CssLineHeight, CssNonNegativeNumberValue, CssSystemFont, parse_style_attribute,
+    CssErrorCode, CssFontFeatureSettings, CssFontFeatureValue, CssFontSize, CssFontStyle,
+    CssFontValue, CssGenericFontFamily, CssKnownDeclaredValueRef, CssKnownProperty,
+    CssKnownPropertyValueRef, CssLineHeight, CssNonNegativeNumberValue, CssSystemFont,
+    parse_style_attribute,
 };
+
+#[test]
+fn kerning_size_adjust_and_synthesis_follow_fonts3() {
+    let report = parse_style_attribute(concat!(
+        "font-kerning: normal; ",
+        "font-size-adjust: 0.5; ",
+        "font-synthesis: style weight; ",
+        "color: red",
+    ));
+
+    if !report.is_clean() {
+        assert_eq!(report.diagnostics().len(), 3);
+        assert!(report
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.error().code() == CssErrorCode::UnknownProperty));
+        assert_eq!(report.syntax().len(), 1);
+        assert_eq!(
+            report.syntax()[0].known().unwrap().property(),
+            CssKnownProperty::Color,
+        );
+    }
+
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    assert_eq!(report.syntax().len(), 4);
+    assert_eq!(
+        report
+            .syntax()
+            .iter()
+            .map(|declaration| declaration.known().unwrap().property().canonical_name())
+            .collect::<Vec<_>>(),
+        [
+            "font-kerning",
+            "font-size-adjust",
+            "font-synthesis",
+            "color",
+        ],
+    );
+}
 
 #[test]
 fn font_size_family_line_height_and_shorthand_follow_fonts3() {

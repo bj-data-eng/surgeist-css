@@ -454,6 +454,20 @@ pub(super) fn parse_basic_shape_arguments<'i, 't>(
     .map(CssBasicShapeArguments::new)
 }
 
+pub(super) fn parse_easing_function_arguments<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    name: &str,
+) -> std::result::Result<CssEasingArguments, ParseError<'i, Error>> {
+    parse_validated_function_arguments(input, "easing function", |input| {
+        match name.to_ascii_lowercase().as_str() {
+            "cubic-bezier" => validate_cubic_bezier(input),
+            "steps" => validate_steps(input),
+            _ => false,
+        }
+    })
+    .map(CssEasingArguments::new)
+}
+
 pub(super) fn parse_validated_function_arguments<'i, 't>(
     input: &mut Parser<'i, 't>,
     context: &str,
@@ -668,6 +682,45 @@ pub(super) fn validate_polygon_shape<'i, 't>(input: &mut Parser<'i, 't>) -> bool
             return false;
         }
     }
+}
+
+pub(super) fn validate_cubic_bezier<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    for index in 0..4 {
+        if input.expect_number().is_err() {
+            return false;
+        }
+        if index < 3 && input.expect_comma().is_err() {
+            return false;
+        }
+    }
+    input.is_exhausted()
+}
+
+pub(super) fn validate_steps<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let Ok(Token::Number {
+        int_value: Some(value),
+        ..
+    }) = input.next()
+    else {
+        return false;
+    };
+    if *value <= 0 {
+        return false;
+    }
+    if input.is_exhausted() {
+        return true;
+    }
+    if input.expect_comma().is_err() {
+        return false;
+    }
+    let Ok(ident) = input.expect_ident_cloned() else {
+        return false;
+    };
+    let valid = matches!(
+        ident.to_ascii_lowercase().as_str(),
+        "jump-start" | "jump-end" | "jump-none" | "jump-both" | "start" | "end"
+    );
+    valid && input.is_exhausted()
 }
 
 pub(super) fn parse_translate<'i, 't>(

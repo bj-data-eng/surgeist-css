@@ -7585,242 +7585,6 @@ pub enum CssEasing {
     Steps(CssEasingArguments),
 }
 
-/// A keyword-authored easing function, including the two step aliases.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum CssEasingKeyword {
-    Ease,
-    Linear,
-    EaseIn,
-    EaseOut,
-    EaseInOut,
-    StepStart,
-    StepEnd,
-}
-
-/// A finite authored easing `<number>` or a symbolic number calculation.
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub enum CssEasingNumber {
-    Literal(CssFiniteNumber),
-    Calculation(CssNumberCalculation),
-}
-
-/// A checked cubic-bezier x coordinate.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CssCubicBezierX {
-    value: CssEasingNumber,
-}
-
-impl CssCubicBezierX {
-    #[must_use]
-    pub fn try_new(value: CssEasingNumber) -> Option<Self> {
-        match value {
-            CssEasingNumber::Literal(value) if !(0.0..=1.0).contains(&value.value()) => None,
-            value => Some(Self { value }),
-        }
-    }
-
-    #[must_use]
-    pub const fn value(&self) -> &CssEasingNumber {
-        &self.value
-    }
-}
-
-/// A checked authored `cubic-bezier()` value.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CssCubicBezier {
-    x1: CssCubicBezierX,
-    y1: CssEasingNumber,
-    x2: CssCubicBezierX,
-    y2: CssEasingNumber,
-}
-
-impl CssCubicBezier {
-    #[must_use]
-    pub fn try_new(
-        x1: CssEasingNumber,
-        y1: CssEasingNumber,
-        x2: CssEasingNumber,
-        y2: CssEasingNumber,
-    ) -> Option<Self> {
-        Some(Self {
-            x1: CssCubicBezierX::try_new(x1)?,
-            y1,
-            x2: CssCubicBezierX::try_new(x2)?,
-            y2,
-        })
-    }
-
-    #[must_use]
-    pub const fn x1(&self) -> &CssCubicBezierX {
-        &self.x1
-    }
-
-    #[must_use]
-    pub const fn y1(&self) -> &CssEasingNumber {
-        &self.y1
-    }
-
-    #[must_use]
-    pub const fn x2(&self) -> &CssCubicBezierX {
-        &self.x2
-    }
-
-    #[must_use]
-    pub const fn y2(&self) -> &CssEasingNumber {
-        &self.y2
-    }
-}
-
-/// The optional authored position of a `steps()` easing function.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum CssStepPosition {
-    JumpStart,
-    JumpEnd,
-    JumpNone,
-    JumpBoth,
-    Start,
-    End,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-enum CssStepCountValue {
-    Literal(i32),
-    Calculation(CssIntegerCalculation),
-}
-
-/// A positive authored step count or a symbolic integer calculation.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CssStepCount {
-    value: CssStepCountValue,
-}
-
-impl CssStepCount {
-    #[must_use]
-    pub const fn try_literal(value: i32) -> Option<Self> {
-        if value > 0 {
-            Some(Self {
-                value: CssStepCountValue::Literal(value),
-            })
-        } else {
-            None
-        }
-    }
-
-    #[must_use]
-    pub const fn from_calculation(value: CssIntegerCalculation) -> Self {
-        Self {
-            value: CssStepCountValue::Calculation(value),
-        }
-    }
-
-    #[must_use]
-    pub const fn literal(&self) -> Option<i32> {
-        match self.value {
-            CssStepCountValue::Literal(value) => Some(value),
-            CssStepCountValue::Calculation(_) => None,
-        }
-    }
-
-    #[must_use]
-    pub const fn calculation(&self) -> Option<&CssIntegerCalculation> {
-        match &self.value {
-            CssStepCountValue::Literal(_) => None,
-            CssStepCountValue::Calculation(value) => Some(value),
-        }
-    }
-}
-
-/// A checked authored `steps()` value.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CssSteps {
-    count: CssStepCount,
-    position: Option<CssStepPosition>,
-}
-
-impl CssSteps {
-    #[must_use]
-    pub fn try_new(count: CssStepCount, position: Option<CssStepPosition>) -> Option<Self> {
-        if matches!(position, Some(CssStepPosition::JumpNone)) && matches!(count.literal(), Some(1))
-        {
-            None
-        } else {
-            Some(Self { count, position })
-        }
-    }
-
-    #[must_use]
-    pub const fn count(&self) -> &CssStepCount {
-        &self.count
-    }
-
-    #[must_use]
-    pub const fn position(&self) -> Option<CssStepPosition> {
-        self.position
-    }
-}
-
-/// A parser-produced current authored easing function.
-#[derive(Clone, Debug, PartialEq)]
-#[non_exhaustive]
-pub enum CssEasingValue {
-    Keyword(CssEasingKeyword),
-    CubicBezier(CssCubicBezier),
-    Steps(CssSteps),
-}
-
-/// A non-empty comma-separated list of current authored easing functions.
-#[derive(Clone, Debug, PartialEq)]
-pub struct CssEasingValueList {
-    values: Vec<CssEasingValue>,
-}
-
-impl CssEasingValueList {
-    #[must_use]
-    pub fn try_new(values: Vec<CssEasingValue>) -> Option<Self> {
-        (!values.is_empty()).then_some(Self { values })
-    }
-
-    #[must_use]
-    pub fn values(&self) -> &[CssEasingValue] {
-        &self.values
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct CssParsedEasing {
-    current: CssEasingValue,
-    legacy: Option<CssEasing>,
-}
-
-impl CssParsedEasing {
-    pub(crate) const fn new(current: CssEasingValue, legacy: Option<CssEasing>) -> Self {
-        Self { current, legacy }
-    }
-
-    pub(crate) fn into_parts(self) -> (CssEasingValue, Option<CssEasing>) {
-        (self.current, self.legacy)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct CssParsedEasingList {
-    current: CssEasingValueList,
-    legacy: Option<CssEasingList>,
-}
-
-impl CssParsedEasingList {
-    pub(crate) const fn new(current: CssEasingValueList, legacy: Option<CssEasingList>) -> Self {
-        Self { current, legacy }
-    }
-
-    pub(crate) fn into_parts(self) -> (CssEasingValueList, Option<CssEasingList>) {
-        (self.current, self.legacy)
-    }
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssEasingList {
     easings: Vec<CssEasing>,
@@ -8306,8 +8070,7 @@ pub struct CssTransitionValue {
     property: Option<CssTransitionProperty>,
     duration: Option<CssDuration>,
     delay: Option<CssDelay>,
-    timing_function: Option<CssEasingValue>,
-    legacy_timing_function: Option<CssEasing>,
+    timing_function: Option<CssEasing>,
 }
 
 impl CssTransitionValue {
@@ -8316,25 +8079,17 @@ impl CssTransitionValue {
         property: Option<CssTransitionProperty>,
         duration: Option<CssDuration>,
         delay: Option<CssDelay>,
-        timing_function: Option<CssParsedEasing>,
+        timing_function: Option<CssEasing>,
     ) -> Option<Self> {
         if property.is_none() && duration.is_none() && delay.is_none() && timing_function.is_none()
         {
             None
         } else {
-            let (timing_function, legacy_timing_function) = match timing_function {
-                Some(value) => {
-                    let (current, legacy) = value.into_parts();
-                    (Some(current), legacy)
-                }
-                None => (None, None),
-            };
             Some(Self {
                 property,
                 duration,
                 delay,
                 timing_function,
-                legacy_timing_function,
             })
         }
     }
@@ -8355,13 +8110,8 @@ impl CssTransitionValue {
     }
 
     #[must_use]
-    pub const fn timing_function(&self) -> Option<&CssEasingValue> {
+    pub const fn timing_function(&self) -> Option<&CssEasing> {
         self.timing_function.as_ref()
-    }
-
-    #[must_use]
-    pub(crate) const fn legacy_timing_function(&self) -> Option<&CssEasing> {
-        self.legacy_timing_function.as_ref()
     }
 }
 
@@ -8393,8 +8143,7 @@ pub struct CssAnimationValue {
     name: Option<CssAnimationName>,
     duration: Option<CssDuration>,
     delay: Option<CssDelay>,
-    timing_function: Option<CssEasingValue>,
-    legacy_timing_function: Option<CssEasing>,
+    timing_function: Option<CssEasing>,
     iteration_count: Option<CssAnimationIterationValue>,
     direction: Option<CssAnimationDirection>,
     fill_mode: Option<CssAnimationFillMode>,
@@ -8411,7 +8160,7 @@ impl CssAnimationValue {
         name: Option<CssAnimationName>,
         duration: Option<CssDuration>,
         delay: Option<CssDelay>,
-        timing_function: Option<CssParsedEasing>,
+        timing_function: Option<CssEasing>,
         iteration_count: Option<CssAnimationIterationValue>,
         direction: Option<CssAnimationDirection>,
         fill_mode: Option<CssAnimationFillMode>,
@@ -8428,19 +8177,11 @@ impl CssAnimationValue {
         {
             None
         } else {
-            let (timing_function, legacy_timing_function) = match timing_function {
-                Some(value) => {
-                    let (current, legacy) = value.into_parts();
-                    (Some(current), legacy)
-                }
-                None => (None, None),
-            };
             Some(Self {
                 name,
                 duration,
                 delay,
                 timing_function,
-                legacy_timing_function,
                 iteration_count,
                 direction,
                 fill_mode,
@@ -8465,13 +8206,8 @@ impl CssAnimationValue {
     }
 
     #[must_use]
-    pub const fn timing_function(&self) -> Option<&CssEasingValue> {
+    pub const fn timing_function(&self) -> Option<&CssEasing> {
         self.timing_function.as_ref()
-    }
-
-    #[must_use]
-    pub(crate) const fn legacy_timing_function(&self) -> Option<&CssEasing> {
-        self.legacy_timing_function.as_ref()
     }
 
     #[must_use]

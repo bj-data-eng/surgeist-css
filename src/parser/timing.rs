@@ -1,5 +1,6 @@
-use cssparser::{ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
+use cssparser::{ParseError, Parser, Token, match_ignore_ascii_case};
 
+use super::effects::parse_easing_function_arguments;
 use super::values::{
     CalculationRoot, next_is_comma, parse_custom_ident_from_str_at, parse_typed_calculation,
 };
@@ -123,18 +124,10 @@ pub(super) fn parse_delay<'i, 't>(
 
 pub(super) fn parse_easing_list<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssParsedEasingList, ParseError<'i, Error>> {
-    let mut current = Vec::new();
-    let mut legacy = Some(Vec::new());
+) -> std::result::Result<CssEasingList, ParseError<'i, Error>> {
+    let mut easings = Vec::new();
     loop {
-        let parsed = parse_easing(input)?;
-        let (current_easing, legacy_easing) = parsed.into_parts();
-        current.push(current_easing);
-        match (legacy.as_mut(), legacy_easing) {
-            (Some(values), Some(value)) => values.push(value),
-            (_, None) => legacy = None,
-            (None, Some(_)) => {}
-        }
+        easings.push(parse_easing(input)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -146,242 +139,45 @@ pub(super) fn parse_easing_list<'i, 't>(
             ));
         }
     }
-    let current = CssEasingValueList::try_new(current)
-        .ok_or_else(|| unsupported_value(input, None, "easing list is empty"))?;
-    let legacy = legacy.and_then(CssEasingList::try_new);
-    Ok(CssParsedEasingList::new(current, legacy))
+    CssEasingList::try_new(easings)
+        .ok_or_else(|| unsupported_value(input, None, "easing list is empty"))
 }
 
 pub(super) fn parse_easing<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssParsedEasing, ParseError<'i, Error>> {
+) -> std::result::Result<CssEasing, ParseError<'i, Error>> {
     if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
-        let (current, legacy) = match_ignore_ascii_case! { &ident,
-            "ease" => (CssEasingKeyword::Ease, CssEasing::Ease),
-            "linear" => (CssEasingKeyword::Linear, CssEasing::Linear),
-            "ease-in" => (CssEasingKeyword::EaseIn, CssEasing::EaseIn),
-            "ease-out" => (CssEasingKeyword::EaseOut, CssEasing::EaseOut),
-            "ease-in-out" => (CssEasingKeyword::EaseInOut, CssEasing::EaseInOut),
-            "step-start" => (CssEasingKeyword::StepStart, CssEasing::StepStart),
-            "step-end" => (CssEasingKeyword::StepEnd, CssEasing::StepEnd),
+        return match_ignore_ascii_case! { &ident,
+            "ease" => Ok(CssEasing::Ease),
+            "linear" => Ok(CssEasing::Linear),
+            "ease-in" => Ok(CssEasing::EaseIn),
+            "ease-out" => Ok(CssEasing::EaseOut),
+            "ease-in-out" => Ok(CssEasing::EaseInOut),
+            "step-start" => Ok(CssEasing::StepStart),
+            "step-end" => Ok(CssEasing::StepEnd),
             _ => Err(unsupported_value(
                 input,
                 None,
                 unsupported_keyword_reason("easing", ident.as_ref()),
-            ))?,
+            )),
         };
-        return Ok(CssParsedEasing::new(
-            CssEasingValue::Keyword(current),
-            Some(legacy),
-        ));
     }
     let location = input.current_source_location();
     let name = match input.next().map_err(basic)? {
         Token::Function(name) => name.clone(),
         token => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
     };
-    let kind = match name.to_ascii_lowercase().as_str() {
-        "cubic-bezier" => CssEasingFunctionKind::CubicBezier,
-        "steps" => CssEasingFunctionKind::Steps,
-        _ => {
-            return Err(unsupported_value(
-                input,
-                None,
-                format!("unsupported easing function `{name}`"),
-            ));
-        }
-    };
-    let (current, arguments) = input.parse_nested_block(|input| {
-        let state = input.state();
-        let authored = collect_easing_authored_tokens(input)?;
-        input.reset(&state);
-        let current = match kind {
-            CssEasingFunctionKind::CubicBezier => {
-                CssEasingValue::CubicBezier(parse_cubic_bezier(input)?)
-            }
-            CssEasingFunctionKind::Steps => CssEasingValue::Steps(parse_steps(input)?),
-        };
-        Ok((
-            current,
-            CssEasingArguments::new(CssAuthoredFunctionArguments::new(authored)),
-        ))
-    })?;
-    let legacy = current_easing_belongs_to_i01(&current).then_some(match kind {
-        CssEasingFunctionKind::CubicBezier => CssEasing::CubicBezier(arguments),
-        CssEasingFunctionKind::Steps => CssEasing::Steps(arguments),
-    });
-    Ok(CssParsedEasing::new(current, legacy))
-}
-
-#[derive(Clone, Copy)]
-enum CssEasingFunctionKind {
-    CubicBezier,
-    Steps,
-}
-
-fn current_easing_belongs_to_i01(value: &CssEasingValue) -> bool {
-    match value {
-        CssEasingValue::Keyword(_) => true,
-        CssEasingValue::CubicBezier(value) => [
-            value.x1().value(),
-            value.y1(),
-            value.x2().value(),
-            value.y2(),
-        ]
-        .into_iter()
-        .all(|value| matches!(value, CssEasingNumber::Literal(_))),
-        CssEasingValue::Steps(value) => value.count().literal().is_some(),
-    }
-}
-
-fn collect_easing_authored_tokens<'i, 't>(
-    input: &mut Parser<'i, 't>,
-) -> std::result::Result<String, ParseError<'i, Error>> {
-    let mut value = String::new();
-    while !input.is_exhausted() {
-        let token = input.next().map_err(basic)?.clone();
-        let token_css = match token {
-            Token::Function(_) => {
-                let mut css = token.to_css_string();
-                css.push_str(&input.parse_nested_block(collect_easing_authored_tokens)?);
-                css.push(')');
-                css
-            }
-            Token::ParenthesisBlock => {
-                let nested = input.parse_nested_block(collect_easing_authored_tokens)?;
-                format!("({nested})")
-            }
-            _ => token.to_css_string(),
-        };
-        if matches!(token, Token::Comma) {
-            if value.ends_with(' ') {
-                value.pop();
-            }
-            value.push_str(", ");
-        } else {
-            if !value.is_empty() && !value.ends_with(' ') {
-                value.push(' ');
-            }
-            value.push_str(&token_css);
-        }
-    }
-    Ok(value.trim().to_owned())
-}
-
-fn parse_easing_number<'i, 't>(
-    input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssEasingNumber, ParseError<'i, Error>> {
-    let location = input.current_source_location();
-    match input.next().map_err(basic)? {
-        Token::Number { value, .. } => CssFiniteNumber::try_new(*value)
-            .map(CssEasingNumber::Literal)
-            .ok_or_else(|| unsupported_value_at(location, None, "easing number must be finite")),
-        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
-            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Number))
-            .map(CssNumberCalculation::from_expression)
-            .map(CssEasingNumber::Calculation),
-        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
-    }
-}
-
-fn parse_cubic_bezier<'i, 't>(
-    input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssCubicBezier, ParseError<'i, Error>> {
-    let x1_location = input.current_source_location();
-    let x1 = parse_easing_number(input)?;
-    input.expect_comma().map_err(basic)?;
-    let y1 = parse_easing_number(input)?;
-    input.expect_comma().map_err(basic)?;
-    let x2_location = input.current_source_location();
-    let x2 = parse_easing_number(input)?;
-    input.expect_comma().map_err(basic)?;
-    let y2 = parse_easing_number(input)?;
-    input.expect_exhausted().map_err(basic)?;
-
-    if CssCubicBezierX::try_new(x1.clone()).is_none() {
-        return Err(unsupported_value_at(
-            x1_location,
+    let arguments =
+        input.parse_nested_block(|input| parse_easing_function_arguments(input, name.as_ref()))?;
+    match name.to_ascii_lowercase().as_str() {
+        "cubic-bezier" => Ok(CssEasing::CubicBezier(arguments)),
+        "steps" => Ok(CssEasing::Steps(arguments)),
+        _ => Err(unsupported_value(
+            input,
             None,
-            "cubic-bezier x coordinate must be between zero and one",
-        ));
+            format!("unsupported easing function `{name}`"),
+        )),
     }
-    if CssCubicBezierX::try_new(x2.clone()).is_none() {
-        return Err(unsupported_value_at(
-            x2_location,
-            None,
-            "cubic-bezier x coordinate must be between zero and one",
-        ));
-    }
-    CssCubicBezier::try_new(x1, y1, x2, y2).ok_or_else(|| {
-        unsupported_value_at(
-            x1_location,
-            None,
-            "cubic-bezier x coordinates must be between zero and one",
-        )
-    })
-}
-
-fn parse_steps<'i, 't>(
-    input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssSteps, ParseError<'i, Error>> {
-    let count_location = input.current_source_location();
-    let count = match input.next().map_err(basic)? {
-        Token::Number {
-            int_value: Some(value),
-            ..
-        } => CssStepCount::try_literal(*value).ok_or_else(|| {
-            unsupported_value_at(
-                count_location,
-                None,
-                "steps() count must be a positive integer",
-            )
-        })?,
-        Token::Number { .. } => {
-            return Err(unsupported_value_at(
-                count_location,
-                None,
-                "steps() count must be an integer",
-            ));
-        }
-        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
-            let calculation = input
-                .parse_nested_block(|input| {
-                    parse_typed_calculation(input, CalculationRoot::Integer)
-                })
-                .map(CssIntegerCalculation::from_expression)?;
-            CssStepCount::from_calculation(calculation)
-        }
-        token => return Err(count_location.new_unexpected_token_error::<Error>(token.clone())),
-    };
-
-    let position = if input.is_exhausted() {
-        None
-    } else {
-        input.expect_comma().map_err(basic)?;
-        let ident = input.expect_ident_cloned().map_err(basic)?;
-        let position = match_ignore_ascii_case! { &ident,
-            "jump-start" => CssStepPosition::JumpStart,
-            "jump-end" => CssStepPosition::JumpEnd,
-            "jump-none" => CssStepPosition::JumpNone,
-            "jump-both" => CssStepPosition::JumpBoth,
-            "start" => CssStepPosition::Start,
-            "end" => CssStepPosition::End,
-            _ => return Err(unsupported_value(
-                input,
-                None,
-                unsupported_keyword_reason("step position", ident.as_ref()),
-            )),
-        };
-        Some(position)
-    };
-    input.expect_exhausted().map_err(basic)?;
-    CssSteps::try_new(count, position).ok_or_else(|| {
-        unsupported_value_at(
-            count_location,
-            None,
-            "steps() with jump-none requires at least two intervals",
-        )
-    })
 }
 
 pub(super) fn parse_transition_property_list<'i, 't>(

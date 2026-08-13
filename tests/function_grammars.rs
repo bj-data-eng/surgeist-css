@@ -106,6 +106,23 @@ fn parsed_filter_property(value: &str) -> CssFilterPropertyValue {
 }
 
 #[test]
+fn clip_path_rejects_circle_percentage_radius() {
+    let report = parse_style_attribute("clip-path: circle(25%); color: red");
+    assert_eq!(report.syntax().len(), 1, "retained invalid circle radius");
+    assert_eq!(
+        report.syntax()[0]
+            .known()
+            .expect("retained color sibling")
+            .property(),
+        CssKnownProperty::Color,
+    );
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid circle radius must produce one diagnostic");
+    };
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+}
+
+#[test]
 fn drop_shadow_rejects_box_shadow_only_components_and_negative_filter_amounts() {
     for value in [
         "drop-shadow(inset 1px 2px)",

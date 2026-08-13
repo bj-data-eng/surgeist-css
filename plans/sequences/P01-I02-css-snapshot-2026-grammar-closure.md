@@ -4,11 +4,11 @@
 
 This sequence implements the reviewed P01-I02 specification at
 `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
-`b8767d626e2ff3aebf4aeea526518778bb00cb001a1da24fa546d56f2314718a`,
+`a080ccbcc72ea12133c54bdaf2af869bbfd717c432b3d4c1388398bf18371a37`,
 and its official ledger at SHA-256
-`746e8fe722eea56c2b6d3d8072480a91fb2473a6c25296cd466556f4bef51ced`.
+`09d69fd44b112a23c7a3863f11b21a6103f55beb37d0dca06cd021b33ae670e6`.
 It is subordinate to reviewed P01 semantic SHA-256
-`e7219f734010db9e5772f587c6a394f5eef3020c0512240229f5e5f77829d986`.
+`08a6696c3c7f5bcaec7563ff56140a02357ed6f511fcdd9d61603b123c356d25`.
 The published I01 base is
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; planning commits after that base
 belong to the I02 candidate range.
@@ -198,16 +198,19 @@ published/read-back C08 SHA.
 - **Prerequisite/entry:** C02 inventories and C03 numeric/ratio domains are
   published/read back; P01.12 reconciles the imported `<general-enclosed>`
   binding to immutable `X-VALUES4` repository provenance without importing its
-  sibling boolean grammar.
+  sibling boolean grammar, and assigns the separate Conditional 4 selector-test
+  delta to `R-CONDITIONAL4`.
 
 Close findings 2.4 and 2.7 and the Conditional portion of 2.1. Implement complete
 MQ3 types/features/defined-false behavior, `@supports`, dated
 `general-enclosed`, atomic Cascade 4/5 import clauses, and the exact layer/import/
 namespace/body phase machine. Exercise all rule contexts, comma recovery,
-nested groups, and source-order diagnostics.
+nested groups, source-order diagnostics, and the Partial
+`ext.supports.selector` boundary against the currently supported selector parser.
 
 Exit: MQ3 and Conditional 3 are Complete; later MQ/container extensions retain
-their separate provenance and recovery behavior. **Handoff:** phase table and
+their separate provenance and recovery behavior. The Conditional 4 selector
+delta remains separately sourced and Partial. **Handoff:** phase table and
 media/supports/import row promotions, recovery/consumer evidence,
 reviews/matrix/cleanup, and published/read-back C09 SHA.
 
@@ -217,13 +220,16 @@ reviews/matrix/cleanup, and published/read-back C09 SHA.
   namespace ordering, 6, 10, 11 findings 2.3/2.8 and namespace 2.1, and 12;
   ledger namespace/selector rows.
 - **Prerequisite/entry:** C09 top-level phase machine is published/read back;
-  namespace slots and selector inventories exist from C02.
+  namespace slots and selector inventories exist from C02; C09's
+  `ext.supports.selector` row is Partial against the pre-C10 selector subset.
 
 Close findings 2.3 and 2.8 and the namespace portion of 2.1. Add namespace rules,
 qualified names, active-prefix validation, universal/type/attribute forms,
 complete Selectors 3 pseudo classes/elements/combinators, ordered repeated IDs,
-and exact legacy spellings. Preserve I01 Selectors 4 forgiving/unforgiving,
-nesting, and scope behavior.
+and exact legacy spellings. Expand the existing `ext.supports.selector` Partial
+subset through the same namespace-aware complex-selector parser without claiming
+complete Selectors 4. Preserve I01 Selectors 4 forgiving/unforgiving, nesting,
+and scope behavior.
 
 Exit: every official selector ledger row is Complete with public AST,
 tokenization, namespace, diagnostic, recovery, and mutation evidence. **Handoff:**

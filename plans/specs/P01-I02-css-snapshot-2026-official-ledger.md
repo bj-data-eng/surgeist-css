@@ -182,6 +182,10 @@ grammar is not another ledger row. The Conditional 3 `@media` shell
 and `baseline.rule.media` record bind to `O-CONDITIONAL3`. Their imported
 `<media-query-list>` grammar binds to the selected `O-MEDIA3` core plus the
 separately catalogued `R-MEDIA4` deltas, not a moving Media Queries reference.
+Conditional 4's `selector(<complex-selector>)` addition is the separate
+`ext.supports.selector` row at `R-CONDITIONAL4#at-supports`; it is Partial in C09
+against the then-supported complex-selector subset and is expanded, without a
+stable-ID change or complete Selectors 4 claim, by C10.
 Color 4 does not own `color-mix()` or relative colors; those retain `I-COLOR5`.
 Fonts 3 does not own `font-display` or `@font-feature-values`; those retain
 `I-FONTS4`.

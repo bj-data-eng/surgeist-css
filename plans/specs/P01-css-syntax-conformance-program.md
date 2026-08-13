@@ -406,9 +406,19 @@ editor-draft Values 4 syntax enters the profile. This is a provenance correction
 not a moving-source exception: the commit and path are immutable and the
 implementation remains bounded by the reviewed I02 atomic ledger row.
 
-The correction changes no frozen I01 parser behavior, public contract, fixture,
-official Snapshot source, dependency, feature, or repository boundary. C09 must
-prove the exact function/parenthesis balanced-token grammar, authored retention,
-and malformed-condition recovery through public parser behavior. Any need to
-consume later boolean grammar beyond this one imported production, or any
-further unresolved source ownership, stops again for P01 reconciliation.
+The same discovery proves that `selector(<complex-selector>)` is not a
+Conditional 3 production. Conditional 3 owns declaration tests; the immutable
+4 September 2025 Conditional 4 Candidate Recommendation Draft selected as
+`R-CONDITIONAL4` adds selector tests. C09 therefore adds a distinct
+`ext.supports.selector` atomic row sourced to `R-CONDITIONAL4#at-supports` and
+keeps it Partial against the complex-selector grammar supported at that point.
+C10's namespace and complete Selectors 3 work expands that same row's supported
+subset without changing its identity or falsely claiming complete Selectors 4.
+
+These corrections change no frozen I01 parser behavior, public contract,
+fixture, official Snapshot source, dependency, feature, or repository boundary.
+C09 must prove the exact function/parenthesis balanced-token grammar, authored
+retention, selector-subset boundary, and malformed-condition recovery through
+public parser behavior. Any need to consume later boolean grammar beyond this
+one imported production, claim unsupported Selectors 4 syntax, or cross C10's
+namespace ownership stops again for P01 reconciliation.

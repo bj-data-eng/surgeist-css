@@ -4,7 +4,7 @@
 
 This is the JIT implementation contract for `P01-I02` in `surgeist-css`.
 It is subordinate to the reviewed P01 program at semantic SHA-256
-`e7219f734010db9e5772f587c6a394f5eef3020c0512240229f5e5f77829d986`
+`08a6696c3c7f5bcaec7563ff56140a02357ed6f511fcdd9d61603b123c356d25`
 and incorporates its I02-entry and source-contradiction reconciliations. The
 initiative base is the published, fetchable I01 candidate
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; the P01 reconciliation commit
@@ -383,7 +383,7 @@ provenance for container-query or style-query syntax.
 
 The immutable official coverage universe is
 `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256
-`746e8fe722eea56c2b6d3d8072480a91fb2473a6c25296cd466556f4bef51ced`.
+`09d69fd44b112a23c7a3863f11b21a6103f55beb37d0dca06cd021b33ae670e6`.
 It enumerates exactly 162 property units, 167 non-property units, the one
 normative legacy-shorthand alias, all supersession mappings, and the complete
 selected exclusion remainder. The implementation may consume its stable IDs in
@@ -463,6 +463,13 @@ catalogued `R-MEDIA4` deltas. No moving imported URL becomes conformance input.
 Unknown/general-enclosed tests are retained as authored syntax where the owning
 grammar requires, not recovered as malformed.
 
+Conditional 3 owns declaration tests but not `selector()`. The selected
+`R-CONDITIONAL4#at-supports` delta owns a distinct `ext.supports.selector`
+atomic row. C09 parses that function through the established complex-selector
+parser and classifies the row Partial with the exact selector subset and
+remainder supported at its exit. C10 expands the same row when namespace and
+complete Selectors 3 syntax land; it does not claim complete Selectors 4.
+
 Counter-style and page descriptors use source-order occurrence lists,
 effective-last lookup where defined, exact required/conflicting descriptor
 validation, and `DropDescriptor` recovery. Page blocks reuse ordinary
@@ -505,11 +512,13 @@ complete unknown media types/features/values in typed defined-false authored
 nodes where MQ3 requires; malformed comma members retain `Never` plus
 `ReplaceMediaQueryWithNever`.
 
-`@supports` implements declaration, selector, `not`, `and`, `or`, grouping, and
-general-enclosed conditions with the grammar's no-mixed-operator rule. A
+`@supports` implements Conditional 3 declaration, `not`, `and`, `or`, grouping,
+and general-enclosed conditions with the grammar's no-mixed-operator rule. A
 declaration test parses through the authoritative property schema but does not
-apply substitution or expose it as an ordinary declaration. Conditional group
-rules reuse the established rule-context and nesting recovery coordinators.
+apply substitution or expose it as an ordinary declaration. The separately
+sourced Conditional 4 `selector()` delta parses the currently supported
+complex-selector subset and remains Partial through C09. Conditional group rules
+reuse the established rule-context and nesting recovery coordinators.
 
 Existing MQ4 range and container-query extensions remain typed and truthful.
 No query is evaluated by this crate.

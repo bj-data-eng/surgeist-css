@@ -4782,7 +4782,7 @@ fn constructor_invariants_reject_invalid_public_numeric_values() {
     assert_eq!(CssGridTrackBreadth::try_fraction(-0.1), None);
     assert_eq!(
         CssGridTrackBreadth::try_fraction(1.0).unwrap(),
-        CssGridTrackBreadth::fraction(1.0)
+        CssGridTrackBreadth::try_fraction(1.0).unwrap()
     );
 
     assert_eq!(CssScaleValues::try_new(vec![1.0, f32::NAN]), None);
@@ -7055,7 +7055,7 @@ fn acceptance_position_alignment_flex_and_grid_matrix_accepts_supported_values()
         value_case!(
             "grid auto-flow shorthand",
             "grid",
-            "auto-flow dense 12px / repeat(auto-fit, 1fr)",
+            "auto-flow dense 12px / repeat(auto-fit, 10px)",
             CssProperty::Grid,
             assert_grid_value
         ),
@@ -9381,7 +9381,7 @@ fn parses_grid_track_lists_and_template_areas() {
                 CssGridTrackList::new(vec![CssGridTrackComponent::TrackSize(
                     CssGridTrackSize::minmax(
                         CssGridTrackBreadth::length(CssLength::px(10.0)),
-                        CssGridTrackBreadth::fraction(1.0),
+                        CssGridTrackBreadth::try_fraction(1.0).unwrap(),
                     )
                 )]),
             )),
@@ -9456,7 +9456,7 @@ fn parses_grid_template_and_grid_shorthands() {
                     CssGridTrackBreadth::length(CssLength::px(100.0))
                 )),
                 CssGridTrackComponent::TrackSize(CssGridTrackSize::breadth(
-                    CssGridTrackBreadth::fraction(1.0)
+                    CssGridTrackBreadth::try_fraction(1.0).unwrap()
                 )),
             ]),
             columns: Some(CssGridTrackList::new(vec![CssGridTrackComponent::Repeat(
@@ -9465,7 +9465,7 @@ fn parses_grid_template_and_grid_shorthands() {
                     CssGridTrackList::new(vec![CssGridTrackComponent::TrackSize(
                         CssGridTrackSize::minmax(
                             CssGridTrackBreadth::length(CssLength::px(10.0)),
-                            CssGridTrackBreadth::fraction(1.0),
+                            CssGridTrackBreadth::try_fraction(1.0).unwrap(),
                         )
                     )]),
                 )
@@ -9474,7 +9474,7 @@ fn parses_grid_template_and_grid_shorthands() {
     );
     assert_eq!(
         declaration_value!(
-            ".panel { grid: auto-flow dense 12px / repeat(auto-fit, 1fr); }",
+            ".panel { grid: auto-flow dense 12px / repeat(auto-fit, 10px); }",
             Grid
         ),
         CssGrid::AutoFlow {
@@ -9488,7 +9488,7 @@ fn parses_grid_template_and_grid_shorthands() {
                 CssGridRepeat::new(
                     CssGridRepeatCount::AutoFit,
                     CssGridTrackList::new(vec![CssGridTrackComponent::TrackSize(
-                        CssGridTrackSize::breadth(CssGridTrackBreadth::fraction(1.0))
+                        CssGridTrackSize::breadth(CssGridTrackBreadth::length(CssLength::px(10.0)))
                     )]),
                 )
             )]),
@@ -9546,7 +9546,7 @@ fn grid_and_flex_property_families_accept_supported_values() {
             grid-row: 1 / span 2;
             grid-column: nav / main;
             grid-area: header / nav / main / 4;
-            grid: auto-flow 12px / repeat(auto-fill, 1fr);
+            grid: auto-flow 12px / repeat(auto-fill, 10px);
             order: 2;
             flex: 1 1 auto;
             justify-tracks: space-between;
@@ -9622,13 +9622,13 @@ fn checked_grid_constructors_reject_parser_invalid_states() {
         CssGridRepeat::try_new(
             CssGridRepeatCount::integer(1),
             CssGridTrackList::new(vec![CssGridTrackComponent::TrackSize(
-                CssGridTrackSize::breadth(CssGridTrackBreadth::fraction(1.0))
+                CssGridTrackSize::breadth(CssGridTrackBreadth::try_fraction(1.0).unwrap())
             )])
         ),
         Some(CssGridRepeat::new(
             CssGridRepeatCount::integer(1),
             CssGridTrackList::new(vec![CssGridTrackComponent::TrackSize(
-                CssGridTrackSize::breadth(CssGridTrackBreadth::fraction(1.0))
+                CssGridTrackSize::breadth(CssGridTrackBreadth::try_fraction(1.0).unwrap())
             )])
         ))
     );

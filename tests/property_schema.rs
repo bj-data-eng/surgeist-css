@@ -437,7 +437,7 @@ const PROPERTY_DISPATCH_VECTORS: &[DispatchVector] = &[
     dispatch_vector!("grid-row", "1 / span 2"),
     dispatch_vector!("grid-column", "nav / main"),
     dispatch_vector!("grid-area", "header / 1 / span 2 / main"),
-    dispatch_vector!("grid", "auto-flow dense 12px / repeat(auto-fit, 1fr)"),
+    dispatch_vector!("grid", "auto-flow dense 12px / repeat(auto-fit, 10px)"),
     dispatch_vector!("aspect-ratio", "1.5"),
     dispatch_vector!("font-size", "16px"),
     dispatch_vector!("line-height", "normal"),
@@ -860,6 +860,8 @@ fn typed_length_calculations_are_accepted_by_the_exact_current_consumer_set() {
         ("grid-template-columns", "calc((1px + 2%) * 3)"),
         ("grid-auto-rows", "calc((1px + 2%) * 3)"),
         ("grid-auto-columns", "calc((1px + 2%) * 3)"),
+        ("grid-template", "calc((1px + 2%) * 3) / 1fr"),
+        ("grid", "calc((1px + 2%) * 3) / 1fr"),
         ("font-size", "calc((1px + 2%) * 3)"),
         ("line-height", "calc((1px + 2%) * 3)"),
         (
@@ -923,18 +925,13 @@ fn typed_length_calculations_are_accepted_by_the_exact_current_consumer_set() {
         );
     }
 
-    for source in [
-        "clip-path: polygon(, calc((1px + 2%) * 3) 0px, 1px 1px)",
-        "grid-template: calc((1px + 2%) * 3) / 1fr",
-        "grid: calc((1px + 2%) * 3) / 1fr",
-    ] {
-        let report = parse_style_attribute(source);
-        assert!(
-            !report.is_clean(),
-            "later function grammar changed: {source}"
-        );
-        assert!(report.syntax().is_empty(), "{source}");
-    }
+    let source = "clip-path: polygon(, calc((1px + 2%) * 3) 0px, 1px 1px)";
+    let report = parse_style_attribute(source);
+    assert!(
+        !report.is_clean(),
+        "later function grammar changed: {source}"
+    );
+    assert!(report.syntax().is_empty(), "{source}");
 }
 
 #[test]

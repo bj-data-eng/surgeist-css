@@ -82,6 +82,58 @@ fn opacity_domain_error_after_non_bmp_text_has_exact_coordinates_and_span() {
 }
 
 #[test]
+fn grid_repeat_error_after_non_bmp_text_has_exact_coordinates_and_span() {
+    let source = "--😀: 1; grid-template-columns: repeat(auto-fit, 1fr); color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid auto-repeat must recover once");
+    };
+    let responsible = source.find("1fr").unwrap();
+    let declaration_start = source.find("grid-template-columns").unwrap();
+    let declaration_end = declaration_start + source[declaration_start..].find(';').unwrap() + 1;
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(source[..responsible].encode_utf16().count()).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().start(),
+        declaration_start,
+        0,
+        u32::try_from(source[..declaration_start].encode_utf16().count()).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        declaration_end,
+        0,
+        u32::try_from(source[..declaration_end].encode_utf16().count()).unwrap(),
+    );
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected Grid property error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::GridTemplateColumns);
+    assert_eq!(
+        detail.encountered().unwrap().kind(),
+        CssTokenKind::Dimension
+    );
+    assert_eq!(detail.encountered().unwrap().authored(), "1fr");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects flexible auto-repeat");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn color_component_error_after_non_bmp_text_has_exact_coordinates_and_span() {
     let source = "--😀: 1; color: rgb(1px 2 3); opacity: 0.5";
     let report = parse_style_attribute(source);

@@ -181,7 +181,7 @@ pub const PROPERTY_POSITIVE_VECTORS: &[PropertyVector] = &[
     vector!(
         "baseline.property.grid",
         "grid",
-        "auto-flow dense 12px / repeat(auto-fit, 1fr)"
+        "auto-flow dense 12px / repeat(auto-fit, 10px)"
     ),
     vector!("baseline.property.font-size", "font-size", "16px"),
     vector!("baseline.property.line-height", "line-height", "normal"),

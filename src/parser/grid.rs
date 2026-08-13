@@ -4,9 +4,8 @@ use cssparser::{ParseError, Parser, Token, match_ignore_ascii_case};
 
 use super::values::{
     LengthGrammar, checked_percentage_value, next_is_delim, parse_box_size_value,
-    parse_calc_length_with_grammar, parse_custom_ident_from_str_at,
-    parse_legacy_calc_length_with_grammar, parse_length_with_context,
-    parse_length_with_context_legacy, parse_positive_integer,
+    parse_calc_length_with_grammar, parse_custom_ident_from_str_at, parse_length_with_context,
+    parse_positive_integer,
 };
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::properties::CssGridFlowTolerancePropertyValueRepresentation;
@@ -48,53 +47,78 @@ pub(super) fn parse_grid_flow_tolerance<'i, 't>(
 
 pub(super) fn parse_grid_track_list<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssGridTrackList, ParseError<'i, Error>> {
-    parse_grid_track_list_with_mode(input, false, true)
+) -> std::result::Result<CssParsedGridTrackList, ParseError<'i, Error>> {
+    parse_grid_track_list_with_mode(input, false)
 }
 
 fn parse_grid_track_list_with_mode<'i, 't>(
     input: &mut Parser<'i, 't>,
     stop_at_slash: bool,
-    allow_typed_calculation: bool,
-) -> std::result::Result<CssGridTrackList, ParseError<'i, Error>> {
+) -> std::result::Result<CssParsedGridTrackList, ParseError<'i, Error>> {
     let mut components = Vec::new();
     while !input.is_exhausted() {
         if stop_at_slash && next_is_delim(input, '/') {
             break;
         }
-        components.push(parse_grid_track_component(input, allow_typed_calculation)?);
+        let location = input.current_source_location();
+        components.push(LocatedGridTrackComponent {
+            location,
+            component: parse_grid_track_component(input)?,
+        });
     }
-    if components.is_empty() {
-        Err(unsupported_value(
+    if components.is_empty()
+        || !components
+            .iter()
+            .any(|component| !matches!(component.component, ParsedGridTrackComponent::LineNames(_)))
+    {
+        return Err(unsupported_value(
             input,
             None,
             "grid track list is missing a track",
-        ))
-    } else {
-        Ok(CssGridTrackList::new(components))
+        ));
     }
+
+    build_grid_track_list(components)
 }
 
-pub(super) fn parse_grid_track_component<'i, 't>(
+#[derive(Clone)]
+struct LocatedGridTrackComponent {
+    location: cssparser::SourceLocation,
+    component: ParsedGridTrackComponent,
+}
+
+#[derive(Clone)]
+enum ParsedGridTrackComponent {
+    LineNames(CssGridLineNames),
+    TrackSize(CssAuthoredGridTrackSize),
+    IntegerRepeat {
+        track: CssAuthoredGridIntegerTrackRepeat,
+        fixed: Option<CssAuthoredGridIntegerFixedRepeat>,
+        i01: Option<CssGridRepeat>,
+    },
+    AutoRepeat {
+        value: CssAuthoredGridAutoRepeat,
+        i01: Option<CssGridRepeat>,
+    },
+}
+
+fn parse_grid_track_component<'i, 't>(
     input: &mut Parser<'i, 't>,
-    allow_typed_calculation: bool,
-) -> std::result::Result<CssGridTrackComponent, ParseError<'i, Error>> {
+) -> std::result::Result<ParsedGridTrackComponent, ParseError<'i, Error>> {
     let state = input.state();
     match input.next().map_err(basic)? {
         Token::SquareBracketBlock => {
             return input
                 .parse_nested_block(parse_grid_line_names)
-                .map(CssGridTrackComponent::LineNames);
+                .map(ParsedGridTrackComponent::LineNames);
         }
         Token::Function(name) if name.eq_ignore_ascii_case("repeat") => {
-            return input
-                .parse_nested_block(|input| parse_grid_repeat(input, allow_typed_calculation))
-                .map(CssGridTrackComponent::Repeat);
+            return input.parse_nested_block(parse_grid_repeat);
         }
         _ => input.reset(&state),
     }
 
-    parse_grid_track_size(input, allow_typed_calculation).map(CssGridTrackComponent::TrackSize)
+    parse_grid_track_size(input).map(ParsedGridTrackComponent::TrackSize)
 }
 
 pub(super) fn parse_grid_line_names<'i, 't>(
@@ -117,14 +141,18 @@ pub(super) fn parse_grid_line_names<'i, 't>(
     }
 }
 
-pub(super) fn parse_grid_repeat<'i, 't>(
+fn parse_grid_repeat<'i, 't>(
     input: &mut Parser<'i, 't>,
-    allow_typed_calculation: bool,
-) -> std::result::Result<CssGridRepeat, ParseError<'i, Error>> {
+) -> std::result::Result<ParsedGridTrackComponent, ParseError<'i, Error>> {
+    enum Count {
+        Integer(i32),
+        Auto(CssAuthoredGridAutoRepeatKind),
+    }
+
     let count = if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
         match_ignore_ascii_case! { &ident,
-            "auto-fill" => CssGridRepeatCount::AutoFill,
-            "auto-fit" => CssGridRepeatCount::AutoFit,
+            "auto-fill" => Count::Auto(CssAuthoredGridAutoRepeatKind::AutoFill),
+            "auto-fit" => Count::Auto(CssAuthoredGridAutoRepeatKind::AutoFit),
             _ => return Err(unsupported_value(
                 input,
                 None,
@@ -133,43 +161,170 @@ pub(super) fn parse_grid_repeat<'i, 't>(
         }
     } else {
         let count = parse_positive_integer(input, "grid repeat count")?;
-        CssGridRepeatCount::integer(count)
+        Count::Integer(count)
     };
 
     input.expect_comma().map_err(basic)?;
-    let tracks = parse_grid_track_list_with_mode(input, false, allow_typed_calculation)?;
-    Ok(CssGridRepeat::new(count, tracks))
+    match count {
+        Count::Integer(count) => parse_integer_grid_repeat(input, count),
+        Count::Auto(kind) => parse_auto_grid_repeat(input, kind),
+    }
 }
 
-pub(super) fn parse_grid_track_size<'i, 't>(
+fn parse_integer_grid_repeat<'i, 't>(
     input: &mut Parser<'i, 't>,
-    allow_typed_calculation: bool,
-) -> std::result::Result<CssGridTrackSize, ParseError<'i, Error>> {
+    count: i32,
+) -> std::result::Result<ParsedGridTrackComponent, ParseError<'i, Error>> {
+    let mut track_components = Vec::new();
+    let mut fixed_components = Vec::new();
+    let mut fixed = true;
+    let mut legacy_components = Some(Vec::new());
+    let mut has_track = false;
+    while !input.is_exhausted() {
+        let state = input.state();
+        if matches!(input.next().map_err(basic)?, Token::SquareBracketBlock) {
+            let names = input.parse_nested_block(parse_grid_line_names)?;
+            track_components.push(CssAuthoredGridTrackRepeatComponent::LineNames(
+                names.clone(),
+            ));
+            fixed_components.push(CssAuthoredGridFixedRepeatComponent::LineNames(
+                names.clone(),
+            ));
+            legacy_components
+                .as_mut()
+                .expect("line names preserve projection")
+                .push(CssGridTrackComponent::LineNames(names));
+            continue;
+        }
+        input.reset(&state);
+        let size = parse_grid_track_size(input)?;
+        has_track = true;
+        match (legacy_components.as_mut(), size.i01_projection()) {
+            (Some(components), Some(value)) => {
+                components.push(CssGridTrackComponent::TrackSize(value));
+            }
+            (Some(_), None) => legacy_components = None,
+            (None, _) => {}
+        }
+        if let Some(fixed_size) = grid_fixed_size(&size) {
+            fixed_components.push(CssAuthoredGridFixedRepeatComponent::FixedSize(fixed_size));
+        } else {
+            fixed = false;
+        }
+        track_components.push(CssAuthoredGridTrackRepeatComponent::TrackSize(size));
+    }
+    if !has_track {
+        return Err(unsupported_value(
+            input,
+            None,
+            "grid repeat content is missing a track",
+        ));
+    }
+    let count_value = CssGridRepeatInteger::try_new(count).expect("positive repeat count");
+    let legacy = legacy_components.map(|components| {
+        CssGridRepeat::new(
+            CssGridRepeatCount::integer(count),
+            CssGridTrackList::new(components),
+        )
+    });
+    Ok(ParsedGridTrackComponent::IntegerRepeat {
+        track: CssAuthoredGridIntegerTrackRepeat::new(
+            count_value,
+            CssAuthoredGridTrackRepeatContent::new(track_components),
+        ),
+        fixed: fixed.then(|| {
+            CssAuthoredGridIntegerFixedRepeat::new(
+                count_value,
+                CssAuthoredGridFixedRepeatContent::new(fixed_components),
+            )
+        }),
+        i01: legacy,
+    })
+}
+
+fn parse_auto_grid_repeat<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    kind: CssAuthoredGridAutoRepeatKind,
+) -> std::result::Result<ParsedGridTrackComponent, ParseError<'i, Error>> {
+    let mut components = Vec::new();
+    let mut legacy_components = Some(Vec::new());
+    let mut has_track = false;
+    while !input.is_exhausted() {
+        let state = input.state();
+        if matches!(input.next().map_err(basic)?, Token::SquareBracketBlock) {
+            let names = input.parse_nested_block(parse_grid_line_names)?;
+            components.push(CssAuthoredGridFixedRepeatComponent::LineNames(
+                names.clone(),
+            ));
+            legacy_components
+                .as_mut()
+                .expect("line names preserve projection")
+                .push(CssGridTrackComponent::LineNames(names));
+            continue;
+        }
+        input.reset(&state);
+        let location = input.current_source_location();
+        let size = parse_grid_track_size(input)?;
+        let Some(fixed) = grid_fixed_size(&size) else {
+            return Err(unsupported_value_at(
+                location,
+                None,
+                "automatic grid repetition requires a fixed track size",
+            ));
+        };
+        has_track = true;
+        match (legacy_components.as_mut(), size.i01_projection()) {
+            (Some(components), Some(value)) => {
+                components.push(CssGridTrackComponent::TrackSize(value));
+            }
+            (Some(_), None) => legacy_components = None,
+            (None, _) => {}
+        }
+        components.push(CssAuthoredGridFixedRepeatComponent::FixedSize(fixed));
+    }
+    if !has_track {
+        return Err(unsupported_value(
+            input,
+            None,
+            "grid repeat content is missing a track",
+        ));
+    }
+    let old_count = match kind {
+        CssAuthoredGridAutoRepeatKind::AutoFill => CssGridRepeatCount::AutoFill,
+        CssAuthoredGridAutoRepeatKind::AutoFit => CssGridRepeatCount::AutoFit,
+    };
+    let legacy = legacy_components
+        .map(|components| CssGridRepeat::new(old_count, CssGridTrackList::new(components)));
+    Ok(ParsedGridTrackComponent::AutoRepeat {
+        value: CssAuthoredGridAutoRepeat::new(
+            kind,
+            CssAuthoredGridFixedRepeatContent::new(components),
+        ),
+        i01: legacy,
+    })
+}
+
+fn parse_grid_track_size<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredGridTrackSize, ParseError<'i, Error>> {
     let location = input.current_source_location();
     let state = input.state();
     match input.next().map_err(basic)? {
         Token::Function(name) if name.eq_ignore_ascii_case("minmax") => {
             input.parse_nested_block(|input| {
-                let min = parse_grid_track_breadth(input, allow_typed_calculation)?;
+                let min = parse_grid_track_breadth(input)?;
                 input.expect_comma().map_err(basic)?;
-                let max = parse_grid_track_breadth(input, allow_typed_calculation)?;
+                let max = parse_grid_track_breadth(input)?;
                 input.expect_exhausted().map_err(basic)?;
-                Ok(CssGridTrackSize::minmax(min, max))
+                Ok(CssAuthoredGridTrackSize::from_minmax(min, max))
             })
         }
         Token::Function(name) if name.eq_ignore_ascii_case("fit-content") => input
             .parse_nested_block(|input| {
-                let limit = if allow_typed_calculation {
-                    parse_length_with_context(input, LengthGrammar::GridTrack, "grid fit-content")?
-                } else {
-                    parse_length_with_context_legacy(
-                        input,
-                        LengthGrammar::GridTrack,
-                        "grid fit-content",
-                    )?
-                };
+                let limit =
+                    parse_length_with_context(input, LengthGrammar::GridTrack, "grid fit-content")?;
                 input.expect_exhausted().map_err(basic)?;
-                Ok(CssGridTrackSize::fit_content(limit))
+                Ok(CssAuthoredGridTrackSize::from_fit_content(limit))
             }),
         Token::Function(name) if name.eq_ignore_ascii_case("repeat") => Err(unsupported_value_at(
             location,
@@ -178,15 +333,14 @@ pub(super) fn parse_grid_track_size<'i, 't>(
         )),
         _ => {
             input.reset(&state);
-            parse_grid_track_breadth(input, allow_typed_calculation).map(CssGridTrackSize::breadth)
+            parse_grid_track_breadth(input).map(CssAuthoredGridTrackSize::from_breadth)
         }
     }
 }
 
-pub(super) fn parse_grid_track_breadth<'i, 't>(
+fn parse_grid_track_breadth<'i, 't>(
     input: &mut Parser<'i, 't>,
-    allow_typed_calculation: bool,
-) -> std::result::Result<CssGridTrackBreadth, ParseError<'i, Error>> {
+) -> std::result::Result<CssAuthoredGridTrackBreadth, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
         Token::Dimension { value, .. } if !value.is_finite() => Err(unsupported_value_at(
@@ -202,7 +356,9 @@ pub(super) fn parse_grid_track_breadth<'i, 't>(
                     "unsupported negative grid flex fraction",
                 ))
             } else {
-                Ok(CssGridTrackBreadth::fraction(*value))
+                Ok(CssAuthoredGridTrackBreadth::from_fraction(
+                    CssNonNegativeNumber::try_new(*value).expect("checked grid fraction"),
+                ))
             }
         }
         Token::Dimension { value, unit, .. } => match classify_length_unit(unit) {
@@ -211,7 +367,7 @@ pub(super) fn parse_grid_track_breadth<'i, 't>(
                 None,
                 "unsupported negative grid track length",
             )),
-            LengthUnitStatus::Supported(unit) => Ok(CssGridTrackBreadth::length(
+            LengthUnitStatus::Supported(unit) => Ok(CssAuthoredGridTrackBreadth::from_length(
                 CssLength::dimension(*value, unit),
             )),
             LengthUnitStatus::Unknown => Err(unsupported_value_at(
@@ -233,16 +389,18 @@ pub(super) fn parse_grid_track_breadth<'i, 't>(
                     "unsupported negative grid track percentage",
                 ))
             } else {
-                Ok(CssGridTrackBreadth::length(CssLength::percent(value)))
+                Ok(CssAuthoredGridTrackBreadth::from_length(
+                    CssLength::percent(value),
+                ))
             }
         }
         Token::Number { value, .. } if *value == 0.0 => {
-            Ok(CssGridTrackBreadth::length(CssLength::Zero))
+            Ok(CssAuthoredGridTrackBreadth::from_length(CssLength::Zero))
         }
         Token::Ident(ident) => match_ignore_ascii_case! { ident,
-            "min-content" => Ok(CssGridTrackBreadth::MinContent),
-            "max-content" => Ok(CssGridTrackBreadth::MaxContent),
-            "auto" => Ok(CssGridTrackBreadth::Auto),
+            "min-content" => Ok(CssAuthoredGridTrackBreadth::min_content()),
+            "max-content" => Ok(CssAuthoredGridTrackBreadth::max_content()),
+            "auto" => Ok(CssAuthoredGridTrackBreadth::auto()),
             _ => Err(unsupported_value_at(
                 location,
                 None,
@@ -251,13 +409,11 @@ pub(super) fn parse_grid_track_breadth<'i, 't>(
         },
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
             let calc = input.parse_nested_block(|input| {
-                if allow_typed_calculation {
-                    parse_calc_length_with_grammar(input, LengthGrammar::GridTrack)
-                } else {
-                    parse_legacy_calc_length_with_grammar(input, LengthGrammar::GridTrack)
-                }
+                parse_calc_length_with_grammar(input, LengthGrammar::GridTrack)
             })?;
-            Ok(CssGridTrackBreadth::length(CssLength::Calc(calc)))
+            Ok(CssAuthoredGridTrackBreadth::from_length(CssLength::Calc(
+                calc,
+            )))
         }
         Token::Function(name) => Err(unsupported_value_at(
             location,
@@ -266,6 +422,150 @@ pub(super) fn parse_grid_track_breadth<'i, 't>(
         )),
         token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
     }
+}
+
+fn build_grid_track_list<'i>(
+    components: Vec<LocatedGridTrackComponent>,
+) -> std::result::Result<CssParsedGridTrackList, ParseError<'i, Error>> {
+    let auto_repeat_count = components
+        .iter()
+        .filter(|component| {
+            matches!(
+                component.component,
+                ParsedGridTrackComponent::AutoRepeat { .. }
+            )
+        })
+        .count();
+
+    if auto_repeat_count > 1 {
+        let location = components
+            .iter()
+            .filter(|component| {
+                matches!(
+                    component.component,
+                    ParsedGridTrackComponent::AutoRepeat { .. }
+                )
+            })
+            .nth(1)
+            .expect("second auto repeat")
+            .location;
+        return Err(unsupported_value_at(
+            location,
+            None,
+            "grid auto track list contains more than one automatic repetition",
+        ));
+    }
+
+    let i01_components = components
+        .iter()
+        .map(|located| match &located.component {
+            ParsedGridTrackComponent::LineNames(value) => {
+                Some(CssGridTrackComponent::LineNames(value.clone()))
+            }
+            ParsedGridTrackComponent::TrackSize(value) => {
+                value.i01_projection().map(CssGridTrackComponent::TrackSize)
+            }
+            ParsedGridTrackComponent::IntegerRepeat { i01, .. }
+            | ParsedGridTrackComponent::AutoRepeat { i01, .. } => {
+                i01.clone().map(CssGridTrackComponent::Repeat)
+            }
+        })
+        .collect::<Option<Vec<_>>>()
+        .map(CssGridTrackList::new);
+
+    let current = if auto_repeat_count == 0 {
+        let values = components
+            .into_iter()
+            .map(|located| match located.component {
+                ParsedGridTrackComponent::LineNames(value) => {
+                    CssAuthoredGridGeneralTrackComponent::LineNames(value)
+                }
+                ParsedGridTrackComponent::TrackSize(value) => {
+                    CssAuthoredGridGeneralTrackComponent::TrackSize(value)
+                }
+                ParsedGridTrackComponent::IntegerRepeat { track, .. } => {
+                    CssAuthoredGridGeneralTrackComponent::Repeat(track)
+                }
+                ParsedGridTrackComponent::AutoRepeat { .. } => {
+                    unreachable!("general list has no auto repetition")
+                }
+            })
+            .collect();
+        CssAuthoredGridTrackList::general(CssAuthoredGridGeneralTrackList::new(values))
+    } else {
+        let mut values = Vec::with_capacity(components.len());
+        for located in components {
+            let value = match located.component {
+                ParsedGridTrackComponent::LineNames(value) => {
+                    CssAuthoredGridAutoTrackComponent::LineNames(value)
+                }
+                ParsedGridTrackComponent::TrackSize(value) => {
+                    let Some(value) = grid_fixed_size(&value) else {
+                        return Err(unsupported_value_at(
+                            located.location,
+                            None,
+                            "tracks surrounding automatic repetition must be fixed-size",
+                        ));
+                    };
+                    CssAuthoredGridAutoTrackComponent::FixedSize(value)
+                }
+                ParsedGridTrackComponent::IntegerRepeat { fixed, .. } => {
+                    let Some(value) = fixed else {
+                        return Err(unsupported_value_at(
+                            located.location,
+                            None,
+                            "repetition surrounding automatic repetition must be fixed-size",
+                        ));
+                    };
+                    CssAuthoredGridAutoTrackComponent::Repeat(value)
+                }
+                ParsedGridTrackComponent::AutoRepeat { value, .. } => {
+                    CssAuthoredGridAutoTrackComponent::AutoRepeat(value)
+                }
+            };
+            values.push(value);
+        }
+        CssAuthoredGridTrackList::auto(CssAuthoredGridAutoTrackList::new(values))
+    };
+
+    Ok(CssParsedGridTrackList::new(current, i01_components))
+}
+
+fn grid_fixed_size(size: &CssAuthoredGridTrackSize) -> Option<CssAuthoredGridFixedSize> {
+    size.is_fixed()
+        .then(|| CssAuthoredGridFixedSize::new(size.clone()))
+}
+
+pub(super) fn parse_grid_auto_track_sizes<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssParsedGridTrackSizeList, ParseError<'i, Error>> {
+    parse_grid_auto_track_sizes_with_mode(input, false)
+}
+
+fn parse_grid_auto_track_sizes_with_mode<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    stop_at_slash: bool,
+) -> std::result::Result<CssParsedGridTrackSizeList, ParseError<'i, Error>> {
+    let mut sizes = Vec::new();
+    while !input.is_exhausted() && !(stop_at_slash && next_is_delim(input, '/')) {
+        sizes.push(parse_grid_track_size(input)?);
+    }
+    if sizes.is_empty() {
+        return Err(unsupported_value(
+            input,
+            None,
+            "grid automatic track list is missing a track size",
+        ));
+    }
+    let i01_subset = sizes
+        .iter()
+        .map(|size| size.i01_projection().map(CssGridTrackComponent::TrackSize))
+        .collect::<Option<Vec<_>>>()
+        .map(CssGridTrackList::new);
+    Ok(CssParsedGridTrackSizeList::new(
+        CssAuthoredGridTrackSizeList::new(sizes),
+        i01_subset,
+    ))
 }
 
 pub(super) fn parse_grid_template_areas<'i, 't>(
@@ -395,10 +695,13 @@ pub(super) fn validate_grid_template_area_rectangles<'i, 't>(
 
 pub(super) fn parse_grid_template<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssGridTemplate, ParseError<'i, Error>> {
+) -> std::result::Result<CssParsedGridTemplate, ParseError<'i, Error>> {
     if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
         return match_ignore_ascii_case! { &ident,
-            "none" => Ok(CssGridTemplate::None),
+            "none" => Ok(CssParsedGridTemplate::new(
+                CssAuthoredGridTemplateValue::none(),
+                Some(CssGridTemplate::None),
+            )),
             _ => Err(unsupported_value(
                 input,
                 None,
@@ -407,13 +710,30 @@ pub(super) fn parse_grid_template<'i, 't>(
         };
     }
 
-    let rows = parse_grid_track_list_with_mode(input, true, false)?;
+    let rows = parse_grid_track_list_with_mode(input, true)?;
     let columns = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
-        Some(parse_grid_track_list_with_mode(input, false, false)?)
+        Some(parse_grid_track_list_with_mode(input, false)?)
     } else {
         None
     };
-    Ok(CssGridTemplate::RowsColumns { rows, columns })
+    let (rows_current, rows_i01) = rows.into_parts();
+    let (columns_current, columns_i01, columns_project) = match columns {
+        Some(value) => {
+            let (current, i01) = value.into_parts();
+            let projects = i01.is_some();
+            (Some(current), i01, projects)
+        }
+        None => (None, None, true),
+    };
+    let current = CssAuthoredGridTemplateValue::rows_columns(rows_current, columns_current);
+    let i01_subset = match (rows_i01, columns_project) {
+        (Some(rows), true) => Some(CssGridTemplate::RowsColumns {
+            rows,
+            columns: columns_i01,
+        }),
+        (None, _) | (_, false) => None,
+    };
+    Ok(CssParsedGridTemplate::new(current, i01_subset))
 }
 
 pub(super) fn parse_grid_auto_flow<'i, 't>(
@@ -559,31 +879,56 @@ pub(super) fn parse_grid_area<'i, 't>(
 
 pub(super) fn parse_grid<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssGrid, ParseError<'i, Error>> {
-    if let Ok(grid) = input.try_parse(parse_grid_auto_flow_shorthand) {
-        Ok(grid)
+) -> std::result::Result<CssParsedGrid, ParseError<'i, Error>> {
+    let state = input.state();
+    let is_auto_flow = input
+        .try_parse(|input| input.expect_ident_matching("auto-flow"))
+        .is_ok();
+    input.reset(&state);
+    if is_auto_flow {
+        parse_grid_auto_flow_shorthand(input)
     } else {
-        parse_grid_template(input).map(CssGrid::Template)
+        let template = parse_grid_template(input)?;
+        let (current, i01_subset) = template.into_parts();
+        Ok(CssParsedGrid::new(
+            CssAuthoredGridValue::template(current),
+            i01_subset.map(CssGrid::Template),
+        ))
     }
 }
 
 pub(super) fn parse_grid_auto_flow_shorthand<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssGrid, ParseError<'i, Error>> {
+) -> std::result::Result<CssParsedGrid, ParseError<'i, Error>> {
     input.expect_ident_matching("auto-flow").map_err(basic)?;
     let dense = input
         .try_parse(|input| input.expect_ident_matching("dense"))
         .is_ok();
     let auto_tracks = if !input.is_exhausted() && !next_is_delim(input, '/') {
-        Some(parse_grid_track_list_with_mode(input, true, false)?)
+        Some(parse_grid_auto_track_sizes_with_mode(input, true)?)
     } else {
         None
     };
     input.expect_delim('/').map_err(basic)?;
-    let explicit_tracks = parse_grid_track_list_with_mode(input, false, false)?;
-    Ok(CssGrid::AutoFlow {
-        flow: CssGridAutoFlow::new(CssGridAutoFlowAxis::Row, dense),
-        auto_tracks,
-        explicit_tracks,
-    })
+    let explicit_tracks = parse_grid_track_list_with_mode(input, false)?;
+    let flow = CssGridAutoFlow::new(CssGridAutoFlowAxis::Row, dense);
+    let (auto_current, auto_i01, auto_projects) = match auto_tracks {
+        Some(value) => {
+            let (current, i01) = value.into_parts();
+            let projects = i01.is_some();
+            (Some(current), i01, projects)
+        }
+        None => (None, None, true),
+    };
+    let (explicit_current, explicit_i01) = explicit_tracks.into_parts();
+    let current = CssAuthoredGridValue::from_auto_flow(flow, auto_current, explicit_current);
+    let i01_subset = match (auto_projects, explicit_i01) {
+        (true, Some(explicit_tracks)) => Some(CssGrid::AutoFlow {
+            flow,
+            auto_tracks: auto_i01,
+            explicit_tracks,
+        }),
+        (false, _) | (_, None) => None,
+    };
+    Ok(CssParsedGrid::new(current, i01_subset))
 }

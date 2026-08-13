@@ -56,8 +56,8 @@ macro_rules! property_schema {
             GridTemplateColumns, "grid-template-columns", [], "baseline.property.grid-template-columns", CssGridTrackList, CssGridTemplateColumnsPropertyValue, CssGridTemplateColumnsPropertyValueRepresentation, parse_grid_track_list, { parse_grid_track_list($input)? };
             GridTemplateAreas, "grid-template-areas", [], "baseline.property.grid-template-areas", CssGridTemplateAreas, CssGridTemplateAreasPropertyValue, CssGridTemplateAreasPropertyValueRepresentation, parse_grid_template_areas, { parse_grid_template_areas($input)? };
             GridTemplate, "grid-template", [], "baseline.property.grid-template", CssGridTemplate, CssGridTemplatePropertyValue, CssGridTemplatePropertyValueRepresentation, parse_grid_template, { parse_grid_template($input)? };
-            GridAutoRows, "grid-auto-rows", [], "baseline.property.grid-auto-rows", CssGridTrackList, CssGridAutoRowsPropertyValue, CssGridAutoRowsPropertyValueRepresentation, parse_grid_track_list, { parse_grid_track_list($input)? };
-            GridAutoColumns, "grid-auto-columns", [], "baseline.property.grid-auto-columns", CssGridTrackList, CssGridAutoColumnsPropertyValue, CssGridAutoColumnsPropertyValueRepresentation, parse_grid_track_list, { parse_grid_track_list($input)? };
+            GridAutoRows, "grid-auto-rows", [], "baseline.property.grid-auto-rows", CssGridTrackList, CssGridAutoRowsPropertyValue, CssGridAutoRowsPropertyValueRepresentation, parse_grid_auto_track_sizes, { parse_grid_auto_track_sizes($input)? };
+            GridAutoColumns, "grid-auto-columns", [], "baseline.property.grid-auto-columns", CssGridTrackList, CssGridAutoColumnsPropertyValue, CssGridAutoColumnsPropertyValueRepresentation, parse_grid_auto_track_sizes, { parse_grid_auto_track_sizes($input)? };
             GridAutoFlow, "grid-auto-flow", [], "baseline.property.grid-auto-flow", CssGridAutoFlow, CssGridAutoFlowPropertyValue, CssGridAutoFlowPropertyValueRepresentation, parse_grid_auto_flow, { parse_grid_auto_flow($input)? };
             GridRowStart, "grid-row-start", [], "baseline.property.grid-row-start", CssGridLine, CssGridRowStartPropertyValue, CssGridRowStartPropertyValueRepresentation, parse_grid_line, { parse_grid_line($input)? };
             GridRowEnd, "grid-row-end", [], "baseline.property.grid-row-end", CssGridLine, CssGridRowEndPropertyValue, CssGridRowEndPropertyValueRepresentation, parse_grid_line, { parse_grid_line($input)? };
@@ -587,7 +587,137 @@ macro_rules! define_authored_color_aggregate_property_value {
     };
 }
 
+macro_rules! define_grid_property_value {
+    (
+        $canonical:literal, $wrapper:ident, $representation:ident,
+        $current:ty, $i01:ty, $parsed:ty
+    ) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: $current,
+            i01_subset: Option<$i01>,
+        }
+
+        #[doc = concat!("A parser-produced current authored value for `", $canonical, "`.")]
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) fn new(authored: CssAuthoredDeclarationValue, parsed: $parsed) -> Self {
+                let (current, i01_subset) = parsed.into_parts();
+                Self {
+                    authored,
+                    representation: $representation {
+                        current,
+                        i01_subset,
+                    },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            /// Returns the parser-owned current authored Grid value.
+            #[must_use]
+            pub const fn current(&self) -> &$current {
+                &self.representation.current
+            }
+
+            /// Returns the frozen I01 compatibility payload when the current value projects
+            /// exactly into that representation.
+            #[must_use]
+            pub const fn i01_subset(&self) -> Option<&$i01> {
+                self.representation.i01_subset.as_ref()
+            }
+        }
+    };
+}
+
 macro_rules! define_property_value {
+    (
+        GridTemplateRows, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_grid_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssAuthoredGridTrackList,
+            CssGridTrackList,
+            CssParsedGridTrackList
+        );
+    };
+    (
+        GridTemplateColumns, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_grid_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssAuthoredGridTrackList,
+            CssGridTrackList,
+            CssParsedGridTrackList
+        );
+    };
+    (
+        GridAutoRows, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_grid_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssAuthoredGridTrackSizeList,
+            CssGridTrackList,
+            CssParsedGridTrackSizeList
+        );
+    };
+    (
+        GridAutoColumns, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_grid_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssAuthoredGridTrackSizeList,
+            CssGridTrackList,
+            CssParsedGridTrackSizeList
+        );
+    };
+    (
+        GridTemplate, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_grid_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssAuthoredGridTemplateValue,
+            CssGridTemplate,
+            CssParsedGridTemplate
+        );
+    };
+    (
+        Grid, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_grid_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssAuthoredGridValue,
+            CssGrid,
+            CssParsedGrid
+        );
+    };
     (
         Color, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident

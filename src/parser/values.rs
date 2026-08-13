@@ -305,7 +305,30 @@ fn parse_length_with_context_mode<'i, 't>(
 }
 
 fn typed_length_calculation_is_current_consumer(context: &str) -> bool {
-    !matches!(context, "function length" | "polygon x" | "polygon y")
+    matches!(
+        context,
+        "box size"
+            | "inset"
+            | "margin"
+            | "padding"
+            | "border-width"
+            | "border-radius"
+            | "box-shadow"
+            | "box-shadow blur"
+            | "gap"
+            | "font-size"
+            | "line-height"
+            | "text-indent"
+            | "vertical-align"
+            | "letter-spacing"
+            | "text-decoration-thickness"
+            | "grid track"
+            | "grid fit-content"
+            | "background-size"
+            | "position"
+            | "outline-width"
+            | "translate"
+    )
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

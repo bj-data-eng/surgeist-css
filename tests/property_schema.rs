@@ -650,9 +650,9 @@ fn typed_length_calculations_are_accepted_by_the_exact_current_consumer_set() {
 #[test]
 fn deferred_basic_shape_math_drops_only_the_invalid_declaration() {
     for shape in [
-        "circle(calc((1px + 2%) * 3))",
-        "ellipse(calc((1px + 2%) * 3) 10px)",
-        "inset(calc((1px + 2%) * 3))",
+        "circle(calc((1px + 2%)) 1px * 2)",
+        "ellipse(calc((1px + 2%)) 1px * 2)",
+        "inset(calc((1px + 2%)) 1px * 2)",
     ] {
         let invalid = format!("clip-path: {shape};");
         let source = format!("{invalid} color: red");

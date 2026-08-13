@@ -3,7 +3,7 @@ use cssparser::{ParseError, Parser, match_ignore_ascii_case};
 use super::box_model::parse_border_style;
 use super::values::{
     LengthGrammar, next_is_comma, next_is_delim, parse_color, parse_length_with,
-    parse_length_with_context,
+    parse_length_with_context, parse_length_with_context_legacy,
 };
 use crate::error::{Error, basic, unsupported_value};
 use crate::syntax::*;
@@ -73,9 +73,26 @@ pub(super) fn parse_position_list<'i, 't>(
 pub(super) fn parse_css_position<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssPosition, ParseError<'i, Error>> {
+    parse_css_position_with_mode(input, true)
+}
+
+pub(super) fn parse_css_position_legacy<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssPosition, ParseError<'i, Error>> {
+    parse_css_position_with_mode(input, false)
+}
+
+fn parse_css_position_with_mode<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    allow_typed_calculation: bool,
+) -> std::result::Result<CssPosition, ParseError<'i, Error>> {
     let mut components = Vec::new();
     while !input.is_exhausted() && !next_is_comma(input) && !next_is_delim(input, '/') {
-        components.push(parse_position_component(input, &components)?);
+        components.push(parse_position_component(
+            input,
+            &components,
+            allow_typed_calculation,
+        )?);
         if components.len() > 4 {
             return Err(unsupported_value(
                 input,
@@ -88,9 +105,10 @@ pub(super) fn parse_css_position<'i, 't>(
         .ok_or_else(|| unsupported_value(input, None, "position is empty"))
 }
 
-pub(super) fn parse_position_component<'i, 't>(
+fn parse_position_component<'i, 't>(
     input: &mut Parser<'i, 't>,
     previous: &[CssPositionComponent],
+    allow_typed_calculation: bool,
 ) -> std::result::Result<CssPositionComponent, ParseError<'i, Error>> {
     let state = input.state();
     if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
@@ -115,7 +133,12 @@ pub(super) fn parse_position_component<'i, 't>(
         };
     }
     input.reset(&state);
-    parse_length_with(input, LengthGrammar::Position).map(CssPositionComponent::Length)
+    if allow_typed_calculation {
+        parse_length_with(input, LengthGrammar::Position)
+    } else {
+        parse_length_with_context_legacy(input, LengthGrammar::Position, "position")
+    }
+    .map(CssPositionComponent::Length)
 }
 
 pub(super) fn parse_background_size_list<'i, 't>(

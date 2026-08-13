@@ -1,7 +1,8 @@
 use surgeist_css::{
-    CssCalcLength, CssErrorCode, CssHorizontalPositionKeyword, CssKnownProperty,
-    CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthUnit, CssPositionComponent,
-    CssPositionOffset, CssRecoveryAction, CssVerticalPositionKeyword, parse_style_attribute,
+    CssCalcLength, CssErrorCode, CssHorizontalPosition, CssHorizontalPositionKeyword,
+    CssKnownProperty, CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthUnit,
+    CssPositionComponent, CssPositionOffset, CssRecoveryAction, CssVerticalPosition,
+    CssVerticalPositionKeyword, parse_style_attribute,
 };
 
 fn assert_generic_position_accepted(value: &str) {
@@ -205,5 +206,193 @@ fn generic_position_typed_calculation_preserves_the_exact_depth_boundary() {
         let failure = surgeist_css::validate_style_attribute(&source)
             .expect_err("strict validation rejects over-limit position calculations");
         assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
+fn background_and_mask_position_lists_expose_each_exact_layer() {
+    let report = parse_style_attribute(concat!(
+        "background-position: left 10px top, center bottom 25%; ",
+        "mask-position: right 5% bottom 2px, calc((1px + 2%) * 3) top",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::BackgroundPosition(background) = report.syntax()[0]
+        .known()
+        .expect("known background position")
+        .property_value()
+        .expect("ordinary background position")
+    else {
+        panic!("expected background-position value");
+    };
+    let background_layers = background.positions().positions();
+    assert_eq!(background_layers.len(), 2);
+    assert!(matches!(
+        background_layers[0].horizontal(),
+        CssHorizontalPosition::LeftOffset(offset)
+            if matches!(offset.value(), CssLength::Px(value) if value.value() == 10.0)
+    ));
+    assert!(matches!(
+        background_layers[0].vertical(),
+        CssVerticalPosition::Top
+    ));
+    assert!(matches!(
+        background_layers[1].horizontal(),
+        CssHorizontalPosition::Center
+    ));
+    assert!(matches!(
+        background_layers[1].vertical(),
+        CssVerticalPosition::BottomOffset(offset)
+            if matches!(offset.value(), CssLength::Percent(value) if value.value() == 25.0)
+    ));
+
+    let CssKnownPropertyValueRef::MaskPosition(mask) = report.syntax()[1]
+        .known()
+        .expect("known mask position")
+        .property_value()
+        .expect("ordinary mask position")
+    else {
+        panic!("expected mask-position value");
+    };
+    let mask_layers = mask.positions().positions();
+    assert_eq!(mask_layers.len(), 2);
+    assert!(matches!(
+        mask_layers[0].value().horizontal(),
+        CssHorizontalPosition::RightOffset(offset)
+            if matches!(offset.value(), CssLength::Percent(value) if value.value() == 5.0)
+    ));
+    assert!(matches!(
+        mask_layers[0].value().vertical(),
+        CssVerticalPosition::BottomOffset(offset)
+            if matches!(offset.value(), CssLength::Px(value) if value.value() == 2.0)
+    ));
+    assert!(matches!(
+        mask_layers[1].value().horizontal(),
+        CssHorizontalPosition::Offset(offset)
+            if matches!(offset.value(), CssLength::Calc(_))
+    ));
+    assert!(matches!(
+        mask_layers[1].value().vertical(),
+        CssVerticalPosition::Top
+    ));
+}
+
+#[test]
+fn background_accepts_three_components_that_mask_rejects() {
+    for value in [
+        "left 10px top",
+        "left top 10px",
+        "top left 10px",
+        "top 10px left",
+        "center bottom 20%",
+        "right calc((1px + 2%) * 3) center",
+    ] {
+        let background = parse_style_attribute(&format!("background-position: {value}"));
+        assert!(
+            background.is_clean(),
+            "background-position: {value}: {:?}",
+            background.diagnostics(),
+        );
+
+        let mask_source = format!("mask-position: {value}; color: red");
+        let mask = parse_style_attribute(&mask_source);
+        assert_eq!(mask.syntax().len(), 1, "{mask_source}");
+        assert_eq!(mask.diagnostics().len(), 1, "{mask_source}");
+        assert_eq!(
+            mask.syntax()[0].known().expect("retained color").property(),
+            CssKnownProperty::Color,
+            "{mask_source}",
+        );
+
+        #[cfg(feature = "app-strict")]
+        {
+            let failure = surgeist_css::validate_style_attribute(&mask_source)
+                .expect_err("strict validation rejects mask-only three-component syntax");
+            assert_eq!(failure.diagnostics(), mask.diagnostics(), "{mask_source}");
+        }
+    }
+}
+
+#[test]
+fn layered_positions_reject_empty_items_slashes_and_trailing_components() {
+    for (property, value) in [
+        ("background-position", ""),
+        ("background-position", "left,"),
+        ("background-position", "left,,right"),
+        ("background-position", "left / cover"),
+        ("background-position", "left top 10px 20px"),
+        ("mask-position", ""),
+        ("mask-position", "left,"),
+        ("mask-position", "left,,right"),
+        ("mask-position", "left / cover"),
+        ("mask-position", "left 10px top"),
+    ] {
+        let source = format!("{property}: {value}; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        assert_eq!(report.diagnostics().len(), 1, "{source}");
+        assert_eq!(
+            report.syntax()[0]
+                .known()
+                .expect("retained color")
+                .property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+    }
+}
+
+#[test]
+fn layered_position_failures_drop_each_declaration_and_continue() {
+    let source = concat!(
+        "background-position: left, left right, bottom; ",
+        "mask-position: top 10px, center; ",
+        "color: red",
+    );
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 1);
+    assert_eq!(report.diagnostics().len(), 2);
+    assert_eq!(
+        report.syntax()[0]
+            .known()
+            .expect("retained color")
+            .property(),
+        CssKnownProperty::Color,
+    );
+    assert!(report.diagnostics().iter().all(|diagnostic| {
+        diagnostic.error().code() == CssErrorCode::InvalidPropertyValue
+            && diagnostic.action() == CssRecoveryAction::DropDeclaration
+    }));
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation reports every layered position failure");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
+fn layered_position_i01_projection_is_exact_and_typed_calculations_are_current_only() {
+    let report = parse_style_attribute(concat!(
+        "background-position: left 10px top, bottom right; ",
+        "background-position: left calc((1px + 2%) * 3) top; ",
+        "mask-position: left top, 10% 20%; ",
+        "mask-position: calc((1px + 2%) * 3) top",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    for (index, has_i01_projection) in [(0, true), (1, false), (2, true), (3, false)] {
+        let value = report.syntax()[index]
+            .known()
+            .expect("known layered position")
+            .property_value()
+            .expect("ordinary layered position");
+        let projection = match value {
+            CssKnownPropertyValueRef::BackgroundPosition(value) => value.i01_subset(),
+            CssKnownPropertyValueRef::MaskPosition(value) => value.i01_subset(),
+            _ => panic!("expected layered position"),
+        };
+        assert_eq!(projection.is_some(), has_i01_projection, "index {index}");
     }
 }

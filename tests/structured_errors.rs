@@ -524,3 +524,89 @@ fn generic_position_mutations_report_the_responsible_token_and_retain_the_siblin
         }
     }
 }
+
+#[test]
+fn layered_position_mutations_report_exact_property_token_span_and_recovery() {
+    for (property, known_property, value, responsible, token_kind) in [
+        (
+            "background-position",
+            CssKnownProperty::BackgroundPosition,
+            "left top 10px 20px",
+            "20px",
+            CssTokenKind::Dimension,
+        ),
+        (
+            "background-position",
+            CssKnownProperty::BackgroundPosition,
+            "left, right left, top",
+            "left",
+            CssTokenKind::Ident,
+        ),
+        (
+            "mask-position",
+            CssKnownProperty::MaskPosition,
+            "left 10px top",
+            "top",
+            CssTokenKind::Ident,
+        ),
+        (
+            "mask-position",
+            CssKnownProperty::MaskPosition,
+            "center, top 10px",
+            "10px",
+            CssTokenKind::Dimension,
+        ),
+    ] {
+        let source = format!("{property}: {value}; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{source}: expected one diagnostic");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue
+        );
+        assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+        let responsible_offset = if value.contains(", right left") {
+            source.find("right left").expect("invalid layer") + "right ".len()
+        } else {
+            source.rfind(responsible).expect("responsible token")
+        };
+        assert_eq!(
+            diagnostic.error().position().byte_offset().value(),
+            responsible_offset,
+            "{source}",
+        );
+        assert_eq!(diagnostic.error().position().line().value(), 0, "{source}");
+        assert_eq!(
+            diagnostic.error().position().column().value() as usize,
+            responsible_offset,
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.span().start().byte_offset().value(),
+            0,
+            "{source}"
+        );
+        assert_eq!(
+            diagnostic.span().end().byte_offset().value(),
+            source.find(';').expect("declaration semicolon") + 1,
+            "{source}",
+        );
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("{source}: expected property-value root");
+        };
+        assert_eq!(detail.property(), known_property, "{source}");
+        let encountered = detail.encountered().expect("responsible position token");
+        assert_eq!(encountered.kind(), token_kind, "{source}");
+        assert_eq!(encountered.authored(), responsible, "{source}");
+
+        #[cfg(feature = "app-strict")]
+        {
+            let failure = surgeist_css::validate_style_attribute(&source)
+                .expect_err("strict validation rejects layered position mutation");
+            assert_eq!(failure.diagnostics(), report.diagnostics(), "{source}");
+        }
+    }
+}

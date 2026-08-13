@@ -554,6 +554,50 @@ fn explicit_property_dispatch_cases_preserve_ordinary_and_important_behavior() {
 }
 
 #[test]
+fn layered_position_wrappers_keep_current_global_and_substitution_branches_distinct() {
+    let report = parse_style_attribute(concat!(
+        "background-position: left 10px top, center; ",
+        "mask-position: right bottom; ",
+        "background-position: inherit; ",
+        "mask-position: var(--position)",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let background = report.syntax()[0].known().expect("background declaration");
+    let CssKnownPropertyValueRef::BackgroundPosition(value) = background
+        .property_value()
+        .expect("ordinary background position")
+    else {
+        panic!("expected background-position value");
+    };
+    assert_eq!(value.positions().positions().len(), 2);
+    assert!(background.global().is_none());
+    assert!(background.substitution_dependent().is_none());
+
+    let mask = report.syntax()[1].known().expect("mask declaration");
+    let CssKnownPropertyValueRef::MaskPosition(value) =
+        mask.property_value().expect("ordinary mask position")
+    else {
+        panic!("expected mask-position value");
+    };
+    assert_eq!(value.positions().positions().len(), 1);
+    assert!(mask.global().is_none());
+    assert!(mask.substitution_dependent().is_none());
+
+    let global = report.syntax()[2].known().expect("global declaration");
+    assert!(global.property_value().is_none());
+    assert!(global.global().is_some());
+    assert!(global.substitution_dependent().is_none());
+
+    let substitution = report.syntax()[3]
+        .known()
+        .expect("substitution-dependent declaration");
+    assert!(substitution.property_value().is_none());
+    assert!(substitution.global().is_none());
+    assert!(substitution.substitution_dependent().is_some());
+}
+
+#[test]
 fn timing_wrappers_expose_exact_property_specific_current_accessors() {
     let report = parse_style_attribute(concat!(
         "transition-duration: calc(1s + 2s); transition-delay: -1s; ",

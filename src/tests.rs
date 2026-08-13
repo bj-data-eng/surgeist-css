@@ -4690,24 +4690,6 @@ fn numeric_properties_use_property_specific_authored_models() {
 fn numeric_property_models_reject_invalid_authored_values() {
     assert_rejects_declarations(&[
         RejectedDeclarationCase {
-            label: "opacity rejects negative values",
-            property_name: "opacity",
-            authored_value: "-0.1",
-            expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
-                property: "opacity",
-            },
-            property_name_should_be_recognized: true,
-        },
-        RejectedDeclarationCase {
-            label: "opacity rejects values above one",
-            property_name: "opacity",
-            authored_value: "2",
-            expected_error: ExpectedErrorKind::UnsupportedValueForProperty {
-                property: "opacity",
-            },
-            property_name_should_be_recognized: true,
-        },
-        RejectedDeclarationCase {
             label: "flex-grow rejects negative values",
             property_name: "flex-grow",
             authored_value: "-1",

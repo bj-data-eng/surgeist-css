@@ -183,6 +183,59 @@ fn existing_calc_consumer_preserves_exact_depth_boundary_and_later_sibling() {
 }
 
 #[test]
+fn opacity_percentage_calculation_preserves_exact_depth_boundary() {
+    for depth in [255_usize, 256] {
+        let source = format!(
+            "opacity: {}1%{}; color: red",
+            "calc(".repeat(depth),
+            ")".repeat(depth)
+        );
+        let report = parse_style_attribute(&source);
+        assert!(
+            report.is_clean(),
+            "depth {depth}: {:?}",
+            report.diagnostics()
+        );
+        assert_eq!(report.syntax().len(), 2, "depth {depth}");
+        let CssKnownPropertyValueRef::Opacity(opacity) = report.syntax()[0]
+            .known()
+            .unwrap()
+            .property_value()
+            .unwrap()
+        else {
+            panic!("expected opacity at depth {depth}");
+        };
+        assert!(matches!(
+            opacity.value(),
+            CssOpacityValue::PercentageCalculation(_)
+        ));
+    }
+
+    let depth = 257_usize;
+    let source = format!(
+        "opacity: {}1%{}; color: red",
+        "calc(".repeat(depth),
+        ")".repeat(depth)
+    );
+    let first_over_limit = source
+        .match_indices("calc(")
+        .nth(256)
+        .expect("257th authored calculation")
+        .0;
+    let report = parse_style_attribute(&source);
+    assert_eq!(report.syntax().len(), 1);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("over-limit opacity calculation must produce one diagnostic");
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::NestingLimit);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::StopAtNestingLimit);
+    assert_eq!(
+        diagnostic.error().position().byte_offset().value(),
+        first_over_limit
+    );
+}
+
+#[test]
 fn typed_length_consumer_exposes_products_and_preserves_simple_sum_compatibility() {
     let report =
         parse_style_attribute("width: calc(1px + 2%); height: calc((1px + 2%) * 3); color: red");
@@ -358,6 +411,54 @@ fn scalar_property_accessors_distinguish_literals_from_deferred_calculations() {
         CssGridFlowToleranceValue::Length(CssLength::Calc(CssCalcLength::Typed(_)))
     ));
     assert!(value.i01_subset().is_none());
+}
+
+#[test]
+fn opacity_keeps_number_and_percentage_calculation_roots_symbolic() {
+    let report = parse_style_attribute(
+        "opacity: calc(-1.5 * 2); opacity: calc((25% + 25%) * 2); color: red",
+    );
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    assert_eq!(report.syntax().len(), 3);
+
+    let CssKnownPropertyValueRef::Opacity(number) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected number-root opacity");
+    };
+    let CssOpacityValue::Calculation(number_calculation) = number.value() else {
+        panic!("expected retained number calculation");
+    };
+    assert_eq!(number_calculation.result_type(), CssCalculationType::Number);
+    assert!(matches!(
+        number_calculation.expression(),
+        CssCalculationExpressionRef::Product(_)
+    ));
+    assert!(number.i01_subset().is_none());
+
+    let CssKnownPropertyValueRef::Opacity(percentage) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected percentage-root opacity");
+    };
+    let CssOpacityValue::PercentageCalculation(percentage_calculation) = percentage.value() else {
+        panic!("expected retained percentage calculation");
+    };
+    assert_eq!(
+        percentage_calculation.result_type(),
+        CssCalculationType::Percentage
+    );
+    assert!(matches!(
+        percentage_calculation.expression(),
+        CssCalculationExpressionRef::Product(_)
+    ));
+    assert!(percentage.i01_subset().is_none());
 }
 
 #[test]

@@ -152,6 +152,45 @@ fn repeated_filter_failures_make_progress_to_valid_filter_and_color_siblings() {
 }
 
 #[test]
+fn repeated_opacity_domain_failures_make_progress_to_a_valid_sibling() {
+    let source = concat!(
+        "opacity: 1e999; ",
+        "opacity: 1px; ",
+        "opacity: calc(1% + 2); ",
+        "color: red",
+    );
+    let report = parse_style_attribute(source);
+    assert_eq!(report.diagnostics().len(), 3);
+    assert_eq!(report.syntax().len(), 1);
+    assert_eq!(
+        report.syntax()[0]
+            .known()
+            .expect("retained color declaration")
+            .property(),
+        CssKnownProperty::Color,
+    );
+    for diagnostic in report.diagnostics() {
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue
+        );
+        assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("expected opacity property-value error");
+        };
+        assert_eq!(detail.property(), CssKnownProperty::Opacity);
+        assert!(detail.encountered().is_some());
+    }
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered opacity mutations");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn basic_shape_failures_report_clip_path_and_retain_valid_siblings() {
     for (value, responsible, token_kind) in [
         ("circle(-1px)", "-1px", CssTokenKind::Dimension),

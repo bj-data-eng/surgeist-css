@@ -3029,6 +3029,9 @@ impl CssOpacity {
 pub enum CssOpacityValue {
     Literal(CssOpacity),
     Calculation(CssNumberCalculation),
+    Number(CssFiniteNumber),
+    Percentage(CssFiniteNumber),
+    PercentageCalculation(CssPercentageCalculation),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

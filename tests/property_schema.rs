@@ -398,7 +398,7 @@ const PROPERTY_DISPATCH_VECTORS: &[DispatchVector] = &[
     dispatch_vector!("border-bottom-right-radius", "10%"),
     dispatch_vector!("border-bottom-left-radius", "calc(1px + 2%)"),
     dispatch_vector!("box-shadow", "inset 1px 2px 3px 4px black"),
-    dispatch_vector!("opacity", "0.5"),
+    dispatch_vector!("opacity", "150%"),
     dispatch_vector!("scrollbar-width", "thin"),
     dispatch_vector!("cursor", "grab"),
     dispatch_vector!("pointer-events", "none"),

@@ -199,7 +199,10 @@ pub(crate) use property_schema;
 fn opacity_i01_projection(value: &CssOpacityValue) -> Option<CssOpacity> {
     match value {
         CssOpacityValue::Literal(value) => Some(*value),
-        CssOpacityValue::Calculation(_) => None,
+        CssOpacityValue::Calculation(_)
+        | CssOpacityValue::Number(_)
+        | CssOpacityValue::Percentage(_)
+        | CssOpacityValue::PercentageCalculation(_) => None,
     }
 }
 

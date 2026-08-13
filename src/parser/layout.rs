@@ -1,6 +1,8 @@
 use cssparser::{ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
 
-use super::values::{CalculationRoot, parse_box_size_value, parse_typed_calculation};
+use super::values::{
+    CalculationRoot, checked_percentage_value, parse_box_size_value, parse_typed_calculation,
+};
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
@@ -376,19 +378,43 @@ pub(super) fn parse_opacity<'i, 't>(
 ) -> std::result::Result<CssOpacityValue, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
-        Token::Number { value, .. } => CssOpacity::try_new(*value)
-            .map(CssOpacityValue::Literal)
-            .ok_or_else(|| {
-                unsupported_value_at(
-                    location,
-                    None,
-                    "opacity must be a finite number between 0 and 1",
-                )
-            }),
-        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
-            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Number))
-            .map(CssNumberCalculation::from_expression)
-            .map(CssOpacityValue::Calculation),
+        Token::Number { value, .. } => {
+            let value = CssFiniteNumber::try_new(*value).ok_or_else(|| {
+                unsupported_value_at(location, None, "opacity number must be finite")
+            })?;
+            Ok(CssOpacity::try_new(value.value())
+                .map(CssOpacityValue::Literal)
+                .unwrap_or(CssOpacityValue::Number(value)))
+        }
+        Token::Percentage { unit_value, .. } => {
+            let value = checked_percentage_value(
+                location,
+                *unit_value,
+                "opacity percentage must be finite",
+            )?;
+            CssFiniteNumber::try_new(value)
+                .map(CssOpacityValue::Percentage)
+                .ok_or_else(|| {
+                    unsupported_value_at(location, None, "opacity percentage must be finite")
+                })
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            if let Ok(calculation) = input.try_parse(|input| {
+                input.parse_nested_block(|input| {
+                    parse_typed_calculation(input, CalculationRoot::Number)
+                })
+            }) {
+                return Ok(CssOpacityValue::Calculation(
+                    CssNumberCalculation::from_expression(calculation),
+                ));
+            }
+            input
+                .parse_nested_block(|input| {
+                    parse_typed_calculation(input, CalculationRoot::Percentage)
+                })
+                .map(CssPercentageCalculation::from_expression)
+                .map(CssOpacityValue::PercentageCalculation)
+        }
         token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
     }
 }

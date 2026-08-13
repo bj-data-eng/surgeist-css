@@ -95,6 +95,45 @@ fn checked_numeric_constructors_reject_non_finite_values_and_preserve_finite_bou
 }
 
 #[test]
+fn opacity_rejects_non_finite_and_unrelated_numeric_domains() {
+    for (value, responsible, token_kind) in [
+        ("1e999", "1e999", CssTokenKind::Number),
+        ("1e999%", "1e999%", CssTokenKind::Percentage),
+        ("calc(1e999)", "1e999", CssTokenKind::Number),
+        ("calc(1e999%)", "1e999%", CssTokenKind::Percentage),
+        ("1px", "1px", CssTokenKind::Dimension),
+    ] {
+        let source = format!("opacity: {value}; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        assert_eq!(
+            report.syntax()[0]
+                .known()
+                .expect("retained sibling")
+                .property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{source}: invalid opacity must recover once");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue,
+            "{source}",
+        );
+        assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("{source}: expected opacity property-value detail");
+        };
+        assert_eq!(detail.property(), CssKnownProperty::Opacity, "{source}");
+        let encountered = detail.encountered().expect("responsible numeric token");
+        assert_eq!(encountered.kind(), token_kind, "{source}");
+        assert_eq!(encountered.authored(), responsible, "{source}");
+    }
+}
+
+#[test]
 fn non_finite_time_parse_drops_only_its_declaration_with_exact_diagnostic() {
     let invalid = "transition-duration: 1e999s;";
     let source = format!("color: red; {invalid} width: 2px");

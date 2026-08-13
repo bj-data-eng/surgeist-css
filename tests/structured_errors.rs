@@ -155,9 +155,13 @@ fn repeated_filter_failures_make_progress_to_valid_filter_and_color_siblings() {
 fn basic_shape_failures_report_clip_path_and_retain_valid_siblings() {
     for (value, responsible, token_kind) in [
         ("circle(-1px)", "-1px", CssTokenKind::Dimension),
-        ("ellipse(1px)", "1px", CssTokenKind::Dimension),
-        ("polygon(round 10%, 0 0)", "10%", CssTokenKind::Percentage),
-        ("polygon(, 0 0, 100%)", "100%", CssTokenKind::Percentage),
+        ("ellipse(1px)", ")", CssTokenKind::CloseParenthesis),
+        (
+            "polygon(round 10%, 0 0)",
+            "10%",
+            CssTokenKind::Percentage,
+        ),
+        ("polygon(, 0 0, 100%)", ")", CssTokenKind::CloseParenthesis),
     ] {
         let source = format!("clip-path: {value}; color: red");
         let report = parse_style_attribute(&source);

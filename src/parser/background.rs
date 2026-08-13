@@ -249,7 +249,8 @@ fn parse_background_position<'i, 't>(
     })
 }
 
-pub(super) fn parse_css_position_value<'i, 't>(
+#[cfg(test)]
+fn parse_css_position_value<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssPositionValue, ParseError<'i, Error>> {
     parse_generic_position(input).map(|(current, _)| current)

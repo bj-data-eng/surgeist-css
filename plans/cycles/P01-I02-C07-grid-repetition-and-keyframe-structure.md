@@ -206,8 +206,10 @@ prohibited repository-wide.
 
 ## 6. Final Cycle Gate And Publication
 
-After T3 is independently clean and before holistic review, the coordinator runs
-this exact gate at the candidate head:
+Immediately after T3 is independently clean, the coordinator makes the separate
+status-only commit changing this plan from `in_progress` to `complete`. With
+that commit already in the candidate range and before holistic review, the
+coordinator runs this exact gate at the candidate head:
 
 ```sh
 cargo check -p surgeist-css --offline --no-default-features
@@ -240,7 +242,7 @@ process listing must contain no repository Cargo, rustc, rustdoc, or
 then reviews exact range
 `4ec24e2bd09bbd937b85e059980970ec4ddcfc6e..HEAD`.
 
-Only after holistic `CLEAN` and the status-only completion commit, run:
+Only after holistic `CLEAN`, run:
 
 ```sh
 cargo clean --offline

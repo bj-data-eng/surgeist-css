@@ -171,3 +171,33 @@ fn malformed_late_and_nested_namespace_rules_drop_one_at_rule_and_keep_siblings(
         }
     }
 }
+
+#[test]
+fn namespace_qualified_type_universal_and_attribute_selectors_use_active_bindings() {
+    let report = parse_sheet(concat!(
+        "@namespace \"urn:default\";",
+        "@namespace svg \"urn:svg\";",
+        "svg|a { color: red; }",
+        "svg|* { color: red; }",
+        "*|a { color: red; }",
+        "|a { color: red; }",
+        "a { color: red; }",
+        ".attributes[svg|href][*|title][|lang][plain] { color: red; }",
+    ));
+
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    assert_eq!(report.syntax().rules().len(), 8);
+    assert!(matches!(
+        report.syntax().rules(),
+        [
+            CssRule::Namespace(_),
+            CssRule::Namespace(_),
+            CssRule::Style(_),
+            CssRule::Style(_),
+            CssRule::Style(_),
+            CssRule::Style(_),
+            CssRule::Style(_),
+            CssRule::Style(_),
+        ]
+    ));
+}

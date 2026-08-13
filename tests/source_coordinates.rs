@@ -111,6 +111,48 @@ fn opentype_tag_error_has_exact_utf16_coordinates_and_full_declaration_span() {
 }
 
 #[test]
+fn font_face_feature_error_after_non_bmp_text_has_exact_descriptor_span() {
+    let source = concat!(
+        "/*😀*/@font-face{font-family:Demo;src:url(face);",
+        "font-feature-settings:\"😀abc\"}.after{color:red}",
+    );
+    let report = parse_sheet(source);
+    assert!(matches!(
+        report.syntax().rules(),
+        [CssRule::FontFace(_), CssRule::Style(_)]
+    ));
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid descriptor must recover once");
+    };
+    let responsible = source.find("\"😀abc\"").unwrap();
+    let descriptor_start = source.find("font-feature-settings").unwrap();
+    let descriptor_end = source.find("}.after").unwrap();
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidDescriptorValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDescriptor);
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(source[..responsible].encode_utf16().count()).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().start(),
+        descriptor_start,
+        0,
+        u32::try_from(source[..descriptor_start].encode_utf16().count()).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        descriptor_end,
+        0,
+        u32::try_from(source[..descriptor_end].encode_utf16().count()).unwrap(),
+    );
+}
+
+#[test]
 fn size_adjust_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
     let source = "--😀: 1; font-size-adjust: -1; color: red";
     let report = parse_style_attribute(source);

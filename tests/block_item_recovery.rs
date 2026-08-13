@@ -360,7 +360,7 @@ fn block_item_recovery_group_rule_merges_child_diagnostic_without_parent_drop() 
 }
 
 #[test]
-fn block_item_recovery_font_face_drops_bad_and_duplicate_optional_descriptors() {
+fn block_item_recovery_font_face_drops_bad_and_retains_duplicate_optional_descriptors() {
     let source = "@font-face { font-family: Inter; mystery: fn(a;b); src: url(i); font-display: swap; font-display: block; unicode-range: U+0-7F; }";
     let report = parse_sheet(source);
     let [CssRule::FontFace(rule)] = report.syntax().rules() else {
@@ -372,9 +372,12 @@ fn block_item_recovery_font_face_drops_bad_and_duplicate_optional_descriptors() 
         descriptors.src().position().byte_offset().value(),
         source.find("src").unwrap()
     );
-    assert!(descriptors.font_display().is_some());
+    assert_eq!(
+        descriptors.font_display().unwrap().value(),
+        &surgeist_css::CssFontDisplay::Block
+    );
     assert!(descriptors.unicode_range().is_some());
-    assert_eq!(report.diagnostics().len(), 2);
+    assert_eq!(report.diagnostics().len(), 1);
     assert_drop(
         source,
         &report.diagnostics()[0],
@@ -383,30 +386,15 @@ fn block_item_recovery_font_face_drops_bad_and_duplicate_optional_descriptors() 
         CssRecoveryAction::DropDescriptor,
         source.find("mystery").unwrap(),
     );
-    let duplicate_start = source.rfind("font-display").unwrap();
     assert_eq!(
-        report.diagnostics()[1].error().code(),
-        CssErrorCode::InvalidDescriptorCombination
-    );
-    assert_eq!(
-        report.diagnostics()[1].action(),
-        CssRecoveryAction::DropDescriptor
-    );
-    assert_eq!(
-        report.diagnostics()[1]
-            .error()
-            .position()
-            .byte_offset()
-            .value(),
-        duplicate_start
-    );
-    assert_eq!(
-        report.diagnostics()[1].span().start().byte_offset().value(),
-        duplicate_start
-    );
-    assert_eq!(
-        report.diagnostics()[1].span().end().byte_offset().value(),
-        duplicate_start + "font-display: block;".len()
+        descriptors
+            .occurrences()
+            .filter(|descriptor| matches!(
+                descriptor,
+                surgeist_css::CssFontFaceDescriptorRef::FontDisplay(_)
+            ))
+            .count(),
+        2
     );
 }
 

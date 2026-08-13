@@ -58,6 +58,14 @@ fn app_strict_parity_clean_and_recovered_sheet_and_style_results_are_exact() {
     assert_eq!(sheet.diagnostics().len(), 1);
     let style = assert_style_parity("mystery: 1");
     assert_eq!(style.diagnostics().len(), 1);
+
+    assert!(
+        assert_sheet_parity(concat!(
+            "@font-face{font-family:One;font-family:Two;src:url(one);src:url(two);",
+            "font-feature-settings:\"kern\" on}"
+        ))
+        .is_clean()
+    );
 }
 
 #[test]

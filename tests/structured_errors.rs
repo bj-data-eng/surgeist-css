@@ -792,23 +792,6 @@ fn error_property_descriptor_color_and_annotation_roots_expose_all_fields() {
         _ => panic!("unexpected error root"),
     }
 
-    let combination =
-        parse_sheet("@font-face { font-family: One; font-family: Two; src: url(test.woff2); }")
-            .expect_err("duplicate descriptor must fail");
-    assert_eq!(
-        combination.code(),
-        CssErrorCode::InvalidDescriptorCombination
-    );
-    match combination.kind() {
-        ErrorKind::InvalidDescriptorCombination(detail) => {
-            assert_eq!(detail.at_rule().as_str(), "font-face");
-            assert_eq!(detail.responsible().as_str(), "font-family");
-            assert_eq!(detail.conflicting().len(), 1);
-            assert_eq!(detail.conflicting()[0].as_str(), "font-family");
-        }
-        _ => panic!("unexpected error root"),
-    }
-
     let color = parse_sheet(".x { color: #ggg; }").expect_err("invalid color must fail");
     assert_eq!(color.code(), CssErrorCode::InvalidColorSyntax);
     match color.kind() {

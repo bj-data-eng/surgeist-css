@@ -806,6 +806,28 @@ fn public_surface_font_format_models_are_checked_and_compatibility_preserving() 
     assert_eq!(legacy.formats().unwrap().formats()[0].as_str(), "woff2");
 }
 
+#[test]
+fn public_surface_font_face_descriptor_current_models_are_checked() {
+    use surgeist_css::{
+        CssFontFaceStretch, CssFontFaceStretchKeyword, CssFontFaceWeight, CssFontFaceWeightKeyword,
+    };
+
+    assert_eq!(
+        CssFontFaceWeight::normal().keyword(),
+        Some(CssFontFaceWeightKeyword::Normal)
+    );
+    assert_eq!(
+        CssFontFaceWeight::bold().keyword(),
+        Some(CssFontFaceWeightKeyword::Bold)
+    );
+    assert_eq!(CssFontFaceWeight::try_range(700.0, 400.0), None);
+    assert_eq!(
+        CssFontFaceStretch::from_keyword(CssFontFaceStretchKeyword::UltraExpanded).keyword(),
+        Some(CssFontFaceStretchKeyword::UltraExpanded)
+    );
+    assert_eq!(CssFontFaceStretch::try_range_percent(125.0, 75.0), None);
+}
+
 #[cfg(feature = "app-strict")]
 #[test]
 fn public_surface_enabled_validators_accept_clean_reports_and_preserve_failures() {

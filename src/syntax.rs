@@ -7493,6 +7493,345 @@ pub enum CssFilter {
     Functions(CssFilterFunctionList),
 }
 
+/// A checked non-negative authored shape `<length>`.
+///
+/// Calculations remain symbolic and are rejected only when their result type permits a
+/// percentage. Literal values are checked immediately.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssShapeLength {
+    value: CssLength,
+}
+
+impl CssShapeLength {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        let valid = match &value {
+            CssLength::Px(value) => value.value() >= 0.0,
+            CssLength::Dimension(value) => value.value() >= 0.0,
+            CssLength::Zero => true,
+            CssLength::Calc(calculation) => !calculation.uses_percentage(),
+            CssLength::Percent(_)
+            | CssLength::Auto
+            | CssLength::MinContent
+            | CssLength::MaxContent
+            | CssLength::FitContent
+            | CssLength::Normal => false,
+        };
+        valid.then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// A checked non-negative authored shape `<length-percentage>`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssShapeLengthPercentage {
+    value: CssLength,
+}
+
+impl CssShapeLengthPercentage {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        let valid = match &value {
+            CssLength::Px(value) | CssLength::Percent(value) => value.value() >= 0.0,
+            CssLength::Dimension(value) => value.value() >= 0.0,
+            CssLength::Zero | CssLength::Calc(_) => true,
+            CssLength::Auto
+            | CssLength::MinContent
+            | CssLength::MaxContent
+            | CssLength::FitContent
+            | CssLength::Normal => false,
+        };
+        valid.then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+fn is_shape_length_percentage(value: &CssLength) -> bool {
+    matches!(
+        value,
+        CssLength::Px(_)
+            | CssLength::Dimension(_)
+            | CssLength::Percent(_)
+            | CssLength::Zero
+            | CssLength::Calc(_)
+    )
+}
+
+/// An authored radial extent keyword shared by `circle()` and `ellipse()`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssRadialExtent {
+    ClosestSide,
+    FarthestSide,
+    ClosestCorner,
+    FarthestCorner,
+}
+
+/// The authored radius branch of a current `circle()` value.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssCircleRadius {
+    Default,
+    Extent(CssRadialExtent),
+    Length(CssShapeLength),
+}
+
+/// A checked pair of non-negative authored ellipse radii.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssEllipseRadii {
+    horizontal: CssShapeLengthPercentage,
+    vertical: CssShapeLengthPercentage,
+}
+
+impl CssEllipseRadii {
+    #[must_use]
+    pub fn try_new(horizontal: CssLength, vertical: CssLength) -> Option<Self> {
+        Some(Self {
+            horizontal: CssShapeLengthPercentage::try_new(horizontal)?,
+            vertical: CssShapeLengthPercentage::try_new(vertical)?,
+        })
+    }
+
+    pub(crate) const fn new(
+        horizontal: CssShapeLengthPercentage,
+        vertical: CssShapeLengthPercentage,
+    ) -> Self {
+        Self {
+            horizontal,
+            vertical,
+        }
+    }
+
+    #[must_use]
+    pub const fn horizontal(&self) -> &CssShapeLengthPercentage {
+        &self.horizontal
+    }
+
+    #[must_use]
+    pub const fn vertical(&self) -> &CssShapeLengthPercentage {
+        &self.vertical
+    }
+}
+
+/// The authored radius branch of a current `ellipse()` value.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssEllipseRadius {
+    Default,
+    Extent(CssRadialExtent),
+    Radii(CssEllipseRadii),
+}
+
+/// A current authored `circle()` value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssCircleShape {
+    radius: CssCircleRadius,
+    position: Option<CssPositionValue>,
+}
+
+impl CssCircleShape {
+    #[must_use]
+    pub const fn new(radius: CssCircleRadius, position: Option<CssPositionValue>) -> Self {
+        Self { radius, position }
+    }
+
+    #[must_use]
+    pub const fn radius(&self) -> &CssCircleRadius {
+        &self.radius
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> Option<&CssPositionValue> {
+        self.position.as_ref()
+    }
+}
+
+/// A current authored `ellipse()` value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssEllipseShape {
+    radius: CssEllipseRadius,
+    position: Option<CssPositionValue>,
+}
+
+impl CssEllipseShape {
+    #[must_use]
+    pub const fn new(radius: CssEllipseRadius, position: Option<CssPositionValue>) -> Self {
+        Self { radius, position }
+    }
+
+    #[must_use]
+    pub const fn radius(&self) -> &CssEllipseRadius {
+        &self.radius
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> Option<&CssPositionValue> {
+        self.position.as_ref()
+    }
+}
+
+/// One-to-four authored `<length-percentage>` inset offsets.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssInsetShapeOffsets {
+    values: Vec<CssLength>,
+}
+
+impl CssInsetShapeOffsets {
+    #[must_use]
+    pub fn try_new(values: Vec<CssLength>) -> Option<Self> {
+        ((1..=4).contains(&values.len()) && values.iter().all(is_shape_length_percentage))
+            .then_some(Self { values })
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[CssLength] {
+        &self.values
+    }
+}
+
+/// A current authored `inset()` value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssInsetShape {
+    offsets: CssInsetShapeOffsets,
+    round: Option<CssBorderRadii>,
+}
+
+impl CssInsetShape {
+    #[must_use]
+    pub const fn new(offsets: CssInsetShapeOffsets, round: Option<CssBorderRadii>) -> Self {
+        Self { offsets, round }
+    }
+
+    #[must_use]
+    pub const fn offsets(&self) -> &CssInsetShapeOffsets {
+        &self.offsets
+    }
+
+    #[must_use]
+    pub const fn round(&self) -> Option<&CssBorderRadii> {
+        self.round.as_ref()
+    }
+}
+
+/// The optional authored fill rule of `polygon()`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssPolygonFillRule {
+    Nonzero,
+    Evenodd,
+}
+
+/// One checked authored point in a current `polygon()` value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssPolygonPoint {
+    x: CssLength,
+    y: CssLength,
+}
+
+impl CssPolygonPoint {
+    #[must_use]
+    pub fn try_new(x: CssLength, y: CssLength) -> Option<Self> {
+        (is_shape_length_percentage(&x) && is_shape_length_percentage(&y)).then_some(Self { x, y })
+    }
+
+    pub(crate) const fn new(x: CssLength, y: CssLength) -> Self {
+        Self { x, y }
+    }
+
+    #[must_use]
+    pub const fn x(&self) -> &CssLength {
+        &self.x
+    }
+
+    #[must_use]
+    pub const fn y(&self) -> &CssLength {
+        &self.y
+    }
+}
+
+/// A non-empty authored polygon point list.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssPolygonPointList {
+    points: Vec<CssPolygonPoint>,
+}
+
+impl CssPolygonPointList {
+    #[must_use]
+    pub fn try_new(points: Vec<CssPolygonPoint>) -> Option<Self> {
+        (!points.is_empty()).then_some(Self { points })
+    }
+
+    #[must_use]
+    pub fn points(&self) -> &[CssPolygonPoint] {
+        &self.points
+    }
+}
+
+/// A current authored `polygon()` value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssPolygonShape {
+    fill_rule: Option<CssPolygonFillRule>,
+    round: Option<CssShapeLength>,
+    points: CssPolygonPointList,
+}
+
+impl CssPolygonShape {
+    #[must_use]
+    pub const fn new(
+        fill_rule: Option<CssPolygonFillRule>,
+        round: Option<CssShapeLength>,
+        points: CssPolygonPointList,
+    ) -> Self {
+        Self {
+            fill_rule,
+            round,
+            points,
+        }
+    }
+
+    #[must_use]
+    pub const fn fill_rule(&self) -> Option<CssPolygonFillRule> {
+        self.fill_rule
+    }
+
+    #[must_use]
+    pub const fn round(&self) -> Option<&CssShapeLength> {
+        self.round.as_ref()
+    }
+
+    #[must_use]
+    pub const fn points(&self) -> &CssPolygonPointList {
+        &self.points
+    }
+}
+
+/// A selected current authored basic-shape function.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssBasicShapeValue {
+    Inset(Box<CssInsetShape>),
+    Circle(CssCircleShape),
+    Ellipse(CssEllipseShape),
+    Polygon(CssPolygonShape),
+}
+
+/// The exact current authored subset of `clip-path`.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssClipPathValue {
+    None,
+    Url(CssUrl),
+    BasicShape(CssBasicShapeValue),
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CssBasicShape {
@@ -7508,6 +7847,25 @@ pub enum CssClipPath {
     None,
     Url(CssUrl),
     BasicShape(CssBasicShape),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CssParsedClipPath {
+    current: Option<CssClipPathValue>,
+    legacy: Option<CssClipPath>,
+}
+
+impl CssParsedClipPath {
+    pub(crate) const fn new(
+        current: Option<CssClipPathValue>,
+        legacy: Option<CssClipPath>,
+    ) -> Self {
+        Self { current, legacy }
+    }
+
+    pub(crate) fn into_parts(self) -> (Option<CssClipPathValue>, Option<CssClipPath>) {
+        (self.current, self.legacy)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

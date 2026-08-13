@@ -140,6 +140,10 @@ fn basic_shape_radius_arity_and_separator_mutations_are_rejected() {
         "ellipse(-1px 2px)",
         "ellipse(1px)",
         "ellipse(1px 2px 3px)",
+        "inset(1px 2px 3px 4px 5px)",
+        "inset(1px round / 2px)",
+        "inset(1px round 2px /)",
+        "inset(1px round 2px / 3px / 4px)",
         "polygon(0 0, 100% 0)",
         "polygon(evenodd 0 0, 100% 0)",
         "polygon(round -1px, 0 0)",
@@ -196,8 +200,14 @@ fn selected_basic_shapes_expose_exact_typed_authored_components() {
             if matches!(value.value(), CssLength::Px(number) if number.value() == 10.0)
     ));
     let position = circle.position().expect("circle position");
-    assert!(matches!(position.horizontal(), CssHorizontalPosition::RightOffset(_)));
-    assert!(matches!(position.vertical(), CssVerticalPosition::BottomOffset(_)));
+    assert!(matches!(
+        position.horizontal(),
+        CssHorizontalPosition::RightOffset(_)
+    ));
+    assert!(matches!(
+        position.vertical(),
+        CssVerticalPosition::BottomOffset(_)
+    ));
 
     let ellipse = parsed_clip_path_property("ellipse(10px 25% at center)");
     let Some(CssClipPathValue::BasicShape(CssBasicShapeValue::Ellipse(ellipse))) =
@@ -221,9 +231,8 @@ fn selected_basic_shapes_expose_exact_typed_authored_components() {
     assert!(matches!(radii.top_left.horizontal(), CssLength::Px(value) if value.value() == 4.0));
     assert!(matches!(radii.top_left.vertical(), CssLength::Px(value) if value.value() == 6.0));
 
-    let polygon = parsed_clip_path_property(
-        "polygon(evenodd round 2px, 0 0, 100% 0, calc(50% - 1px) 100%)",
-    );
+    let polygon =
+        parsed_clip_path_property("polygon(evenodd round 2px, 0 0, 100% 0, calc(50% - 1px) 100%)");
     let Some(CssClipPathValue::BasicShape(CssBasicShapeValue::Polygon(polygon))) =
         polygon.current()
     else {
@@ -236,7 +245,7 @@ fn selected_basic_shapes_expose_exact_typed_authored_components() {
     ));
     assert_eq!(polygon.points().points().len(), 3);
     assert!(matches!(
-        polygon.points().points()[2].x().value(),
+        polygon.points().points()[2].x(),
         CssLength::Calc(_)
     ));
 }
@@ -260,6 +269,20 @@ fn omitted_shape_radii_and_polygon_prefix_are_explicit_current_branches() {
     assert!(matches!(ellipse.radius(), CssEllipseRadius::Default));
     assert!(ellipse.position().is_some());
 
+    for (value, count) in [
+        ("inset(1px)", 1),
+        ("inset(1px 2px)", 2),
+        ("inset(1px 2px 3px)", 3),
+        ("inset(1px 2px 3px 4px)", 4),
+    ] {
+        let inset = parsed_clip_path_property(value);
+        let Some(CssClipPathValue::BasicShape(CssBasicShapeValue::Inset(inset))) = inset.current()
+        else {
+            panic!("expected typed `{value}`");
+        };
+        assert_eq!(inset.offsets().values().len(), count);
+    }
+
     let polygon = parsed_clip_path_property("polygon(, 0 0)");
     let Some(CssClipPathValue::BasicShape(CssBasicShapeValue::Polygon(polygon))) =
         polygon.current()
@@ -269,15 +292,22 @@ fn omitted_shape_radii_and_polygon_prefix_are_explicit_current_branches() {
     assert_eq!(polygon.fill_rule(), None);
     assert!(polygon.round().is_none());
     assert_eq!(polygon.points().points().len(), 1);
+
+    let polygon = parsed_clip_path_property("polygon(round 1px nonzero, -1px -2%)");
+    let Some(CssClipPathValue::BasicShape(CssBasicShapeValue::Polygon(polygon))) =
+        polygon.current()
+    else {
+        panic!("expected round-first polygon prefix");
+    };
+    assert_eq!(polygon.fill_rule(), Some(CssPolygonFillRule::Nonzero));
+    assert!(polygon.round().is_some());
 }
 
 #[test]
 fn shape_checked_scalars_reject_invalid_public_construction() {
     assert!(CssShapeLength::try_new(CssLength::try_percent(10.0).unwrap()).is_none());
     assert!(CssShapeLength::try_new(CssLength::try_px(-1.0).unwrap()).is_none());
-    assert!(
-        CssShapeLengthPercentage::try_new(CssLength::try_percent(-1.0).unwrap()).is_none()
-    );
+    assert!(CssShapeLengthPercentage::try_new(CssLength::try_percent(-1.0).unwrap()).is_none());
 }
 
 #[test]

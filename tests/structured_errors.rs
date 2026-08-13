@@ -639,6 +639,52 @@ fn error_malformed_at_rule_prelude_reports_responsible_token_position() {
 }
 
 #[test]
+fn namespace_prelude_errors_expose_exact_payload_span_action_and_sibling_recovery() {
+    let failed = "@namespace svg ident;";
+    let source = format!("{failed} .after {{}}");
+    let report = parse_sheet(&source);
+    assert!(matches!(report.syntax().rules(), [CssRule::Style(_)]));
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected one malformed namespace diagnostic")
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidAtRulePrelude
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropAtRule);
+    assert_eq!(
+        diagnostic.error().position().byte_offset().value(),
+        source.find("ident").unwrap()
+    );
+    let failed_start = source.find(failed).unwrap();
+    assert_eq!(
+        diagnostic.span().start().byte_offset().value(),
+        failed_start
+    );
+    assert_eq!(
+        diagnostic.span().end().byte_offset().value(),
+        failed_start + failed.len()
+    );
+    let ErrorKind::InvalidAtRulePrelude(detail) = diagnostic.error().kind() else {
+        panic!("expected namespace prelude payload")
+    };
+    assert_eq!(detail.name().as_str(), "namespace");
+    assert_eq!(detail.production().as_str(), "later.rule.namespace");
+    assert_eq!(
+        detail.expectation().as_str(),
+        "an optional prefix followed by one string or URL namespace name"
+    );
+    assert_eq!(detail.encountered().unwrap().authored(), "ident");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_sheet(&source)
+            .expect_err("strict validation rejects malformed namespace rules");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn error_missing_at_rule_body_reports_missing_token_position() {
     let error = parse_sheet("@media screen;").expect_err("media requires a block");
     assert_eq!(error.code(), CssErrorCode::InvalidAtRuleBody);

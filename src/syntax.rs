@@ -112,6 +112,7 @@ impl CssEncodingDeclaration {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssRule {
     Import(CssImportRule),
+    Namespace(CssNamespaceRule),
     LayerStatement(CssLayerStatementRule),
     LayerBlock(CssLayerBlockRule),
     FontFace(CssFontFaceRule),
@@ -121,6 +122,107 @@ pub enum CssRule {
     Supports(CssSupportsRule),
     Container(CssContainerRule),
     Scope(CssScopeRule),
+}
+
+/// One valid authored Namespaces 3 declaration.
+///
+/// The declaration retains its optional decoded prefix, literal namespace name,
+/// and parser-produced source position. It does not resolve namespace names,
+/// load resources, or perform selector matching.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssNamespaceRule {
+    prefix: Option<CssNamespacePrefix>,
+    name: CssNamespaceName,
+    position: CssSourcePosition,
+}
+
+impl CssNamespaceRule {
+    #[must_use]
+    pub(crate) const fn new(
+        prefix: Option<CssNamespacePrefix>,
+        name: CssNamespaceName,
+        position: CssSourcePosition,
+    ) -> Self {
+        Self {
+            prefix,
+            name,
+            position,
+        }
+    }
+
+    /// Returns the optional exact, case-sensitive decoded namespace prefix.
+    #[must_use]
+    pub const fn prefix(&self) -> Option<&CssNamespacePrefix> {
+        self.prefix.as_ref()
+    }
+
+    /// Returns the literal string carried by the authored string or `url()` token.
+    #[must_use]
+    pub const fn name(&self) -> &CssNamespaceName {
+        &self.name
+    }
+
+    /// Returns the semantic source position of the rule's at-keyword.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+}
+
+/// One checked, decoded Namespaces 3 prefix.
+///
+/// Construction accepts exactly one decoded CSS identifier. Prefix equality is
+/// exact and case-sensitive.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CssNamespacePrefix {
+    value: String,
+}
+
+impl CssNamespacePrefix {
+    /// Constructs a prefix from one decoded CSS identifier.
+    #[must_use]
+    pub fn try_new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        is_exact_css_identifier(&value).then(|| Self::new(value))
+    }
+
+    #[must_use]
+    pub(crate) fn new(value: impl Into<String>) -> Self {
+        let value = value.into();
+        debug_assert!(is_exact_css_identifier(&value));
+        Self { value }
+    }
+
+    /// Returns the exact, case-sensitive decoded identifier.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+/// The literal namespace name from a Namespaces 3 declaration.
+///
+/// Empty values and strings that are not valid URIs remain valid authored
+/// syntax. This value is not normalized, resolved, or loaded.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CssNamespaceName {
+    value: String,
+}
+
+impl CssNamespaceName {
+    /// Constructs an authored literal namespace name without URI validation.
+    #[must_use]
+    pub fn new(value: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+        }
+    }
+
+    /// Returns the literal string carried by the authored string or `url()` token.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -131,6 +131,40 @@ fn app_strict_conditional_imports_and_prelude_phases_match_ordinary_reports() {
     }
 }
 
+#[test]
+fn app_strict_namespace_rules_match_ordinary_retention_ordering_and_recovery() {
+    let clean = assert_sheet_parity(concat!(
+        "@import 'theme.css'; ",
+        "@namespace \"urn:default\"; ",
+        "@namespace svg url(urn:svg);",
+    ));
+    assert!(clean.is_clean());
+    assert!(matches!(
+        clean.syntax().rules(),
+        [
+            CssRule::Import(_),
+            CssRule::Namespace(_),
+            CssRule::Namespace(_)
+        ]
+    ));
+
+    for source in [
+        "@namespace svg ident; .kept {}",
+        "@layer reset; @namespace svg 'urn:late'; @import 'kept.css';",
+        "@media screen { @namespace svg 'urn:nested'; .kept {} }",
+        "@namespace svg 'urn:missing-semicolon'",
+    ] {
+        let recovered = assert_sheet_parity(source);
+        assert!(!recovered.is_clean(), "{source}");
+        assert!(
+            recovered
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.action() == CssRecoveryAction::DropAtRule)
+        );
+    }
+}
+
 fn nested_selector(depth: usize) -> String {
     format!("{}{}{}", ":is(".repeat(depth), ".leaf", ")".repeat(depth)) + "{color:red}"
 }

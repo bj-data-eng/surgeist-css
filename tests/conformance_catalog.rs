@@ -1190,15 +1190,14 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "@namespace",
         source: ExpectedSource::Id("O-NAMESPACES3"),
         production: "#declaration,#syntax",
-        status: CssSupportStatus::RecognizedUnsupported,
+        status: CssSupportStatus::Complete,
         supported_subset: None,
         unsupported_remainder: None,
-        recognized_code: Some(CssErrorCode::UnsupportedAtRule),
-        positive: None,
-        negative: Some((
-            Input::Sheet("@namespace svg url(https://example.test/svg);"),
-            CssErrorCode::UnsupportedAtRule,
+        recognized_code: None,
+        positive: Some(Input::Sheet(
+            "@namespace svg url(https://example.test/svg);",
         )),
+        negative: None,
     },
     ExpectedFeature {
         id: "later.rule.counter-style",

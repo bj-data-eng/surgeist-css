@@ -230,3 +230,86 @@ fn encoding_is_independent_from_import_phase_and_imports_remain_top_level_only()
         CssErrorCode::InvalidAtRulePlacement
     );
 }
+
+#[test]
+fn namespace_and_import_preludes_follow_the_six_state_ordering_contract() {
+    let namespace_path = parse_sheet(concat!(
+        "@charset \"UTF-8\"; ",
+        "@import 'theme.css'; ",
+        "@namespace \"urn:default\"; ",
+        "@namespace svg url(urn:svg); ",
+        "@layer theme; ",
+        ".body {} ",
+        "@namespace late \"urn:late\";",
+    ));
+    assert_eq!(namespace_path.syntax().encoding().unwrap().label(), "UTF-8");
+    assert!(matches!(
+        namespace_path.syntax().rules(),
+        [
+            CssRule::Import(_),
+            CssRule::Namespace(_),
+            CssRule::Namespace(_),
+            CssRule::LayerStatement(_),
+            CssRule::Style(_),
+        ]
+    ));
+    assert_eq!(namespace_path.diagnostics().len(), 1);
+    assert_eq!(
+        namespace_path.diagnostics()[0].error().code(),
+        CssErrorCode::InvalidAtRulePlacement
+    );
+
+    let initial_layers_path = parse_sheet(concat!(
+        "@layer reset; ",
+        "@layer tokens; ",
+        "@import 'first.css'; ",
+        "@namespace blocked \"urn:blocked\"; ",
+        "@import 'second.css'; ",
+        "@layer theme; ",
+        "@import 'late.css';",
+    ));
+    assert!(matches!(
+        initial_layers_path.syntax().rules(),
+        [
+            CssRule::LayerStatement(_),
+            CssRule::LayerStatement(_),
+            CssRule::Import(_),
+            CssRule::Import(_),
+            CssRule::LayerStatement(_),
+        ]
+    ));
+    assert_eq!(initial_layers_path.diagnostics().len(), 2);
+    assert!(initial_layers_path.diagnostics().iter().all(|diagnostic| {
+        diagnostic.error().code() == CssErrorCode::InvalidAtRulePlacement
+            && diagnostic.action() == CssRecoveryAction::DropAtRule
+    }));
+}
+
+#[test]
+fn only_successful_namespace_or_layer_rules_change_the_prelude_phase() {
+    let report = parse_sheet(concat!(
+        "@namespace missing-name; ",
+        "@layer ; ",
+        "@unknown ignored; ",
+        "@namespace kept \"urn:kept\"; ",
+        "@namespace replacement \"urn:replacement\";",
+    ));
+
+    assert!(matches!(
+        report.syntax().rules(),
+        [CssRule::Namespace(_), CssRule::Namespace(_)]
+    ));
+    assert_eq!(report.diagnostics().len(), 3);
+    assert_eq!(
+        report.diagnostics()[0].error().code(),
+        CssErrorCode::InvalidAtRulePrelude
+    );
+    assert_eq!(
+        report.diagnostics()[1].error().code(),
+        CssErrorCode::UnexpectedToken
+    );
+    assert_eq!(
+        report.diagnostics()[2].error().code(),
+        CssErrorCode::UnknownAtRule
+    );
+}

@@ -12,13 +12,34 @@ use surgeist_css::{
     CssGenericFontFamily, CssGridAutoFlowAxis, CssHueInterpolationMethod, CssImportance,
     CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLength,
     CssLineHeightLengthPercentage, CssMediaConditionKind, CssMediaQuery, CssMediaQueryModifier,
-    CssMediaType, CssOpenTypeTag, CssPredefinedColorSpace, CssPropertyNameRef, CssRecoveryAction,
-    CssRelativeColorChannel, CssRelativeColorEnvironment, CssRelativeColorExpressionValue,
-    CssRelativeColorFunction, CssRelativeColorResultDomain, CssRule, CssSelectorCombinator,
-    CssSpecificationTier, CssSupportStatus, CssSupportsConditionKind, CssSupportsConditionList,
-    ErrorKind, conformance_exclusion, feature_metadata, parse_sheet, parse_style_attribute,
-    property_metadata, specification_source,
+    CssMediaType, CssNamespaceName, CssNamespacePrefix, CssOpenTypeTag, CssPredefinedColorSpace,
+    CssPropertyNameRef, CssRecoveryAction, CssRelativeColorChannel, CssRelativeColorEnvironment,
+    CssRelativeColorExpressionValue, CssRelativeColorFunction, CssRelativeColorResultDomain,
+    CssRule, CssSelectorCombinator, CssSpecificationTier, CssSupportStatus,
+    CssSupportsConditionKind, CssSupportsConditionList, ErrorKind, conformance_exclusion,
+    feature_metadata, parse_sheet, parse_style_attribute, property_metadata, specification_source,
 };
+
+#[test]
+fn public_surface_exposes_checked_private_field_namespace_models() {
+    let report = parse_sheet("@namespace s\\76 g \"not a URI\";");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [CssRule::Namespace(rule)] = report.syntax().rules() else {
+        panic!("expected namespace rule")
+    };
+    assert_eq!(rule.prefix().expect("decoded prefix").as_str(), "svg");
+    assert_eq!(rule.name().as_str(), "not a URI");
+    assert_eq!(rule.position().byte_offset().value(), 0);
+
+    assert_eq!(
+        CssNamespacePrefix::try_new("svg")
+            .expect("one decoded identifier")
+            .as_str(),
+        "svg"
+    );
+    assert!(CssNamespacePrefix::try_new("svg icon").is_none());
+    assert_eq!(CssNamespaceName::new("").as_str(), "");
+}
 
 #[test]
 fn public_surface_exposes_private_field_supports_models_and_checked_lists() {
@@ -720,15 +741,9 @@ fn public_surface_metadata_exposes_every_final_accessor_and_bounded_status() {
         "official.media.query-list-core"
     );
 
-    let unsupported = feature_metadata("later.rule.namespace").expect("namespace record");
-    assert_eq!(
-        unsupported.status(),
-        CssSupportStatus::RecognizedUnsupported
-    );
-    assert_eq!(
-        unsupported.recognized_unsupported_code(),
-        Some(CssErrorCode::UnsupportedAtRule)
-    );
+    let namespace = feature_metadata("later.rule.namespace").expect("namespace record");
+    assert_eq!(namespace.status(), CssSupportStatus::Complete);
+    assert_eq!(namespace.recognized_unsupported_code(), None);
 
     let property = property_metadata("WiDtH").expect("ASCII-insensitive property lookup");
     assert_eq!(property.feature().id().as_str(), "baseline.property.width");

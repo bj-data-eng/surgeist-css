@@ -296,6 +296,11 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
                 "keyframes",
                 "a stylesheet or conditional group rule list",
             )),
+            "namespace" => Err(invalid_at_rule_placement(
+                input.current_source_location(),
+                "namespace",
+                "the stylesheet top level",
+            )),
             _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
         }
     }

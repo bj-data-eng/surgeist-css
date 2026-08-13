@@ -4355,13 +4355,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 366] = [
         CALC_SUBSET,
         CALC_REMAINDER,
     ),
-    CssFeatureMetadata::recognized_unsupported(
+    CssFeatureMetadata::complete(
         "later.rule.namespace",
         CssFeatureKind::Rule,
         "@namespace",
         O_NAMESPACES3,
         "#declaration,#syntax",
-        CssErrorCode::UnsupportedAtRule,
     ),
     CssFeatureMetadata::complete(
         "later.rule.supports",
@@ -6016,12 +6015,9 @@ mod tests {
         assert_eq!(import.recognized_unsupported_code(), None);
 
         let namespace = feature_metadata("later.rule.namespace").expect("namespace metadata");
-        assert_eq!(namespace.status(), CssSupportStatus::RecognizedUnsupported);
+        assert_eq!(namespace.status(), CssSupportStatus::Complete);
         assert_eq!(namespace.supported_subset(), None);
         assert_eq!(namespace.unsupported_remainder(), None);
-        assert_eq!(
-            namespace.recognized_unsupported_code(),
-            Some(CssErrorCode::UnsupportedAtRule)
-        );
+        assert_eq!(namespace.recognized_unsupported_code(), None);
     }
 }

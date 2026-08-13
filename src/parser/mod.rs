@@ -926,7 +926,10 @@ fn into_scoped_rule(rule: CssRule) -> Option<CssScopedRule> {
             rule.position(),
         ))),
         CssRule::Scope(rule) => Some(CssScopedRule::Scope(rule)),
-        CssRule::Import(_) | CssRule::FontFace(_) | CssRule::Keyframes(_) => None,
+        CssRule::Import(_)
+        | CssRule::Namespace(_)
+        | CssRule::FontFace(_)
+        | CssRule::Keyframes(_) => None,
     }
 }
 
@@ -989,6 +992,7 @@ fn rebuild_group_rule(rule: CssRule, rules: Vec<CssRule>) -> CssRule {
 fn rule_start(rule: &CssRule) -> usize {
     match rule {
         CssRule::Import(rule) => rule.position(),
+        CssRule::Namespace(rule) => rule.position(),
         CssRule::LayerStatement(rule) => rule.position(),
         CssRule::LayerBlock(rule) => rule.position(),
         CssRule::FontFace(rule) => rule.position(),
@@ -1308,6 +1312,7 @@ pub(super) fn is_declaration_recovery_unit(failed_unit: &str) -> bool {
 struct StrictRuleParser<'s> {
     source: &'s str,
     top_level_phase: Option<TopLevelPreludePhase>,
+    namespace_bindings: CssNamespaceBindings,
     encoding_allowed: bool,
     source_len: usize,
     encoding: Option<CssEncodingDeclaration>,
@@ -1318,27 +1323,37 @@ struct StrictRuleParser<'s> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TopLevelPreludePhase {
     Initial,
+    InitialLayers,
     Imports,
+    ImportsAfterInitialLayers,
     Namespaces,
     Body,
 }
 
 impl TopLevelPreludePhase {
     const fn accepts_import(self) -> bool {
-        matches!(self, Self::Initial | Self::Imports)
+        matches!(
+            self,
+            Self::Initial | Self::InitialLayers | Self::Imports | Self::ImportsAfterInitialLayers
+        )
     }
 
     const fn after_import(self) -> Self {
         match self {
             Self::Initial | Self::Imports => Self::Imports,
+            Self::InitialLayers | Self::ImportsAfterInitialLayers => {
+                Self::ImportsAfterInitialLayers
+            }
             Self::Namespaces | Self::Body => self,
         }
     }
 
     const fn after_layer_statement(self) -> Self {
         match self {
-            Self::Initial => Self::Initial,
-            Self::Imports | Self::Namespaces | Self::Body => Self::Body,
+            Self::Initial | Self::InitialLayers => Self::InitialLayers,
+            Self::Imports | Self::ImportsAfterInitialLayers | Self::Namespaces | Self::Body => {
+                Self::Body
+            }
         }
     }
 
@@ -1349,7 +1364,46 @@ impl TopLevelPreludePhase {
     const fn after_namespace(self) -> Option<Self> {
         match self {
             Self::Initial | Self::Imports | Self::Namespaces => Some(Self::Namespaces),
-            Self::Body => None,
+            Self::InitialLayers | Self::ImportsAfterInitialLayers | Self::Body => None,
+        }
+    }
+}
+
+#[derive(Default)]
+struct CssNamespaceBindings {
+    default: Option<CssNamespaceName>,
+    named: Vec<(CssNamespacePrefix, CssNamespaceName)>,
+}
+
+impl CssNamespaceBindings {
+    fn activate(&mut self, prefix: Option<CssNamespacePrefix>, name: CssNamespaceName) {
+        if let Some(prefix) = prefix {
+            if let Some((_, active_name)) = self
+                .named
+                .iter_mut()
+                .find(|(active_prefix, _)| active_prefix == &prefix)
+            {
+                *active_name = name;
+            } else {
+                self.named.push((prefix, name));
+            }
+        } else {
+            self.default = Some(name);
+        }
+    }
+
+    fn has_active_binding(
+        &self,
+        prefix: Option<&CssNamespacePrefix>,
+        name: &CssNamespaceName,
+    ) -> bool {
+        if let Some(prefix) = prefix {
+            self.named
+                .iter()
+                .find(|(active_prefix, _)| active_prefix == prefix)
+                .is_some_and(|(_, active_name)| active_name == name)
+        } else {
+            self.default.as_ref() == Some(name)
         }
     }
 }
@@ -1359,6 +1413,7 @@ impl<'s> StrictRuleParser<'s> {
         Self {
             source,
             top_level_phase: Some(TopLevelPreludePhase::Initial),
+            namespace_bindings: CssNamespaceBindings::default(),
             encoding_allowed: true,
             source_len: source.len(),
             encoding: None,
@@ -1371,6 +1426,7 @@ impl<'s> StrictRuleParser<'s> {
         Self {
             source,
             top_level_phase: None,
+            namespace_bindings: CssNamespaceBindings::default(),
             encoding_allowed: false,
             source_len: usize::MAX,
             encoding: None,
@@ -1397,11 +1453,11 @@ impl<'s> StrictRuleParser<'s> {
         }
     }
 
-    #[expect(
-        dead_code,
-        reason = "C10 activates the reserved namespace phase transition after successful parsing"
-    )]
-    fn mark_successful_namespace(&mut self) -> bool {
+    fn mark_successful_namespace(
+        &mut self,
+        prefix: Option<CssNamespacePrefix>,
+        name: CssNamespaceName,
+    ) -> bool {
         let Some(phase) = self.top_level_phase else {
             return false;
         };
@@ -1409,6 +1465,12 @@ impl<'s> StrictRuleParser<'s> {
             return false;
         };
         self.top_level_phase = Some(next);
+        self.namespace_bindings
+            .activate(prefix.clone(), name.clone());
+        debug_assert!(
+            self.namespace_bindings
+                .has_active_binding(prefix.as_ref(), &name)
+        );
         true
     }
 
@@ -1416,11 +1478,17 @@ impl<'s> StrictRuleParser<'s> {
         self.top_level_phase
             .map(TopLevelPreludePhase::accepts_import)
     }
+
+    fn namespace_is_allowed(&self) -> Option<bool> {
+        self.top_level_phase
+            .map(|phase| phase.after_namespace().is_some())
+    }
 }
 
 enum StrictAtRulePrelude {
     Encoding(String),
     Import(CssImportPrelude),
+    Namespace(CssNamespacePrelude),
     Layer(Vec<CssLayerName>),
     FontFace,
     Keyframes(CssKeyframesName),
@@ -1435,6 +1503,7 @@ impl StrictAtRulePrelude {
         match self {
             Self::Encoding(_) => "css.encoding-declaration",
             Self::Import(_) => "baseline.rule.import",
+            Self::Namespace(_) => "later.rule.namespace",
             Self::Layer(_) => "baseline.rule.layer-block",
             Self::FontFace => "baseline.rule.font-face",
             Self::Keyframes(_) => "baseline.rule.keyframes",
@@ -1452,6 +1521,11 @@ struct CssImportPrelude {
     supports: Option<CssImportSupports>,
     media: Option<CssMediaQueryList>,
     implicit_media_closures: Vec<usize>,
+}
+
+struct CssNamespacePrelude {
+    prefix: Option<CssNamespacePrefix>,
+    name: CssNamespaceName,
 }
 
 struct CssContainerPrelude {
@@ -1539,6 +1613,31 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                     )
                 })?;
                 Ok(StrictAtRulePrelude::Import(prelude))
+            },
+            "namespace" => {
+                let Some(namespace_is_allowed) = self.namespace_is_allowed() else {
+                    return Err(invalid_at_rule_placement(
+                        input.current_source_location(),
+                        "namespace",
+                        "the stylesheet top level",
+                    ));
+                };
+                if !namespace_is_allowed {
+                    return Err(invalid_at_rule_placement(
+                        input.current_source_location(),
+                        "namespace",
+                        "after imports and before every layer or body rule",
+                    ));
+                }
+                let prelude = parse_namespace_prelude(self.source, input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "namespace",
+                        "later.rule.namespace",
+                        "an optional prefix followed by one string or URL namespace name",
+                    )
+                })?;
+                Ok(StrictAtRulePrelude::Namespace(prelude))
             },
             "font-face" => {
                 if !input.is_exhausted() {
@@ -1681,6 +1780,20 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 self.mark_successful_import();
                 Ok(vec![rule])
             }
+            StrictAtRulePrelude::Namespace(prelude) => {
+                let rule = CssNamespaceRule::new(
+                    prelude.prefix,
+                    prelude.name,
+                    crate::source::CssSourcePosition::from_cssparser(
+                        start.position(),
+                        start.source_location(),
+                    ),
+                );
+                if !self.mark_successful_namespace(rule.prefix().cloned(), rule.name().clone()) {
+                    return Err(());
+                }
+                Ok(vec![CssRule::Namespace(rule)])
+            }
             StrictAtRulePrelude::Layer(names) => {
                 let names = CssLayerNameList::try_new(names).ok_or(())?;
                 self.mark_successful_layer_statement();
@@ -1719,6 +1832,12 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 "import",
                 "baseline.rule.import",
                 "a semicolon-terminated @import rule",
+            )),
+            StrictAtRulePrelude::Namespace(_) => Err(invalid_at_rule_block(
+                input,
+                "namespace",
+                "later.rule.namespace",
+                "a semicolon-terminated @namespace rule",
             )),
             StrictAtRulePrelude::Layer(names) => {
                 if names.len() > 1 {
@@ -2189,6 +2308,34 @@ fn parse_import_target<'i, 't>(
     ))
 }
 
+fn parse_namespace_prelude<'i, 't>(
+    source: &'i str,
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssNamespacePrelude, ParseError<'i, Error>> {
+    let prefix = input
+        .try_parse(Parser::expect_ident_cloned)
+        .ok()
+        .map(|prefix| CssNamespacePrefix::new(prefix.to_string()));
+    let name = input.expect_url_or_string().map_err(basic)?;
+    input.expect_exhausted().map_err(basic)?;
+
+    if source
+        .as_bytes()
+        .get(input.position().byte_index())
+        .is_none()
+    {
+        return Err(invalid_syntax(
+            input.current_source_location(),
+            "namespace rules require a terminating semicolon",
+        ));
+    }
+
+    Ok(CssNamespacePrelude {
+        prefix,
+        name: CssNamespaceName::new(name.to_string()),
+    })
+}
+
 fn parse_import_layer<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<Option<CssImportLayer>, ParseError<'i, Error>> {
@@ -2417,6 +2564,11 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser<'i> {
                 input.current_source_location(),
                 "keyframes",
                 "a stylesheet or conditional group rule list",
+            )),
+            "namespace" => Err(invalid_at_rule_placement(
+                input.current_source_location(),
+                "namespace",
+                "the stylesheet top level",
             )),
             _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
         }

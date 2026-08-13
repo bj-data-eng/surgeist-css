@@ -296,27 +296,27 @@ fn stylesheet_recovery_unknown_block_at_rule_keeps_surrounding_rules_and_balance
 }
 
 #[test]
-fn stylesheet_recovery_recognized_unsupported_semicolon_at_rule_is_distinct() {
-    let failed = "@namespace svg url(http://example.test/a;b);";
-    let source = format!(".before {{ color: red; }} {failed} .after {{ color: blue; }}");
+fn stylesheet_recovery_malformed_namespace_rule_is_distinct() {
+    let failed = "@namespace svg ident;";
+    let source = format!("{failed} .after {{ color: blue; }}");
 
     let report = parse_sheet(&source);
 
-    assert_eq!(style_rule_names(&report), ["before", "after"]);
+    assert_eq!(style_rule_names(&report), ["after"]);
     assert_eq!(report.diagnostics().len(), 1);
     let diagnostic = &report.diagnostics()[0];
     assert_drop(
         &source,
         diagnostic,
-        CssErrorCode::UnsupportedAtRule,
+        CssErrorCode::InvalidAtRulePrelude,
         CssRecoveryAction::DropAtRule,
         failed,
     );
-    let ErrorKind::UnsupportedAtRule(detail) = diagnostic.error().kind() else {
-        panic!("expected recognized-unsupported at-rule detail")
+    let ErrorKind::InvalidAtRulePrelude(detail) = diagnostic.error().kind() else {
+        panic!("expected namespace prelude detail")
     };
     assert_eq!(detail.name().as_str(), "namespace");
-    assert_eq!(detail.feature().as_str(), "later.rule.namespace");
+    assert_eq!(detail.production().as_str(), "later.rule.namespace");
 }
 
 #[test]

@@ -7,6 +7,57 @@ use surgeist_css::{
 };
 
 #[test]
+fn font_variant_longhands_and_shorthand_enforce_keyword_groups() {
+    let report = parse_style_attribute(concat!(
+        "font-variant-caps: all-small-caps; ",
+        "font-variant-east-asian: ruby jis04 full-width; ",
+        "font-variant-ligatures: no-contextual common-ligatures; ",
+        "font-variant-numeric: slashed-zero oldstyle-nums tabular-nums diagonal-fractions ordinal; ",
+        "font-variant-position: super; ",
+        "font-variant: no-contextual common-ligatures super all-small-caps ",
+        "oldstyle-nums tabular-nums diagonal-fractions ordinal slashed-zero ",
+        "ruby jis04 full-width; ",
+        "color: red",
+    ));
+
+    if !report.is_clean() {
+        assert_eq!(report.diagnostics().len(), 6);
+        assert_eq!(
+            report
+                .diagnostics()
+                .iter()
+                .filter(|diagnostic| diagnostic.error().code() == CssErrorCode::UnknownProperty)
+                .count(),
+            5,
+        );
+        assert_eq!(report.syntax().len(), 1);
+        assert_eq!(
+            report.syntax()[0].known().unwrap().property(),
+            CssKnownProperty::Color,
+        );
+    }
+
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    assert_eq!(report.syntax().len(), 7);
+    assert_eq!(
+        report
+            .syntax()
+            .iter()
+            .map(|declaration| declaration.known().unwrap().property().canonical_name())
+            .collect::<Vec<_>>(),
+        [
+            "font-variant-caps",
+            "font-variant-east-asian",
+            "font-variant-ligatures",
+            "font-variant-numeric",
+            "font-variant-position",
+            "font-variant",
+            "color",
+        ],
+    );
+}
+
+#[test]
 fn kerning_size_adjust_and_synthesis_follow_fonts3() {
     let report = parse_style_attribute(concat!(
         "font-kerning: normal; ",

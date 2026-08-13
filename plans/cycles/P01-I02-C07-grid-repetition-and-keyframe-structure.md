@@ -157,6 +157,8 @@ sets/counts, workflow state, or call counts is prohibited repository-wide.
   the three hand-authored fixture replacements fail on the same base. New-symbol
   compile evidence may follow only after this executable RED. Exact RED command:
   `cargo test -p surgeist-css --offline --no-default-features --test grid_repetition grid_repeat_models_reject_invalid_cross_products -- --exact`.
+  Exact fixture-reader RED command:
+  `cargo test -p surgeist-css --offline --no-default-features --test i01_c01_observables authored_css_cases_match_frozen_public_report_observables -- --exact`.
 - **Acceptance:** all structural languages in section 2; one-token invalid
   mutations; all direct/aggregate consumers; exact current/I01 projection;
   calculation and 255/256/257 depth boundaries; non-BMP coordinates; complete
@@ -186,6 +188,8 @@ sets/counts, workflow state, or call counts is prohibited repository-wide.
   empty rule/block or duplicate offset is rejected; the four exact fixture
   replacements also execute RED before production changes. Exact RED command:
   `cargo test -p surgeist-css --offline --no-default-features --test keyframe_structures keyframes_preserve_empty_and_duplicate_authored_structure -- --exact`.
+  Exact fixture-reader RED command:
+  `cargo test -p surgeist-css --offline --no-default-features --test i01_c01_observables authored_css_cases_match_frozen_public_report_observables -- --exact`.
 - **Acceptance:** empty rules and blocks; duplicate blocks and list-local/cross-
   block offsets in authored order; declaration and invalid-block smallest-unit
   recovery; retained empty parents; positions, depth, EOF, repeated failures,
@@ -283,6 +287,7 @@ git status --short --branch
 ps -axo pid=,command=
 candidate_sha="$(git rev-parse HEAD)"
 test "$candidate_sha" = "$(git rev-parse main)"
+git merge-base --is-ancestor 597265b574be01c88a3ce559cc2bc07e02791da3 "$candidate_sha"
 git fetch origin main
 test "$(git rev-parse refs/remotes/origin/main)" = "597265b574be01c88a3ce559cc2bc07e02791da3"
 git push --force-with-lease=refs/heads/main:597265b574be01c88a3ce559cc2bc07e02791da3 origin "${candidate_sha}:refs/heads/main"

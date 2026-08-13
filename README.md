@@ -77,14 +77,72 @@ Every one of the 179 schema rows has a generated
 ordinary value, preserving its interior spelling and trivia while excluding
 parser-owned boundary trivia and the terminal importance annotation.
 `i01_subset()` exposes the compatibility payload only when the value belongs to
-the frozen I01 representation. It returns `Some` for every value parsed by the
-current grammar; a later property grammar may return `None` only for syntax that
-the I01 payload cannot represent.
+the frozen I01 representation. Every I01 input retains its exact `Some`
+projection; newly accepted I02 syntax returns `None` when the I01 payload cannot
+represent it.
 
 The `overflow` row illustrates the wrapper/payload distinction. The generated
 `CssOverflowPropertyValue` is the authored property wrapper, while
 `CssOverflowI01PropertyValue` is the renamed I01 payload containing the
 `Single` and `Pair` shapes.
+
+## Finite numeric values, timing domains, and symbolic calculations
+
+Current numeric models reject NaN and both infinities at checked construction
+boundaries. Duration literals are additionally non-negative, while delay
+literals are signed. Range checks that belong to the authored literal are
+immediate; a well-typed calculation remains symbolic when its eventual range
+belongs to computed-value processing.
+
+```rust
+use surgeist_css::{
+    CssDelay, CssDuration, CssDurationLiteral, CssKnownPropertyValueRef,
+    CssTimeUnit, parse_style_attribute,
+};
+
+assert!(CssDurationLiteral::try_new(-1.0, CssTimeUnit::Seconds).is_none());
+
+let report = parse_style_attribute(concat!(
+    "transition-duration: calc(-1s + 2s); ",
+    "transition-delay: -250ms",
+));
+assert!(report.is_clean());
+
+let CssKnownPropertyValueRef::TransitionDuration(duration) = report.syntax()[0]
+    .known()
+    .expect("known duration")
+    .property_value()
+    .expect("ordinary duration")
+else {
+    panic!("expected transition-duration");
+};
+assert!(matches!(
+    duration.durations().values()[0],
+    CssDuration::Calculation(_)
+));
+assert!(duration.i01_subset().is_none());
+
+let CssKnownPropertyValueRef::TransitionDelay(delay) = report.syntax()[1]
+    .known()
+    .expect("known delay")
+    .property_value()
+    .expect("ordinary delay")
+else {
+    panic!("expected transition-delay");
+};
+assert!(matches!(
+    delay.delays().values()[0],
+    CssDelay::Literal(value) if value.value() == -250.0
+));
+```
+
+The current accessors expose `CssDuration`, `CssDelay`, typed iteration values,
+and typed calculation trees. `i01_subset()` remains the frozen compatibility
+view: every I01 timing value retains its exact projection, while newly accepted
+signed-delay or calculation syntax returns `None` when the older payload cannot
+represent it. Calculation roots preserve authored units and expression shape;
+this crate does not resolve relative units, evaluate computed ranges, run
+animation timelines, or lower values into sibling Surgeist crates.
 
 `CssImportance` and `CssSupportStatus` are deliberately closed and may be
 matched exhaustively. Every other public enum is non-exhaustive and requires a

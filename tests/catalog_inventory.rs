@@ -11,6 +11,8 @@ use surgeist_css::{
 const PROPERTY_SUBSET: &str = "The property-specific parser behavior at 4b288d6:src/parser/mod.rs, plus whole-value CSS-wide keywords and syntactically admissible substitution-dependent authored values, is supported.";
 const PROPERTY_REMAINDER: &str =
     "Other valid forms of the cited property production are outside the I01 subset.";
+const TIMING_SUBSET: &str = "The I01 shorthand components plus C03 duration, signed delay, iteration, and typed calculation syntax are supported.";
+const TIMING_REMAINDER: &str = "C05 easing and function grammar closure remains unsupported.";
 const CSS_WIDE_KEYWORDS: &[&str] = &["inherit", "initial", "unset", "revert", "revert-layer"];
 
 fn starts_with_css_wide_keyword(authored_value: &str) -> bool {
@@ -44,9 +46,27 @@ fn public_feature_catalog_exposes_declared_metadata_and_lookup() {
             "{} exact property production",
             vector.id
         );
-        assert_eq!(feature.status(), CssSupportStatus::Partial);
-        assert_eq!(feature.supported_subset(), Some(PROPERTY_SUBSET));
-        assert_eq!(feature.unsupported_remainder(), Some(PROPERTY_REMAINDER));
+        match vector.id {
+            "baseline.property.transition-duration"
+            | "baseline.property.transition-delay"
+            | "baseline.property.animation-duration"
+            | "baseline.property.animation-delay"
+            | "baseline.property.animation-iteration-count" => {
+                assert_eq!(feature.status(), CssSupportStatus::Complete);
+                assert_eq!(feature.supported_subset(), None);
+                assert_eq!(feature.unsupported_remainder(), None);
+            }
+            "baseline.property.transition" | "baseline.property.animation" => {
+                assert_eq!(feature.status(), CssSupportStatus::Partial);
+                assert_eq!(feature.supported_subset(), Some(TIMING_SUBSET));
+                assert_eq!(feature.unsupported_remainder(), Some(TIMING_REMAINDER));
+            }
+            _ => {
+                assert_eq!(feature.status(), CssSupportStatus::Partial);
+                assert_eq!(feature.supported_subset(), Some(PROPERTY_SUBSET));
+                assert_eq!(feature.unsupported_remainder(), Some(PROPERTY_REMAINDER));
+            }
+        }
         assert_eq!(feature.recognized_unsupported_code(), None);
         assert_ne!(
             feature.source().id().as_str(),

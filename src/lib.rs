@@ -133,9 +133,9 @@ let _ = validate_style_attribute("color: red");
 //! `Css<SchemaVariant>PropertyValue` wrapper. Its `as_css()` method returns the
 //! exact authored ordinary value, preserving interior spelling and trivia while
 //! excluding parser-owned boundary trivia and the terminal importance annotation.
-//! Its `i01_subset()` method is a compatibility view: every value parsed by the
-//! current grammar returns `Some`, while a later grammar may return `None` only
-//! for syntax outside the frozen I01 representation.
+//! Its `i01_subset()` method is a compatibility view: every I01 input retains its
+//! exact `Some` projection, while newly accepted I02 syntax returns `None` when
+//! the frozen I01 representation cannot carry it.
 //!
 //! The generated [`CssOverflowPropertyValue`] is the authored wrapper for the
 //! `overflow` row. [`CssOverflowI01PropertyValue`] is its renamed I01 payload and
@@ -167,6 +167,75 @@ let _ = validate_style_attribute("color: red");
 //!         if value.value() == -0.5 && value.unit() == CssAngleUnit::Turns
 //! ));
 //! ```
+//!
+//! Calculation trees remain authored and symbolic. This crate checks finite literal values and
+//! dimensional validity, but it does not resolve relative units, evaluate computed ranges, or
+//! run animation timelines.
+//!
+//! # Timing domains and I01 compatibility
+//!
+//! Duration literals are finite and non-negative; delay literals are finite and signed. A range
+//! constraint that belongs to a literal is enforced immediately, while a well-typed calculation
+//! remains representable for later computed-value processing. Current property accessors expose
+//! those distinct domains. [`CssKnownDeclaration::property_value`] still provides
+//! `i01_subset()` on each concrete wrapper as the frozen compatibility view.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssDelay, CssDuration, CssDurationLiteral, CssKnownPropertyValueRef,
+//!     CssTimeUnit, parse_style_attribute,
+//! };
+//!
+//! assert!(CssDurationLiteral::try_new(-1.0, CssTimeUnit::Seconds).is_none());
+//!
+//! let report = parse_style_attribute(concat!(
+//!     "transition-duration: calc(-1s + 2s); ",
+//!     "transition-delay: -250ms",
+//! ));
+//! assert!(report.is_clean());
+//!
+//! let CssKnownPropertyValueRef::TransitionDuration(duration) = report.syntax()[0]
+//!     .known()
+//!     .expect("known duration")
+//!     .property_value()
+//!     .expect("ordinary duration")
+//! else {
+//!     panic!("expected transition-duration");
+//! };
+//! assert!(matches!(
+//!     duration.durations().values()[0],
+//!     CssDuration::Calculation(_)
+//! ));
+//! assert!(duration.i01_subset().is_none());
+//!
+//! let CssKnownPropertyValueRef::TransitionDelay(delay) = report.syntax()[1]
+//!     .known()
+//!     .expect("known delay")
+//!     .property_value()
+//!     .expect("ordinary delay")
+//! else {
+//!     panic!("expected transition-delay");
+//! };
+//! assert!(matches!(
+//!     delay.delays().values()[0],
+//!     CssDelay::Literal(value) if value.value() == -250.0
+//! ));
+//!
+//! let i01 = parse_style_attribute("transition-duration: 1s");
+//! let CssKnownPropertyValueRef::TransitionDuration(duration) = i01.syntax()[0]
+//!     .known()
+//!     .expect("known duration")
+//!     .property_value()
+//!     .expect("ordinary duration")
+//! else {
+//!     panic!("expected transition-duration");
+//! };
+//! assert!(duration.i01_subset().is_some());
+//! ```
+//!
+//! New signed-delay and typed-calculation syntax returns no I01 projection when the older payload
+//! cannot represent it. This crate owns authored timing syntax only; timeline evaluation and
+//! cross-crate lowering remain downstream responsibilities.
 //!
 //! # Diagnostics and coordinates
 //!

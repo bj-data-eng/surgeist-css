@@ -4,9 +4,28 @@ use cssparser::{
 };
 use cssparser_color::{Color as ParsedColor, DefaultColorParser, parse_color_with};
 
-use crate::error::{Error, basic, invalid_color, unsupported_value_at, with_color_context};
+use crate::error::{
+    CssFeatureId, Error, basic, invalid_color, unsupported_value_at, with_color_context,
+};
 use crate::syntax::*;
 use crate::validation::{LengthUnitStatus, classify_length_unit, parse_global_keyword};
+
+pub(crate) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] = &[
+    CssFeatureId::new("official.value.integer"),
+    CssFeatureId::new("official.value.number"),
+    CssFeatureId::new("official.value.dimension"),
+    CssFeatureId::new("official.value.percentage"),
+    CssFeatureId::new("official.value.length"),
+    CssFeatureId::new("official.value.length-percentage"),
+    CssFeatureId::new("official.value.angle"),
+    CssFeatureId::new("official.value.angle-percentage"),
+    CssFeatureId::new("official.value.time"),
+    CssFeatureId::new("official.value.time-percentage"),
+    CssFeatureId::new("official.value.frequency"),
+    CssFeatureId::new("official.value.frequency-percentage"),
+    CssFeatureId::new("official.value.resolution"),
+    CssFeatureId::new("official.value.calc"),
+];
 
 pub(super) fn parse_box_size_value<'i, 't>(
     input: &mut Parser<'i, 't>,

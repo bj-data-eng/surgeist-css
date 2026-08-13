@@ -493,6 +493,54 @@ impl CssFeatureMetadata {
         }
     }
 
+    const fn complete_property(
+        id: &'static str,
+        property: CssKnownProperty,
+        canonical_name: &'static str,
+        production: &'static str,
+        aliases: &'static [&'static str],
+    ) -> Self {
+        Self {
+            id: CssFeatureId::new(id),
+            kind: CssFeatureKind::Property,
+            spelling: canonical_name,
+            source: property_source(property),
+            production: property_production(property, production),
+            status: CssSupportStatus::Complete,
+            supported_subset: None,
+            unsupported_remainder: None,
+            recognized_unsupported_code: None,
+            disposition: CssConformanceDisposition::Atomic,
+            property: Some(property),
+            property_aliases: aliases,
+        }
+    }
+
+    const fn partial_property_with_boundary(
+        id: &'static str,
+        property: CssKnownProperty,
+        canonical_name: &'static str,
+        production: &'static str,
+        aliases: &'static [&'static str],
+        supported_subset: &'static str,
+        unsupported_remainder: &'static str,
+    ) -> Self {
+        Self {
+            id: CssFeatureId::new(id),
+            kind: CssFeatureKind::Property,
+            spelling: canonical_name,
+            source: property_source(property),
+            production: property_production(property, production),
+            status: CssSupportStatus::Partial,
+            supported_subset: Some(supported_subset),
+            unsupported_remainder: Some(unsupported_remainder),
+            recognized_unsupported_code: None,
+            disposition: CssConformanceDisposition::Atomic,
+            property: Some(property),
+            property_aliases: aliases,
+        }
+    }
+
     /// Returns the globally unique stable feature identity.
     #[must_use]
     pub const fn id(&self) -> CssFeatureId {
@@ -2828,123 +2876,19 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
         "I02-C03",
         SharedValueTypedPositiveAndMutation
     ),
-    reserved_coverage!(
-        "official.value.integer",
-        Value,
-        O_VALUES3,
-        "#integers",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.number",
-        Value,
-        O_VALUES3,
-        "#numbers",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.dimension",
-        Value,
-        O_VALUES3,
-        "#dimensions",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.percentage",
-        Value,
-        O_VALUES3,
-        "#percentages",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.length",
-        Value,
-        O_VALUES3,
-        "#lengths",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.length-percentage",
-        Value,
-        O_VALUES3,
-        "#mixed-percentages",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.angle",
-        Value,
-        O_VALUES3,
-        "#angles",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.angle-percentage",
-        Value,
-        O_VALUES3,
-        "#mixed-percentages",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.time",
-        Value,
-        O_VALUES3,
-        "#time",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.time-percentage",
-        Value,
-        O_VALUES3,
-        "#mixed-percentages",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.frequency",
-        Value,
-        O_VALUES3,
-        "#frequency",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.frequency-percentage",
-        Value,
-        O_VALUES3,
-        "#mixed-percentages",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.resolution",
-        Value,
-        O_VALUES3,
-        "#resolution",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.integer"),
+    active_coverage!("official.value.number"),
+    active_coverage!("official.value.dimension"),
+    active_coverage!("official.value.percentage"),
+    active_coverage!("official.value.length"),
+    active_coverage!("official.value.length-percentage"),
+    active_coverage!("official.value.angle"),
+    active_coverage!("official.value.angle-percentage"),
+    active_coverage!("official.value.time"),
+    active_coverage!("official.value.time-percentage"),
+    active_coverage!("official.value.frequency"),
+    active_coverage!("official.value.frequency-percentage"),
+    active_coverage!("official.value.resolution"),
     reserved_coverage!(
         "official.value.position",
         Value,
@@ -2954,15 +2898,7 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
         "I02-C04",
         SharedValueTypedPositiveAndMutation
     ),
-    reserved_coverage!(
-        "official.value.calc",
-        Value,
-        O_VALUES3,
-        "#calc-notation,#calc-syntax,#calc-type-checking",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.calc"),
     active_coverage!("baseline.value.substitution-dependent"),
     reserved_coverage!(
         "official.value.box-edge-keywords",
@@ -3718,6 +3654,33 @@ const QUERY_REMAINDER: &str =
 const PROPERTY_SUBSET: &str = "The property-specific parser behavior at 4b288d6:src/parser/mod.rs, plus whole-value CSS-wide keywords and syntactically admissible substitution-dependent authored values, is supported.";
 const PROPERTY_REMAINDER: &str =
     "Other valid forms of the cited property production are outside the I01 subset.";
+const DIMENSION_SUBSET: &str =
+    "Selected typed length, angle, time, frequency, and resolution dimensions are supported.";
+const DIMENSION_REMAINDER: &str =
+    "Other valid CSS dimension families remain for their owning later grammar cycles.";
+const ANGLE_SUBSET: &str = "The public typed angle model and calculation root are supported.";
+const ANGLE_REMAINDER: &str =
+    "Angle property consumers remain for their owning later grammar cycles.";
+const ANGLE_PERCENTAGE_SUBSET: &str =
+    "The public typed angle and percentage calculation models are supported.";
+const ANGLE_PERCENTAGE_REMAINDER: &str =
+    "Angle-percentage property consumers remain for their owning later grammar cycles.";
+const TIME_PERCENTAGE_SUBSET: &str =
+    "The public typed time and percentage calculation models are supported.";
+const TIME_PERCENTAGE_REMAINDER: &str =
+    "Time-percentage property consumers remain for their owning later grammar cycles.";
+const FREQUENCY_SUBSET: &str =
+    "The public typed frequency model and calculation root are supported.";
+const FREQUENCY_REMAINDER: &str =
+    "Frequency property consumers remain for their owning later grammar cycles.";
+const FREQUENCY_PERCENTAGE_SUBSET: &str =
+    "The public typed frequency and percentage calculation models are supported.";
+const FREQUENCY_PERCENTAGE_REMAINDER: &str =
+    "Frequency-percentage property consumers remain for their owning later grammar cycles.";
+const CALC_SUBSET: &str = "Typed sum, product, division, negation, grouping, and nested calc() trees are supported for the C03 roots and integrated property consumers.";
+const CALC_REMAINDER: &str = "Angle, frequency, Media resolution, keyframe percentage, font-feature numeric, and C05 function-owned consumer integrations remain for their owning later cycles.";
+const TIMING_SUBSET: &str = "The I01 shorthand components plus C03 duration, signed delay, iteration, and typed calculation syntax are supported.";
+const TIMING_REMAINDER: &str = "C05 easing and function grammar closure remains unsupported.";
 
 const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
     match property {
@@ -4030,7 +3993,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 248] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 262] = [
     CssFeatureMetadata::partial(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -4150,6 +4113,118 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 248] = [
         "#using-variables",
         "Known-property values with syntactically admissible var() references remain authored and symbolic.",
         "Other valid CSS Variables substitution functions and post-substitution forms are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.integer",
+        CssFeatureKind::Value,
+        "<integer>",
+        O_VALUES3,
+        "#integers",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.number",
+        CssFeatureKind::Value,
+        "<number>",
+        O_VALUES3,
+        "#numbers",
+    ),
+    CssFeatureMetadata::partial(
+        "official.value.dimension",
+        CssFeatureKind::Value,
+        "<dimension>",
+        O_VALUES3,
+        "#dimensions",
+        DIMENSION_SUBSET,
+        DIMENSION_REMAINDER,
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.percentage",
+        CssFeatureKind::Value,
+        "<percentage>",
+        O_VALUES3,
+        "#percentages",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.length",
+        CssFeatureKind::Value,
+        "<length>",
+        O_VALUES3,
+        "#lengths",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.length-percentage",
+        CssFeatureKind::Value,
+        "<length-percentage>",
+        O_VALUES3,
+        "#mixed-percentages",
+    ),
+    CssFeatureMetadata::partial(
+        "official.value.angle",
+        CssFeatureKind::Value,
+        "<angle>",
+        O_VALUES3,
+        "#angles",
+        ANGLE_SUBSET,
+        ANGLE_REMAINDER,
+    ),
+    CssFeatureMetadata::partial(
+        "official.value.angle-percentage",
+        CssFeatureKind::Value,
+        "<angle-percentage>",
+        O_VALUES3,
+        "#mixed-percentages",
+        ANGLE_PERCENTAGE_SUBSET,
+        ANGLE_PERCENTAGE_REMAINDER,
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.time",
+        CssFeatureKind::Value,
+        "<time>",
+        O_VALUES3,
+        "#time",
+    ),
+    CssFeatureMetadata::partial(
+        "official.value.time-percentage",
+        CssFeatureKind::Value,
+        "<time-percentage>",
+        O_VALUES3,
+        "#mixed-percentages",
+        TIME_PERCENTAGE_SUBSET,
+        TIME_PERCENTAGE_REMAINDER,
+    ),
+    CssFeatureMetadata::partial(
+        "official.value.frequency",
+        CssFeatureKind::Value,
+        "<frequency>",
+        O_VALUES3,
+        "#frequency",
+        FREQUENCY_SUBSET,
+        FREQUENCY_REMAINDER,
+    ),
+    CssFeatureMetadata::partial(
+        "official.value.frequency-percentage",
+        CssFeatureKind::Value,
+        "<frequency-percentage>",
+        O_VALUES3,
+        "#mixed-percentages",
+        FREQUENCY_PERCENTAGE_SUBSET,
+        FREQUENCY_PERCENTAGE_REMAINDER,
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.resolution",
+        CssFeatureKind::Value,
+        "<resolution>",
+        O_VALUES3,
+        "#resolution",
+    ),
+    CssFeatureMetadata::partial(
+        "official.value.calc",
+        CssFeatureKind::Value,
+        "calc()",
+        O_VALUES3,
+        "#calc-notation,#calc-syntax,#calc-type-checking",
+        CALC_SUBSET,
+        CALC_REMAINDER,
     ),
     CssFeatureMetadata::recognized_unsupported(
         "later.rule.namespace",
@@ -5158,50 +5233,64 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 248] = [
         "transition-property",
         "baseline.property.transition-property"
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.transition-duration",
         CssKnownProperty::TransitionDuration,
         "transition-duration",
-        "baseline.property.transition-duration"
+        "#propdef-transition-duration",
+        &[],
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.transition-delay",
         CssKnownProperty::TransitionDelay,
         "transition-delay",
-        "baseline.property.transition-delay"
+        "#propdef-transition-delay",
+        &[],
     ),
     property_feature!(
         CssKnownProperty::TransitionTimingFunction,
         "transition-timing-function",
         "baseline.property.transition-timing-function"
     ),
-    property_feature!(
+    CssFeatureMetadata::partial_property_with_boundary(
+        "baseline.property.transition",
         CssKnownProperty::Transition,
         "transition",
-        "baseline.property.transition"
+        "#propdef-transition",
+        &[],
+        TIMING_SUBSET,
+        TIMING_REMAINDER,
     ),
     property_feature!(
         CssKnownProperty::AnimationName,
         "animation-name",
         "baseline.property.animation-name"
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.animation-duration",
         CssKnownProperty::AnimationDuration,
         "animation-duration",
-        "baseline.property.animation-duration"
+        "#propdef-animation-duration",
+        &[],
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.animation-delay",
         CssKnownProperty::AnimationDelay,
         "animation-delay",
-        "baseline.property.animation-delay"
+        "#propdef-animation-delay",
+        &[],
     ),
     property_feature!(
         CssKnownProperty::AnimationTimingFunction,
         "animation-timing-function",
         "baseline.property.animation-timing-function"
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.animation-iteration-count",
         CssKnownProperty::AnimationIterationCount,
         "animation-iteration-count",
-        "baseline.property.animation-iteration-count"
+        "#propdef-animation-iteration-count",
+        &[],
     ),
     property_feature!(
         CssKnownProperty::AnimationDirection,
@@ -5218,10 +5307,14 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 248] = [
         "animation-play-state",
         "baseline.property.animation-play-state"
     ),
-    property_feature!(
+    CssFeatureMetadata::partial_property_with_boundary(
+        "baseline.property.animation",
         CssKnownProperty::Animation,
         "animation",
-        "baseline.property.animation"
+        "#propdef-animation",
+        &[],
+        TIMING_SUBSET,
+        TIMING_REMAINDER,
     ),
     CssFeatureMetadata::complete(
         "official.selector.generated",

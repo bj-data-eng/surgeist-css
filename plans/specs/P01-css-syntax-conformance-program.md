@@ -453,3 +453,52 @@ public parser behavior. Any need to change another fixture row, consume later
 boolean grammar beyond this one imported production, claim unsupported
 Selectors 4 syntax, or cross C10's namespace ownership stops again for P01
 reconciliation.
+
+## P01.13 C10 Selector And Namespace Oracle Reconciliation
+
+C09 is published and read back at
+`019906900cab8295d8c33a28eb53a76b39cd85ee`. JIT discovery for I02-C10 proved
+that five frozen C01 boundary rows encode exactly the incomplete Selectors 3
+and Namespaces 3 behavior allocated to C10:
+
+- `catalog.non-property.baseline.selector.extension-state.boundary` rejects the
+  required `:target` pseudo-class;
+- `catalog.non-property.baseline.selector.functional.boundary` rejects the
+  required `:lang(en)` pseudo-class;
+- `catalog.non-property.baseline.selector.pseudo-class.boundary` rejects the
+  required `:visited` pseudo-class;
+- `catalog.non-property.baseline.selector.pseudo-element.boundary` rejects the
+  required `::first-line` pseudo-element; and
+- `catalog.non-property.later.rule.namespace.boundary` rejects the required
+  top-level `@namespace svg url(https://example.test/svg);` declaration.
+
+The immutable Selectors 3 Recommendation requires those selector spellings,
+and the immutable Namespaces 3 Recommendation requires that namespace-rule
+grammar and ordering. Preserving their recovery diagnostics would make C10's
+reviewed complete-Selectors-3 and namespace-rule outcomes false. The distinct
+`catalog.non-property.baseline.selector.complex.boundary` input `svg|a`
+remains invalid because it contains no earlier declaration for the named
+prefix.
+
+P01 therefore authorizes one source-backed C10 oracle correction limited to
+those five stable IDs and authored inputs. The four selector rows become clean,
+retain their style rule and red color declaration, and remove only the obsolete
+selector diagnostic. The namespace row becomes clean, retains public rule
+identity `later.rule.namespace`, and removes only the obsolete unsupported-rule
+diagnostic. The fixture SHA-256 before C10 is
+`95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`;
+the hand-authored five-row replacement yields
+`085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`.
+C10 task review must prove exactly those five rows changed and every other row
+is byte-identical. No Rust test asserts either digest, derives expectations
+from production, masks a corrected row, or uses source/test owner sets or
+counts as completion evidence.
+
+This correction changes no parser entry-point signature, report or recovery
+meaning, diagnostic ordering or coordinate contract, property/value coupling,
+official Snapshot source, dependency, feature, or repository boundary. C10
+must separately prove undeclared-prefix failure, malformed and misplaced
+namespace recovery, exact legacy selector spellings, and preservation of the
+existing Selectors 4/nesting/scope boundaries through public parser behavior.
+Any need to change another fixture row, make a second breaking API change, or
+claim unsupported Selectors 4 syntax stops again for P01 reconciliation.

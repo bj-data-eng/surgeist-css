@@ -2,8 +2,8 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssDeclarationContextRef, CssErrorCode, CssKnownProperty, CssRecoveryAction, CssTokenKind,
-    ErrorKind, parse_sheet, parse_style_attribute,
+    CssDeclarationContextRef, CssErrorCode, CssKnownProperty, CssRecoveryAction, CssRule,
+    CssTokenKind, ErrorKind, parse_sheet, parse_style_attribute,
 };
 
 #[test]
@@ -837,6 +837,37 @@ fn error_property_descriptor_color_and_annotation_roots_expose_all_fields() {
         }
         _ => panic!("unexpected error root"),
     }
+}
+
+#[test]
+fn error_invalid_font_source_format_reports_descriptor_context_and_recovers_sibling() {
+    let source = concat!(
+        "@font-face{font-family:Demo;src:url(face) format(woff3)}",
+        ".after{color:red}",
+    );
+    let report = parse_sheet(source);
+    assert!(matches!(report.syntax().rules(), [CssRule::Style(_)]));
+    assert_eq!(report.diagnostics().len(), 2);
+    let diagnostic = &report.diagnostics()[0];
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidDescriptorValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDescriptor);
+    let ErrorKind::InvalidDescriptorValue(detail) = diagnostic.error().kind() else {
+        panic!("expected typed descriptor error");
+    };
+    assert_eq!(detail.at_rule().as_str(), "font-face");
+    assert_eq!(detail.descriptor().as_str(), "src");
+    assert_eq!(detail.encountered().unwrap().authored(), "woff3");
+    assert_eq!(
+        report.diagnostics()[1].error().code(),
+        CssErrorCode::InvalidAtRuleBody
+    );
+    assert_eq!(
+        report.diagnostics()[1].action(),
+        CssRecoveryAction::DropAtRule
+    );
 }
 
 #[test]

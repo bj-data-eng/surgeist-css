@@ -124,6 +124,50 @@ fn specialized_boundary_balanced_declaration_components_each_get_one_eof_closure
         [CssRule::FontFace(_)]
     ));
     assert_implicit_closures(descriptor, 2);
+
+    let format = "@font-face{font-family:Demo;src:url(face) format(\"woff2\"";
+    assert!(matches!(
+        parse_sheet(format).syntax().rules(),
+        [CssRule::FontFace(_)]
+    ));
+    assert_implicit_closures(format, 2);
+}
+
+#[test]
+fn font_source_descriptor_components_observe_the_exact_nesting_limit() {
+    let source = format!(
+        "@font-face{{font-family:Demo;src:url(face) {}x{};}}",
+        "f(".repeat(255),
+        ")".repeat(255),
+    );
+    let report = parse_sheet(&source);
+    assert!(
+        report
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.action() != CssRecoveryAction::StopAtNestingLimit)
+    );
+
+    for depth in [256_usize, 257] {
+        let source = format!(
+            "@font-face{{font-family:Demo;src:url(face) {}x{};}}",
+            "f(".repeat(depth),
+            ")".repeat(depth),
+        );
+        let first_over_limit = source.match_indices("f(").nth(255).unwrap().0;
+        let report = parse_sheet(&source);
+        let diagnostic = report
+            .diagnostics()
+            .iter()
+            .find(|diagnostic| diagnostic.action() == CssRecoveryAction::StopAtNestingLimit)
+            .expect("component beyond the enclosing block depth must stop at the limit");
+        assert_eq!(diagnostic.error().code(), CssErrorCode::NestingLimit);
+        assert_eq!(
+            diagnostic.error().position().byte_offset().value(),
+            first_over_limit,
+            "depth {depth}"
+        );
+    }
 }
 
 #[test]

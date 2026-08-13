@@ -780,6 +780,32 @@ fn public_surface_emits_all_ten_recovery_actions() {
     );
 }
 
+#[test]
+fn public_surface_font_format_models_are_checked_and_compatibility_preserving() {
+    use surgeist_css::{
+        CssFontFaceUrlSource, CssFontFormatHint, CssFontFormatList, CssFontFormatString,
+        CssFontTechHint,
+    };
+
+    assert_eq!(CssFontFormatString::try_new(""), None);
+    let arbitrary = CssFontFormatString::try_new("zebra").unwrap();
+    assert_eq!(arbitrary.as_str(), "zebra");
+    let recognized = CssFontFormatString::try_new("WoFf2").unwrap();
+    assert_eq!(recognized.as_str(), "WoFf2");
+    assert_eq!(CssFontFormatList::try_new(Vec::new()), None);
+    let formats = CssFontFormatList::try_new(vec![arbitrary, recognized]).unwrap();
+    assert_eq!(formats.formats().len(), 2);
+
+    let legacy = CssFontFaceUrlSource::try_new(
+        "face.woff2",
+        Some(CssFontFormatHint::Woff2),
+        vec![CssFontTechHint::Variations],
+    )
+    .unwrap();
+    assert_eq!(legacy.format(), Some(&CssFontFormatHint::Woff2));
+    assert_eq!(legacy.formats().unwrap().formats()[0].as_str(), "woff2");
+}
+
 #[cfg(feature = "app-strict")]
 #[test]
 fn public_surface_enabled_validators_accept_clean_reports_and_preserve_failures() {

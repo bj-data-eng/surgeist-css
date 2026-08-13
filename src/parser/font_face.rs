@@ -5,7 +5,7 @@ use cssparser::{
 };
 
 use super::recovery::{RecoveryLoopOutcome, RecoveryProgress, RecoveryState};
-use super::typography::parse_font_family_name;
+use super::typography::parse_non_generic_font_family_name;
 use super::{
     block_item_diagnostic, block_item_diagnostic_from_start, is_declaration_recovery_unit,
     parse_descriptor_boundary,
@@ -324,7 +324,7 @@ impl<'i> DeclarationParser<'i> for FontFaceDescriptorParser<'i> {
 fn parse_font_face_family<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssFontFaceFamily, ParseError<'i, Error>> {
-    let family = parse_font_family_name(input)?;
+    let family = parse_non_generic_font_family_name(input)?;
     CssFontFaceFamily::try_new(family.as_str())
         .ok_or_else(|| unsupported_value(input, None, "font-family descriptor is empty"))
 }
@@ -359,13 +359,13 @@ fn parse_font_face_source<'i, 't>(
         .is_ok()
     {
         let name = input.parse_nested_block(parse_local_name)?;
-        return CssFontLocalName::try_new(name)
+        return CssFontLocalName::try_new(name.as_str())
             .map(CssFontFaceSource::Local)
             .ok_or_else(|| unsupported_value(input, None, "local font name is empty"));
     }
 
     let url = parse_font_source_url(input)?;
-    let mut format = None;
+    let mut formats = None;
     let mut tech = Vec::new();
     let mut saw_tech = false;
 
@@ -381,14 +381,14 @@ fn parse_font_face_source<'i, 't>(
                     "font source format hint must precede tech hint",
                 ));
             }
-            if format.is_some() {
+            if formats.is_some() {
                 return Err(unsupported_value(
                     input,
                     None,
                     "font source has duplicate format hint",
                 ));
             }
-            format = Some(input.parse_nested_block(parse_font_format_hint)?);
+            formats = Some(input.parse_nested_block(parse_font_format_list)?);
         } else if input
             .try_parse(|input| input.expect_function_matching("tech"))
             .is_ok()
@@ -411,7 +411,7 @@ fn parse_font_face_source<'i, 't>(
         }
     }
 
-    CssFontFaceUrlSource::try_new(url, format, tech)
+    CssFontFaceUrlSource::try_new_with_formats(url, formats, tech)
         .map(CssFontFaceSource::Url)
         .ok_or_else(|| unsupported_value(input, None, "font source URL is empty"))
 }
@@ -424,42 +424,56 @@ fn parse_font_source_url<'i, 't>(
 
 fn parse_local_name<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<String, ParseError<'i, Error>> {
-    if let Ok(name) = input.try_parse(Parser::expect_string_cloned) {
-        input.expect_exhausted().map_err(basic)?;
-        return Ok(name.to_string());
-    }
-
-    let mut parts = Vec::new();
-    while !input.is_exhausted() {
-        let location = input.current_source_location();
-        match input.next().map_err(basic)? {
-            Token::Ident(ident) => parts.push(ident.to_string()),
-            token => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
-        }
-    }
-
-    Ok(parts.join(" "))
+) -> std::result::Result<CssFontFamilyName, ParseError<'i, Error>> {
+    let name = parse_non_generic_font_family_name(input)?;
+    input.expect_exhausted().map_err(basic)?;
+    Ok(name)
 }
 
-fn parse_font_format_hint<'i, 't>(
+fn parse_font_format_list<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssFontFormatHint, ParseError<'i, Error>> {
+) -> std::result::Result<CssFontFormatList, ParseError<'i, Error>> {
     let location = input.current_source_location();
-    let hint = match input.next().map_err(basic)? {
-        Token::QuotedString(value) | Token::Ident(value) => {
-            font_format_hint_from_str(value.as_ref()).ok_or_else(|| {
-                unsupported_value_at(
-                    location,
-                    None,
-                    format!("unsupported font format hint `{value}`"),
-                )
-            })?
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        let hint = font_format_hint_from_str(ident.as_ref()).ok_or_else(|| {
+            unsupported_value_at(
+                location,
+                None,
+                format!("unsupported font format hint `{ident}`"),
+            )
+        })?;
+        input.expect_exhausted().map_err(basic)?;
+        return Ok(CssFontFormatList::new(vec![CssFontFormatString::new(
+            hint.as_str(),
+        )]));
+    }
+
+    let mut formats = Vec::new();
+    loop {
+        let item_location = input.current_source_location();
+        let value = input.expect_string_cloned().map_err(basic)?;
+        let Some(value) = CssFontFormatString::try_new(value.to_string()) else {
+            return Err(unsupported_value_at(
+                item_location,
+                None,
+                "font source format string is empty",
+            ));
+        };
+        formats.push(value);
+        if input.is_exhausted() {
+            break;
         }
-        token => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
-    };
-    input.expect_exhausted().map_err(basic)?;
-    Ok(hint)
+        input.expect_comma().map_err(basic)?;
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "font source format list has an empty item",
+            ));
+        }
+    }
+
+    Ok(CssFontFormatList::new(formats))
 }
 
 fn font_format_hint_from_str(value: &str) -> Option<CssFontFormatHint> {

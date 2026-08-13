@@ -592,6 +592,7 @@ pub enum CssFontFaceSource {
 pub struct CssFontFaceUrlSource {
     url: String,
     format: Option<CssFontFormatHint>,
+    formats: Option<CssFontFormatList>,
     tech: Vec<CssFontTechHint>,
 }
 
@@ -606,8 +607,35 @@ impl CssFontFaceUrlSource {
         if url.trim().is_empty() {
             None
         } else {
-            Some(Self { url, format, tech })
+            let formats = format.map(|format| {
+                CssFontFormatList::new(vec![CssFontFormatString::new(format.as_str())])
+            });
+            Some(Self {
+                url,
+                format,
+                formats,
+                tech,
+            })
         }
+    }
+
+    #[must_use]
+    pub(crate) fn try_new_with_formats(
+        url: impl Into<String>,
+        formats: Option<CssFontFormatList>,
+        tech: Vec<CssFontTechHint>,
+    ) -> Option<Self> {
+        let url = url.into();
+        if url.trim().is_empty() {
+            return None;
+        }
+        let format = formats.as_ref().and_then(CssFontFormatList::recognized);
+        Some(Self {
+            url,
+            format,
+            formats,
+            tech,
+        })
     }
 
     #[must_use]
@@ -620,9 +648,86 @@ impl CssFontFaceUrlSource {
         self.format.as_ref()
     }
 
+    /// Returns the current authored `format()` string list, when present.
+    #[must_use]
+    pub const fn formats(&self) -> Option<&CssFontFormatList> {
+        self.formats.as_ref()
+    }
+
     #[must_use]
     pub fn tech(&self) -> &[CssFontTechHint] {
         &self.tech
+    }
+}
+
+/// One checked authored string from a font source `format()` hint.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssFontFormatString {
+    value: String,
+}
+
+impl CssFontFormatString {
+    #[must_use]
+    pub fn try_new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        if value.is_empty() {
+            None
+        } else {
+            Some(Self::new(value))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(value: impl Into<String>) -> Self {
+        let value = value.into();
+        debug_assert!(!value.is_empty());
+        Self { value }
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+
+    fn recognized(&self) -> Option<CssFontFormatHint> {
+        CssFontFormatHint::from_ascii_name(self.value.as_bytes())
+    }
+}
+
+/// A nonempty ordered list of authored strings from one font source `format()` hint.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssFontFormatList {
+    formats: Vec<CssFontFormatString>,
+}
+
+impl CssFontFormatList {
+    #[must_use]
+    pub fn try_new(formats: Vec<CssFontFormatString>) -> Option<Self> {
+        if formats.is_empty() {
+            None
+        } else {
+            Some(Self::new(formats))
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new(formats: Vec<CssFontFormatString>) -> Self {
+        debug_assert!(!formats.is_empty());
+        Self { formats }
+    }
+
+    #[must_use]
+    pub fn formats(&self) -> &[CssFontFormatString] {
+        &self.formats
+    }
+
+    #[must_use]
+    fn recognized(&self) -> Option<CssFontFormatHint> {
+        if self.formats.len() == 1 {
+            self.formats[0].recognized()
+        } else {
+            None
+        }
     }
 }
 
@@ -957,6 +1062,41 @@ pub enum CssFontFormatHint {
     Collection,
     EmbeddedOpenType,
     Svg,
+}
+
+impl CssFontFormatHint {
+    #[must_use]
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Woff => "woff",
+            Self::Woff2 => "woff2",
+            Self::TrueType => "truetype",
+            Self::OpenType => "opentype",
+            Self::Collection => "collection",
+            Self::EmbeddedOpenType => "embedded-opentype",
+            Self::Svg => "svg",
+        }
+    }
+
+    fn from_ascii_name(value: &[u8]) -> Option<Self> {
+        if value.eq_ignore_ascii_case(b"woff") {
+            Some(Self::Woff)
+        } else if value.eq_ignore_ascii_case(b"woff2") {
+            Some(Self::Woff2)
+        } else if value.eq_ignore_ascii_case(b"truetype") {
+            Some(Self::TrueType)
+        } else if value.eq_ignore_ascii_case(b"opentype") {
+            Some(Self::OpenType)
+        } else if value.eq_ignore_ascii_case(b"collection") {
+            Some(Self::Collection)
+        } else if value.eq_ignore_ascii_case(b"embedded-opentype") {
+            Some(Self::EmbeddedOpenType)
+        } else if value.eq_ignore_ascii_case(b"svg") {
+            Some(Self::Svg)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

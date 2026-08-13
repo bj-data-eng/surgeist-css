@@ -221,6 +221,57 @@ fn font_variant_conflict_after_non_bmp_text_has_exact_utf16_coordinates_and_span
 }
 
 #[test]
+fn font_source_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
+    let source = concat!(
+        ".😀{color:red}",
+        "@font-face{font-family:Demo;src:url(face) format(woff3)}",
+        ".after{color:blue}",
+    );
+    let report = parse_sheet(source);
+    assert_eq!(report.syntax().rules().len(), 2);
+    assert_eq!(report.diagnostics().len(), 2);
+    let diagnostic = &report.diagnostics()[0];
+    let responsible = source.find("woff3").unwrap();
+    let descriptor_start = source.find("src:").unwrap();
+    let descriptor_end = source[descriptor_start..].find('}').unwrap() + descriptor_start;
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidDescriptorValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDescriptor);
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(source[..responsible].encode_utf16().count()).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().start(),
+        descriptor_start,
+        0,
+        u32::try_from(source[..descriptor_start].encode_utf16().count()).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        descriptor_end,
+        0,
+        u32::try_from(source[..descriptor_end].encode_utf16().count()).unwrap(),
+    );
+    let ErrorKind::InvalidDescriptorValue(detail) = diagnostic.error().kind() else {
+        panic!("expected font source descriptor error");
+    };
+    assert_eq!(detail.descriptor().as_str(), "src");
+    assert_eq!(detail.encountered().unwrap().authored(), "woff3");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_sheet(source)
+            .expect_err("strict validation rejects recovered font source");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn timing_type_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
     let source = "--😀: 1; transition-duration: calc(1px + 2px); color: red";
     let report = parse_style_attribute(source);

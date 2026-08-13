@@ -206,6 +206,19 @@ pub(super) fn parse_font_family_list<'i, 't>(
 pub(super) fn parse_font_family_name<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssFontFamilyName, ParseError<'i, Error>> {
+    parse_font_family_name_with_generics(input, true)
+}
+
+pub(super) fn parse_non_generic_font_family_name<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFontFamilyName, ParseError<'i, Error>> {
+    parse_font_family_name_with_generics(input, false)
+}
+
+fn parse_font_family_name_with_generics<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    allow_generic: bool,
+) -> std::result::Result<CssFontFamilyName, ParseError<'i, Error>> {
     if let Ok(name) = input.try_parse(Parser::expect_string_cloned) {
         if name.is_empty() {
             return Err(unsupported_value(
@@ -230,7 +243,8 @@ pub(super) fn parse_font_family_name<'i, 't>(
         return Err(unsupported_value(input, None, "font family name is empty"));
     }
 
-    if parts.len() == 1
+    if allow_generic
+        && parts.len() == 1
         && let Some(generic) = generic_font_family(&parts[0])
     {
         return Ok(CssFontFamilyName::generic(generic, parts.remove(0)));

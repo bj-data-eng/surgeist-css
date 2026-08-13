@@ -220,10 +220,42 @@ digest, derives expected values from production, masks the corrected cases, or
 weakens comparison. Every unaffected row remains byte-for-byte identical and
 all non-contradictory I01 behavioral suites remain green.
 
-This is the only post-C01 oracle correction authorized by the reviewed P01.
+This is the first post-C01 oracle correction authorized by the reviewed P01.
 It changes parser outcomes solely where the dated grammar proves the C01
 expectation nonconforming; section 3.1 contracts and compatibility signatures
 remain frozen. Any additional contradiction stops for P01 reconciliation.
+
+### 3.4 C08 Source-Backed Oracle Correction
+
+P01.11 reconciles the second discovered conflict between the C01 behavioral
+oracle and Fonts 3 descriptor semantics. C08 shall replace only the expected
+observables for `focused.structured-errors.12`, preserving its stable ID,
+stylesheet entry point, both-feature applicability, and authored input:
+
+```css
+@font-face { font-family: One; font-family: Two; src: url(test.woff2); }
+```
+
+The C01/C07 expectation recovers from the second `font-family` descriptor with
+`InvalidDescriptorCombination` and `DropDescriptor`. The dated Fonts 3
+Recommendation section 4.1 requires the last declaration to be effective when
+a descriptor occurs multiple times. The replacement expectation is therefore
+a clean report retaining the valid `@font-face` rule, with both valid family
+occurrences preserved in authored order and `Two` exposed by effective lookup.
+
+The fixture SHA-256 before C08 is
+`99bbb897710969949d7b596d14fbd352d5d3121a6c4cf663b8ca100154057f8b`.
+Replacing exactly that one row yields SHA-256
+`67e69813d808ffda40e7c159fde719fbadd0447f8e4105788b0bb593931fac89`.
+The C08 task review verifies the one-row diff. No Rust test asserts either
+digest, derives the expectation from production, masks the corrected case, or
+weakens fixture comparison. Every other row remains byte-for-byte identical.
+
+This correction does not change a section 3.1 parser, report, diagnostic,
+coordinate, recovery-action, or feature-parity contract. Invalid descriptor
+occurrences still recover with `DropDescriptor`; valid duplicates are retained
+and effective-last exactly as section 5 already requires. Any further frozen
+oracle contradiction returns to P01 reconciliation before implementation.
 
 ## 4. Conformance Profile And Catalog
 
@@ -572,7 +604,8 @@ namespaces, rules/descriptors, queries, calculations, and property-specific
 inspection. They reiterate the excluded downstream semantics.
 
 I01 behavioral tests remain baseline-preservation evidence, subject only to the
-seven source-backed C07 corrections in section 3.3. At I02 completion,
+seven source-backed C07 corrections in section 3.3 and the one source-backed
+C08 correction in section 3.4. At I02 completion,
 the coordinator and reviewers map every acceptance item to direct source
 inspection, compiler-visible API evidence, behavioral tests, or deterministic
 checks of declared product artifacts as appropriate. No Rust test encodes an
@@ -616,9 +649,10 @@ I02 is complete only when all predicates hold:
    owning artifacts, not inferred by a Rust test from owner identity sets or
    counts.
 3. The exact 219-row I01 feature baseline remains classified; the seven C07
-   scenario IDs in section 3.3 carry their reviewed source-backed replacement
-   observables and every other accepted vector does not regress; extension
-   status and provenance are truthful.
+   scenario IDs in section 3.3 and the one C08 scenario ID in section 3.4 carry
+   their reviewed source-backed replacement observables and every other
+   accepted vector does not regress; extension status and provenance are
+   truthful.
 4. All fourteen allocated findings in section 11 have implemented source and
    focused exact evidence, while the reconciled I01 evidence stays green.
 5. Both ordinary front doors retain valid siblings and report every recovery;

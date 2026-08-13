@@ -174,7 +174,9 @@ Close finding 2.16; complete four-ASCII OpenType tags, non-negative feature
 values, family/global boundaries, official font properties, Fonts 3 descriptors,
 source/hint grammar, duplicate/effective-last behavior, and required descriptor
 sets. Preserve selected Fonts 4 descriptor deltas and recognized-unsupported
-`@font-feature-values` as separate sources.
+`@font-feature-values` as separate sources. Replace only
+`focused.structured-errors.12` with the reviewed section 3.4 source-backed
+observable; its authored input and every other fixture row remain unchanged.
 
 Exit: Fonts 3 property/descriptor/value rows are Complete with exact public and
 recovery vectors; Fonts 4 rows remain truthfully classified. **Handoff:** exact
@@ -296,8 +298,9 @@ cleanup, then published/read-back I02 SHA and root-only actions.
 ## 3. Cross-Cycle Invariants
 
 Every cycle preserves the I01 behavioral corpus's authored inputs and public
-observables except for C07's exact seven reviewed source-backed replacement
-observables; every unaffected row remains byte-identical. Every cycle also
+observables except for C07's exact seven and C08's exact one reviewed
+source-backed replacement observables; every unaffected row remains
+byte-identical. Every cycle also
 preserves all prior completed I02 vectors, parser progress/depth guarantees,
 diagnostic ordering and coordinates, custom/substitution authored text,
 declaration importance, parser-owned valid states, and ordinary/`app-strict`

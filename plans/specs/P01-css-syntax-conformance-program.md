@@ -351,3 +351,38 @@ conforming values. Keyframe structure becomes permissive exactly where the
 owning grammar admits empty or duplicate authored occurrences, without sorting,
 merging, cascading, or evaluating them. Any further C01-oracle contradiction or
 public-contract break stops again for a new P01 reconciliation.
+
+## P01.11 C08 Source-Contradiction Reconciliation
+
+C07 is published and read back at
+`21e33f121fd414c55bb229f0eab25ab41cfa7325`. JIT discovery for I02-C08 proved
+that `focused.structured-errors.12` encodes a descriptor-duplicate behavior
+that contradicts both the selected dated Fonts 3 Recommendation and the
+reviewed C08 outcome. Its authored source contains two valid `font-family`
+descriptors followed by the required valid `src` descriptor. The C01 oracle
+expects the second family descriptor to recover with
+`InvalidDescriptorCombination` and `DropDescriptor`, retaining the first
+family. Fonts 3 section 4.1 instead requires every authored occurrence to be
+parsed and makes the last declaration effective when one descriptor occurs
+multiple times.
+
+Preserving that observation would make Fonts 3 descriptor completion and the
+P01.6 finding 2.1 closure claim false. P01 therefore authorizes one additional
+source-backed behavioral-oracle correction in C08. The stable case ID, entry
+point, feature mode, and authored input remain unchanged. Its expected report
+becomes clean and retains the valid `@font-face` rule without the obsolete
+duplicate diagnostic. The C08 plan records the old and replacement fixture
+digests outside Rust tests, and task review verifies this exact one-row diff.
+Every other fixture row remains byte-for-byte unchanged. Existing stale direct
+duplicate-descriptor assertions are replaced with public behavior that proves
+authored occurrence order and effective-last lookup; they are not deleted or
+masked.
+
+This correction changes no parser entry-point signature, report or recovery
+meaning, diagnostic ordering or coordinate contract, property/value coupling,
+or ordinary/`app-strict` relationship. The additive descriptor model preserves
+valid occurrences in authored order and exposes the last valid occurrence
+through the existing effective typed accessors. Invalid descriptor occurrences
+still recover at the descriptor boundary and do not erase an earlier or later
+valid occurrence. Any further C01-oracle contradiction or public-contract break
+stops again for a new P01 reconciliation.

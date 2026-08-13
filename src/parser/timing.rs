@@ -1,17 +1,19 @@
 use cssparser::{ParseError, Parser, Token, match_ignore_ascii_case};
 
 use super::effects::parse_easing_function_arguments;
-use super::values::{next_is_comma, parse_custom_ident_from_str_at};
+use super::values::{
+    CalculationRoot, next_is_comma, parse_custom_ident_from_str_at, parse_typed_calculation,
+};
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
 
-pub(super) fn parse_time_list<'i, 't>(
+pub(super) fn parse_duration_list<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssTimeList, ParseError<'i, Error>> {
-    let mut times = Vec::new();
+) -> std::result::Result<CssDurationList, ParseError<'i, Error>> {
+    let mut values = Vec::new();
     loop {
-        times.push(parse_time(input)?);
+        values.push(parse_duration(input)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -19,33 +21,103 @@ pub(super) fn parse_time_list<'i, 't>(
             return Err(unsupported_value(
                 input,
                 None,
-                "time list has an empty item",
+                "duration list has an empty item",
             ));
         }
     }
-    CssTimeList::try_new(times).ok_or_else(|| unsupported_value(input, None, "time list is empty"))
+    CssDurationList::try_new(values)
+        .ok_or_else(|| unsupported_value(input, None, "duration list is empty"))
 }
 
-pub(super) fn parse_time<'i, 't>(
+pub(super) fn parse_delay_list<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssTime, ParseError<'i, Error>> {
+) -> std::result::Result<CssDelayList, ParseError<'i, Error>> {
+    let mut values = Vec::new();
+    loop {
+        values.push(parse_delay(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "delay list has an empty item",
+            ));
+        }
+    }
+    CssDelayList::try_new(values)
+        .ok_or_else(|| unsupported_value(input, None, "delay list is empty"))
+}
+
+pub(super) fn parse_duration<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssDuration, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
         Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("s") => {
-            CssTime::try_new(*value, CssTimeUnit::Seconds).ok_or_else(|| {
-                unsupported_value_at(location, None, "CSS time must be finite and non-negative")
-            })
+            CssDurationLiteral::try_new(*value, CssTimeUnit::Seconds)
+                .map(CssDuration::Literal)
+                .ok_or_else(|| {
+                    unsupported_value_at(
+                        location,
+                        None,
+                        "CSS duration must be finite and non-negative",
+                    )
+                })
         }
         Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("ms") => {
-            CssTime::try_new(*value, CssTimeUnit::Milliseconds).ok_or_else(|| {
-                unsupported_value_at(location, None, "CSS time must be finite and non-negative")
-            })
+            CssDurationLiteral::try_new(*value, CssTimeUnit::Milliseconds)
+                .map(CssDuration::Literal)
+                .ok_or_else(|| {
+                    unsupported_value_at(
+                        location,
+                        None,
+                        "CSS duration must be finite and non-negative",
+                    )
+                })
         }
         Token::Dimension { unit, .. } => Err(unsupported_value_at(
             location,
             None,
-            format!("unsupported time unit `{unit}`"),
+            format!("unsupported duration unit `{unit}`"),
         )),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| {
+                parse_typed_calculation(input, CalculationRoot::Time)
+                    .map(CssTimeCalculation::from_expression)
+            })
+            .map(CssDuration::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+pub(super) fn parse_delay<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssDelay, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("s") => {
+            CssDelayLiteral::try_new(*value, CssTimeUnit::Seconds)
+                .map(CssDelay::Literal)
+                .ok_or_else(|| unsupported_value_at(location, None, "CSS delay must be finite"))
+        }
+        Token::Dimension { value, unit, .. } if unit.eq_ignore_ascii_case("ms") => {
+            CssDelayLiteral::try_new(*value, CssTimeUnit::Milliseconds)
+                .map(CssDelay::Literal)
+                .ok_or_else(|| unsupported_value_at(location, None, "CSS delay must be finite"))
+        }
+        Token::Dimension { unit, .. } => Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported delay unit `{unit}`"),
+        )),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| {
+                parse_typed_calculation(input, CalculationRoot::Time)
+                    .map(CssTimeCalculation::from_expression)
+            })
+            .map(CssDelay::Calculation),
         token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
     }
 }
@@ -142,12 +214,12 @@ pub(super) fn parse_transition_property<'i, 't>(
     }
 }
 
-pub(super) fn parse_transition_list<'i, 't>(
+pub(super) fn parse_transition_value_list<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssTransitionList, ParseError<'i, Error>> {
+) -> std::result::Result<CssTransitionValueList, ParseError<'i, Error>> {
     let mut items = Vec::new();
     loop {
-        items.push(parse_single_transition(input)?);
+        items.push(parse_single_transition_value(input)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -159,26 +231,29 @@ pub(super) fn parse_transition_list<'i, 't>(
             ));
         }
     }
-    CssTransitionList::try_new(items)
+    CssTransitionValueList::try_new(items)
         .ok_or_else(|| unsupported_value(input, None, "transition list is empty"))
 }
 
-pub(super) fn parse_single_transition<'i, 't>(
+pub(super) fn parse_single_transition_value<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssTransition, ParseError<'i, Error>> {
+) -> std::result::Result<CssTransitionValue, ParseError<'i, Error>> {
     let mut property = None;
     let mut duration = None;
     let mut delay = None;
     let mut timing_function = None;
     while !input.is_exhausted() && !next_is_comma(input) {
-        if let Ok(time) = input.try_parse(parse_time) {
-            if duration.is_none() {
-                duration = Some(time);
-            } else if delay.is_none() {
-                delay = Some(time);
-            } else {
-                return Err(unsupported_value(input, None, "duplicate transition time"));
-            }
+        if duration.is_none()
+            && let Ok(value) = input.try_parse(parse_duration)
+        {
+            duration = Some(value);
+            continue;
+        }
+        if duration.is_some()
+            && delay.is_none()
+            && let Ok(value) = input.try_parse(parse_delay)
+        {
+            delay = Some(value);
             continue;
         }
         if timing_function.is_none()
@@ -199,7 +274,7 @@ pub(super) fn parse_single_transition<'i, 't>(
             "unsupported transition component",
         ));
     }
-    CssTransition::try_new(property, duration, delay, timing_function)
+    CssTransitionValue::try_new(property, duration, delay, timing_function)
         .ok_or_else(|| unsupported_value(input, None, "transition item is empty"))
 }
 
@@ -243,12 +318,12 @@ pub(super) fn parse_animation_name<'i, 't>(
     }
 }
 
-pub(super) fn parse_animation_iteration_count_list<'i, 't>(
+pub(super) fn parse_animation_iteration_value_list<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssAnimationIterationCountList, ParseError<'i, Error>> {
+) -> std::result::Result<CssAnimationIterationValueList, ParseError<'i, Error>> {
     let mut counts = Vec::new();
     loop {
-        counts.push(parse_animation_iteration_count(input)?);
+        counts.push(parse_animation_iteration_value(input)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -260,28 +335,38 @@ pub(super) fn parse_animation_iteration_count_list<'i, 't>(
             ));
         }
     }
-    CssAnimationIterationCountList::try_new(counts)
+    CssAnimationIterationValueList::try_new(counts)
         .ok_or_else(|| unsupported_value(input, None, "animation-iteration-count list is empty"))
 }
 
-pub(super) fn parse_animation_iteration_count<'i, 't>(
+pub(super) fn parse_animation_iteration_value<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssAnimationIterationCount, ParseError<'i, Error>> {
+) -> std::result::Result<CssAnimationIterationValue, ParseError<'i, Error>> {
     if input
         .try_parse(|input| input.expect_ident_matching("infinite"))
         .is_ok()
     {
-        return Ok(CssAnimationIterationCount::Infinite);
+        return Ok(CssAnimationIterationValue::Infinite);
     }
     let location = input.current_source_location();
-    let value = input.expect_number().map_err(basic)?;
-    CssAnimationIterationCount::try_number(value).ok_or_else(|| {
-        unsupported_value_at(
-            location,
-            None,
-            "animation iteration count must be finite and non-negative",
-        )
-    })
+    match input.next().map_err(basic)? {
+        Token::Number { value, .. } => CssAnimationIterationNumber::try_new(*value)
+            .map(CssAnimationIterationValue::Number)
+            .ok_or_else(|| {
+                unsupported_value_at(
+                    location,
+                    None,
+                    "animation iteration count must be finite and non-negative",
+                )
+            }),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| {
+                parse_typed_calculation(input, CalculationRoot::Number)
+                    .map(CssNumberCalculation::from_expression)
+            })
+            .map(CssAnimationIterationValue::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
 }
 
 pub(super) fn parse_animation_direction_list<'i, 't>(
@@ -396,12 +481,12 @@ pub(super) fn parse_animation_play_state<'i, 't>(
     }
 }
 
-pub(super) fn parse_animation_list<'i, 't>(
+pub(super) fn parse_animation_value_list<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssAnimationList, ParseError<'i, Error>> {
+) -> std::result::Result<CssAnimationValueList, ParseError<'i, Error>> {
     let mut items = Vec::new();
     loop {
-        items.push(parse_single_animation(input)?);
+        items.push(parse_single_animation_value(input)?);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -413,13 +498,13 @@ pub(super) fn parse_animation_list<'i, 't>(
             ));
         }
     }
-    CssAnimationList::try_new(items)
+    CssAnimationValueList::try_new(items)
         .ok_or_else(|| unsupported_value(input, None, "animation list is empty"))
 }
 
-pub(super) fn parse_single_animation<'i, 't>(
+pub(super) fn parse_single_animation_value<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssAnimation, ParseError<'i, Error>> {
+) -> std::result::Result<CssAnimationValue, ParseError<'i, Error>> {
     let mut name = None;
     let mut duration = None;
     let mut delay = None;
@@ -430,14 +515,17 @@ pub(super) fn parse_single_animation<'i, 't>(
     let mut play_state = None;
 
     while !input.is_exhausted() && !next_is_comma(input) {
-        if let Ok(time) = input.try_parse(parse_time) {
-            if duration.is_none() {
-                duration = Some(time);
-            } else if delay.is_none() {
-                delay = Some(time);
-            } else {
-                return Err(unsupported_value(input, None, "duplicate animation time"));
-            }
+        if duration.is_none()
+            && let Ok(value) = input.try_parse(parse_duration)
+        {
+            duration = Some(value);
+            continue;
+        }
+        if duration.is_some()
+            && delay.is_none()
+            && let Ok(value) = input.try_parse(parse_delay)
+        {
+            delay = Some(value);
             continue;
         }
         if timing_function.is_none()
@@ -447,7 +535,7 @@ pub(super) fn parse_single_animation<'i, 't>(
             continue;
         }
         if iteration_count.is_none()
-            && let Ok(count) = input.try_parse(parse_animation_iteration_count)
+            && let Ok(count) = input.try_parse(parse_animation_iteration_value)
         {
             iteration_count = Some(count);
             continue;
@@ -483,7 +571,7 @@ pub(super) fn parse_single_animation<'i, 't>(
         ));
     }
 
-    CssAnimation::try_new(CssAnimationComponents {
+    CssAnimationValue::try_new(
         name,
         duration,
         delay,
@@ -492,6 +580,6 @@ pub(super) fn parse_single_animation<'i, 't>(
         direction,
         fill_mode,
         play_state,
-    })
+    )
     .ok_or_else(|| unsupported_value(input, None, "animation item is empty"))
 }

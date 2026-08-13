@@ -176,19 +176,19 @@ macro_rules! property_schema {
             MaskPosition, "mask-position", [], "baseline.property.mask-position", CssPositionList, CssMaskPositionPropertyValue, CssMaskPositionPropertyValueRepresentation, parse_position_list, { parse_position_list($input)? };
             MaskRepeat, "mask-repeat", [], "baseline.property.mask-repeat", CssBackgroundRepeatList, CssMaskRepeatPropertyValue, CssMaskRepeatPropertyValueRepresentation, parse_background_repeat_list, { parse_background_repeat_list($input)? };
             TransitionProperty, "transition-property", [], "baseline.property.transition-property", CssTransitionPropertyList, CssTransitionPropertyPropertyValue, CssTransitionPropertyPropertyValueRepresentation, parse_transition_property_list, { parse_transition_property_list($input)? };
-            TransitionDuration, "transition-duration", [], "baseline.property.transition-duration", CssTimeList, CssTransitionDurationPropertyValue, CssTransitionDurationPropertyValueRepresentation, parse_time_list, { parse_time_list($input)? };
-            TransitionDelay, "transition-delay", [], "baseline.property.transition-delay", CssTimeList, CssTransitionDelayPropertyValue, CssTransitionDelayPropertyValueRepresentation, parse_time_list, { parse_time_list($input)? };
+            TransitionDuration, "transition-duration", [], "baseline.property.transition-duration", CssTimeList, CssTransitionDurationPropertyValue, CssTransitionDurationPropertyValueRepresentation, parse_duration_list, { parse_duration_list($input)? };
+            TransitionDelay, "transition-delay", [], "baseline.property.transition-delay", CssTimeList, CssTransitionDelayPropertyValue, CssTransitionDelayPropertyValueRepresentation, parse_delay_list, { parse_delay_list($input)? };
             TransitionTimingFunction, "transition-timing-function", [], "baseline.property.transition-timing-function", CssEasingList, CssTransitionTimingFunctionPropertyValue, CssTransitionTimingFunctionPropertyValueRepresentation, parse_easing_list, { parse_easing_list($input)? };
-            Transition, "transition", [], "baseline.property.transition", CssTransitionList, CssTransitionPropertyValue, CssTransitionPropertyValueRepresentation, parse_transition_list, { parse_transition_list($input)? };
+            Transition, "transition", [], "baseline.property.transition", CssTransitionList, CssTransitionPropertyValue, CssTransitionPropertyValueRepresentation, parse_transition_value_list, { parse_transition_value_list($input)? };
             AnimationName, "animation-name", [], "baseline.property.animation-name", CssAnimationNameList, CssAnimationNamePropertyValue, CssAnimationNamePropertyValueRepresentation, parse_animation_name_list, { parse_animation_name_list($input)? };
-            AnimationDuration, "animation-duration", [], "baseline.property.animation-duration", CssTimeList, CssAnimationDurationPropertyValue, CssAnimationDurationPropertyValueRepresentation, parse_time_list, { parse_time_list($input)? };
-            AnimationDelay, "animation-delay", [], "baseline.property.animation-delay", CssTimeList, CssAnimationDelayPropertyValue, CssAnimationDelayPropertyValueRepresentation, parse_time_list, { parse_time_list($input)? };
+            AnimationDuration, "animation-duration", [], "baseline.property.animation-duration", CssTimeList, CssAnimationDurationPropertyValue, CssAnimationDurationPropertyValueRepresentation, parse_duration_list, { parse_duration_list($input)? };
+            AnimationDelay, "animation-delay", [], "baseline.property.animation-delay", CssTimeList, CssAnimationDelayPropertyValue, CssAnimationDelayPropertyValueRepresentation, parse_delay_list, { parse_delay_list($input)? };
             AnimationTimingFunction, "animation-timing-function", [], "baseline.property.animation-timing-function", CssEasingList, CssAnimationTimingFunctionPropertyValue, CssAnimationTimingFunctionPropertyValueRepresentation, parse_easing_list, { parse_easing_list($input)? };
-            AnimationIterationCount, "animation-iteration-count", [], "baseline.property.animation-iteration-count", CssAnimationIterationCountList, CssAnimationIterationCountPropertyValue, CssAnimationIterationCountPropertyValueRepresentation, parse_animation_iteration_count_list, { parse_animation_iteration_count_list($input)? };
+            AnimationIterationCount, "animation-iteration-count", [], "baseline.property.animation-iteration-count", CssAnimationIterationCountList, CssAnimationIterationCountPropertyValue, CssAnimationIterationCountPropertyValueRepresentation, parse_animation_iteration_value_list, { parse_animation_iteration_value_list($input)? };
             AnimationDirection, "animation-direction", [], "baseline.property.animation-direction", CssAnimationDirectionList, CssAnimationDirectionPropertyValue, CssAnimationDirectionPropertyValueRepresentation, parse_animation_direction_list, { parse_animation_direction_list($input)? };
             AnimationFillMode, "animation-fill-mode", [], "baseline.property.animation-fill-mode", CssAnimationFillModeList, CssAnimationFillModePropertyValue, CssAnimationFillModePropertyValueRepresentation, parse_animation_fill_mode_list, { parse_animation_fill_mode_list($input)? };
             AnimationPlayState, "animation-play-state", [], "baseline.property.animation-play-state", CssAnimationPlayStateList, CssAnimationPlayStatePropertyValue, CssAnimationPlayStatePropertyValueRepresentation, parse_animation_play_state_list, { parse_animation_play_state_list($input)? };
-            Animation, "animation", [], "baseline.property.animation", CssAnimationList, CssAnimationPropertyValue, CssAnimationPropertyValueRepresentation, parse_animation_list, { parse_animation_list($input)? };
+            Animation, "animation", [], "baseline.property.animation", CssAnimationList, CssAnimationPropertyValue, CssAnimationPropertyValueRepresentation, parse_animation_value_list, { parse_animation_value_list($input)? };
         }
     };
 }
@@ -242,6 +242,121 @@ fn flex_i01_projection(value: &CssFlexValue) -> Option<CssFlex> {
     }
 }
 
+fn duration_i01_projection(value: &CssDuration) -> Option<CssTime> {
+    match value {
+        CssDuration::Literal(value) => CssTime::try_new(value.value(), value.unit()),
+        CssDuration::Calculation(_) => None,
+    }
+}
+
+fn delay_i01_projection(value: &CssDelay) -> Option<CssTime> {
+    match value {
+        CssDelay::Literal(value) => CssTime::try_new(value.value(), value.unit()),
+        CssDelay::Calculation(_) => None,
+    }
+}
+
+fn duration_list_i01_projection(value: &CssDurationList) -> Option<CssTimeList> {
+    let values = value
+        .values()
+        .iter()
+        .map(duration_i01_projection)
+        .collect::<Option<Vec<_>>>()?;
+    CssTimeList::try_new(values)
+}
+
+fn delay_list_i01_projection(value: &CssDelayList) -> Option<CssTimeList> {
+    let values = value
+        .values()
+        .iter()
+        .map(delay_i01_projection)
+        .collect::<Option<Vec<_>>>()?;
+    CssTimeList::try_new(values)
+}
+
+fn iteration_i01_projection(
+    value: &CssAnimationIterationValue,
+) -> Option<CssAnimationIterationCount> {
+    match value {
+        CssAnimationIterationValue::Infinite => Some(CssAnimationIterationCount::Infinite),
+        CssAnimationIterationValue::Number(value) => {
+            CssAnimationIterationCount::try_number(value.value())
+        }
+        CssAnimationIterationValue::Calculation(_) => None,
+    }
+}
+
+fn iteration_list_i01_projection(
+    value: &CssAnimationIterationValueList,
+) -> Option<CssAnimationIterationCountList> {
+    let values = value
+        .values()
+        .iter()
+        .map(iteration_i01_projection)
+        .collect::<Option<Vec<_>>>()?;
+    CssAnimationIterationCountList::try_new(values)
+}
+
+fn transition_i01_projection(value: &CssTransitionValue) -> Option<CssTransition> {
+    let duration = match value.duration() {
+        Some(value) => Some(duration_i01_projection(value)?),
+        None => None,
+    };
+    let delay = match value.delay() {
+        Some(value) => Some(delay_i01_projection(value)?),
+        None => None,
+    };
+    CssTransition::try_new(
+        value.property().cloned(),
+        duration,
+        delay,
+        value.timing_function().cloned(),
+    )
+}
+
+fn transition_list_i01_projection(value: &CssTransitionValueList) -> Option<CssTransitionList> {
+    let values = value
+        .values()
+        .iter()
+        .map(transition_i01_projection)
+        .collect::<Option<Vec<_>>>()?;
+    CssTransitionList::try_new(values)
+}
+
+fn animation_i01_projection(value: &CssAnimationValue) -> Option<CssAnimation> {
+    let duration = match value.duration() {
+        Some(value) => Some(duration_i01_projection(value)?),
+        None => None,
+    };
+    let delay = match value.delay() {
+        Some(value) => Some(delay_i01_projection(value)?),
+        None => None,
+    };
+    let iteration_count = match value.iteration_count() {
+        Some(value) => Some(iteration_i01_projection(value)?),
+        None => None,
+    };
+    CssAnimation::try_new(CssAnimationComponents {
+        name: value.name().cloned(),
+        duration,
+        delay,
+        timing_function: value.timing_function().cloned(),
+        iteration_count,
+        direction: value.direction(),
+        fill_mode: value.fill_mode(),
+        play_state: value.play_state(),
+    })
+}
+
+fn animation_list_i01_projection(value: &CssAnimationValueList) -> Option<CssAnimationList> {
+    let values = value
+        .values()
+        .iter()
+        .map(animation_i01_projection)
+        .collect::<Option<Vec<_>>>()?;
+    CssAnimationList::try_new(values)
+}
+
 macro_rules! define_current_property_value {
     (
         $canonical:literal, $wrapper:ident, $representation:ident,
@@ -292,6 +407,104 @@ macro_rules! define_current_property_value {
 }
 
 macro_rules! define_property_value {
+    (
+        TransitionDuration, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssDurationList,
+            CssTimeList,
+            durations,
+            duration_list_i01_projection
+        );
+    };
+    (
+        TransitionDelay, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssDelayList,
+            CssTimeList,
+            delays,
+            delay_list_i01_projection
+        );
+    };
+    (
+        AnimationDuration, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssDurationList,
+            CssTimeList,
+            durations,
+            duration_list_i01_projection
+        );
+    };
+    (
+        AnimationDelay, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssDelayList,
+            CssTimeList,
+            delays,
+            delay_list_i01_projection
+        );
+    };
+    (
+        AnimationIterationCount, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssAnimationIterationValueList,
+            CssAnimationIterationCountList,
+            iteration_counts,
+            iteration_list_i01_projection
+        );
+    };
+    (
+        Transition, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssTransitionValueList,
+            CssTransitionList,
+            transitions,
+            transition_list_i01_projection
+        );
+    };
+    (
+        Animation, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssAnimationValueList,
+            CssAnimationList,
+            animations,
+            animation_list_i01_projection
+        );
+    };
     (
         Opacity, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident

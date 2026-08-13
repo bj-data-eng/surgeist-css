@@ -6726,6 +6726,93 @@ impl CssTimeList {
     }
 }
 
+/// A finite non-negative authored duration literal.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssDurationLiteral {
+    value: CssFiniteNumber,
+    unit: CssTimeUnit,
+}
+
+impl CssDurationLiteral {
+    #[must_use]
+    pub const fn try_new(value: f32, unit: CssTimeUnit) -> Option<Self> {
+        match CssFiniteNumber::try_new(value) {
+            Some(value) if value.value() >= 0.0 => Some(Self { value, unit }),
+            Some(_) | None => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        self.value.value()
+    }
+
+    #[must_use]
+    pub const fn unit(self) -> CssTimeUnit {
+        self.unit
+    }
+}
+
+/// An authored transition or animation duration.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssDuration {
+    Literal(CssDurationLiteral),
+    Calculation(CssTimeCalculation),
+}
+
+/// A non-empty authored duration list.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssDurationList {
+    values: Vec<CssDuration>,
+}
+
+impl CssDurationList {
+    #[must_use]
+    pub fn try_new(values: Vec<CssDuration>) -> Option<Self> {
+        if values.is_empty() {
+            None
+        } else {
+            Some(Self { values })
+        }
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[CssDuration] {
+        &self.values
+    }
+}
+
+/// An authored signed transition or animation delay.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssDelay {
+    Literal(CssDelayLiteral),
+    Calculation(CssTimeCalculation),
+}
+
+/// A non-empty authored delay list.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssDelayList {
+    values: Vec<CssDelay>,
+}
+
+impl CssDelayList {
+    #[must_use]
+    pub fn try_new(values: Vec<CssDelay>) -> Option<Self> {
+        if values.is_empty() {
+            None
+        } else {
+            Some(Self { values })
+        }
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[CssDelay] {
+        &self.values
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CssEasing {
@@ -6903,6 +6990,37 @@ impl CssAnimationIterationCountList {
     #[must_use]
     pub fn counts(&self) -> &[CssAnimationIterationCount] {
         &self.counts
+    }
+}
+
+/// A current authored animation iteration-count value.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssAnimationIterationValue {
+    Infinite,
+    Number(CssAnimationIterationNumber),
+    Calculation(CssNumberCalculation),
+}
+
+/// A non-empty list of current authored animation iteration-count values.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAnimationIterationValueList {
+    values: Vec<CssAnimationIterationValue>,
+}
+
+impl CssAnimationIterationValueList {
+    #[must_use]
+    pub fn try_new(values: Vec<CssAnimationIterationValue>) -> Option<Self> {
+        if values.is_empty() {
+            None
+        } else {
+            Some(Self { values })
+        }
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[CssAnimationIterationValue] {
+        &self.values
     }
 }
 
@@ -7185,6 +7303,195 @@ impl CssAnimationList {
     #[must_use]
     pub fn items(&self) -> &[CssAnimation] {
         &self.items
+    }
+}
+
+/// A parser-owned current transition value with distinct duration and delay domains.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransitionValue {
+    property: Option<CssTransitionProperty>,
+    duration: Option<CssDuration>,
+    delay: Option<CssDelay>,
+    timing_function: Option<CssEasing>,
+}
+
+impl CssTransitionValue {
+    #[must_use]
+    pub(crate) fn try_new(
+        property: Option<CssTransitionProperty>,
+        duration: Option<CssDuration>,
+        delay: Option<CssDelay>,
+        timing_function: Option<CssEasing>,
+    ) -> Option<Self> {
+        if property.is_none() && duration.is_none() && delay.is_none() && timing_function.is_none()
+        {
+            None
+        } else {
+            Some(Self {
+                property,
+                duration,
+                delay,
+                timing_function,
+            })
+        }
+    }
+
+    #[must_use]
+    pub const fn property(&self) -> Option<&CssTransitionProperty> {
+        self.property.as_ref()
+    }
+
+    #[must_use]
+    pub const fn duration(&self) -> Option<&CssDuration> {
+        self.duration.as_ref()
+    }
+
+    #[must_use]
+    pub const fn delay(&self) -> Option<&CssDelay> {
+        self.delay.as_ref()
+    }
+
+    #[must_use]
+    pub const fn timing_function(&self) -> Option<&CssEasing> {
+        self.timing_function.as_ref()
+    }
+}
+
+/// A parser-owned non-empty current transition list.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransitionValueList {
+    values: Vec<CssTransitionValue>,
+}
+
+impl CssTransitionValueList {
+    #[must_use]
+    pub(crate) fn try_new(values: Vec<CssTransitionValue>) -> Option<Self> {
+        if values.is_empty() {
+            None
+        } else {
+            Some(Self { values })
+        }
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[CssTransitionValue] {
+        &self.values
+    }
+}
+
+/// A parser-owned current animation value with distinct timing domains.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAnimationValue {
+    name: Option<CssAnimationName>,
+    duration: Option<CssDuration>,
+    delay: Option<CssDelay>,
+    timing_function: Option<CssEasing>,
+    iteration_count: Option<CssAnimationIterationValue>,
+    direction: Option<CssAnimationDirection>,
+    fill_mode: Option<CssAnimationFillMode>,
+    play_state: Option<CssAnimationPlayState>,
+}
+
+impl CssAnimationValue {
+    #[must_use]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the parser-owned constructor preserves the eight distinct animation components"
+    )]
+    pub(crate) fn try_new(
+        name: Option<CssAnimationName>,
+        duration: Option<CssDuration>,
+        delay: Option<CssDelay>,
+        timing_function: Option<CssEasing>,
+        iteration_count: Option<CssAnimationIterationValue>,
+        direction: Option<CssAnimationDirection>,
+        fill_mode: Option<CssAnimationFillMode>,
+        play_state: Option<CssAnimationPlayState>,
+    ) -> Option<Self> {
+        if name.is_none()
+            && duration.is_none()
+            && delay.is_none()
+            && timing_function.is_none()
+            && iteration_count.is_none()
+            && direction.is_none()
+            && fill_mode.is_none()
+            && play_state.is_none()
+        {
+            None
+        } else {
+            Some(Self {
+                name,
+                duration,
+                delay,
+                timing_function,
+                iteration_count,
+                direction,
+                fill_mode,
+                play_state,
+            })
+        }
+    }
+
+    #[must_use]
+    pub const fn name(&self) -> Option<&CssAnimationName> {
+        self.name.as_ref()
+    }
+
+    #[must_use]
+    pub const fn duration(&self) -> Option<&CssDuration> {
+        self.duration.as_ref()
+    }
+
+    #[must_use]
+    pub const fn delay(&self) -> Option<&CssDelay> {
+        self.delay.as_ref()
+    }
+
+    #[must_use]
+    pub const fn timing_function(&self) -> Option<&CssEasing> {
+        self.timing_function.as_ref()
+    }
+
+    #[must_use]
+    pub const fn iteration_count(&self) -> Option<&CssAnimationIterationValue> {
+        self.iteration_count.as_ref()
+    }
+
+    #[must_use]
+    pub const fn direction(&self) -> Option<CssAnimationDirection> {
+        self.direction
+    }
+
+    #[must_use]
+    pub const fn fill_mode(&self) -> Option<CssAnimationFillMode> {
+        self.fill_mode
+    }
+
+    #[must_use]
+    pub const fn play_state(&self) -> Option<CssAnimationPlayState> {
+        self.play_state
+    }
+}
+
+/// A parser-owned non-empty current animation list.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAnimationValueList {
+    values: Vec<CssAnimationValue>,
+}
+
+impl CssAnimationValueList {
+    #[must_use]
+    pub(crate) fn try_new(values: Vec<CssAnimationValue>) -> Option<Self> {
+        if values.is_empty() {
+            None
+        } else {
+            Some(Self { values })
+        }
+    }
+
+    #[must_use]
+    pub fn values(&self) -> &[CssAnimationValue] {
+        &self.values
     }
 }
 

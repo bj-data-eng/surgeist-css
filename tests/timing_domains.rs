@@ -215,8 +215,8 @@ fn positive_i01_timing_inputs_keep_exact_compatibility_debug_observables() {
             "CssTimeList { times: [CssTime { value: 4.0, unit: Milliseconds }] }",
             "CssTimeList { times: [CssTime { value: 5.0, unit: Seconds }] }",
             "CssAnimationIterationCountList { counts: [Infinite, Number(CssAnimationIterationNumber { value: 2.0 })] }",
-            "CssTransitionList { items: [CssTransition { property: Some(Custom(CssCustomIdent(\"opacity\"))), duration: Some(CssTime { value: 1.0, unit: Seconds }), delay: Some(CssTime { value: 2.0, unit: Milliseconds }), timing_function: Some(Ease) }] }",
-            "CssAnimationList { items: [CssAnimation { name: Some(Custom(CssCustomIdent(\"fade\"))), duration: Some(CssTime { value: 3.0, unit: Seconds }), delay: Some(CssTime { value: 4.0, unit: Milliseconds }), timing_function: Some(Linear), iteration_count: Some(Number(CssAnimationIterationNumber { value: 2.0 })), direction: Some(Reverse), fill_mode: Some(Both), play_state: Some(Paused) }] }",
+            "CssTransitionList { items: [CssTransition { property: Some(Custom(CssCustomIdent { value: \"opacity\" })), duration: Some(CssTime { value: 1.0, unit: Seconds }), delay: Some(CssTime { value: 2.0, unit: Milliseconds }), timing_function: Some(Ease) }] }",
+            "CssAnimationList { items: [CssAnimation { name: Some(Custom(CssCustomIdent { value: \"fade\" })), duration: Some(CssTime { value: 3.0, unit: Seconds }), delay: Some(CssTime { value: 4.0, unit: Milliseconds }), timing_function: Some(Linear), iteration_count: Some(Number(CssAnimationIterationNumber { value: 2.0 })), direction: Some(Reverse), fill_mode: Some(Both), play_state: Some(Paused) }] }",
         ]
     );
 }

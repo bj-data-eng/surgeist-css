@@ -563,7 +563,7 @@ fn timing_wrappers_expose_exact_property_specific_current_accessors() {
     ));
     assert!(report.is_clean(), "{:?}", report.diagnostics());
 
-    for declaration in report.syntax() {
+    for declaration in report.syntax().as_slice() {
         match declaration.known().unwrap().property_value().unwrap() {
             CssKnownPropertyValueRef::TransitionDuration(value) => {
                 assert_eq!(value.durations().values().len(), 1);

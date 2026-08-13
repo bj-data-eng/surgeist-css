@@ -4,8 +4,8 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssByteOffset, CssErrorCode, CssKnownProperty, CssRecoveryAction, CssRule, CssSourcePosition,
-    CssSourceSpan, CssTokenKind, CssUtf16ColumnIndex, ErrorKind, parse_sheet,
+    CssByteOffset, CssErrorCode, CssKnownProperty, CssLineIndex, CssRecoveryAction, CssRule,
+    CssSourcePosition, CssSourceSpan, CssTokenKind, CssUtf16ColumnIndex, ErrorKind, parse_sheet,
     parse_style_attribute,
 };
 

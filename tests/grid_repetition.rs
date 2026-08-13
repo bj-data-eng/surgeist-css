@@ -175,6 +175,87 @@ fn grid_repeat_models_reject_each_invalid_structural_cross_product() {
 }
 
 #[test]
+fn flexible_minmax_minimums_are_rejected_at_the_first_responsible_token() {
+    for (property, value) in [
+        ("grid-template-columns", "minmax(1fr, 10px)"),
+        ("grid-template-columns", "repeat(2, minmax(1fr, 10px))"),
+        ("grid-auto-rows", "minmax(1fr, 10px)"),
+        ("grid-auto-columns", "minmax(1fr, 10px)"),
+    ] {
+        let source = format!("{property}: {value}; color: red");
+        let report = parse_style_attribute(&source);
+
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        assert_eq!(
+            report.syntax()[0]
+                .known()
+                .expect("retained sibling")
+                .property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{source}: flexible minimum must recover once");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue,
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.action(),
+            CssRecoveryAction::DropDeclaration,
+            "{source}",
+        );
+        let responsible = source.find("1fr").expect("flexible minimum");
+        assert_eq!(
+            diagnostic.error().position().byte_offset().value(),
+            responsible,
+            "{source}",
+        );
+        assert_eq!(diagnostic.error().position().line().value(), 0, "{source}");
+        assert_eq!(
+            diagnostic.error().position().column().value() as usize,
+            responsible,
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.span().start().byte_offset().value(),
+            0,
+            "{source}"
+        );
+        assert_eq!(
+            diagnostic.span().end().byte_offset().value(),
+            source.find(';').expect("declaration terminator") + 1,
+            "{source}",
+        );
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("{source}: expected Grid property error");
+        };
+        assert_eq!(
+            detail.encountered().expect("responsible fraction").kind(),
+            CssTokenKind::Dimension,
+            "{source}",
+        );
+        assert_eq!(
+            detail
+                .encountered()
+                .expect("responsible fraction")
+                .authored(),
+            "1fr",
+            "{source}",
+        );
+
+        #[cfg(feature = "app-strict")]
+        {
+            let failure = surgeist_css::validate_style_attribute(&source)
+                .expect_err("strict validation rejects a flexible minmax minimum");
+            assert_eq!(failure.diagnostics(), report.diagnostics(), "{source}");
+        }
+    }
+}
+
+#[test]
 fn grid_repeat_typed_calculation_stays_symbolic_and_outside_i01_projection() {
     let report = parse_style_attribute(
         "grid-template-columns: repeat(auto-fit, calc((10px + 5%) * 2)); color: red",

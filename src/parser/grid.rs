@@ -312,7 +312,7 @@ fn parse_grid_track_size<'i, 't>(
     match input.next().map_err(basic)? {
         Token::Function(name) if name.eq_ignore_ascii_case("minmax") => {
             input.parse_nested_block(|input| {
-                let min = parse_grid_track_breadth(input)?;
+                let min = parse_grid_inflexible_track_breadth(input)?;
                 input.expect_comma().map_err(basic)?;
                 let max = parse_grid_track_breadth(input)?;
                 input.expect_exhausted().map_err(basic)?;
@@ -335,6 +335,22 @@ fn parse_grid_track_size<'i, 't>(
             input.reset(&state);
             parse_grid_track_breadth(input).map(CssAuthoredGridTrackSize::from_breadth)
         }
+    }
+}
+
+fn parse_grid_inflexible_track_breadth<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredGridTrackBreadth, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let breadth = parse_grid_track_breadth(input)?;
+    if breadth.is_inflexible() {
+        Ok(breadth)
+    } else {
+        Err(unsupported_value_at(
+            location,
+            None,
+            "minmax() minimum must be an inflexible track breadth",
+        ))
     }
 }
 

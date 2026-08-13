@@ -298,6 +298,28 @@ fn specialized_list_repeated_failures_emit_one_ordered_action_per_member() {
 }
 
 #[test]
+fn specialized_list_defined_false_and_repeated_malformed_members_recover_locally() {
+    let source = "@media (unknown: yes),???,(width: calc(1px)),,print { .x { color: red; } }";
+    let report = parse_sheet(source);
+    let queries = media_rule(&report).query().queries();
+    assert!(matches!(
+        queries,
+        [
+            CssMediaQuery::Condition(unknown),
+            CssMediaQuery::Never(_),
+            CssMediaQuery::Condition(value),
+            CssMediaQuery::Never(_),
+            CssMediaQuery::Typed(_),
+        ] if matches!(unknown.kind(), CssMediaConditionKind::DefinedFalse(_))
+            && matches!(value.kind(), CssMediaConditionKind::DefinedFalse(_))
+    ));
+    assert_eq!(report.diagnostics().len(), 2);
+    assert!(report.diagnostics().iter().all(|diagnostic| {
+        diagnostic.action() == CssRecoveryAction::ReplaceMediaQueryWithNever
+    }));
+}
+
+#[test]
 fn specialized_list_empty_media_member_uses_delimiter_and_end_position() {
     let source = "@media screen,,print { .x { color: red; } }";
     let report = parse_sheet(source);
@@ -340,36 +362,21 @@ fn specialized_list_media_recovery_stops_at_balanced_nested_commas() {
 }
 
 #[test]
-fn specialized_list_media_sentinel_and_error_keep_distinct_exact_positions() {
+fn specialized_list_defined_false_member_keeps_exact_text_and_position_without_recovery() {
     let source = "@media screen,(unknown: yes),print { .x { color: red; } }";
     let report = parse_sheet(source);
     let queries = media_rule(&report).query().queries();
     let member_start = source.find('(').expect("member start");
-    let responsible = source.find("unknown").expect("responsible feature");
-    let member_end = source[member_start..].find(',').expect("member end") + member_start;
-
-    let CssMediaQuery::Never(never) = &queries[1] else {
-        panic!("expected Never sentinel")
+    let CssMediaQuery::Condition(condition) = &queries[1] else {
+        panic!("expected defined-false condition")
     };
-    assert_eq!(never.position().byte_offset().value(), member_start);
-    assert_eq!(report.diagnostics().len(), 1);
-    assert_specialized_diagnostic(
-        source,
-        &report.diagnostics()[0],
-        CssErrorCode::InvalidMediaQuery,
-        CssRecoveryAction::ReplaceMediaQueryWithNever,
-        member_start,
-        member_end,
-        responsible,
-    );
-    let ErrorKind::InvalidMediaQuery(detail) = report.diagnostics()[0].error().kind() else {
-        panic!("expected media-query detail")
+    let CssMediaConditionKind::DefinedFalse(defined_false) = condition.kind() else {
+        panic!("expected defined-false condition details")
     };
-    assert_eq!(detail.feature().expect("feature name").as_str(), "unknown");
-    assert_eq!(
-        detail.encountered().expect("feature token").authored(),
-        "unknown"
-    );
+    assert_eq!(condition.position().byte_offset().value(), member_start);
+    assert_eq!(defined_false.position(), condition.position());
+    assert_eq!(defined_false.as_css(), "(unknown: yes)");
+    assert!(report.is_clean());
 }
 
 #[test]

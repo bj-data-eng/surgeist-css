@@ -1,7 +1,8 @@
 use surgeist_css::{
-    CssGridMode, CssMediaConditionKind, CssMediaFeatureKind, CssMediaFeatureQuery, CssMediaQuery,
-    CssMediaRatio, CssMediaType, CssQueryComparison, CssRatio, CssRecoveryAction,
-    CssResolutionUnit, CssRule, CssScanMode, parse_sheet,
+    CssDefinedFalseMediaReason, CssErrorCode, CssGridMode, CssMediaConditionKind,
+    CssMediaFeatureKind, CssMediaFeatureQuery, CssMediaQuery, CssMediaQueryModifier, CssMediaRatio,
+    CssMediaType, CssQueryComparison, CssRatio, CssRecoveryAction, CssResolutionUnit, CssRule,
+    CssScanMode, parse_sheet,
 };
 
 fn parsed_feature(query: &str) -> CssMediaFeatureQuery {
@@ -305,15 +306,12 @@ fn mq3_named_queries_keep_exact_non_bmp_source_positions() {
 }
 
 #[test]
-fn mq3_invalid_named_feature_domains_recover_one_member_and_retain_siblings() {
+fn mq3_structurally_malformed_features_recover_one_member_and_retain_siblings() {
     for (invalid, responsible) in [
         ("(min-width)", "min-width"),
-        ("(min-orientation: portrait)", "min-orientation"),
-        ("(aspect-ratio: 0/1)", "0/1"),
-        ("(aspect-ratio: 1.5/1)", "1.5"),
-        ("(resolution: 0dpi)", "0dpi"),
-        ("(scan: raster)", "raster"),
-        ("(grid: 2)", "2"),
+        ("(min-color)", "min-color"),
+        ("(width:)", ")"),
+        ("(width 1px)", "1px"),
     ] {
         let source = format!("@media screen,{invalid},print {{ .x {{ color: red; }} }}");
         let report = parse_sheet(&source);
@@ -351,6 +349,166 @@ fn mq3_invalid_named_feature_domains_recover_one_member_and_retain_siblings() {
             "{invalid}"
         );
     }
+}
+
+#[test]
+fn mq3_unknown_features_and_complete_unknown_values_are_defined_false() {
+    for (css, reason) in [
+        (
+            "(future-feature)",
+            CssDefinedFalseMediaReason::UnknownFeature,
+        ),
+        (
+            "(min-future-feature: 1px)",
+            CssDefinedFalseMediaReason::UnknownFeature,
+        ),
+        (
+            "(future-feature: calc(1foo + 2px))",
+            CssDefinedFalseMediaReason::UnknownFeature,
+        ),
+        (
+            "(width: calc(1px))",
+            CssDefinedFalseMediaReason::UnknownValue,
+        ),
+        ("(width: -1px)", CssDefinedFalseMediaReason::UnknownValue),
+        ("(width: 2qu)", CssDefinedFalseMediaReason::UnknownValue),
+        (
+            "(orientation: diagonal)",
+            CssDefinedFalseMediaReason::UnknownValue,
+        ),
+        (
+            "(aspect-ratio: 0/1)",
+            CssDefinedFalseMediaReason::UnknownValue,
+        ),
+        (
+            "(aspect-ratio: 1.5/1)",
+            CssDefinedFalseMediaReason::UnknownValue,
+        ),
+        (
+            "(resolution: 0dpi)",
+            CssDefinedFalseMediaReason::UnknownValue,
+        ),
+        ("(scan: raster)", CssDefinedFalseMediaReason::UnknownValue),
+        ("(grid: 2)", CssDefinedFalseMediaReason::UnknownValue),
+    ] {
+        let source = format!("@media screen,{css},print {{}}");
+        let report = parse_sheet(&source);
+        assert!(report.is_clean(), "{css}: {:?}", report.diagnostics());
+        let [CssRule::Media(rule)] = report.syntax().rules() else {
+            panic!("{css}: expected retained media rule")
+        };
+        let [
+            CssMediaQuery::Typed(_),
+            CssMediaQuery::Condition(condition),
+            CssMediaQuery::Typed(_),
+        ] = rule.query().queries()
+        else {
+            panic!("{css}: expected comma-local defined-false condition")
+        };
+        let CssMediaConditionKind::DefinedFalse(defined_false) = condition.kind() else {
+            panic!("{css}: expected defined-false authored condition")
+        };
+        assert_eq!(defined_false.as_css(), css, "{css}");
+        assert_eq!(defined_false.reason(), reason, "{css}");
+        assert_eq!(defined_false.position(), condition.position(), "{css}");
+        assert!(!rule.query().queries()[1].is_guaranteed_false(), "{css}");
+    }
+}
+
+#[test]
+fn mq3_unknown_media_types_preserve_modifiers_exact_spelling_and_positions() {
+    let source = "@media only F\\75ture-Screen, not Future-Print and (width: 1px) {}";
+    let report = parse_sheet(source);
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [CssRule::Media(rule)] = report.syntax().rules() else {
+        panic!("expected retained media rule")
+    };
+    let [CssMediaQuery::Typed(only), CssMediaQuery::Typed(not)] = rule.query().queries() else {
+        panic!("expected two typed unknown media queries")
+    };
+
+    assert_eq!(only.modifier(), Some(CssMediaQueryModifier::Only));
+    assert_eq!(only.media_type(), CssMediaType::Unknown);
+    let only_type = only.unknown_media_type().expect("unknown type details");
+    assert_eq!(only_type.as_css(), "F\\75ture-Screen");
+    assert_eq!(only_type.reason(), CssDefinedFalseMediaReason::UnknownType);
+    assert_eq!(
+        only.position().byte_offset().value(),
+        source.find("only").unwrap()
+    );
+    assert_eq!(
+        only_type.position().byte_offset().value(),
+        source.find("F\\75ture-Screen").unwrap()
+    );
+
+    assert_eq!(not.modifier(), Some(CssMediaQueryModifier::Not));
+    assert_eq!(not.media_type(), CssMediaType::Unknown);
+    assert_eq!(
+        not.unknown_media_type()
+            .expect("unknown type details")
+            .as_css(),
+        "Future-Print"
+    );
+    assert!(not.condition().is_some());
+}
+
+#[test]
+fn mq3_defined_false_balanced_nesting_obeys_the_255_256_257_boundary() {
+    fn source_at_depth(depth: usize) -> String {
+        let functions = depth.saturating_sub(1);
+        format!(
+            "@media (unknown: {}x{}) {{}}",
+            "f(".repeat(functions),
+            ")".repeat(functions)
+        )
+    }
+
+    for depth in [255, 256] {
+        let source = source_at_depth(depth);
+        let report = parse_sheet(&source);
+        assert!(
+            report.is_clean(),
+            "depth {depth}: {:?}",
+            report.diagnostics()
+        );
+        let [CssRule::Media(rule)] = report.syntax().rules() else {
+            panic!("depth {depth}: expected retained media rule")
+        };
+        assert!(matches!(
+            rule.query().queries(),
+            [CssMediaQuery::Condition(condition)]
+                if matches!(condition.kind(), CssMediaConditionKind::DefinedFalse(_))
+        ));
+    }
+
+    let source = source_at_depth(257);
+    let report = parse_sheet(&source);
+    assert!(!report.is_clean());
+    assert!(report.diagnostics().iter().any(|diagnostic| {
+        diagnostic.error().code() == CssErrorCode::NestingLimit
+            && diagnostic.action() == CssRecoveryAction::StopAtNestingLimit
+    }));
+}
+
+#[test]
+fn mq3_defined_false_condition_survives_rule_eof_implicit_closure() {
+    let source = "@media (unknown: yes) {";
+    let report = parse_sheet(source);
+    let [CssRule::Media(rule)] = report.syntax().rules() else {
+        panic!("expected the implicitly closed media rule to be retained")
+    };
+    assert!(matches!(
+        rule.query().queries(),
+        [CssMediaQuery::Condition(condition)]
+            if matches!(condition.kind(), CssMediaConditionKind::DefinedFalse(_))
+    ));
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected only the rule-block EOF closure diagnostic")
+    };
+    assert_eq!(
+        diagnostic.action(),
+        CssRecoveryAction::RetainWithImplicitClosure
+    );
 }
 
 #[test]

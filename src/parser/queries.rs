@@ -69,7 +69,7 @@ pub(crate) fn parse_media_query_list<'i, 't>(
                 member,
                 "baseline.media.query-list",
             )?;
-            parse_media_query(member)
+            parse_media_query(source, member)
         });
         let member_end = input.position().byte_index();
         let comma_start = member_end;
@@ -337,34 +337,41 @@ fn parse_container_style_query<'i, 't>(
 }
 
 fn parse_media_query<'i, 't>(
+    source: &str,
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssMediaQuery, ParseError<'i, Error>> {
     let position = first_non_trivia_parser_position(input);
-    if let Ok(query) = input.try_parse(|input| parse_typed_media_query(input, position)) {
+    if let Ok(query) = input.try_parse(|input| parse_typed_media_query(source, input, position)) {
         return Ok(CssMediaQuery::Typed(query));
     }
 
-    parse_media_condition(input).map(CssMediaQuery::Condition)
+    parse_media_condition(source, input).map(CssMediaQuery::Condition)
 }
 
 fn parse_typed_media_query<'i, 't>(
+    source: &str,
     input: &mut Parser<'i, 't>,
     position: crate::CssSourcePosition,
 ) -> std::result::Result<CssTypedMediaQuery, ParseError<'i, Error>> {
     let modifier = input.try_parse(parse_media_query_modifier).ok();
-    let media_type = parse_media_type(input)?;
+    let media_type = parse_media_type(source, input)?;
     let condition = if input
         .try_parse(|input| input.expect_ident_matching("and"))
         .is_ok()
     {
-        Some(parse_media_condition(input)?)
+        Some(parse_media_condition(source, input)?)
     } else {
         None
     };
 
-    Ok(CssTypedMediaQuery::new(
-        modifier, media_type, condition, position,
-    ))
+    Ok(match media_type {
+        ParsedMediaType::Known(media_type) => {
+            CssTypedMediaQuery::new(modifier, media_type, condition, position)
+        }
+        ParsedMediaType::Unknown(media_type) => {
+            CssTypedMediaQuery::new_unknown(modifier, media_type, condition, position)
+        }
+    })
 }
 
 fn parse_media_query_modifier<'i, 't>(
@@ -383,47 +390,61 @@ fn parse_media_query_modifier<'i, 't>(
     }
 }
 
+enum ParsedMediaType {
+    Known(CssMediaType),
+    Unknown(CssUnknownMediaType),
+}
+
 fn parse_media_type<'i, 't>(
+    source: &str,
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssMediaType, ParseError<'i, Error>> {
+) -> std::result::Result<ParsedMediaType, ParseError<'i, Error>> {
     let location = input.current_source_location();
+    let position = first_non_trivia_parser_position(input);
     let ident = input.expect_ident_cloned().map_err(basic)?;
     match_ignore_ascii_case! { &ident,
-        "all" => Ok(CssMediaType::All),
-        "aural" => Ok(CssMediaType::Aural),
-        "braille" => Ok(CssMediaType::Braille),
-        "embossed" => Ok(CssMediaType::Embossed),
-        "handheld" => Ok(CssMediaType::Handheld),
-        "projection" => Ok(CssMediaType::Projection),
-        "screen" => Ok(CssMediaType::Screen),
-        "speech" => Ok(CssMediaType::Speech),
-        "tty" => Ok(CssMediaType::Tty),
-        "tv" => Ok(CssMediaType::Tv),
-        "print" => Ok(CssMediaType::Print),
-        _ => Err(unsupported_value_at(
+        "all" => Ok(ParsedMediaType::Known(CssMediaType::All)),
+        "aural" => Ok(ParsedMediaType::Known(CssMediaType::Aural)),
+        "braille" => Ok(ParsedMediaType::Known(CssMediaType::Braille)),
+        "embossed" => Ok(ParsedMediaType::Known(CssMediaType::Embossed)),
+        "handheld" => Ok(ParsedMediaType::Known(CssMediaType::Handheld)),
+        "projection" => Ok(ParsedMediaType::Known(CssMediaType::Projection)),
+        "screen" => Ok(ParsedMediaType::Known(CssMediaType::Screen)),
+        "speech" => Ok(ParsedMediaType::Known(CssMediaType::Speech)),
+        "tty" => Ok(ParsedMediaType::Known(CssMediaType::Tty)),
+        "tv" => Ok(ParsedMediaType::Known(CssMediaType::Tv)),
+        "print" => Ok(ParsedMediaType::Known(CssMediaType::Print)),
+        "layer" | "not" | "and" | "only" | "or" => Err(unsupported_value_at(
             location,
             None,
-            format!("unsupported media type `{ident}`"),
+            format!("reserved media type `{ident}`"),
         )),
+        _ => Ok(ParsedMediaType::Unknown(CssUnknownMediaType::new(
+            source
+                .get(position.byte_offset().value()..input.position().byte_index())
+                .unwrap_or(ident.as_ref()),
+            position,
+        ))),
     }
 }
 
 fn parse_media_condition<'i, 't>(
+    source: &str,
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssMediaCondition, ParseError<'i, Error>> {
     let position = first_non_trivia_parser_position(input);
-    let first = parse_media_condition_atom(input)?;
+    let first = parse_media_condition_atom(source, input)?;
 
     if input
         .try_parse(|input| input.expect_ident_matching("and"))
         .is_ok()
     {
-        let mut conditions = vec![first, parse_media_condition_atom(input)?];
+        let mut conditions = vec![first, parse_media_condition_atom(source, input)?];
         while input
             .try_parse(|input| input.expect_ident_matching("and"))
             .is_ok()
         {
-            conditions.push(parse_media_condition_atom(input)?);
+            conditions.push(parse_media_condition_atom(source, input)?);
         }
         return Ok(CssMediaCondition::new(
             CssMediaConditionKind::And(CssMediaConditionList::new(conditions)),
@@ -435,12 +456,12 @@ fn parse_media_condition<'i, 't>(
         .try_parse(|input| input.expect_ident_matching("or"))
         .is_ok()
     {
-        let mut conditions = vec![first, parse_media_condition_atom(input)?];
+        let mut conditions = vec![first, parse_media_condition_atom(source, input)?];
         while input
             .try_parse(|input| input.expect_ident_matching("or"))
             .is_ok()
         {
-            conditions.push(parse_media_condition_atom(input)?);
+            conditions.push(parse_media_condition_atom(source, input)?);
         }
         return Ok(CssMediaCondition::new(
             CssMediaConditionKind::Or(CssMediaConditionList::new(conditions)),
@@ -452,6 +473,7 @@ fn parse_media_condition<'i, 't>(
 }
 
 fn parse_media_condition_atom<'i, 't>(
+    source: &str,
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssMediaCondition, ParseError<'i, Error>> {
     let position = first_non_trivia_parser_position(input);
@@ -460,26 +482,90 @@ fn parse_media_condition_atom<'i, 't>(
         .is_ok()
     {
         return Ok(CssMediaCondition::new(
-            CssMediaConditionKind::Not(Box::new(parse_media_condition_atom(input)?)),
+            CssMediaConditionKind::Not(Box::new(parse_media_condition_atom(source, input)?)),
             position,
         ));
     }
 
+    let expression_start = position.byte_offset().value();
     input.expect_parenthesis_block().map_err(basic)?;
-    let feature = input.parse_nested_block(|input| {
-        let feature = parse_media_feature_query(input)?;
-        if !input.is_exhausted() {
-            return Err(invalid_syntax(
-                input.current_source_location(),
-                "unexpected token in media feature query",
-            ));
+    let parsed = input.parse_nested_block(|input| {
+        let initial = input.state();
+        match parse_media_feature_query(input) {
+            Ok(feature) if input.is_exhausted() => Ok(ParsedMediaConditionAtom::Feature(feature)),
+            Ok(_) => {
+                let location = input.current_source_location();
+                input.reset(&initial);
+                parse_defined_false_media_reason(input)
+                    .map(ParsedMediaConditionAtom::DefinedFalse)
+                    .ok_or_else(|| {
+                        invalid_syntax(location, "unexpected token in media feature query")
+                    })
+            }
+            Err(error) => {
+                input.reset(&initial);
+                if let Some(reason) = parse_defined_false_media_reason(input) {
+                    Ok(ParsedMediaConditionAtom::DefinedFalse(reason))
+                } else {
+                    Err(error)
+                }
+            }
         }
-        Ok(feature)
     })?;
-    Ok(CssMediaCondition::new(
-        CssMediaConditionKind::Feature(feature),
-        position,
-    ))
+    let kind = match parsed {
+        ParsedMediaConditionAtom::Feature(feature) => CssMediaConditionKind::Feature(feature),
+        ParsedMediaConditionAtom::DefinedFalse(reason) => {
+            let expression_end = input.position().byte_index();
+            let authored = source
+                .get(expression_start..expression_end)
+                .unwrap_or_default();
+            CssMediaConditionKind::DefinedFalse(CssDefinedFalseMediaCondition::new(
+                authored, reason, position,
+            ))
+        }
+    };
+    Ok(CssMediaCondition::new(kind, position))
+}
+
+enum ParsedMediaConditionAtom {
+    Feature(CssMediaFeatureQuery),
+    DefinedFalse(CssDefinedFalseMediaReason),
+}
+
+fn parse_defined_false_media_reason(
+    input: &mut Parser<'_, '_>,
+) -> Option<CssDefinedFalseMediaReason> {
+    let ident = input.expect_ident_cloned().ok()?;
+    if ident.eq_ignore_ascii_case("scripting") {
+        return None;
+    }
+
+    let feature_name = MediaFeatureName::parse(&ident);
+    if feature_name.is_some_and(|name| !name.is_mq3()) {
+        return None;
+    }
+    if input.is_exhausted() {
+        return feature_name
+            .is_none()
+            .then_some(CssDefinedFalseMediaReason::UnknownFeature);
+    }
+
+    let has_value_separator = match feature_name {
+        Some(name) if name.is_range() => {
+            parse_range_feature_comparison(input, name.prefix()).is_ok()
+        }
+        Some(_) | None => input.expect_colon().is_ok(),
+    };
+    if !has_value_separator || input.is_exhausted() {
+        return None;
+    }
+
+    while input.next_including_whitespace_and_comments().is_ok() {}
+    Some(if feature_name.is_some() {
+        CssDefinedFalseMediaReason::UnknownValue
+    } else {
+        CssDefinedFalseMediaReason::UnknownFeature
+    })
 }
 
 fn first_non_trivia_parser_position(input: &mut Parser<'_, '_>) -> crate::CssSourcePosition {
@@ -814,6 +900,66 @@ impl MediaFeatureName {
             | Self::AnyPointer
             | Self::DisplayMode => return None,
         })
+    }
+
+    fn is_mq3(self) -> bool {
+        !matches!(
+            self,
+            Self::PrefersColorScheme
+                | Self::PrefersReducedMotion
+                | Self::PrefersReducedTransparency
+                | Self::PrefersContrast
+                | Self::ForcedColors
+                | Self::Hover
+                | Self::AnyHover
+                | Self::Pointer
+                | Self::AnyPointer
+                | Self::DisplayMode
+        )
+    }
+
+    fn is_range(self) -> bool {
+        matches!(
+            self,
+            Self::Width(_)
+                | Self::Height(_)
+                | Self::DeviceWidth(_)
+                | Self::DeviceHeight(_)
+                | Self::AspectRatio(_)
+                | Self::DeviceAspectRatio(_)
+                | Self::Resolution(_)
+                | Self::Color(_)
+                | Self::ColorIndex(_)
+                | Self::Monochrome(_)
+        )
+    }
+
+    fn prefix(self) -> Option<RangePrefix> {
+        match self {
+            Self::Width(prefix)
+            | Self::Height(prefix)
+            | Self::DeviceWidth(prefix)
+            | Self::DeviceHeight(prefix)
+            | Self::AspectRatio(prefix)
+            | Self::DeviceAspectRatio(prefix)
+            | Self::Resolution(prefix)
+            | Self::Color(prefix)
+            | Self::ColorIndex(prefix)
+            | Self::Monochrome(prefix) => prefix,
+            Self::Orientation
+            | Self::Scan
+            | Self::Grid
+            | Self::PrefersColorScheme
+            | Self::PrefersReducedMotion
+            | Self::PrefersReducedTransparency
+            | Self::PrefersContrast
+            | Self::ForcedColors
+            | Self::Hover
+            | Self::AnyHover
+            | Self::Pointer
+            | Self::AnyPointer
+            | Self::DisplayMode => None,
+        }
     }
 }
 

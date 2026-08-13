@@ -1982,21 +1982,40 @@ impl CssNeverMediaQuery {
 pub struct CssTypedMediaQuery {
     modifier: Option<CssMediaQueryModifier>,
     media_type: CssMediaType,
+    unknown_media_type: Option<CssUnknownMediaType>,
     condition: Option<CssMediaCondition>,
     position: CssSourcePosition,
 }
 
 impl CssTypedMediaQuery {
     #[must_use]
-    pub(crate) const fn new(
+    pub(crate) fn new(
         modifier: Option<CssMediaQueryModifier>,
         media_type: CssMediaType,
         condition: Option<CssMediaCondition>,
         position: CssSourcePosition,
     ) -> Self {
+        debug_assert_ne!(media_type, CssMediaType::Unknown);
         Self {
             modifier,
             media_type,
+            unknown_media_type: None,
+            condition,
+            position,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn new_unknown(
+        modifier: Option<CssMediaQueryModifier>,
+        media_type: CssUnknownMediaType,
+        condition: Option<CssMediaCondition>,
+        position: CssSourcePosition,
+    ) -> Self {
+        Self {
+            modifier,
+            media_type: CssMediaType::Unknown,
+            unknown_media_type: Some(media_type),
             condition,
             position,
         }
@@ -2010,6 +2029,14 @@ impl CssTypedMediaQuery {
     #[must_use]
     pub const fn media_type(&self) -> CssMediaType {
         self.media_type
+    }
+
+    /// Returns the exact authored spelling and token position for an unknown media type.
+    ///
+    /// This is present exactly when [`Self::media_type`] returns [`CssMediaType::Unknown`].
+    #[must_use]
+    pub const fn unknown_media_type(&self) -> Option<&CssUnknownMediaType> {
+        self.unknown_media_type.as_ref()
     }
 
     #[must_use]
@@ -2045,6 +2072,45 @@ pub enum CssMediaType {
     Speech,
     Tty,
     Tv,
+    /// A syntactically valid unknown MQ3 media type, which is defined to be false.
+    Unknown,
+}
+
+/// A parser-owned unknown MQ3 media type with exact authored spelling and provenance.
+///
+/// Unknown types are valid authored syntax with defined-false semantics. Private fields prevent
+/// callers from forging parser provenance or pairing this model with a known media type.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssUnknownMediaType {
+    spelling: String,
+    position: CssSourcePosition,
+}
+
+impl CssUnknownMediaType {
+    #[must_use]
+    pub(crate) fn new(spelling: impl Into<String>, position: CssSourcePosition) -> Self {
+        let spelling = spelling.into();
+        debug_assert!(!spelling.is_empty());
+        Self { spelling, position }
+    }
+
+    /// Returns the exact authored media-type token spelling, including escapes and casing.
+    #[must_use]
+    pub fn as_css(&self) -> &str {
+        &self.spelling
+    }
+
+    /// Returns the defined-false classification for this unknown media type.
+    #[must_use]
+    pub const fn reason(&self) -> CssDefinedFalseMediaReason {
+        CssDefinedFalseMediaReason::UnknownType
+    }
+
+    /// Returns the position of the authored unknown media-type token.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
 }
 
 /// A parser-produced authored media condition with exact first non-trivia provenance.
@@ -2089,9 +2155,66 @@ impl CssMediaCondition {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssMediaConditionKind {
     Feature(CssMediaFeatureQuery),
+    DefinedFalse(CssDefinedFalseMediaCondition),
     Not(Box<CssMediaCondition>),
     And(CssMediaConditionList),
     Or(CssMediaConditionList),
+}
+
+/// A syntactically valid MQ3 expression whose unknown feature or value is defined to be false.
+///
+/// The complete parenthesized expression is retained exactly as authored. This parser-produced
+/// value is distinct from [`CssNeverMediaQuery`], which represents malformed recovery and always
+/// has a paired diagnostic.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssDefinedFalseMediaCondition {
+    authored: String,
+    reason: CssDefinedFalseMediaReason,
+    position: CssSourcePosition,
+}
+
+impl CssDefinedFalseMediaCondition {
+    #[must_use]
+    pub(crate) fn new(
+        authored: impl Into<String>,
+        reason: CssDefinedFalseMediaReason,
+        position: CssSourcePosition,
+    ) -> Self {
+        let authored = authored.into();
+        debug_assert!(authored.starts_with('('));
+        Self {
+            authored,
+            reason,
+            position,
+        }
+    }
+
+    /// Returns the complete parenthesized expression exactly as authored.
+    #[must_use]
+    pub fn as_css(&self) -> &str {
+        &self.authored
+    }
+
+    /// Returns why this syntactically valid expression is defined to be false.
+    #[must_use]
+    pub const fn reason(&self) -> CssDefinedFalseMediaReason {
+        self.reason
+    }
+
+    /// Returns the position of the expression's opening parenthesis.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+}
+
+/// Why syntactically valid MQ3 authored syntax is defined to be false.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub enum CssDefinedFalseMediaReason {
+    UnknownType,
+    UnknownFeature,
+    UnknownValue,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

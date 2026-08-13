@@ -726,14 +726,14 @@ fn error_selector_media_and_qualified_rule_failures_keep_production_context() {
         _ => panic!("unexpected error root"),
     }
 
-    let media = parse_sheet("@media (unknown: yes) { .x { width: 1px; } }")
-        .expect_err("unsupported media feature must fail");
+    let media = parse_sheet("@media (scripting: enabled) { .x { width: 1px; } }")
+        .expect_err("recognized deferred scripting must retain its frozen failure");
     assert_eq!(media.code(), CssErrorCode::InvalidMediaQuery);
     match media.kind() {
         ErrorKind::InvalidMediaQuery(detail) => {
-            assert_eq!(detail.feature().unwrap().as_str(), "unknown");
+            assert_eq!(detail.feature().unwrap().as_str(), "scripting");
             assert_eq!(detail.expectation().as_str(), "a supported media query");
-            assert_eq!(detail.encountered().unwrap().authored(), "unknown");
+            assert_eq!(detail.encountered().unwrap().authored(), "scripting");
         }
         _ => panic!("unexpected error root"),
     }

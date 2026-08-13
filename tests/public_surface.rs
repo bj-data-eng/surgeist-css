@@ -3,20 +3,52 @@ use surgeist_css::{
     CssAuthoredColorMixPercentage, CssAuthoredColorSyntax, CssAuthoredFontFeature,
     CssAuthoredFontFeatureList, CssAuthoredFontFeatureSettings, CssAuthoredFontFeatureValue,
     CssAuthoredSystemColor, CssCalcOperator, CssColorInterpolationMethod,
-    CssColorInterpolationSpace, CssErrorCode, CssExclusionReason, CssFeatureKind,
-    CssFontFamilyNameKind, CssFontFeature, CssFontFeatureIndex, CssFontFeatureValue, CssFontSize,
-    CssFontSizeAdjust, CssFontSizeLengthPercentage, CssFontSynthesis, CssFontSynthesisValues,
-    CssFontVariantCaps, CssFontVariantEastAsianValues, CssFontVariantLigatureState,
-    CssFontVariantLigatureValues, CssFontVariantNumericFigure, CssFontVariantNumericValues,
-    CssFontVariantPosition, CssFontVariantValues, CssGenericFontFamily, CssGridAutoFlowAxis,
-    CssHueInterpolationMethod, CssImportance, CssKnownDeclaredValueRef, CssKnownProperty,
-    CssKnownPropertyValueRef, CssLength, CssLineHeightLengthPercentage, CssMediaQueryModifier,
-    CssOpenTypeTag, CssPredefinedColorSpace, CssPropertyNameRef, CssRecoveryAction,
+    CssColorInterpolationSpace, CssDefinedFalseMediaReason, CssErrorCode, CssExclusionReason,
+    CssFeatureKind, CssFontFamilyNameKind, CssFontFeature, CssFontFeatureIndex,
+    CssFontFeatureValue, CssFontSize, CssFontSizeAdjust, CssFontSizeLengthPercentage,
+    CssFontSynthesis, CssFontSynthesisValues, CssFontVariantCaps, CssFontVariantEastAsianValues,
+    CssFontVariantLigatureState, CssFontVariantLigatureValues, CssFontVariantNumericFigure,
+    CssFontVariantNumericValues, CssFontVariantPosition, CssFontVariantValues,
+    CssGenericFontFamily, CssGridAutoFlowAxis, CssHueInterpolationMethod, CssImportance,
+    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLength,
+    CssLineHeightLengthPercentage, CssMediaConditionKind, CssMediaQuery, CssMediaQueryModifier,
+    CssMediaType, CssOpenTypeTag, CssPredefinedColorSpace, CssPropertyNameRef, CssRecoveryAction,
     CssRelativeColorChannel, CssRelativeColorEnvironment, CssRelativeColorExpressionValue,
     CssRelativeColorFunction, CssRelativeColorResultDomain, CssRule, CssSelectorCombinator,
     CssSpecificationTier, CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata,
     parse_sheet, parse_style_attribute, property_metadata, specification_source,
 };
+
+#[test]
+fn public_surface_exposes_parser_owned_defined_false_media_models() {
+    let source = "@media only F\\75ture and (unknown: calc(1foo + 2px)) {}";
+    let report = parse_sheet(source);
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [CssRule::Media(rule)] = report.syntax().rules() else {
+        panic!("expected retained media rule")
+    };
+    let [CssMediaQuery::Typed(query)] = rule.query().queries() else {
+        panic!("expected typed unknown media query")
+    };
+    assert_eq!(query.media_type(), CssMediaType::Unknown);
+    let unknown_type = query.unknown_media_type().expect("unknown type details");
+    assert_eq!(unknown_type.as_css(), "F\\75ture");
+    assert_eq!(
+        unknown_type.reason(),
+        CssDefinedFalseMediaReason::UnknownType
+    );
+
+    let condition = query.condition().expect("unknown type condition");
+    let CssMediaConditionKind::DefinedFalse(defined_false) = condition.kind() else {
+        panic!("expected defined-false condition")
+    };
+    assert_eq!(defined_false.as_css(), "(unknown: calc(1foo + 2px))");
+    assert_eq!(
+        defined_false.reason(),
+        CssDefinedFalseMediaReason::UnknownFeature
+    );
+    assert_eq!(defined_false.position(), condition.position());
+}
 
 #[test]
 fn public_surface_exposes_checked_core_font_models() {

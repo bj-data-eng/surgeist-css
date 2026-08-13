@@ -1071,7 +1071,7 @@ const EXPECTED: &[ExpectedFeature] = &[
         recognized_code: None,
         positive: Some(Input::Sheet("@media screen { .x { color: red; } }")),
         negative: Some((
-            Input::Sheet("@media (width: calc(1px)) { .x { color: red; } }"),
+            Input::Sheet("@media (width:) { .x { color: red; } }"),
             CssErrorCode::InvalidMediaQuery,
         )),
     },

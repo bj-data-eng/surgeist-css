@@ -1,8 +1,9 @@
 #![cfg(feature = "app-strict")]
 
 use surgeist_css::{
-    CssDeclarationList, CssParseReport, CssRecoveryAction, CssSheet, parse_sheet,
-    parse_style_attribute, validate_sheet, validate_style_attribute,
+    CssDeclarationList, CssMediaConditionKind, CssMediaQuery, CssParseReport, CssRecoveryAction,
+    CssRule, CssSheet, parse_sheet, parse_style_attribute, validate_sheet,
+    validate_style_attribute,
 };
 
 fn assert_sheet_parity(source: &str) -> CssParseReport<CssSheet> {
@@ -43,6 +44,35 @@ fn assert_style_parity(source: &str) -> CssParseReport<CssDeclarationList> {
     }
 
     ordinary
+}
+
+#[test]
+fn app_strict_accepts_defined_false_media_syntax_and_rejects_only_malformed_recovery() {
+    let defined_false = assert_sheet_parity(concat!(
+        "@media only future-screen and (unknown: calc(1foo + 2px)), ",
+        "(width: -1px) {}",
+    ));
+    assert!(defined_false.is_clean());
+    let [CssRule::Media(rule)] = defined_false.syntax().rules() else {
+        panic!("expected retained media rule")
+    };
+    assert!(matches!(rule.query().queries()[0], CssMediaQuery::Typed(_)));
+    assert!(matches!(
+        &rule.query().queries()[1],
+        CssMediaQuery::Condition(condition)
+            if matches!(condition.kind(), CssMediaConditionKind::DefinedFalse(_))
+    ));
+
+    for source in [
+        "@media screen,layer,print {}",
+        "@media screen,(scripting: enabled),print {}",
+        "@media screen,,print {}",
+    ] {
+        let malformed = assert_sheet_parity(source);
+        assert!(malformed.diagnostics().iter().any(|diagnostic| {
+            diagnostic.action() == CssRecoveryAction::ReplaceMediaQueryWithNever
+        }));
+    }
 }
 
 fn nested_selector(depth: usize) -> String {

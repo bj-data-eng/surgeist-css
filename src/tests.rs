@@ -4919,15 +4919,19 @@ fn media_query_parser_accepts_supported_types_ranges_and_conditions() {
 }
 
 #[test]
-fn media_query_parser_rejects_unknown_types_features_and_malformed_conditions() {
+fn media_query_parser_preserves_defined_false_and_rejects_malformed_conditions() {
     for css in [
+        "future-screen",
         "(unknown-feature: yes)",
         "(width: auto)",
         "(width: min-content)",
-        "(width >= )",
-        "screen and",
-        "screen or print",
     ] {
+        let query = parse_media_query_list_for_test(css)
+            .unwrap_or_else(|error| panic!("{css} should be valid defined-false syntax: {error}"));
+        assert!(!matches!(query.queries(), [CssMediaQuery::Never(_)]));
+    }
+
+    for css in ["(width >= )", "screen and", "screen or print"] {
         assert!(
             parse_media_query_list_for_test(css).is_err(),
             "{css} should reject"
@@ -5750,8 +5754,16 @@ fn media_rule_parser_accepts_nested_media_rule() {
 }
 
 #[test]
-fn media_rule_parser_rejects_unknown_features_and_invalid_bodies() {
-    assert!(parse_sheet("@media (unknown: yes) { .panel { color: black; } }").is_err());
+fn media_rule_parser_retains_defined_false_features_and_rejects_invalid_bodies() {
+    let sheet = parse_sheet("@media (unknown: yes) { .panel { color: black; } }").unwrap();
+    let [rule] = sheet.rules() else {
+        panic!("expected retained media rule")
+    };
+    assert!(matches!(
+        media_rule(rule).query().queries(),
+        [CssMediaQuery::Condition(condition)]
+            if matches!(condition.kind(), CssMediaConditionKind::DefinedFalse(_))
+    ));
     assert!(parse_sheet("@media screen { .panel { made-up: value; } }").is_err());
 }
 

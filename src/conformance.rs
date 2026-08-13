@@ -1068,13 +1068,11 @@ profile_source!(
     CssSpecificationTier::SurgeistExtension,
     "https://www.w3.org/TR/2025/WD-css-pseudo-4-20250627/"
 );
-profile_source!(
-    X_VALUES4,
+const X_VALUES4: CssSpecificationSource = CssSpecificationSource::from_repository(
     "X-VALUES4",
     "CSS Values and Units",
     "4",
-    CssSpecificationTier::SurgeistExtension,
-    "https://www.w3.org/TR/2024/WD-css-values-4-20240312/"
+    "720ea2863696971ea6a6744e0f23acbb3e6936bd:css-values-4/Overview.bs",
 );
 profile_source!(
     X_MEDIA5,
@@ -2488,84 +2486,20 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("baseline.media.type"),
     active_coverage!("official.media.feature.width"),
     active_coverage!("official.media.feature.height"),
-    reserved_coverage!(
-        "official.media.feature.device-width",
-        MediaFeature,
-        O_MEDIA3,
-        "#device-width",
-        "crate::parser::queries",
-        "I02-C09",
-        MediaQueryTypedPositiveDefinedFalseAndRecovery
-    ),
-    reserved_coverage!(
-        "official.media.feature.device-height",
-        MediaFeature,
-        O_MEDIA3,
-        "#device-height",
-        "crate::parser::queries",
-        "I02-C09",
-        MediaQueryTypedPositiveDefinedFalseAndRecovery
-    ),
+    active_coverage!("official.media.feature.device-width"),
+    active_coverage!("official.media.feature.device-height"),
     active_coverage!("official.media.feature.orientation"),
-    reserved_coverage!(
-        "official.media.feature.aspect-ratio",
-        MediaFeature,
-        O_MEDIA3,
-        "#aspect-ratio",
-        "crate::parser::queries",
-        "I02-C09",
-        MediaQueryTypedPositiveDefinedFalseAndRecovery
-    ),
-    reserved_coverage!(
-        "official.media.feature.device-aspect-ratio",
-        MediaFeature,
-        O_MEDIA3,
-        "#device-aspect-ratio",
-        "crate::parser::queries",
-        "I02-C09",
-        MediaQueryTypedPositiveDefinedFalseAndRecovery
-    ),
+    active_coverage!("official.media.feature.aspect-ratio"),
+    active_coverage!("official.media.feature.device-aspect-ratio"),
     active_coverage!("official.media.feature.color"),
-    reserved_coverage!(
-        "official.media.feature.color-index",
-        MediaFeature,
-        O_MEDIA3,
-        "#color-index",
-        "crate::parser::queries",
-        "I02-C09",
-        MediaQueryTypedPositiveDefinedFalseAndRecovery
-    ),
+    active_coverage!("official.media.feature.color-index"),
     active_coverage!("official.media.feature.monochrome"),
     active_coverage!("official.media.feature.resolution"),
-    reserved_coverage!(
-        "official.media.feature.scan",
-        MediaFeature,
-        O_MEDIA3,
-        "#scan",
-        "crate::parser::queries",
-        "I02-C09",
-        MediaQueryTypedPositiveDefinedFalseAndRecovery
-    ),
-    reserved_coverage!(
-        "official.media.feature.grid",
-        MediaFeature,
-        O_MEDIA3,
-        "#grid",
-        "crate::parser::queries",
-        "I02-C09",
-        MediaQueryTypedPositiveDefinedFalseAndRecovery
-    ),
+    active_coverage!("official.media.feature.scan"),
+    active_coverage!("official.media.feature.grid"),
     active_coverage!("baseline.rule.media"),
     active_coverage!("later.rule.supports"),
-    reserved_coverage!(
-        "official.rule.conditional-group-context",
-        Rule,
-        O_CONDITIONAL3,
-        "#contents,#placement",
-        "crate::parser::queries",
-        "I02-C09",
-        RulePlacementAstAndRecovery
-    ),
+    active_coverage!("official.rule.conditional-group-context"),
     reserved_coverage!(
         "official.selector.group",
         Selector,
@@ -3625,6 +3559,7 @@ const MEDIA_RANGE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("official.media.feature.resolution"),
     CssFeatureId::new("official.media.feature.color"),
     CssFeatureId::new("official.media.feature.monochrome"),
+    CssFeatureId::new("ext.media.resolution.dppx"),
     CssFeatureId::new("ext.media.range.width"),
     CssFeatureId::new("ext.media.range.height"),
     CssFeatureId::new("ext.media.range.resolution"),
@@ -3646,15 +3581,27 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 353] = [
-    CssFeatureMetadata::partial(
+static FEATURE_CATALOG: [CssFeatureMetadata; 366] = [
+    CssFeatureMetadata::complete(
         "baseline.rule.import",
         CssFeatureKind::Rule,
         "@import",
         O_CASCADE4,
         "#at-import",
-        BASELINE_RULE_SUBSET,
-        BASELINE_RULE_REMAINDER,
+    ),
+    CssFeatureMetadata::complete(
+        "ext.import.layer",
+        CssFeatureKind::Rule,
+        "@import layer or layer() clause",
+        R_CASCADE5,
+        "#at-import",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.stylesheet.prelude-order",
+        CssFeatureKind::Rule,
+        "initial layer statements, imports, namespaces, and body-rule ordering",
+        R_CASCADE5,
+        "#at-import",
     ),
     CssFeatureMetadata::partial(
         "baseline.rule.layer-statement",
@@ -3699,14 +3646,19 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 353] = [
         BASELINE_RULE_SUBSET,
         BASELINE_RULE_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "baseline.rule.media",
         CssFeatureKind::Rule,
         "@media",
         O_CONDITIONAL3,
         "#at-media",
-        BASELINE_RULE_SUBSET,
-        BASELINE_RULE_REMAINDER,
+    ),
+    CssFeatureMetadata::complete(
+        "official.rule.conditional-group-context",
+        CssFeatureKind::Rule,
+        "conditional group rule contents and placement",
+        O_CONDITIONAL3,
+        "#contents,#placement",
     ),
     CssFeatureMetadata::partial(
         "baseline.rule.container",
@@ -4411,13 +4363,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 353] = [
         "#declaration,#syntax",
         CssErrorCode::UnsupportedAtRule,
     ),
-    CssFeatureMetadata::recognized_unsupported(
+    CssFeatureMetadata::complete(
         "later.rule.supports",
         CssFeatureKind::Rule,
         "@supports",
         O_CONDITIONAL3,
         "#at-supports",
-        CssErrorCode::UnsupportedAtRule,
     ),
     CssFeatureMetadata::recognized_unsupported(
         "later.rule.counter-style",
@@ -4636,14 +4587,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 353] = [
         ),
         MEDIA_QUERY_LIST_ALIAS_TARGETS,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "baseline.media.type",
         CssFeatureKind::MediaQuery,
-        "all, screen, print",
+        "all, aural, braille, embossed, handheld, print, projection, screen, speech, tty, tv",
         O_MEDIA3,
         "#media1",
-        "The all, screen, and print media types are supported.",
-        QUERY_REMAINDER,
     ),
     CssFeatureMetadata::baseline_alias(
         "baseline.media.range-feature",
@@ -5723,14 +5672,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 353] = [
         X_PSEUDO4,
         "#marker-pseudo",
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "official.media.query-list-core",
         CssFeatureKind::MediaQuery,
         "Media Queries 3 query-list core",
         O_MEDIA3,
         "#syntax",
-        "The I01 all, screen, and print typed query-list core is supported.",
-        "Other valid Media Queries 3 query-list forms are outside the I01 subset.",
     ),
     CssFeatureMetadata::complete(
         "ext.media.condition-syntax",
@@ -5746,50 +5693,112 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 353] = [
         R_MEDIA4,
         "#mq-invalid",
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "official.media.feature.width",
         CssFeatureKind::MediaQuery,
-        "width, min-width, max-width colon forms",
+        "width, min-width, max-width, including boolean forms where permitted",
         O_MEDIA3,
         "#width",
-        "Finite authored length values in width colon forms are supported.",
-        "Other valid Media Queries 3 width values are outside the I01 subset.",
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "official.media.feature.height",
         CssFeatureKind::MediaQuery,
-        "height, min-height, max-height colon forms",
+        "height, min-height, max-height, including boolean forms where permitted",
         O_MEDIA3,
         "#height",
-        "Finite authored length values in height colon forms are supported.",
-        "Other valid Media Queries 3 height values are outside the I01 subset.",
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
+        "official.media.feature.device-width",
+        CssFeatureKind::MediaQuery,
+        "device-width, min-device-width, max-device-width, including boolean forms where permitted",
+        O_MEDIA3,
+        "#device-width",
+    ),
+    CssFeatureMetadata::complete(
+        "official.media.feature.device-height",
+        CssFeatureKind::MediaQuery,
+        "device-height, min-device-height, max-device-height, including boolean forms where permitted",
+        O_MEDIA3,
+        "#device-height",
+    ),
+    CssFeatureMetadata::complete(
+        "official.media.feature.aspect-ratio",
+        CssFeatureKind::MediaQuery,
+        "aspect-ratio, min-aspect-ratio, max-aspect-ratio, including boolean forms where permitted",
+        O_MEDIA3,
+        "#aspect-ratio",
+    ),
+    CssFeatureMetadata::complete(
+        "official.media.feature.device-aspect-ratio",
+        CssFeatureKind::MediaQuery,
+        "device-aspect-ratio, min-device-aspect-ratio, max-device-aspect-ratio, including boolean forms where permitted",
+        O_MEDIA3,
+        "#device-aspect-ratio",
+    ),
+    CssFeatureMetadata::complete(
         "official.media.feature.resolution",
         CssFeatureKind::MediaQuery,
-        "resolution, min-resolution, max-resolution colon forms",
+        "resolution, min-resolution, max-resolution with dpi and dpcm, including boolean forms where permitted",
         O_MEDIA3,
         "#resolution",
-        "Finite positive dpi, dpcm, and dppx values in resolution colon forms are supported.",
-        "Other valid Media Queries 3 resolution values are outside the I01 subset.",
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "official.media.feature.color",
         CssFeatureKind::MediaQuery,
-        "color, min-color, max-color colon forms",
+        "color, min-color, max-color, including boolean forms where permitted",
         O_MEDIA3,
         "#color",
-        "Non-negative integer color values in colon forms are supported.",
-        "Other valid Media Queries 3 color values are outside the I01 subset.",
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
+        "official.media.feature.color-index",
+        CssFeatureKind::MediaQuery,
+        "color-index, min-color-index, max-color-index, including boolean forms where permitted",
+        O_MEDIA3,
+        "#color-index",
+    ),
+    CssFeatureMetadata::complete(
         "official.media.feature.monochrome",
         CssFeatureKind::MediaQuery,
-        "monochrome, min-monochrome, max-monochrome colon forms",
+        "monochrome, min-monochrome, max-monochrome, including boolean forms where permitted",
         O_MEDIA3,
         "#monochrome",
-        "Non-negative integer monochrome values in colon forms are supported.",
-        "Other valid Media Queries 3 monochrome values are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::complete(
+        "official.media.feature.scan",
+        CssFeatureKind::MediaQuery,
+        "scan, including its boolean form",
+        O_MEDIA3,
+        "#scan",
+    ),
+    CssFeatureMetadata::complete(
+        "official.media.feature.grid",
+        CssFeatureKind::MediaQuery,
+        "grid, including its boolean form",
+        O_MEDIA3,
+        "#grid",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.media.resolution.dppx",
+        CssFeatureKind::MediaQuery,
+        "dppx resolution unit",
+        R_MEDIA4,
+        "#resolution",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.supports.general-enclosed",
+        CssFeatureKind::Value,
+        "general-enclosed supports condition",
+        X_VALUES4,
+        "css-values-4/Overview.bs#general-enclosed",
+    ),
+    CssFeatureMetadata::partial(
+        "ext.supports.selector",
+        CssFeatureKind::Selector,
+        "selector() supports test",
+        R_CONDITIONAL4,
+        "#at-supports",
+        "selector() accepts the current typed complex-selector subset and preserves other balanced selector content as general-enclosed authored syntax.",
+        "Namespace-qualified selectors and the remaining Selectors 3 grammar await I02-C10; this row does not claim complete Selectors 4.",
     ),
     CssFeatureMetadata::partial(
         "ext.media.range.width",
@@ -6001,15 +6010,9 @@ mod tests {
         assert_eq!(importance.recognized_unsupported_code(), None);
 
         let import = feature_metadata("baseline.rule.import").expect("import metadata");
-        assert_eq!(import.status(), CssSupportStatus::Partial);
-        assert_eq!(
-            import.supported_subset(),
-            Some("The baseline parser spelling and the I01 recovery extensions are supported.")
-        );
-        assert_eq!(
-            import.unsupported_remainder(),
-            Some("Other valid forms of the cited rule production are outside the I01 subset.")
-        );
+        assert_eq!(import.status(), CssSupportStatus::Complete);
+        assert_eq!(import.supported_subset(), None);
+        assert_eq!(import.unsupported_remainder(), None);
         assert_eq!(import.recognized_unsupported_code(), None);
 
         let namespace = feature_metadata("later.rule.namespace").expect("namespace metadata");

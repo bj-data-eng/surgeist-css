@@ -9,6 +9,12 @@ use crate::error::{
 };
 use crate::syntax::*;
 
+pub(super) static IMPLEMENTED_SHARED_VALUES: &[crate::CssFeatureId] =
+    &[crate::CssFeatureId::new("ext.supports.general-enclosed")];
+
+pub(super) static IMPLEMENTED_SELECTORS: &[crate::CssFeatureId] =
+    &[crate::CssFeatureId::new("ext.supports.selector")];
+
 enum ParenthesizedCondition {
     Parsed(CssSupportsConditionKind),
     GeneralEnclosed,

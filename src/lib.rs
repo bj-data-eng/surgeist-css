@@ -514,6 +514,91 @@ let _ = validate_style_attribute("color: red");
 //! cannot represent it. This crate owns authored timing syntax only; timeline evaluation and
 //! cross-crate lowering remain downstream responsibilities.
 //!
+//! # Media, supports, imports, and prelude recovery
+//!
+//! Media Queries 3 syntax preserves defined-false authored input without confusing it with
+//! malformed-member recovery. A balanced unknown feature or value is retained as
+//! [`CssMediaConditionKind::DefinedFalse`] with no diagnostic. A reserved or structurally
+//! malformed list member becomes [`CssMediaQuery::Never`] and emits
+//! [`CssRecoveryAction::ReplaceMediaQueryWithNever`], allowing later comma siblings to survive.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssMediaConditionKind, CssMediaQuery, CssRecoveryAction, CssRule, parse_sheet,
+//! };
+//!
+//! let report = parse_sheet("@media (future-mode: active), ???, print {}");
+//! let [CssRule::Media(media)] = report.syntax().rules() else {
+//!     panic!("expected retained media rule");
+//! };
+//! assert!(matches!(
+//!     media.query().queries(),
+//!     [
+//!         CssMediaQuery::Condition(condition),
+//!         CssMediaQuery::Never(_),
+//!         CssMediaQuery::Typed(_),
+//!     ] if matches!(condition.kind(), CssMediaConditionKind::DefinedFalse(_))
+//! ));
+//! assert!(matches!(
+//!     report.diagnostics(),
+//!     [diagnostic]
+//!         if diagnostic.action() == CssRecoveryAction::ReplaceMediaQueryWithNever
+//! ));
+//! ```
+//!
+//! Supports rules retain declaration tests, boolean grouping, the current typed `selector()`
+//! subset, and balanced general-enclosed fallback syntax. These nodes describe authored tests;
+//! the crate never evaluates whether a condition matches.
+//!
+//! ```
+//! use surgeist_css::{CssRule, CssSupportsConditionKind, parse_sheet};
+//!
+//! let report = parse_sheet(concat!(
+//!     "@supports selector(.card > .item:hover) {}",
+//!     "@supports future-layout(mode) {}",
+//! ));
+//! assert!(report.is_clean());
+//! let [CssRule::Supports(selector), CssRule::Supports(fallback)] =
+//!     report.syntax().rules()
+//! else {
+//!     panic!("expected supports rules");
+//! };
+//! assert!(matches!(
+//!     selector.condition().kind(),
+//!     CssSupportsConditionKind::Selector(_)
+//! ));
+//! assert!(matches!(
+//!     fallback.condition().kind(),
+//!     CssSupportsConditionKind::GeneralEnclosed(value)
+//!         if value.authored() == "future-layout(mode)"
+//! ));
+//! ```
+//!
+//! An import prelude is parsed in target, optional `layer`, optional `supports()`, optional media
+//! order. A successful initial layer statement may precede imports; a later body rule closes the
+//! import phase. Invalid order or clauses drop only the import and leave later siblings eligible.
+//! Import targets and conditions remain symbolic: URL resolution, resource loading, condition
+//! evaluation, cascade, selector matching, and root/sibling lowering are downstream work.
+//!
+//! ```
+//! use surgeist_css::{CssImportLayer, CssRule, CssSupportsConditionKind, parse_sheet};
+//!
+//! let report = parse_sheet(concat!(
+//!     "@layer reset; ",
+//!     "@import url(theme.css) layer(theme) supports(display: grid) print;",
+//! ));
+//! assert!(report.is_clean());
+//! let [CssRule::LayerStatement(_), CssRule::Import(import)] = report.syntax().rules() else {
+//!     panic!("expected initial layer and import");
+//! };
+//! assert!(matches!(import.layer(), Some(CssImportLayer::Named(_))));
+//! assert!(matches!(
+//!     import.supports().expect("supports clause").condition().kind(),
+//!     CssSupportsConditionKind::Declaration(_)
+//! ));
+//! assert!(import.media().is_some());
+//! ```
+//!
 //! # Diagnostics and coordinates
 //!
 //! Each [`CssRecoveryDiagnostic`] exposes a typed [`ErrorKind`] and stable

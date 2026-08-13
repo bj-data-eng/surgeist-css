@@ -968,15 +968,14 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "@import",
         source: ExpectedSource::Id("O-CASCADE4"),
         production: "#at-import",
-        status: CssSupportStatus::Partial,
-        supported_subset: Some(BASELINE_RULE_SUBSET),
-        unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
+        status: CssSupportStatus::Complete,
+        supported_subset: None,
+        unsupported_remainder: None,
         recognized_code: None,
-        positive: Some(Input::Sheet("@import \"theme.css\";")),
-        negative: Some((
-            Input::Sheet("@import url(theme.css) supports(display: grid) layer(theme);"),
-            CssErrorCode::InvalidAtRulePrelude,
+        positive: Some(Input::Sheet(
+            "@import url(theme.css) supports(display: grid) print;",
         )),
+        negative: None,
     },
     ExpectedFeature {
         id: "baseline.rule.layer-statement",
@@ -1065,15 +1064,12 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "@media",
         source: ExpectedSource::Id("O-CONDITIONAL3"),
         production: "#at-media",
-        status: CssSupportStatus::Partial,
-        supported_subset: Some(BASELINE_RULE_SUBSET),
-        unsupported_remainder: Some(BASELINE_RULE_REMAINDER),
+        status: CssSupportStatus::Complete,
+        supported_subset: None,
+        unsupported_remainder: None,
         recognized_code: None,
         positive: Some(Input::Sheet("@media screen { .x { color: red; } }")),
-        negative: Some((
-            Input::Sheet("@media (width:) { .x { color: red; } }"),
-            CssErrorCode::InvalidMediaQuery,
-        )),
+        negative: None,
     },
     ExpectedFeature {
         id: "baseline.rule.container",
@@ -1526,18 +1522,15 @@ const EXPECTED: &[ExpectedFeature] = &[
     ExpectedFeature {
         id: "baseline.media.type",
         kind: CssFeatureKind::MediaQuery,
-        spelling: "all, screen, print",
+        spelling: "all, aural, braille, embossed, handheld, print, projection, screen, speech, tty, tv",
         source: ExpectedSource::Id("O-MEDIA3"),
         production: "#media1",
-        status: CssSupportStatus::Partial,
-        supported_subset: Some("The all, screen, and print media types are supported."),
-        unsupported_remainder: Some(QUERY_REMAINDER),
+        status: CssSupportStatus::Complete,
+        supported_subset: None,
+        unsupported_remainder: None,
         recognized_code: None,
-        positive: Some(Input::Sheet("@media print { .x { color: red; } }")),
-        negative: Some((
-            Input::Sheet("@media only and or { .x { color: red; } }"),
-            CssErrorCode::InvalidMediaQuery,
-        )),
+        positive: Some(Input::Sheet("@media speech { .x { color: red; } }")),
+        negative: None,
     },
     ExpectedFeature {
         id: "baseline.media.range-feature",
@@ -2377,9 +2370,20 @@ fn media_conditional_and_import_metadata_are_truthful() {
     );
     assert_complete(
         "ext.supports.general-enclosed",
-        CssFeatureKind::MediaQuery,
+        CssFeatureKind::Value,
         "X-VALUES4",
         "css-values-4/Overview.bs#general-enclosed",
+    );
+    let general_enclosed_source =
+        specification_source("X-VALUES4").expect("immutable general-enclosed source");
+    assert_eq!(
+        general_enclosed_source.tier(),
+        CssSpecificationTier::SurgeistExtension
+    );
+    assert_eq!(general_enclosed_source.url(), None);
+    assert_eq!(
+        general_enclosed_source.repository_provenance(),
+        Some("720ea2863696971ea6a6744e0f23acbb3e6936bd:css-values-4/Overview.bs")
     );
     assert_complete(
         "ext.import.layer",
@@ -2396,7 +2400,7 @@ fn media_conditional_and_import_metadata_are_truthful() {
 
     let selector =
         feature_metadata("ext.supports.selector").expect("Conditional 4 selector-test metadata");
-    assert_eq!(selector.kind(), CssFeatureKind::MediaQuery);
+    assert_eq!(selector.kind(), CssFeatureKind::Selector);
     assert_eq!(selector.source().id().as_str(), "R-CONDITIONAL4");
     assert_eq!(selector.production(), "#at-supports");
     assert_eq!(selector.status(), CssSupportStatus::Partial);
@@ -2689,6 +2693,7 @@ fn every_alias_atomic_target_has_declared_metadata_and_public_parser_evidence() 
                 "official.media.feature.resolution",
                 "official.media.feature.color",
                 "official.media.feature.monochrome",
+                "ext.media.resolution.dppx",
                 "ext.media.range.width",
                 "ext.media.range.height",
                 "ext.media.range.resolution",
@@ -2772,6 +2777,11 @@ fn every_alias_atomic_target_has_declared_metadata_and_public_parser_evidence() 
         (
             "official.media.feature.resolution",
             "O-MEDIA3",
+            "@media (resolution: 192dpi) { .x { color: red; } }",
+        ),
+        (
+            "ext.media.resolution.dppx",
+            "R-MEDIA4",
             "@media (resolution: 2dppx) { .x { color: red; } }",
         ),
         (

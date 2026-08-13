@@ -106,9 +106,12 @@ pub(crate) struct CssAtomicImplementationInventory {
 
 static IMPLEMENTED_RULES: &[CssFeatureId] = &[
     CssFeatureId::new("baseline.rule.import"),
+    CssFeatureId::new("ext.import.layer"),
+    CssFeatureId::new("ext.stylesheet.prelude-order"),
     CssFeatureId::new("baseline.rule.layer-statement"),
     CssFeatureId::new("baseline.rule.layer-block"),
     CssFeatureId::new("baseline.rule.media"),
+    CssFeatureId::new("official.rule.conditional-group-context"),
     CssFeatureId::new("baseline.rule.scope"),
     CssFeatureId::new("foundation.encoding.charset"),
     CssFeatureId::new("later.rule.namespace"),
@@ -188,6 +191,16 @@ static ATOMIC_IMPLEMENTATION_INVENTORIES: &[CssAtomicImplementationInventory] = 
         module: "crate::parser::selectors",
         kind: CssAtomicImplementationKind::Selector,
         stable_ids: selectors::IMPLEMENTED_SELECTORS,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::supports",
+        kind: CssAtomicImplementationKind::SharedValue,
+        stable_ids: supports::IMPLEMENTED_SHARED_VALUES,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::supports",
+        kind: CssAtomicImplementationKind::Selector,
+        stable_ids: supports::IMPLEMENTED_SELECTORS,
     },
     CssAtomicImplementationInventory {
         module: "crate::parser::variables",

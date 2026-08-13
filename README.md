@@ -495,11 +495,96 @@ Pseudo-classes for UI interaction, form state, structure, selector-list filterin
 
 Selector-list pseudo-class arguments are parsed as authored selector syntax with bounded recovery. In recognized `:is()` and `:where()` lists, an invalid member is dropped with `DropSelectorListItem` while the other members remain in authored order. Other selector lists are unforgiving: `:not()` preserves supported complex selector lists, `:has()` preserves supported relative selector lists including leading child and sibling combinators, and `:nth-child()` / `:nth-last-child()` preserve optional `of` selector filters, but an invalid member causes the containing qualified rule to be dropped with `DropQualifiedRule`. Later sibling rules remain eligible for parsing.
 
-Media queries are parsed as authored conditions on `@media` group rules. `surgeist-css` does not evaluate media query matches; environment-dependent matching belongs to downstream Surgeist layers.
+## Media, supports, and import preludes
+
+Media Queries 3 types and features are retained as authored query syntax. A
+balanced unknown type, feature, or feature value is defined-false syntax: it is
+preserved with its exact authored text and emits no diagnostic. This is distinct
+from `CssMediaQuery::Never`, which replaces a reserved or structurally malformed
+comma member and is paired with `ReplaceMediaQueryWithNever`. The replacement is
+comma-local, so later query members and the containing `@media` rule remain
+eligible.
+
+```rust
+use surgeist_css::{
+    CssMediaConditionKind, CssMediaQuery, CssRecoveryAction, CssRule, parse_sheet,
+};
+
+let report = parse_sheet("@media (future-mode: active), ???, print {}");
+let [CssRule::Media(media)] = report.syntax().rules() else {
+    panic!("expected retained media rule");
+};
+assert!(matches!(
+    media.query().queries(),
+    [
+        CssMediaQuery::Condition(condition),
+        CssMediaQuery::Never(_),
+        CssMediaQuery::Typed(_),
+    ] if matches!(condition.kind(), CssMediaConditionKind::DefinedFalse(_))
+));
+assert_eq!(
+    report.diagnostics()[0].action(),
+    CssRecoveryAction::ReplaceMediaQueryWithNever,
+);
+```
+
+`@supports` conditions expose declaration tests, `not`/`and`/`or` grouping, the
+current typed `selector()` subset, and exact balanced general-enclosed fallback
+syntax. Declaration tests preserve authored property/value text and importance;
+their optional known-declaration view is inspection data, not a declaration
+inserted into a style block. Invalid children recover within a valid conditional
+parent, while a malformed supports prelude drops that parent and leaves later
+siblings eligible.
+
+```rust
+use surgeist_css::{CssRule, CssSupportsConditionKind, parse_sheet};
+
+let report = parse_sheet(concat!(
+    "@supports (display: grid) and (color: red) {}",
+    "@supports selector(.card > .item:hover) {}",
+    "@supports future-layout(mode) {}",
+));
+assert!(report.is_clean());
+let [
+    CssRule::Supports(declarations),
+    CssRule::Supports(selector),
+    CssRule::Supports(fallback),
+] = report.syntax().rules()
+else {
+    panic!("expected supports rules");
+};
+assert!(matches!(
+    declarations.condition().kind(),
+    CssSupportsConditionKind::And(_)
+));
+assert!(matches!(
+    selector.condition().kind(),
+    CssSupportsConditionKind::Selector(_)
+));
+assert!(matches!(
+    fallback.condition().kind(),
+    CssSupportsConditionKind::GeneralEnclosed(value)
+        if value.authored() == "future-layout(mode)"
+));
+```
+
+An `@import` prelude is retained in exact target, optional `layer` or
+`layer(name)`, optional `supports(...)`, optional media-list order. A successful
+initial layer statement permits a following import. Once an import is followed
+by another layer statement, a namespace phase, or a body rule, later imports are
+invalid; only successful rules advance the phase. Duplicated, swapped, or
+trailing import clauses drop that import without preventing later siblings from
+being parsed.
+
+These models are authored syntax only. `surgeist-css` does not evaluate media or
+supports conditions, match selectors, resolve URLs, load imported resources,
+apply cascade or substitution, compute layer order, or lower syntax into root or
+sibling types. Environment matching, resource loading, composition, and
+cross-crate adapters remain downstream responsibilities.
 
 Container queries are parsed as authored conditions on `@container` group rules. `surgeist-css` does not evaluate container query matches; container-dependent matching belongs to downstream Surgeist layers.
 
-Imports are parsed as authored `@import` contracts only. `surgeist-css` preserves import targets, layer clauses, and media conditions, but does not resolve paths, load files, or merge imported sheets; root/style-owned Surgeist integration performs loading and composition.
+Imports are parsed as authored `@import` contracts only. `surgeist-css` preserves import targets, layer clauses, supports conditions, and media conditions, but does not resolve paths, load files, or merge imported sheets; root/style-owned Surgeist integration performs loading and composition.
 
 Cascade layers are parsed as authored `@layer` statements and blocks, including named and anonymous layer blocks. `surgeist-css` records layer names and layer-contained rules, but does not compute cascade order, declaration precedence, or runtime cascade effects.
 

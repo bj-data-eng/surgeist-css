@@ -172,7 +172,7 @@ let _ = validate_style_attribute("color: red");
 //! dimensional validity, but it does not resolve relative units, evaluate computed ranges, or
 //! run animation timelines.
 //!
-//! # Authored generic positions
+//! # Property-specific authored positions
 //!
 //! Generic CSS positions retain both axes and distinguish free offsets from offsets authored
 //! against a named edge. [`CssPositionOffset`] accepts only the symbolic length-percentage domain;
@@ -191,7 +191,66 @@ let _ = validate_style_attribute("color: red");
 //!
 //! [`CssPositionValue`] is parser-produced with private fields. Its borrowed horizontal and
 //! vertical views make omitted centered axes and authored edge origins explicit without allowing
-//! callers to forge an invalid cross-axis combination.
+//! callers to forge an invalid cross-axis combination. `object-position` and every
+//! `mask-position` layer use this exact generic grammar. `background-position` instead exposes a
+//! nonempty [`CssBackgroundPositionList`] whose layers also admit the background-only
+//! three-component form. `transform-origin` exposes the directed 2D split plus an optional checked
+//! [`CssTransformOriginZ`] length.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssHorizontalPosition, CssKnownPropertyValueRef, CssLength, CssVerticalPosition,
+//!     parse_style_attribute,
+//! };
+//!
+//! let report = parse_style_attribute(concat!(
+//!     "background-position: left 10px top; ",
+//!     "mask-position: right 5% bottom 2px; ",
+//!     "object-position: center 25%; ",
+//!     "transform-origin: top 50px",
+//! ));
+//! assert!(report.is_clean());
+//!
+//! let CssKnownPropertyValueRef::BackgroundPosition(background) = report.syntax()[0]
+//!     .known().expect("known background position")
+//!     .property_value().expect("ordinary background position")
+//! else { panic!("expected background-position") };
+//! assert!(matches!(
+//!     background.positions().positions()[0].horizontal(),
+//!     CssHorizontalPosition::LeftOffset(offset)
+//!         if matches!(offset.value(), CssLength::Px(value) if value.value() == 10.0)
+//! ));
+//!
+//! let CssKnownPropertyValueRef::MaskPosition(mask) = report.syntax()[1]
+//!     .known().expect("known mask position")
+//!     .property_value().expect("ordinary mask position")
+//! else { panic!("expected mask-position") };
+//! assert!(matches!(
+//!     mask.positions().positions()[0].value().vertical(),
+//!     CssVerticalPosition::BottomOffset(_)
+//! ));
+//!
+//! let CssKnownPropertyValueRef::ObjectPosition(object) = report.syntax()[2]
+//!     .known().expect("known object position")
+//!     .property_value().expect("ordinary object position")
+//! else { panic!("expected object-position") };
+//! assert!(matches!(object.position().value().horizontal(), CssHorizontalPosition::Center));
+//!
+//! let CssKnownPropertyValueRef::TransformOrigin(transform) = report.syntax()[3]
+//!     .known().expect("known transform origin")
+//!     .property_value().expect("ordinary transform origin")
+//! else { panic!("expected transform-origin") };
+//! assert!(matches!(
+//!     transform.origin().z().map(|z| z.value()),
+//!     Some(CssLength::Px(value)) if value.value() == 50.0
+//! ));
+//! ```
+//!
+//! The background, mask, and transform wrappers retain `i01_subset()` as a frozen compatibility
+//! view. Newly accepted current syntax returns `None` when it cannot be represented without loss;
+//! `object-position` is additive and has no I01 projection. Function-specific position grammars,
+//! cascade, substitution, contextual resolution, layout, painting, transforms, and cross-crate
+//! lowering remain outside this surface.
 //!
 //! # Timing domains and I01 compatibility
 //!

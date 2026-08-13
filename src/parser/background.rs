@@ -5,9 +5,14 @@ use super::values::{
     LengthGrammar, next_is_comma, next_is_delim, parse_color, parse_length_with,
     parse_length_with_context, parse_length_with_context_legacy,
 };
-use crate::error::{Error, basic, unsupported_value};
+use crate::error::{CssFeatureId, Error, basic, unsupported_value};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
+
+pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] = &[
+    CssFeatureId::new("official.value.position"),
+    CssFeatureId::new("official.value.background-position"),
+];
 
 pub(super) fn parse_image_layer_list<'i, 't>(
     input: &mut Parser<'i, 't>,

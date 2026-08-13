@@ -144,6 +144,76 @@ represent it. Calculation roots preserve authored units and expression shape;
 this crate does not resolve relative units, evaluate computed ranges, run
 animation timelines, or lower values into sibling Surgeist crates.
 
+## Property-specific authored positions
+
+Current position values preserve authored symbolic offsets and expose both axes
+without resolving percentages, calculations, writing modes, positioning boxes,
+object sizes, layout, painting, or transforms. `CssPositionOffset` accepts only
+the position-valid length-percentage domain and retains whether an offset was
+free or authored against a named edge.
+
+The property grammars and accessors are deliberately distinct:
+
+- `CssObjectPositionPropertyValue::position()` exposes one generic
+  `CssPositionValue` through `CssObjectPosition::value()`.
+- `CssMaskPositionPropertyValue::positions()` exposes a nonempty list whose
+  `CssMaskPosition` layers each contain one generic `CssPositionValue`.
+- `CssBackgroundPositionPropertyValue::positions()` exposes a distinct
+  nonempty layer list that additionally admits the background-only
+  three-component form.
+- `CssTransformOriginPropertyValue::origin()` exposes explicit horizontal and
+  vertical axes plus an optional `CssTransformOriginZ`; the z component is a
+  checked authored length and cannot contain a percentage.
+
+```rust
+use surgeist_css::{
+    CssHorizontalPosition, CssKnownPropertyValueRef, CssLength,
+    parse_style_attribute,
+};
+
+let report = parse_style_attribute(concat!(
+    "background-position: left 10px top; ",
+    "object-position: right 5% bottom 2px; ",
+    "transform-origin: top 50px",
+));
+assert!(report.is_clean());
+
+let CssKnownPropertyValueRef::BackgroundPosition(background) = report.syntax()[0]
+    .known().expect("known background position")
+    .property_value().expect("ordinary background position")
+else { panic!("expected background-position") };
+assert!(matches!(
+    background.positions().positions()[0].horizontal(),
+    CssHorizontalPosition::LeftOffset(offset)
+        if matches!(offset.value(), CssLength::Px(value) if value.value() == 10.0)
+));
+
+let CssKnownPropertyValueRef::ObjectPosition(object) = report.syntax()[1]
+    .known().expect("known object position")
+    .property_value().expect("ordinary object position")
+else { panic!("expected object-position") };
+assert!(matches!(
+    object.position().value().horizontal(),
+    CssHorizontalPosition::RightOffset(_)
+));
+
+let CssKnownPropertyValueRef::TransformOrigin(transform) = report.syntax()[2]
+    .known().expect("known transform origin")
+    .property_value().expect("ordinary transform origin")
+else { panic!("expected transform-origin") };
+assert!(matches!(
+    transform.origin().z().map(|z| z.value()),
+    Some(CssLength::Px(value)) if value.value() == 50.0
+));
+```
+
+The background, mask, and transform wrappers keep `i01_subset()` as a frozen
+compatibility view. Every I01 value retains its exact projection; newly accepted
+current syntax returns `None` when the older payload cannot represent it without
+loss. `object-position` is additive and has no I01 projection. Position use
+inside gradients, transforms, filters, and basic shapes remains on its separate
+function grammar boundary.
+
 `CssImportance` and `CssSupportStatus` are deliberately closed and may be
 matched exhaustively. Every other public enum is non-exhaustive and requires a
 wildcard in downstream matches. This declaration inspection migration changes

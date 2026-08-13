@@ -2106,15 +2106,7 @@ static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
         "I02-C13",
         PropertyValueGlobalSubstitutionAndRecovery
     ),
-    reserved_coverage!(
-        "official.property.object-position",
-        Property,
-        O_IMAGES3,
-        "#propdef-object-position",
-        "crate::parser::background",
-        "I02-C04",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.object-position"),
     active_coverage!("baseline.property.font"),
     active_coverage!("baseline.property.font-family"),
     active_coverage!("baseline.property.font-feature-settings"),
@@ -2889,15 +2881,7 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("official.value.frequency"),
     active_coverage!("official.value.frequency-percentage"),
     active_coverage!("official.value.resolution"),
-    reserved_coverage!(
-        "official.value.position",
-        Value,
-        O_VALUES3,
-        "#position",
-        "crate::parser::values",
-        "I02-C04",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.position"),
     active_coverage!("official.value.calc"),
     active_coverage!("baseline.value.substitution-dependent"),
     reserved_coverage!(
@@ -3098,15 +3082,7 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
         "I02-C13",
         SharedValueTypedPositiveAndMutation
     ),
-    reserved_coverage!(
-        "official.value.background-position",
-        Value,
-        O_BACKGROUNDS3,
-        "#background-position",
-        "crate::parser::background",
-        "I02-C04",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.background-position"),
     reserved_coverage!(
         "official.value.background-size",
         Value,
@@ -3994,7 +3970,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 262] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 265] = [
     CssFeatureMetadata::partial(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -4217,6 +4193,20 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 262] = [
         "<resolution>",
         O_VALUES3,
         "#resolution",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.position",
+        CssFeatureKind::Value,
+        "<position>",
+        O_VALUES3,
+        "#position",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.background-position",
+        CssFeatureKind::Value,
+        "<bg-position>#",
+        O_BACKGROUNDS3,
+        "#background-position",
     ),
     CssFeatureMetadata::partial(
         "official.value.calc",
@@ -5015,10 +5005,19 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 262] = [
         "background-image",
         "baseline.property.background-image"
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.background-position",
         CssKnownProperty::BackgroundPosition,
         "background-position",
-        "baseline.property.background-position"
+        "#propdef-background-position",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.object-position",
+        CssKnownProperty::ObjectPosition,
+        "object-position",
+        "#propdef-object-position",
+        &[],
     ),
     property_feature!(
         CssKnownProperty::BackgroundSize,
@@ -5177,10 +5176,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 262] = [
         "transform",
         "baseline.property.transform"
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.transform-origin",
         CssKnownProperty::TransformOrigin,
         "transform-origin",
-        "baseline.property.transform-origin"
+        "#propdef-transform-origin",
+        &[],
     ),
     property_feature!(
         CssKnownProperty::Translate,
@@ -5219,10 +5220,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 262] = [
         "mask-size",
         "baseline.property.mask-size"
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.mask-position",
         CssKnownProperty::MaskPosition,
         "mask-position",
-        "baseline.property.mask-position"
+        "#propdef-mask-position",
+        &[],
     ),
     property_feature!(
         CssKnownProperty::MaskRepeat,

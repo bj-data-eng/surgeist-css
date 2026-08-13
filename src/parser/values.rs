@@ -5,7 +5,7 @@ use cssparser::{
 use cssparser_color::{Color as ParsedColor, DefaultColorParser, parse_color_with};
 
 use crate::error::{Error, basic, invalid_color, unsupported_value_at, with_color_context};
-use crate::syntax::{self, *};
+use crate::syntax::*;
 use crate::validation::{LengthUnitStatus, classify_length_unit, parse_global_keyword};
 
 pub(super) fn parse_box_size_value<'i, 't>(
@@ -206,6 +206,28 @@ pub(super) fn parse_length_with_context<'i, 't>(
     grammar: LengthGrammar,
     context: &str,
 ) -> std::result::Result<CssLength, ParseError<'i, Error>> {
+    parse_length_with_context_mode(
+        input,
+        grammar,
+        context,
+        typed_length_calculation_is_current_consumer(context),
+    )
+}
+
+pub(super) fn parse_length_with_context_legacy<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    grammar: LengthGrammar,
+    context: &str,
+) -> std::result::Result<CssLength, ParseError<'i, Error>> {
+    parse_length_with_context_mode(input, grammar, context, false)
+}
+
+fn parse_length_with_context_mode<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    grammar: LengthGrammar,
+    context: &str,
+    allow_typed_calculation: bool,
+) -> std::result::Result<CssLength, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
         Token::Dimension { value, .. } if !value.is_finite() => Err(unsupported_value_at(
@@ -264,15 +286,13 @@ pub(super) fn parse_length_with_context<'i, 't>(
             )),
         },
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
-            let calc =
-                input.parse_nested_block(|input| parse_calc_length_with_grammar(input, grammar))?;
-            if grammar.requires_non_negative() && syntax::calc_has_negative_component(&calc) {
-                return Err(unsupported_value_at(
-                    location,
-                    None,
-                    format!("unsupported negative {context} calc component"),
-                ));
-            }
+            let calc = input.parse_nested_block(|input| {
+                if allow_typed_calculation {
+                    parse_calc_length_with_grammar(input, grammar)
+                } else {
+                    parse_legacy_calc_length_with_grammar(input, grammar)
+                }
+            })?;
             Ok(CssLength::Calc(calc))
         }
         Token::Function(name) => Err(unsupported_value_at(
@@ -282,6 +302,10 @@ pub(super) fn parse_length_with_context<'i, 't>(
         )),
         token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
     }
+}
+
+fn typed_length_calculation_is_current_consumer(context: &str) -> bool {
+    !matches!(context, "function length" | "polygon x" | "polygon y")
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -304,13 +328,6 @@ pub(super) enum CalculationRoot {
 
 const CALCULATION_NESTING_LIMIT: u16 = 256;
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "T2 parser foundation is consumed by the staged T3 property integration"
-    )
-)]
 pub(super) fn parse_typed_calculation<'i, 't>(
     input: &mut Parser<'i, 't>,
     root: CalculationRoot,
@@ -764,6 +781,31 @@ pub(super) fn parse_calc_length_with_grammar<'i, 't>(
     input: &mut Parser<'i, 't>,
     grammar: LengthGrammar,
 ) -> std::result::Result<CssCalcLength, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    if let Ok(legacy) =
+        input.try_parse(|input| parse_legacy_calc_length_with_grammar(input, grammar))
+    {
+        return Ok(legacy);
+    }
+
+    let expression = parse_typed_calculation(input, CalculationRoot::Length)?;
+    if !grammar.allows_calc_percent()
+        && matches!(
+            expression.result_type(),
+            CssCalculationType::Percentage | CssCalculationType::LengthPercentage
+        )
+    {
+        return Err(calculation_error(location));
+    }
+    Ok(CssCalcLength::Typed(CssLengthCalculation::from_expression(
+        expression,
+    )))
+}
+
+pub(super) fn parse_legacy_calc_length_with_grammar<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    grammar: LengthGrammar,
+) -> std::result::Result<CssCalcLength, ParseError<'i, Error>> {
     let first = CssCalcLengthTerm::add(parse_calc_component(input, grammar)?);
     let mut terms = Vec::new();
 
@@ -837,7 +879,7 @@ pub(super) fn parse_calc_component<'i, 't>(
         }
         Token::Number { value, .. } if *value == 0.0 => Ok(CssCalcLength::px(0.0)),
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
-            input.parse_nested_block(|input| parse_calc_length_with_grammar(input, grammar))
+            input.parse_nested_block(|input| parse_legacy_calc_length_with_grammar(input, grammar))
         }
         Token::Function(name) => Err(unsupported_value_at(
             location,

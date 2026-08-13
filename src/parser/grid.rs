@@ -4,12 +4,13 @@ use cssparser::{ParseError, Parser, Token, match_ignore_ascii_case};
 
 use super::values::{
     LengthGrammar, checked_percentage_value, next_is_delim, parse_box_size_value,
-    parse_calc_length_with_grammar, parse_custom_ident_from_str_at, parse_length_with_context,
-    parse_positive_integer,
+    parse_calc_length_with_grammar, parse_custom_ident_from_str_at,
+    parse_legacy_calc_length_with_grammar, parse_length_with_context,
+    parse_length_with_context_legacy, parse_positive_integer,
 };
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::properties::CssGridFlowTolerancePropertyValueRepresentation;
-use crate::syntax::{self, *};
+use crate::syntax::*;
 use crate::validation::{LengthUnitStatus, classify_length_unit, unsupported_keyword_reason};
 
 pub(super) fn parse_grid_flow_tolerance<'i, 't>(
@@ -35,32 +36,33 @@ pub(super) fn parse_grid_flow_tolerance<'i, 't>(
 
     let length = parse_box_size_value(input)?;
     let current = CssGridFlowToleranceValue::from_length(length.clone());
-    let i01_subset = match length {
-        CssLength::Percent(value) => CssGridFlowTolerance::Percent(value.value()),
-        length => CssGridFlowTolerance::Length(length),
+    let i01_subset = match &length {
+        CssLength::Percent(value) => Some(CssGridFlowTolerance::Percent(value.value())),
+        CssLength::Calc(CssCalcLength::Typed(_)) => None,
+        length => Some(CssGridFlowTolerance::Length(length.clone())),
     };
     Ok(CssGridFlowTolerancePropertyValueRepresentation::new(
-        current,
-        Some(i01_subset),
+        current, i01_subset,
     ))
 }
 
 pub(super) fn parse_grid_track_list<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssGridTrackList, ParseError<'i, Error>> {
-    parse_grid_track_list_until_slash(input, false)
+    parse_grid_track_list_with_mode(input, false, true)
 }
 
-pub(super) fn parse_grid_track_list_until_slash<'i, 't>(
+fn parse_grid_track_list_with_mode<'i, 't>(
     input: &mut Parser<'i, 't>,
     stop_at_slash: bool,
+    allow_typed_calculation: bool,
 ) -> std::result::Result<CssGridTrackList, ParseError<'i, Error>> {
     let mut components = Vec::new();
     while !input.is_exhausted() {
         if stop_at_slash && next_is_delim(input, '/') {
             break;
         }
-        components.push(parse_grid_track_component(input)?);
+        components.push(parse_grid_track_component(input, allow_typed_calculation)?);
     }
     if components.is_empty() {
         Err(unsupported_value(
@@ -75,6 +77,7 @@ pub(super) fn parse_grid_track_list_until_slash<'i, 't>(
 
 pub(super) fn parse_grid_track_component<'i, 't>(
     input: &mut Parser<'i, 't>,
+    allow_typed_calculation: bool,
 ) -> std::result::Result<CssGridTrackComponent, ParseError<'i, Error>> {
     let state = input.state();
     match input.next().map_err(basic)? {
@@ -85,13 +88,13 @@ pub(super) fn parse_grid_track_component<'i, 't>(
         }
         Token::Function(name) if name.eq_ignore_ascii_case("repeat") => {
             return input
-                .parse_nested_block(parse_grid_repeat)
+                .parse_nested_block(|input| parse_grid_repeat(input, allow_typed_calculation))
                 .map(CssGridTrackComponent::Repeat);
         }
         _ => input.reset(&state),
     }
 
-    parse_grid_track_size(input).map(CssGridTrackComponent::TrackSize)
+    parse_grid_track_size(input, allow_typed_calculation).map(CssGridTrackComponent::TrackSize)
 }
 
 pub(super) fn parse_grid_line_names<'i, 't>(
@@ -116,6 +119,7 @@ pub(super) fn parse_grid_line_names<'i, 't>(
 
 pub(super) fn parse_grid_repeat<'i, 't>(
     input: &mut Parser<'i, 't>,
+    allow_typed_calculation: bool,
 ) -> std::result::Result<CssGridRepeat, ParseError<'i, Error>> {
     let count = if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
         match_ignore_ascii_case! { &ident,
@@ -133,29 +137,37 @@ pub(super) fn parse_grid_repeat<'i, 't>(
     };
 
     input.expect_comma().map_err(basic)?;
-    let tracks = parse_grid_track_list(input)?;
+    let tracks = parse_grid_track_list_with_mode(input, false, allow_typed_calculation)?;
     Ok(CssGridRepeat::new(count, tracks))
 }
 
 pub(super) fn parse_grid_track_size<'i, 't>(
     input: &mut Parser<'i, 't>,
+    allow_typed_calculation: bool,
 ) -> std::result::Result<CssGridTrackSize, ParseError<'i, Error>> {
     let location = input.current_source_location();
     let state = input.state();
     match input.next().map_err(basic)? {
         Token::Function(name) if name.eq_ignore_ascii_case("minmax") => {
             input.parse_nested_block(|input| {
-                let min = parse_grid_track_breadth(input)?;
+                let min = parse_grid_track_breadth(input, allow_typed_calculation)?;
                 input.expect_comma().map_err(basic)?;
-                let max = parse_grid_track_breadth(input)?;
+                let max = parse_grid_track_breadth(input, allow_typed_calculation)?;
                 input.expect_exhausted().map_err(basic)?;
                 Ok(CssGridTrackSize::minmax(min, max))
             })
         }
         Token::Function(name) if name.eq_ignore_ascii_case("fit-content") => input
             .parse_nested_block(|input| {
-                let limit =
-                    parse_length_with_context(input, LengthGrammar::GridTrack, "grid fit-content")?;
+                let limit = if allow_typed_calculation {
+                    parse_length_with_context(input, LengthGrammar::GridTrack, "grid fit-content")?
+                } else {
+                    parse_length_with_context_legacy(
+                        input,
+                        LengthGrammar::GridTrack,
+                        "grid fit-content",
+                    )?
+                };
                 input.expect_exhausted().map_err(basic)?;
                 Ok(CssGridTrackSize::fit_content(limit))
             }),
@@ -166,13 +178,14 @@ pub(super) fn parse_grid_track_size<'i, 't>(
         )),
         _ => {
             input.reset(&state);
-            parse_grid_track_breadth(input).map(CssGridTrackSize::breadth)
+            parse_grid_track_breadth(input, allow_typed_calculation).map(CssGridTrackSize::breadth)
         }
     }
 }
 
 pub(super) fn parse_grid_track_breadth<'i, 't>(
     input: &mut Parser<'i, 't>,
+    allow_typed_calculation: bool,
 ) -> std::result::Result<CssGridTrackBreadth, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
@@ -238,15 +251,12 @@ pub(super) fn parse_grid_track_breadth<'i, 't>(
         },
         Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
             let calc = input.parse_nested_block(|input| {
-                parse_calc_length_with_grammar(input, LengthGrammar::GridTrack)
+                if allow_typed_calculation {
+                    parse_calc_length_with_grammar(input, LengthGrammar::GridTrack)
+                } else {
+                    parse_legacy_calc_length_with_grammar(input, LengthGrammar::GridTrack)
+                }
             })?;
-            if syntax::calc_has_negative_component(&calc) {
-                return Err(unsupported_value_at(
-                    location,
-                    None,
-                    "unsupported negative grid track calc component",
-                ));
-            }
             Ok(CssGridTrackBreadth::length(CssLength::Calc(calc)))
         }
         Token::Function(name) => Err(unsupported_value_at(
@@ -397,9 +407,9 @@ pub(super) fn parse_grid_template<'i, 't>(
         };
     }
 
-    let rows = parse_grid_track_list_until_slash(input, true)?;
+    let rows = parse_grid_track_list_with_mode(input, true, false)?;
     let columns = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
-        Some(parse_grid_track_list(input)?)
+        Some(parse_grid_track_list_with_mode(input, false, false)?)
     } else {
         None
     };
@@ -565,12 +575,12 @@ pub(super) fn parse_grid_auto_flow_shorthand<'i, 't>(
         .try_parse(|input| input.expect_ident_matching("dense"))
         .is_ok();
     let auto_tracks = if !input.is_exhausted() && !next_is_delim(input, '/') {
-        Some(parse_grid_track_list_until_slash(input, true)?)
+        Some(parse_grid_track_list_with_mode(input, true, false)?)
     } else {
         None
     };
     input.expect_delim('/').map_err(basic)?;
-    let explicit_tracks = parse_grid_track_list(input)?;
+    let explicit_tracks = parse_grid_track_list_with_mode(input, false, false)?;
     Ok(CssGrid::AutoFlow {
         flow: CssGridAutoFlow::new(CssGridAutoFlowAxis::Row, dense),
         auto_tracks,

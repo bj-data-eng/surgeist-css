@@ -352,8 +352,8 @@ fn typed_calculation_type_error_has_exact_non_bmp_coordinates_span_and_recovery(
     assert_eq!(diagnostic.error().position().column().value(), 23);
     assert_eq!(diagnostic.span().start().byte_offset().value(), 11);
     assert_eq!(diagnostic.span().start().column().value(), 9);
-    assert_eq!(diagnostic.span().end().byte_offset().value(), 37);
-    assert_eq!(diagnostic.span().end().column().value(), 35);
+    assert_eq!(diagnostic.span().end().byte_offset().value(), 36);
+    assert_eq!(diagnostic.span().end().column().value(), 34);
     let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
         panic!("expected structured property-value error");
     };

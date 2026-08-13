@@ -2538,6 +2538,10 @@ impl CssDeclaration {
 /// Known values are coupled to their schema identity; custom values remain attached to their
 /// case-sensitive custom name. This syntax does not perform cascade or substitution.
 #[non_exhaustive]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the stable declaration enum keeps values inline while typed properties retain current and I01 projections"
+)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum CssDeclarationBody {
     /// A schema-recognized property carrying only its property-specific declared value.
@@ -2940,6 +2944,41 @@ pub struct CssNonNegativeNumber {
     value: CssFiniteNumber,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssNonNegativeNumberValue {
+    Literal(CssNonNegativeNumber),
+    Calculation(CssNumberCalculation),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CssPositiveNumber {
+    value: CssFiniteNumber,
+}
+
+impl CssPositiveNumber {
+    #[must_use]
+    pub fn try_new(value: f32) -> Option<Self> {
+        if value > 0.0 {
+            CssFiniteNumber::try_new(value).map(|value| Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> f32 {
+        self.value.value()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssPositiveNumberValue {
+    Literal(CssPositiveNumber),
+    Calculation(CssNumberCalculation),
+}
+
 impl CssNonNegativeNumber {
     #[must_use]
     pub fn try_new(value: f32) -> Option<Self> {
@@ -2985,6 +3024,13 @@ impl CssOpacity {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssOpacityValue {
+    Literal(CssOpacity),
+    Calculation(CssNumberCalculation),
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CssFlexFactor {
     value: CssNonNegativeNumber,
@@ -3022,6 +3068,13 @@ impl CssAspectRatio {
     pub const fn value(self) -> f32 {
         self.value.value()
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssAspectRatioValue {
+    Literal(CssAspectRatio),
+    Calculation(CssNumberCalculation),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -4258,6 +4311,65 @@ pub enum CssFlex {
         shrink: Option<CssFlexFactor>,
         basis: Option<CssLength>,
     },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssFlexComponents {
+    grow: CssNonNegativeNumberValue,
+    shrink: Option<CssNonNegativeNumberValue>,
+    basis: Option<CssLength>,
+}
+
+impl CssFlexComponents {
+    #[must_use]
+    pub(crate) const fn new(
+        grow: CssNonNegativeNumberValue,
+        shrink: Option<CssNonNegativeNumberValue>,
+        basis: Option<CssLength>,
+    ) -> Self {
+        Self {
+            grow,
+            shrink,
+            basis,
+        }
+    }
+
+    #[must_use]
+    pub const fn grow(&self) -> &CssNonNegativeNumberValue {
+        &self.grow
+    }
+
+    #[must_use]
+    pub const fn shrink(&self) -> Option<&CssNonNegativeNumberValue> {
+        self.shrink.as_ref()
+    }
+
+    #[must_use]
+    pub const fn basis(&self) -> Option<&CssLength> {
+        self.basis.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssFlexValue {
+    None,
+    Auto,
+    Components(CssFlexComponents),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssIntegerValue {
+    Literal(i32),
+    Calculation(CssIntegerCalculation),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssZIndexValue {
+    Auto,
+    Integer(CssIntegerValue),
 }
 
 impl CssFlex {
@@ -7097,6 +7209,7 @@ pub(crate) fn calc_has_negative_component(calc: &CssCalcLength) -> bool {
         CssCalcLength::Sum(terms) => terms
             .iter()
             .any(|term| calc_has_negative_component(term.value())),
+        CssCalcLength::Typed(_) => false,
     }
 }
 
@@ -8740,6 +8853,78 @@ impl CssCalculationExpression {
             }
         }
     }
+
+    fn to_css_fragment(&self) -> String {
+        match self {
+            Self::Value(value) => value.to_css_fragment(),
+            Self::Sum { terms, .. } => terms
+                .iter()
+                .enumerate()
+                .map(|(index, term)| {
+                    let operator = match term.operator {
+                        None if index == 0 => "",
+                        Some(CssCalculationSumOperator::Add) => " + ",
+                        Some(CssCalculationSumOperator::Subtract) => " - ",
+                        None => " ",
+                    };
+                    format!("{operator}{}", term.expression.to_css_fragment())
+                })
+                .collect(),
+            Self::Product { factors, .. } => factors
+                .iter()
+                .enumerate()
+                .map(|(index, factor)| {
+                    let operator = match factor.operator {
+                        None if index == 0 => "",
+                        Some(CssCalculationProductOperator::Multiply) => " * ",
+                        Some(CssCalculationProductOperator::Divide) => " / ",
+                        None => " ",
+                    };
+                    format!("{operator}{}", factor.expression.to_css_fragment())
+                })
+                .collect(),
+            Self::Negate(operand) => format!("-{}", operand.to_css_fragment()),
+            Self::Group(operand) => format!("({})", operand.to_css_fragment()),
+            Self::NestedCalc(operand) => format!("calc({})", operand.to_css_fragment()),
+        }
+    }
+}
+
+impl CssCalculationValue {
+    fn to_css_fragment(&self) -> String {
+        match self {
+            Self::Integer(value) => value.to_string(),
+            Self::Number(value) => format_css_number(value.value()),
+            Self::Percentage(value) => format!("{}%", format_css_number(value.value())),
+            Self::Length(value) => value.to_css_string(),
+            Self::Angle(value) => format!(
+                "{}{}",
+                format_css_number(value.value()),
+                match value.unit() {
+                    CssAngleUnit::Degrees => "deg",
+                    CssAngleUnit::Gradians => "grad",
+                    CssAngleUnit::Radians => "rad",
+                    CssAngleUnit::Turns => "turn",
+                }
+            ),
+            Self::Time(value) => format!(
+                "{}{}",
+                format_css_number(value.value()),
+                match value.unit() {
+                    CssTimeUnit::Seconds => "s",
+                    CssTimeUnit::Milliseconds => "ms",
+                }
+            ),
+            Self::Frequency(value) => format!(
+                "{}{}",
+                format_css_number(value.value()),
+                match value.unit() {
+                    CssFrequencyUnit::Hertz => "hz",
+                    CssFrequencyUnit::Kilohertz => "khz",
+                }
+            ),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -9013,6 +9198,7 @@ pub enum CssCalcLength {
     Dimension(CssLengthDimension),
     Percent(CssFiniteNumber),
     Sum(Vec<CssCalcLengthTerm>),
+    Typed(CssLengthCalculation),
 }
 
 impl CssCalcLength {
@@ -9069,6 +9255,10 @@ impl CssCalcLength {
             Self::Dimension(_) => false,
             Self::Percent(_) => true,
             Self::Sum(terms) => terms.iter().any(|term| term.value.uses_percentage()),
+            Self::Typed(calculation) => matches!(
+                calculation.result_type(),
+                CssCalculationType::Percentage | CssCalculationType::LengthPercentage
+            ),
         }
     }
 
@@ -9099,6 +9289,9 @@ impl CssCalcLength {
                 }
                 css.push(')');
                 css
+            }
+            Self::Typed(calculation) => {
+                format!("calc({})", calculation.expression.to_css_fragment())
             }
         }
     }

@@ -635,6 +635,8 @@ fn typed_length_calculations_are_accepted_by_the_exact_current_consumer_set() {
     for source in [
         "transform: translate(calc((1px + 2%) * 3))",
         "clip-path: polygon(calc((1px + 2%) * 3) 0px, 1px 1px)",
+        "grid-template: calc((1px + 2%) * 3) / 1fr",
+        "grid: calc((1px + 2%) * 3) / 1fr",
     ] {
         let report = parse_style_attribute(source);
         assert!(

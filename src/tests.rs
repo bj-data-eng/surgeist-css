@@ -4557,7 +4557,7 @@ fn leakage_wrong_keyword_and_unit_matrix_rejects_property_family_crossovers() {
 fn rejection_malformed_functions_lists_and_shorthands_matrix() {
     for input in [
         ".panel { width: calc(10px + ); }",
-        ".panel { width: calc(10px * 2); }",
+        ".panel { width: calc(10px * 2px); }",
         ".panel { transform: translate(red); }",
         ".panel { filter: opacity(red); }",
         ".panel { clip-path: polygon(0 0, ); }",

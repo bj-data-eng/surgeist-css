@@ -1,6 +1,6 @@
 use cssparser::{ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
 
-use super::values::{parse_box_size_value, parse_integer};
+use super::values::{CalculationRoot, parse_box_size_value, parse_typed_calculation};
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
@@ -373,45 +373,69 @@ pub(super) fn parse_content_visibility<'i, 't>(
 
 pub(super) fn parse_opacity<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssOpacity, ParseError<'i, Error>> {
+) -> std::result::Result<CssOpacityValue, ParseError<'i, Error>> {
     let location = input.current_source_location();
-    let value = input.expect_number().map_err(basic)?;
-    CssOpacity::try_new(value).ok_or_else(|| {
-        unsupported_value_at(
-            location,
-            None,
-            "opacity must be a finite number between 0 and 1",
-        )
-    })
+    match input.next().map_err(basic)? {
+        Token::Number { value, .. } => CssOpacity::try_new(*value)
+            .map(CssOpacityValue::Literal)
+            .ok_or_else(|| {
+                unsupported_value_at(
+                    location,
+                    None,
+                    "opacity must be a finite number between 0 and 1",
+                )
+            }),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Number))
+            .map(CssNumberCalculation::from_expression)
+            .map(CssOpacityValue::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
 }
 
 pub(super) fn parse_flex_factor<'i, 't>(
     input: &mut Parser<'i, 't>,
     context: &str,
-) -> std::result::Result<CssFlexFactor, ParseError<'i, Error>> {
+) -> std::result::Result<CssNonNegativeNumberValue, ParseError<'i, Error>> {
     let location = input.current_source_location();
-    let value = input.expect_number().map_err(basic)?;
-    CssFlexFactor::try_new(value).ok_or_else(|| {
-        unsupported_value_at(
-            location,
-            None,
-            format!("{context} must be a finite non-negative number"),
-        )
-    })
+    match input.next().map_err(basic)? {
+        Token::Number { value, .. } => CssNonNegativeNumber::try_new(*value)
+            .map(CssNonNegativeNumberValue::Literal)
+            .ok_or_else(|| {
+                unsupported_value_at(
+                    location,
+                    None,
+                    format!("{context} must be a finite non-negative number"),
+                )
+            }),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Number))
+            .map(CssNumberCalculation::from_expression)
+            .map(CssNonNegativeNumberValue::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
 }
 
 pub(super) fn parse_aspect_ratio<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssAspectRatio, ParseError<'i, Error>> {
+) -> std::result::Result<CssAspectRatioValue, ParseError<'i, Error>> {
     let location = input.current_source_location();
-    let value = input.expect_number().map_err(basic)?;
-    CssAspectRatio::try_new(value).ok_or_else(|| {
-        unsupported_value_at(
-            location,
-            None,
-            "aspect-ratio must be a finite positive number",
-        )
-    })
+    match input.next().map_err(basic)? {
+        Token::Number { value, .. } => CssAspectRatio::try_new(*value)
+            .map(CssAspectRatioValue::Literal)
+            .ok_or_else(|| {
+                unsupported_value_at(
+                    location,
+                    None,
+                    "aspect-ratio must be a finite positive number",
+                )
+            }),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Number))
+            .map(CssNumberCalculation::from_expression)
+            .map(CssAspectRatioValue::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
 }
 
 pub(super) fn parse_scrollbar_width<'i, 't>(
@@ -439,17 +463,33 @@ pub(super) fn parse_scrollbar_width<'i, 't>(
 
 pub(super) fn parse_order<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssOrder, ParseError<'i, Error>> {
-    parse_integer(input, "order").map(CssOrder::Integer)
+) -> std::result::Result<CssIntegerValue, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Number {
+            int_value: Some(value),
+            ..
+        } => Ok(CssIntegerValue::Literal(*value)),
+        Token::Number { .. } => Err(unsupported_value_at(
+            location,
+            None,
+            "order must be an integer",
+        )),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Integer))
+            .map(CssIntegerCalculation::from_expression)
+            .map(CssIntegerValue::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
 }
 
 pub(super) fn parse_flex<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssFlex, ParseError<'i, Error>> {
+) -> std::result::Result<CssFlexValue, ParseError<'i, Error>> {
     if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
         return match_ignore_ascii_case! { &ident,
-            "none" => Ok(CssFlex::None),
-            "auto" => Ok(CssFlex::Auto),
+            "none" => Ok(CssFlexValue::None),
+            "auto" => Ok(CssFlexValue::Auto),
             _ => Err(unsupported_value(
                 input,
                 None,
@@ -472,15 +512,17 @@ pub(super) fn parse_flex<'i, 't>(
             basis = Some(parse_box_size_value(input)?);
         }
     }
-    Ok(CssFlex::components(grow, shrink, basis))
+    Ok(CssFlexValue::Components(CssFlexComponents::new(
+        grow, shrink, basis,
+    )))
 }
 
 pub(super) fn parse_z_index<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssZIndex, ParseError<'i, Error>> {
+) -> std::result::Result<CssZIndexValue, ParseError<'i, Error>> {
     let location = input.current_source_location();
     match input.next().map_err(basic)? {
-        Token::Ident(ident) if ident.eq_ignore_ascii_case("auto") => Ok(CssZIndex::Auto),
+        Token::Ident(ident) if ident.eq_ignore_ascii_case("auto") => Ok(CssZIndexValue::Auto),
         Token::Ident(ident) => Err(unsupported_value_at(
             location,
             None,
@@ -489,7 +531,7 @@ pub(super) fn parse_z_index<'i, 't>(
         Token::Number {
             int_value: Some(value),
             ..
-        } => Ok(CssZIndex::Integer(*value)),
+        } => Ok(CssZIndexValue::Integer(CssIntegerValue::Literal(*value))),
         Token::Number { .. } => Err(unsupported_value_at(
             location,
             None,
@@ -500,6 +542,11 @@ pub(super) fn parse_z_index<'i, 't>(
             None,
             format!("unsupported z-index length unit `{unit}`"),
         )),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Integer))
+            .map(CssIntegerCalculation::from_expression)
+            .map(CssIntegerValue::Calculation)
+            .map(CssZIndexValue::Integer),
         token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
     }
 }

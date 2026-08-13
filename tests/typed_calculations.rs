@@ -2,11 +2,11 @@ use surgeist_css::{
     CssAngleCalculation, CssAngleUnit, CssAspectRatioValue, CssCalcLength,
     CssCalculationExpressionRef, CssCalculationProductOperator, CssCalculationType,
     CssCalculationValueRef, CssErrorCode, CssFlexValue, CssFrequencyCalculation, CssFrequencyUnit,
-    CssGridFlowToleranceValue, CssIntegerCalculation, CssIntegerValue, CssKnownProperty,
-    CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthUnit,
-    CssNonNegativeNumberValue, CssNumberCalculation, CssOpacityValue, CssPercentageCalculation,
-    CssPositiveNumber, CssPositiveNumberValue, CssRecoveryAction, CssTimeCalculation, CssTimeUnit,
-    CssTokenKind, CssZIndexValue, ErrorKind, parse_style_attribute,
+    CssGridFlowToleranceValue, CssIntegerCalculation, CssIntegerValue, CssKnownPropertyValueRef,
+    CssLength, CssLengthCalculation, CssLengthUnit, CssNonNegativeNumberValue,
+    CssNumberCalculation, CssOpacityValue, CssPercentageCalculation, CssPositiveNumber,
+    CssPositiveNumberValue, CssRecoveryAction, CssTimeCalculation, CssTimeUnit, CssZIndexValue,
+    parse_style_attribute,
 };
 
 #[test]
@@ -24,34 +24,24 @@ fn number_calculation_literal_preserves_finite_authored_value() {
 }
 
 #[test]
-fn property_consumers_defer_typed_product_and_group_integration_with_exact_recovery() {
-    for (value, authored, kind) in [
-        ("calc(1px * 2)", "*", CssTokenKind::Delim),
-        ("calc((1px + 2px))", "(", CssTokenKind::ParenthesisBlock),
-    ] {
-        let invalid = format!("width: {value};");
-        let source = format!("{invalid} color: red");
+fn property_consumers_accept_typed_products_and_groups_with_later_siblings() {
+    for value in ["calc(1px * 2)", "calc((1px + 2px))"] {
+        let source = format!("width: {value}; color: red");
         let report = parse_style_attribute(&source);
-        assert_eq!(report.syntax().len(), 1);
-        let [diagnostic] = report.diagnostics() else {
-            panic!("staged property integration must recover exactly once");
+        assert!(report.is_clean(), "{source}: {:?}", report.diagnostics());
+        assert_eq!(report.syntax().len(), 2);
+        let CssKnownPropertyValueRef::Width(width) = report.syntax()[0]
+            .known()
+            .unwrap()
+            .property_value()
+            .unwrap()
+        else {
+            panic!("expected width wrapper");
         };
-        assert_eq!(
-            diagnostic.error().code(),
-            CssErrorCode::InvalidPropertyValue
-        );
-        assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
-        assert_eq!(diagnostic.span().start().byte_offset().value(), 0);
-        assert_eq!(diagnostic.span().end().byte_offset().value(), invalid.len());
-        match diagnostic.error().kind() {
-            ErrorKind::InvalidPropertyValue(detail) => {
-                assert_eq!(detail.property(), CssKnownProperty::Width);
-                let encountered = detail.encountered().expect("responsible authored token");
-                assert_eq!(encountered.kind(), kind);
-                assert_eq!(encountered.authored(), authored);
-            }
-            _ => panic!("expected a structured width value error"),
-        }
+        assert!(matches!(
+            width.i01_subset(),
+            Some(CssLength::Calc(CssCalcLength::Typed(_)))
+        ));
     }
 }
 
@@ -210,7 +200,12 @@ fn typed_length_consumer_exposes_products_and_preserves_simple_sum_compatibility
     let CssKnownPropertyValueRef::Height(height) = height.property_value().unwrap() else {
         panic!("expected height wrapper");
     };
-    let CssLength::Calc(CssCalcLength::Typed(calculation)) = height.i01_subset().unwrap() else {
+    let CssLength::Calc(calc) = height.i01_subset().unwrap() else {
+        panic!("expected calculated height");
+    };
+    assert!(calc.uses_percentage());
+    assert_eq!(calc.to_css_string(), "calc((1px + 2%) * 3)");
+    let CssCalcLength::Typed(calculation) = calc else {
         panic!("new length syntax must use the additive typed compatibility branch");
     };
     assert_eq!(
@@ -362,6 +357,110 @@ fn scalar_property_accessors_distinguish_literals_from_deferred_calculations() {
         CssGridFlowToleranceValue::Length(CssLength::Calc(CssCalcLength::Typed(_)))
     ));
     assert!(value.i01_subset().is_none());
+}
+
+#[test]
+fn scalar_property_accessors_preserve_literal_compatibility_projections() {
+    let report = parse_style_attribute(
+        "opacity: 0.5; flex-grow: 2; flex-shrink: 0; order: -2; z-index: auto; \
+         aspect-ratio: 1.5; flex: 2 0 10rem",
+    );
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::Opacity(value) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected opacity wrapper");
+    };
+    assert!(matches!(value.value(), CssOpacityValue::Literal(value) if value.value() == 0.5));
+    assert_eq!(value.i01_subset().unwrap().value(), 0.5);
+
+    let CssKnownPropertyValueRef::FlexGrow(value) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected flex-grow wrapper");
+    };
+    assert!(
+        matches!(value.factor(), CssNonNegativeNumberValue::Literal(value) if value.value() == 2.0)
+    );
+    assert_eq!(value.i01_subset().unwrap().value(), 2.0);
+
+    let CssKnownPropertyValueRef::FlexShrink(value) = report.syntax()[2]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected flex-shrink wrapper");
+    };
+    assert!(
+        matches!(value.factor(), CssNonNegativeNumberValue::Literal(value) if value.value() == 0.0)
+    );
+    assert_eq!(value.i01_subset().unwrap().value(), 0.0);
+
+    let CssKnownPropertyValueRef::Order(value) = report.syntax()[3]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected order wrapper");
+    };
+    assert!(matches!(value.value(), CssIntegerValue::Literal(-2)));
+    assert!(matches!(
+        value.i01_subset(),
+        Some(surgeist_css::CssOrder::Integer(-2))
+    ));
+
+    let CssKnownPropertyValueRef::ZIndex(value) = report.syntax()[4]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected z-index wrapper");
+    };
+    assert!(matches!(value.value(), CssZIndexValue::Auto));
+    assert!(matches!(
+        value.i01_subset(),
+        Some(surgeist_css::CssZIndex::Auto)
+    ));
+
+    let CssKnownPropertyValueRef::AspectRatio(value) = report.syntax()[5]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected aspect-ratio wrapper");
+    };
+    assert!(matches!(value.ratio(), CssAspectRatioValue::Literal(value) if value.value() == 1.5));
+    assert_eq!(value.i01_subset().unwrap().value(), 1.5);
+
+    let CssKnownPropertyValueRef::Flex(value) = report.syntax()[6]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected flex wrapper");
+    };
+    let CssFlexValue::Components(components) = value.value() else {
+        panic!("expected literal flex components");
+    };
+    assert!(
+        matches!(components.grow(), CssNonNegativeNumberValue::Literal(value) if value.value() == 2.0)
+    );
+    assert!(
+        matches!(components.shrink(), Some(CssNonNegativeNumberValue::Literal(value)) if value.value() == 0.0)
+    );
+    assert!(value.i01_subset().is_some());
 }
 
 #[test]

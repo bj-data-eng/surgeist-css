@@ -195,7 +195,206 @@ macro_rules! property_schema {
 
 pub(crate) use property_schema;
 
+fn opacity_i01_projection(value: &CssOpacityValue) -> Option<CssOpacity> {
+    match value {
+        CssOpacityValue::Literal(value) => Some(*value),
+        CssOpacityValue::Calculation(_) => None,
+    }
+}
+
+fn flex_factor_i01_projection(value: &CssNonNegativeNumberValue) -> Option<CssFlexFactor> {
+    match value {
+        CssNonNegativeNumberValue::Literal(value) => CssFlexFactor::try_new(value.value()),
+        CssNonNegativeNumberValue::Calculation(_) => None,
+    }
+}
+
+fn integer_i01_projection(value: &CssIntegerValue) -> Option<i32> {
+    match value {
+        CssIntegerValue::Literal(value) => Some(*value),
+        CssIntegerValue::Calculation(_) => None,
+    }
+}
+
+fn aspect_ratio_i01_projection(value: &CssAspectRatioValue) -> Option<CssAspectRatio> {
+    match value {
+        CssAspectRatioValue::Literal(value) => Some(*value),
+        CssAspectRatioValue::Calculation(_) => None,
+    }
+}
+
+fn flex_i01_projection(value: &CssFlexValue) -> Option<CssFlex> {
+    match value {
+        CssFlexValue::None => Some(CssFlex::None),
+        CssFlexValue::Auto => Some(CssFlex::Auto),
+        CssFlexValue::Components(components) => {
+            let grow = flex_factor_i01_projection(components.grow())?;
+            let shrink = match components.shrink() {
+                Some(value) => Some(flex_factor_i01_projection(value)?),
+                None => None,
+            };
+            Some(CssFlex::components(
+                grow,
+                shrink,
+                components.basis().cloned(),
+            ))
+        }
+    }
+}
+
+macro_rules! define_current_property_value {
+    (
+        $canonical:literal, $wrapper:ident, $representation:ident,
+        $current:ty, $i01:ty, $accessor:ident, $projection:expr
+    ) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: $current,
+            i01_subset: Option<$i01>,
+        }
+
+        #[doc = concat!("A parser-produced authored ordinary value for `", $canonical, "`.")]
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) fn new(authored: CssAuthoredDeclarationValue, current: $current) -> Self {
+                let i01_subset = ($projection)(&current);
+                Self {
+                    authored,
+                    representation: $representation {
+                        current,
+                        i01_subset,
+                    },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            #[must_use]
+            pub const fn $accessor(&self) -> &$current {
+                &self.representation.current
+            }
+
+            #[must_use]
+            pub const fn i01_subset(&self) -> Option<&$i01> {
+                self.representation.i01_subset.as_ref()
+            }
+        }
+    };
+}
+
 macro_rules! define_property_value {
+    (
+        Opacity, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssOpacityValue,
+            CssOpacity,
+            value,
+            opacity_i01_projection
+        );
+    };
+    (
+        FlexGrow, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssNonNegativeNumberValue,
+            CssFlexFactor,
+            factor,
+            flex_factor_i01_projection
+        );
+    };
+    (
+        FlexShrink, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssNonNegativeNumberValue,
+            CssFlexFactor,
+            factor,
+            flex_factor_i01_projection
+        );
+    };
+    (
+        Order, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssIntegerValue,
+            CssOrder,
+            value,
+            |value: &CssIntegerValue| integer_i01_projection(value).map(CssOrder::Integer)
+        );
+    };
+    (
+        ZIndex, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssZIndexValue,
+            CssZIndex,
+            value,
+            |value: &CssZIndexValue| match value {
+                CssZIndexValue::Auto => Some(CssZIndex::Auto),
+                CssZIndexValue::Integer(value) => {
+                    integer_i01_projection(value).map(CssZIndex::Integer)
+                }
+            }
+        );
+    };
+    (
+        AspectRatio, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssAspectRatioValue,
+            CssAspectRatio,
+            ratio,
+            aspect_ratio_i01_projection
+        );
+    };
+    (
+        Flex, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFlexValue,
+            CssFlex,
+            value,
+            flex_i01_projection
+        );
+    };
     (
         GridFlowTolerance, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident

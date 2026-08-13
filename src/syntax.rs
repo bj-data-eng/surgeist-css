@@ -9088,6 +9088,11 @@ enum CssAuthoredColorRepresentation {
     Rgb(CssAuthoredRgbColor),
     Hsl(CssAuthoredHslColor),
     Hwb(CssAuthoredHwbColor),
+    Lab(CssAuthoredLabColor),
+    Lch(CssAuthoredLchColor),
+    Oklab(CssAuthoredLabColor),
+    Oklch(CssAuthoredLchColor),
+    Predefined(CssAuthoredPredefinedColor),
     PreservedI01(CssColor),
 }
 
@@ -9137,6 +9142,36 @@ impl CssAuthoredColor {
     pub(crate) const fn hwb(value: CssAuthoredHwbColor) -> Self {
         Self {
             representation: CssAuthoredColorRepresentation::Hwb(value),
+        }
+    }
+
+    pub(crate) const fn lab(value: CssAuthoredLabColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Lab(value),
+        }
+    }
+
+    pub(crate) const fn lch(value: CssAuthoredLchColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Lch(value),
+        }
+    }
+
+    pub(crate) const fn oklab(value: CssAuthoredLabColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Oklab(value),
+        }
+    }
+
+    pub(crate) const fn oklch(value: CssAuthoredLchColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Oklch(value),
+        }
+    }
+
+    pub(crate) const fn predefined(value: CssAuthoredPredefinedColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Predefined(value),
         }
     }
 
@@ -9211,6 +9246,46 @@ impl CssAuthoredColor {
     }
 
     #[must_use]
+    pub const fn lab_value(&self) -> Option<&CssAuthoredLabColor> {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Lab(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn lch_value(&self) -> Option<&CssAuthoredLchColor> {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Lch(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn oklab_value(&self) -> Option<&CssAuthoredLabColor> {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Oklab(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn oklch_value(&self) -> Option<&CssAuthoredLchColor> {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Oklch(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn predefined_value(&self) -> Option<&CssAuthoredPredefinedColor> {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Predefined(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    #[must_use]
     pub const fn kind_name(&self) -> &'static str {
         match &self.representation {
             CssAuthoredColorRepresentation::CurrentColor => "currentcolor",
@@ -9221,8 +9296,52 @@ impl CssAuthoredColor {
             CssAuthoredColorRepresentation::Rgb(_) => "rgb",
             CssAuthoredColorRepresentation::Hsl(_) => "hsl",
             CssAuthoredColorRepresentation::Hwb(_) => "hwb",
+            CssAuthoredColorRepresentation::Lab(_) => "lab",
+            CssAuthoredColorRepresentation::Lch(_) => "lch",
+            CssAuthoredColorRepresentation::Oklab(_) => "oklab",
+            CssAuthoredColorRepresentation::Oklch(_) => "oklch",
+            CssAuthoredColorRepresentation::Predefined(_) => "color",
             CssAuthoredColorRepresentation::PreservedI01(value) => value.kind_name(),
         }
+    }
+
+    pub(crate) fn has_exact_i01_projection(&self) -> bool {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Lab(value)
+            | CssAuthoredColorRepresentation::Oklab(value) => {
+                authored_alpha_has_exact_i01_projection(value.alpha())
+            }
+            CssAuthoredColorRepresentation::Lch(value)
+            | CssAuthoredColorRepresentation::Oklch(value) => {
+                authored_alpha_has_exact_i01_projection(value.alpha())
+            }
+            CssAuthoredColorRepresentation::Predefined(value) => {
+                authored_alpha_has_exact_i01_projection(value.alpha())
+            }
+            CssAuthoredColorRepresentation::CurrentColor
+            | CssAuthoredColorRepresentation::Transparent
+            | CssAuthoredColorRepresentation::Hex(_)
+            | CssAuthoredColorRepresentation::Named(_)
+            | CssAuthoredColorRepresentation::System(_)
+            | CssAuthoredColorRepresentation::Rgb(_)
+            | CssAuthoredColorRepresentation::Hsl(_)
+            | CssAuthoredColorRepresentation::Hwb(_)
+            | CssAuthoredColorRepresentation::PreservedI01(_) => true,
+        }
+    }
+}
+
+fn authored_alpha_has_exact_i01_projection(alpha: Option<&CssAuthoredColorComponent>) -> bool {
+    match alpha {
+        None | Some(CssAuthoredColorComponent::None) => true,
+        Some(CssAuthoredColorComponent::Number(value)) => (0.0..=1.0).contains(&value.value()),
+        Some(CssAuthoredColorComponent::Percentage(value)) => {
+            (0.0..=100.0).contains(&value.value())
+        }
+        Some(
+            CssAuthoredColorComponent::NumberCalculation(_)
+            | CssAuthoredColorComponent::PercentageCalculation(_),
+        ) => false,
     }
 }
 
@@ -9480,6 +9599,133 @@ impl CssAuthoredHwbColor {
     #[must_use]
     pub const fn blackness(&self) -> &CssAuthoredColorComponent {
         &self.blackness
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<&CssAuthoredColorComponent> {
+        self.alpha.as_ref()
+    }
+}
+
+/// A parser-owned authored Lab-family color with exact channel kinds.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAuthoredLabColor {
+    lightness: CssAuthoredColorComponent,
+    a: CssAuthoredColorComponent,
+    b: CssAuthoredColorComponent,
+    alpha: Option<CssAuthoredColorComponent>,
+}
+
+impl CssAuthoredLabColor {
+    pub(crate) const fn new(
+        lightness: CssAuthoredColorComponent,
+        a: CssAuthoredColorComponent,
+        b: CssAuthoredColorComponent,
+        alpha: Option<CssAuthoredColorComponent>,
+    ) -> Self {
+        Self {
+            lightness,
+            a,
+            b,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn lightness(&self) -> &CssAuthoredColorComponent {
+        &self.lightness
+    }
+
+    #[must_use]
+    pub const fn a(&self) -> &CssAuthoredColorComponent {
+        &self.a
+    }
+
+    #[must_use]
+    pub const fn b(&self) -> &CssAuthoredColorComponent {
+        &self.b
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<&CssAuthoredColorComponent> {
+        self.alpha.as_ref()
+    }
+}
+
+/// A parser-owned authored LCH-family color with an angle-capable hue.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAuthoredLchColor {
+    lightness: CssAuthoredColorComponent,
+    chroma: CssAuthoredColorComponent,
+    hue: CssAuthoredHue,
+    alpha: Option<CssAuthoredColorComponent>,
+}
+
+impl CssAuthoredLchColor {
+    pub(crate) const fn new(
+        lightness: CssAuthoredColorComponent,
+        chroma: CssAuthoredColorComponent,
+        hue: CssAuthoredHue,
+        alpha: Option<CssAuthoredColorComponent>,
+    ) -> Self {
+        Self {
+            lightness,
+            chroma,
+            hue,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn lightness(&self) -> &CssAuthoredColorComponent {
+        &self.lightness
+    }
+
+    #[must_use]
+    pub const fn chroma(&self) -> &CssAuthoredColorComponent {
+        &self.chroma
+    }
+
+    #[must_use]
+    pub const fn hue(&self) -> &CssAuthoredHue {
+        &self.hue
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<&CssAuthoredColorComponent> {
+        self.alpha.as_ref()
+    }
+}
+
+/// A parser-owned absolute `color()` value in a predefined Color 4 space.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAuthoredPredefinedColor {
+    color_space: CssPredefinedColorSpace,
+    channels: [CssAuthoredColorComponent; 3],
+    alpha: Option<CssAuthoredColorComponent>,
+}
+
+impl CssAuthoredPredefinedColor {
+    pub(crate) const fn new(
+        color_space: CssPredefinedColorSpace,
+        channels: [CssAuthoredColorComponent; 3],
+        alpha: Option<CssAuthoredColorComponent>,
+    ) -> Self {
+        Self {
+            color_space,
+            channels,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn color_space(&self) -> CssPredefinedColorSpace {
+        self.color_space
+    }
+
+    #[must_use]
+    pub const fn channels(&self) -> &[CssAuthoredColorComponent; 3] {
+        &self.channels
     }
 
     #[must_use]

@@ -1030,16 +1030,38 @@ pub(super) fn parse_color<'i, 't>(
     if let Ok(color) = input.try_parse(parse_color_mix) {
         return Ok(CssParsedColor::from_i01(color));
     }
+    if let Ok(color) = input.try_parse(parse_compatibility_only_predefined_color) {
+        return Ok(CssParsedColor::from_i01(color));
+    }
     let start = input.position();
     if next_is_selected_authored_color(input) {
         let current = parse_selected_authored_color(input)
             .map_err(|error| with_color_context(error, None))?;
-        let i01_subset = parse_compatibility_color_text(input.slice_from(start));
+        let i01_subset = current
+            .has_exact_i01_projection()
+            .then(|| parse_compatibility_color_text(input.slice_from(start)))
+            .flatten();
         return Ok(CssParsedColor::new(current, i01_subset));
     }
     parse_color_inner(input)
         .map(CssParsedColor::from_i01)
         .map_err(|error| with_color_context(error, None))
+}
+
+fn parse_compatibility_only_predefined_color<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColor, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let color = parse_color_inner(input)?;
+    if matches!(
+        color,
+        CssColor::ColorFunction(ref value)
+            if value.color_space() == CssPredefinedColorSpace::DisplayP3Linear
+    ) {
+        Ok(color)
+    } else {
+        Err(invalid_color(location, None))
+    }
 }
 
 fn next_is_selected_authored_color<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
@@ -1052,6 +1074,11 @@ fn next_is_selected_authored_color<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
                 || name.eq_ignore_ascii_case("hsl")
                 || name.eq_ignore_ascii_case("hsla")
                 || name.eq_ignore_ascii_case("hwb")
+                || name.eq_ignore_ascii_case("lab")
+                || name.eq_ignore_ascii_case("lch")
+                || name.eq_ignore_ascii_case("oklab")
+                || name.eq_ignore_ascii_case("oklch")
+                || name.eq_ignore_ascii_case("color")
         }
         Ok(_) | Err(_) => false,
     };
@@ -1119,6 +1146,21 @@ fn parse_selected_authored_color<'i, 't>(
         Token::Function(name) if name.eq_ignore_ascii_case("hwb") => input
             .parse_nested_block(parse_authored_hwb)
             .map(CssAuthoredColor::hwb),
+        Token::Function(name) if name.eq_ignore_ascii_case("lab") => input
+            .parse_nested_block(parse_authored_lab)
+            .map(CssAuthoredColor::lab),
+        Token::Function(name) if name.eq_ignore_ascii_case("lch") => input
+            .parse_nested_block(parse_authored_lch)
+            .map(CssAuthoredColor::lch),
+        Token::Function(name) if name.eq_ignore_ascii_case("oklab") => input
+            .parse_nested_block(parse_authored_lab)
+            .map(CssAuthoredColor::oklab),
+        Token::Function(name) if name.eq_ignore_ascii_case("oklch") => input
+            .parse_nested_block(parse_authored_lch)
+            .map(CssAuthoredColor::oklch),
+        Token::Function(name) if name.eq_ignore_ascii_case("color") => input
+            .parse_nested_block(parse_authored_predefined_color)
+            .map(CssAuthoredColor::predefined),
         token => Err(with_color_context(
             location.new_unexpected_token_error::<Error>(token),
             None,
@@ -1230,6 +1272,75 @@ fn parse_authored_hwb<'i, 't>(
     };
     input.expect_exhausted().map_err(basic)?;
     Ok(CssAuthoredHwbColor::new(hue, whiteness, blackness, alpha))
+}
+
+fn parse_authored_lab<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredLabColor, ParseError<'i, Error>> {
+    let lightness = parse_authored_color_component(input, true)?;
+    let a = parse_authored_color_component(input, true)?;
+    let b = parse_authored_color_component(input, true)?;
+    let alpha = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+        Some(parse_authored_alpha(input, true)?)
+    } else {
+        None
+    };
+    input.expect_exhausted().map_err(basic)?;
+    Ok(CssAuthoredLabColor::new(lightness, a, b, alpha))
+}
+
+fn parse_authored_lch<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredLchColor, ParseError<'i, Error>> {
+    let lightness = parse_authored_color_component(input, true)?;
+    let chroma = parse_authored_color_component(input, true)?;
+    let hue = parse_authored_hue(input, true)?;
+    let alpha = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+        Some(parse_authored_alpha(input, true)?)
+    } else {
+        None
+    };
+    input.expect_exhausted().map_err(basic)?;
+    Ok(CssAuthoredLchColor::new(lightness, chroma, hue, alpha))
+}
+
+fn parse_authored_predefined_color<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredPredefinedColor, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    let color_space = match_ignore_ascii_case! { &ident,
+        "srgb" => CssPredefinedColorSpace::Srgb,
+        "srgb-linear" => CssPredefinedColorSpace::SrgbLinear,
+        "display-p3" => CssPredefinedColorSpace::DisplayP3,
+        "a98-rgb" => CssPredefinedColorSpace::A98Rgb,
+        "prophoto-rgb" => CssPredefinedColorSpace::ProphotoRgb,
+        "rec2020" => CssPredefinedColorSpace::Rec2020,
+        "xyz" | "xyz-d65" => CssPredefinedColorSpace::XyzD65,
+        "xyz-d50" => CssPredefinedColorSpace::XyzD50,
+        _ => {
+            return Err(with_color_context(
+                location.new_unexpected_token_error::<Error>(Token::Ident(ident)),
+                Some("color space"),
+            ));
+        }
+    };
+    let channels = [
+        parse_authored_color_component(input, true)?,
+        parse_authored_color_component(input, true)?,
+        parse_authored_color_component(input, true)?,
+    ];
+    let alpha = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+        Some(parse_authored_alpha(input, true)?)
+    } else {
+        None
+    };
+    input.expect_exhausted().map_err(basic)?;
+    Ok(CssAuthoredPredefinedColor::new(
+        color_space,
+        channels,
+        alpha,
+    ))
 }
 
 fn parse_authored_color_component<'i, 't>(

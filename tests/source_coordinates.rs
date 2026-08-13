@@ -139,6 +139,60 @@ fn color_component_error_after_non_bmp_text_has_exact_coordinates_and_span() {
 }
 
 #[test]
+fn perceptual_color_error_after_non_bmp_text_has_exact_coordinates_and_span() {
+    let source = "--😀: 1; color: lab(50% 1px 30); opacity: 0.5";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid Lab component must recover once");
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::InvalidColorSyntax);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    let responsible = source.find("1px").expect("responsible Lab component");
+    let declaration_start = source.find("color").expect("color declaration");
+    let declaration_end = declaration_start
+        + source[declaration_start..]
+            .find(';')
+            .expect("color declaration terminator")
+        + 1;
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(source[..responsible].encode_utf16().count()).expect("UTF-16 column"),
+    );
+    assert_position(
+        diagnostic.span().start(),
+        declaration_start,
+        0,
+        u32::try_from(source[..declaration_start].encode_utf16().count()).expect("UTF-16 column"),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        declaration_end,
+        0,
+        u32::try_from(source[..declaration_end].encode_utf16().count()).expect("UTF-16 column"),
+    );
+    let ErrorKind::InvalidColorSyntax(detail) = diagnostic.error().kind() else {
+        panic!("expected structured color error");
+    };
+    assert_eq!(
+        detail.component().map(|value| value.as_str()),
+        Some("component")
+    );
+    let encountered = detail.encountered().expect("responsible Lab component");
+    assert_eq!(encountered.kind(), CssTokenKind::Dimension);
+    assert_eq!(encountered.authored(), "1px");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered Lab component error");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn legacy_rgb_mixed_domain_reports_the_later_component_and_retains_its_sibling() {
     let source = "--😀: 1; color: rgb(1, 20%, 3); opacity: 0.5";
     let report = parse_style_attribute(source);

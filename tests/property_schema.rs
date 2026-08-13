@@ -2,10 +2,11 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssAuthoredSystemColor, CssBasicShapeValue, CssBoxShadow, CssClipPathValue, CssEasingValue,
-    CssErrorCode, CssFilterFunctionValue, CssFilterValue, CssImportance, CssKnownDeclaredValueRef,
-    CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction, CssRule,
-    CssTransformFunctionValue, CssTransformValue, ErrorKind, parse_sheet, parse_style_attribute,
+    CssAuthoredColorComponent, CssAuthoredSystemColor, CssBasicShapeValue, CssBoxShadow,
+    CssClipPathValue, CssEasingValue, CssErrorCode, CssFilterFunctionValue, CssFilterValue,
+    CssImportance, CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef,
+    CssRecoveryAction, CssRule, CssTransformFunctionValue, CssTransformValue, ErrorKind,
+    parse_sheet, parse_style_attribute,
 };
 
 #[test]
@@ -51,6 +52,47 @@ fn direct_color_wrappers_keep_current_i01_global_and_substitution_branches_disti
         report.syntax()[3].known().unwrap().declared_value(),
         CssKnownDeclaredValueRef::SubstitutionDependent(_)
     ));
+}
+
+#[test]
+fn direct_color_wrappers_expose_perceptual_current_values_without_lossy_projection() {
+    let report = parse_style_attribute(concat!(
+        "color: lab(calc(40% + 10%) 20 30); ",
+        "background-color: color(xyz none calc(2 + 1) -3 / 120%)",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::Color(lab) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected color wrapper");
+    };
+    assert!(matches!(
+        lab.current().lab_value().unwrap().lightness(),
+        CssAuthoredColorComponent::PercentageCalculation(_)
+    ));
+    assert!(lab.i01_subset().is_none());
+
+    let CssKnownPropertyValueRef::BackgroundColor(predefined) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected background-color wrapper");
+    };
+    assert!(matches!(
+        predefined.current().predefined_value().unwrap().channels(),
+        [
+            CssAuthoredColorComponent::None,
+            CssAuthoredColorComponent::NumberCalculation(_),
+            CssAuthoredColorComponent::Number(_),
+        ]
+    ));
+    assert!(predefined.i01_subset().is_none());
 }
 
 macro_rules! assert_property_specific_css {

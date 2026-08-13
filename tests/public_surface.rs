@@ -2,10 +2,10 @@ use surgeist_css::{
     CssAnimationDirection, CssAuthoredColorComponent, CssAuthoredColorSyntax,
     CssAuthoredSystemColor, CssCalcOperator, CssErrorCode, CssExclusionReason, CssFeatureKind,
     CssGridAutoFlowAxis, CssImportance, CssKnownDeclaredValueRef, CssKnownProperty,
-    CssKnownPropertyValueRef, CssMediaQueryModifier, CssPropertyNameRef, CssRecoveryAction,
-    CssRelativeColorFunction, CssRule, CssSelectorCombinator, CssSpecificationTier,
-    CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata, parse_sheet,
-    parse_style_attribute, property_metadata, specification_source,
+    CssKnownPropertyValueRef, CssMediaQueryModifier, CssPredefinedColorSpace, CssPropertyNameRef,
+    CssRecoveryAction, CssRelativeColorFunction, CssRule, CssSelectorCombinator,
+    CssSpecificationTier, CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata,
+    parse_sheet, parse_style_attribute, property_metadata, specification_source,
 };
 
 #[test]
@@ -45,6 +45,43 @@ fn public_surface_exposes_typed_authored_color_inspection() {
         _ => "other future system color",
     };
     assert_eq!(category, "deprecated system");
+}
+
+#[test]
+fn public_surface_exposes_perceptual_and_predefined_color_inspection() {
+    let report = parse_style_attribute(concat!(
+        "color: oklch(50% 0.2 calc(1turn - 90deg) / none); ",
+        "color: color(xyz 1 2 3)",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::Color(oklch) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected Oklch color wrapper");
+    };
+    assert!(oklch.current().oklch_value().is_some());
+    assert!(oklch.current().lab_value().is_none());
+
+    let CssKnownPropertyValueRef::Color(predefined) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected predefined color wrapper");
+    };
+    assert_eq!(
+        predefined
+            .current()
+            .predefined_value()
+            .unwrap()
+            .color_space(),
+        CssPredefinedColorSpace::XyzD65,
+    );
 }
 
 fn known_declared_value_kind(value: CssKnownDeclaredValueRef<'_>) -> &'static str {

@@ -1,14 +1,71 @@
 use surgeist_css::{
-    CssAngleCalculation, CssAngleUnit, CssAspectRatioValue, CssCalcLength,
-    CssCalculationExpressionRef, CssCalculationProductOperator, CssCalculationType,
-    CssCalculationValueRef, CssErrorCode, CssFilterAmount, CssFilterFunctionValue, CssFilterNumber,
-    CssFilterPercentage, CssFilterValue, CssFlexValue, CssFrequencyCalculation, CssFrequencyUnit,
-    CssGridFlowToleranceValue, CssIntegerCalculation, CssIntegerValue, CssKnownPropertyValueRef,
-    CssLength, CssLengthCalculation, CssLengthUnit, CssNonNegativeNumberValue,
-    CssNumberCalculation, CssOpacityValue, CssPercentageCalculation, CssPositiveNumber,
-    CssPositiveNumberValue, CssRecoveryAction, CssTimeCalculation, CssTimeUnit, CssZIndexValue,
-    parse_style_attribute,
+    CssAngleCalculation, CssAngleUnit, CssAspectRatioValue, CssAuthoredColorComponent,
+    CssAuthoredHue, CssCalcLength, CssCalculationExpressionRef, CssCalculationProductOperator,
+    CssCalculationType, CssCalculationValueRef, CssErrorCode, CssFilterAmount,
+    CssFilterFunctionValue, CssFilterNumber, CssFilterPercentage, CssFilterValue, CssFlexValue,
+    CssFrequencyCalculation, CssFrequencyUnit, CssGridFlowToleranceValue, CssIntegerCalculation,
+    CssIntegerValue, CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthUnit,
+    CssNonNegativeNumberValue, CssNumberCalculation, CssOpacityValue, CssPercentageCalculation,
+    CssPositiveNumber, CssPositiveNumberValue, CssRecoveryAction, CssTimeCalculation, CssTimeUnit,
+    CssZIndexValue, parse_style_attribute,
 };
+
+#[test]
+fn perceptual_color_channels_preserve_typed_calculation_domains() {
+    let report = parse_style_attribute(concat!(
+        "color: lab(calc(40% + 10%) calc(1 + 2) calc(20% - 5%)); ",
+        "color: lch(calc(50 + 10) calc(30% + 5%) calc(1turn - 90deg)); ",
+        "color: color(rec2020 calc(1 + 2) calc(10% + 20%) none)",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let mut colors = report.syntax().iter().map(|declaration| {
+        let CssKnownPropertyValueRef::Color(value) = declaration
+            .known()
+            .expect("known color")
+            .property_value()
+            .expect("ordinary color")
+        else {
+            panic!("expected color wrapper");
+        };
+        value.current()
+    });
+
+    let lab = colors.next().unwrap().lab_value().unwrap();
+    assert!(matches!(
+        lab.lightness(),
+        CssAuthoredColorComponent::PercentageCalculation(_)
+    ));
+    assert!(matches!(
+        lab.a(),
+        CssAuthoredColorComponent::NumberCalculation(_)
+    ));
+    assert!(matches!(
+        lab.b(),
+        CssAuthoredColorComponent::PercentageCalculation(_)
+    ));
+
+    let lch = colors.next().unwrap().lch_value().unwrap();
+    assert!(matches!(
+        lch.lightness(),
+        CssAuthoredColorComponent::NumberCalculation(_)
+    ));
+    assert!(matches!(
+        lch.chroma(),
+        CssAuthoredColorComponent::PercentageCalculation(_)
+    ));
+    assert!(matches!(lch.hue(), CssAuthoredHue::AngleCalculation(_)));
+
+    let predefined = colors.next().unwrap().predefined_value().unwrap();
+    assert!(matches!(
+        predefined.channels(),
+        [
+            CssAuthoredColorComponent::NumberCalculation(_),
+            CssAuthoredColorComponent::PercentageCalculation(_),
+            CssAuthoredColorComponent::None,
+        ]
+    ));
+}
 
 #[test]
 fn number_calculation_literal_preserves_finite_authored_value() {

@@ -1,7 +1,7 @@
 use surgeist_css::{
     CssAuthoredColorComponent, CssAuthoredColorSyntax, CssAuthoredHue, CssAuthoredSystemColor,
     CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssOpacityValue,
-    parse_style_attribute,
+    CssPredefinedColorSpace, parse_style_attribute,
 };
 
 fn color_value(source: &str) -> surgeist_css::CssColorPropertyValue {
@@ -52,9 +52,8 @@ fn deprecated_system_color_is_retained_with_its_valid_sibling() {
 
 #[test]
 fn perceptual_color_with_typed_math_is_retained_with_its_valid_sibling() {
-    let report = parse_style_attribute(
-        "color: lab(calc(50% + 10%) calc(20 + 5) -30 / 120%); opacity: 0.5",
-    );
+    let report =
+        parse_style_attribute("color: lab(calc(50% + 10%) calc(20 + 5) -30 / 120%); opacity: 0.5");
 
     assert!(report.is_clean(), "{:?}", report.diagnostics());
     assert_eq!(report.syntax().len(), 2);
@@ -182,6 +181,230 @@ fn authored_hsl_and_hwb_keep_hue_and_percentage_domains() {
         hwb.blackness(),
         CssAuthoredColorComponent::Percentage(value) if (value.value() - 120.0).abs() < 0.001
     ));
+}
+
+#[test]
+fn authored_perceptual_colors_preserve_channels_alpha_and_function_identity() {
+    let lab = color_value("color: lab(calc(50% + 10%) calc(20 + 5) -30% / calc(120% - 5%))");
+    let lab_value = lab.current().lab_value().expect("typed Lab branch");
+    assert!(matches!(
+        lab_value.lightness(),
+        CssAuthoredColorComponent::PercentageCalculation(_)
+    ));
+    assert!(matches!(
+        lab_value.a(),
+        CssAuthoredColorComponent::NumberCalculation(_)
+    ));
+    assert!(matches!(
+        lab_value.b(),
+        CssAuthoredColorComponent::Percentage(value)
+            if (value.value() - -30.0).abs() < 0.001
+    ));
+    assert!(matches!(
+        lab_value.alpha(),
+        Some(CssAuthoredColorComponent::PercentageCalculation(_))
+    ));
+    assert!(lab.i01_subset().is_none());
+
+    let lch = color_value("color: lch(125% -20 calc(1turn - 90deg) / none)");
+    let lch_value = lch.current().lch_value().expect("typed LCH branch");
+    assert!(matches!(
+        lch_value.lightness(),
+        CssAuthoredColorComponent::Percentage(value) if value.value() == 125.0
+    ));
+    assert!(matches!(
+        lch_value.chroma(),
+        CssAuthoredColorComponent::Number(value) if value.value() == -20.0
+    ));
+    assert!(matches!(
+        lch_value.hue(),
+        CssAuthoredHue::AngleCalculation(_)
+    ));
+    assert!(matches!(
+        lch_value.alpha(),
+        Some(CssAuthoredColorComponent::None)
+    ));
+
+    let oklab = color_value("color: oklab(none 150% -2 / 3)");
+    let oklab_value = oklab.current().oklab_value().expect("typed Oklab branch");
+    assert!(matches!(
+        oklab_value.lightness(),
+        CssAuthoredColorComponent::None
+    ));
+    assert!(matches!(
+        oklab_value.a(),
+        CssAuthoredColorComponent::Percentage(value) if value.value() == 150.0
+    ));
+    assert!(matches!(
+        oklab_value.b(),
+        CssAuthoredColorComponent::Number(value) if value.value() == -2.0
+    ));
+
+    let oklch = color_value("color: oklch(-20 150% none)");
+    let oklch_value = oklch.current().oklch_value().expect("typed Oklch branch");
+    assert!(matches!(
+        oklch_value.lightness(),
+        CssAuthoredColorComponent::Number(value) if value.value() == -20.0
+    ));
+    assert!(matches!(
+        oklch_value.chroma(),
+        CssAuthoredColorComponent::Percentage(value) if value.value() == 150.0
+    ));
+    assert!(matches!(oklch_value.hue(), CssAuthoredHue::None));
+
+    let compatible = color_value("color: lab(50% 20 30 / 50%)");
+    assert!(matches!(
+        compatible.i01_subset(),
+        Some(surgeist_css::CssColor::Lab(_))
+    ));
+
+    let out_of_range = color_value("color: lab(125% -20 30 / 150%)");
+    assert!(out_of_range.i01_subset().is_none());
+}
+
+#[test]
+fn authored_predefined_colors_preserve_supported_space_and_channel_kinds() {
+    for (name, expected) in [
+        ("srgb", CssPredefinedColorSpace::Srgb),
+        ("srgb-linear", CssPredefinedColorSpace::SrgbLinear),
+        ("display-p3", CssPredefinedColorSpace::DisplayP3),
+        ("a98-rgb", CssPredefinedColorSpace::A98Rgb),
+        ("prophoto-rgb", CssPredefinedColorSpace::ProphotoRgb),
+        ("rec2020", CssPredefinedColorSpace::Rec2020),
+        ("xyz", CssPredefinedColorSpace::XyzD65),
+        ("xyz-d50", CssPredefinedColorSpace::XyzD50),
+        ("xyz-d65", CssPredefinedColorSpace::XyzD65),
+    ] {
+        let value = color_value(&format!(
+            "color: color({name} calc(1 + 2) 120% none / -25%)"
+        ));
+        let predefined = value
+            .current()
+            .predefined_value()
+            .expect("typed predefined color branch");
+        assert_eq!(predefined.color_space(), expected, "{name}");
+        assert!(matches!(
+            predefined.channels(),
+            [
+                CssAuthoredColorComponent::NumberCalculation(_),
+                CssAuthoredColorComponent::Percentage(percentage),
+                CssAuthoredColorComponent::None,
+        ] if (percentage.value() - 120.0).abs() < 0.001
+        ));
+        assert!(matches!(
+            predefined.alpha(),
+            Some(CssAuthoredColorComponent::Percentage(value))
+                if (value.value() - -25.0).abs() < 0.001
+        ));
+        assert!(value.i01_subset().is_none());
+    }
+}
+
+#[test]
+fn frozen_display_p3_linear_color_remains_a_compatibility_only_branch() {
+    let value = color_value("color: color(display-p3-linear 1 0.5 0)");
+    assert!(value.current().predefined_value().is_none());
+    assert!(matches!(
+        value.i01_subset(),
+        Some(surgeist_css::CssColor::ColorFunction(color))
+            if color.color_space() == CssPredefinedColorSpace::DisplayP3Linear
+    ));
+}
+
+#[test]
+fn out_of_range_predefined_alpha_has_no_lossy_compatibility_projection() {
+    let value = color_value("color: color(srgb 1 0.5 0 / 150%)");
+    assert!(value.current().predefined_value().is_some());
+    assert!(value.i01_subset().is_none());
+}
+
+#[test]
+fn frozen_predefined_literal_keeps_its_exact_compatibility_projection() {
+    let value = color_value("color: color(display-p3 0.8 0.2 0.1 / 90%)");
+    assert_eq!(
+        value.current().predefined_value().unwrap().color_space(),
+        CssPredefinedColorSpace::DisplayP3,
+    );
+    assert!(matches!(
+        value.i01_subset(),
+        Some(surgeist_css::CssColor::ColorFunction(_))
+    ));
+}
+
+#[test]
+fn invalid_perceptual_and_predefined_color_forms_drop_only_the_declaration() {
+    for invalid in [
+        "lab(50% 20)",
+        "lab(50%, 20, 30)",
+        "lab(50% 20 30 40)",
+        "lab(50% 1px 30)",
+        "lch(50% 20 10%)",
+        "lch(50% 20 10deg / 1 / 2)",
+        "oklab(50% 20 30deg)",
+        "oklch(50% 20 30deg, 1)",
+        "color(--custom 1 2 3)",
+        "color(srgb 1 2)",
+        "color(srgb 1, 2, 3)",
+        "color(srgb 1 2 3 4)",
+        "color(srgb 1px 2 3)",
+    ] {
+        let source = format!("color: {invalid}; opacity: 0.5");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{invalid}");
+        assert_eq!(report.diagnostics().len(), 1, "{invalid}");
+        assert_eq!(
+            report.syntax()[0].known().map(|known| known.property()),
+            Some(CssKnownProperty::Opacity),
+            "{invalid}",
+        );
+    }
+}
+
+#[test]
+fn perceptual_color_calculations_preserve_the_exact_depth_boundary() {
+    for depth in [254_usize, 255] {
+        let source = format!(
+            "color: oklab({}1{} 2 3); opacity: 0.5",
+            "calc(".repeat(depth),
+            ")".repeat(depth),
+        );
+        let report = parse_style_attribute(&source);
+        assert!(
+            report.is_clean(),
+            "depth {depth}: {:?}",
+            report.diagnostics()
+        );
+        assert_eq!(report.syntax().len(), 2);
+    }
+
+    for depth in [256_usize, 257] {
+        let source = format!(
+            "color: oklab({}1{} 2 3); opacity: 0.5",
+            "calc(".repeat(depth),
+            ")".repeat(depth),
+        );
+        let first_over_limit = source.match_indices("calc(").nth(255).unwrap().0;
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "depth {depth}");
+        let [diagnostic] = report.diagnostics() else {
+            panic!("depth {depth}: expected one diagnostic");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            surgeist_css::CssErrorCode::NestingLimit,
+            "depth {depth}",
+        );
+        assert_eq!(
+            diagnostic.action(),
+            surgeist_css::CssRecoveryAction::StopAtNestingLimit,
+            "depth {depth}",
+        );
+        assert_eq!(
+            diagnostic.error().position().byte_offset().value(),
+            first_over_limit,
+            "depth {depth}",
+        );
+    }
 }
 
 #[test]

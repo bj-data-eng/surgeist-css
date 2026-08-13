@@ -49,6 +49,40 @@ fn timing_type_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
     }
 }
 
+#[test]
+fn generic_position_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
+    let source = "--😀: 1; mask-position: 50% left; color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid generic position must recover once");
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    assert_position(diagnostic.error().position(), 30, 0, 28);
+    assert_position(diagnostic.span().start(), 11, 0, 9);
+    assert_position(diagnostic.span().end(), 35, 0, 33);
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected structured position property error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::MaskPosition);
+    let encountered = detail
+        .encountered()
+        .expect("responsible horizontal keyword");
+    assert_eq!(encountered.kind(), CssTokenKind::Ident);
+    assert_eq!(encountered.authored(), "left");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered generic position input");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
 fn first_declaration_position(source: &str) -> CssSourcePosition {
     let sheet = parse_sheet(source).expect("valid stylesheet");
     let CssRule::Style(rule) = &sheet.rules()[0] else {

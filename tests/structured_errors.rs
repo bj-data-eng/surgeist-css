@@ -447,3 +447,80 @@ fn timing_first_duration_failure_has_exact_payload_span_action_and_sibling_recov
         assert_eq!(failure.diagnostics(), report.diagnostics());
     }
 }
+
+#[test]
+fn generic_position_mutations_report_the_responsible_token_and_retain_the_sibling() {
+    for (value, responsible, token_kind) in [
+        ("left right", "right", CssTokenKind::Ident),
+        ("50% left", "left", CssTokenKind::Ident),
+        ("left top 10px", "10px", CssTokenKind::Dimension),
+        ("left 10px top", "top", CssTokenKind::Ident),
+        ("center 10px top 20px", "top", CssTokenKind::Ident),
+        ("left 10px right 20px", "right", CssTokenKind::Ident),
+        ("top 10px", "10px", CssTokenKind::Dimension),
+    ] {
+        let source = format!("mask-position: {value}; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{source}: expected one generic-position diagnostic");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue,
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.action(),
+            CssRecoveryAction::DropDeclaration,
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.error().position().byte_offset().value(),
+            source.find(responsible).expect("responsible token"),
+            "{source}",
+        );
+        assert_eq!(diagnostic.error().position().line().value(), 0, "{source}");
+        assert_eq!(
+            diagnostic.error().position().column().value() as usize,
+            source.find(responsible).expect("responsible column"),
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.span().start().byte_offset().value(),
+            0,
+            "{source}"
+        );
+        assert_eq!(
+            diagnostic.span().end().byte_offset().value(),
+            source.find(';').expect("declaration semicolon") + 1,
+            "{source}",
+        );
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("{source}: expected property-value root");
+        };
+        assert_eq!(
+            detail.property(),
+            CssKnownProperty::MaskPosition,
+            "{source}"
+        );
+        let encountered = detail.encountered().expect("responsible position token");
+        assert_eq!(encountered.kind(), token_kind, "{source}");
+        assert_eq!(encountered.authored(), responsible, "{source}");
+        assert_eq!(
+            report.syntax()[0]
+                .known()
+                .expect("retained color declaration")
+                .property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+
+        #[cfg(feature = "app-strict")]
+        {
+            let failure = surgeist_css::validate_style_attribute(&source)
+                .expect_err("strict validation rejects the recovered mutation");
+            assert_eq!(failure.diagnostics(), report.diagnostics(), "{source}");
+        }
+    }
+}

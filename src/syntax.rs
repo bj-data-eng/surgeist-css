@@ -5940,6 +5940,100 @@ pub enum CssVerticalPositionKeyword {
     Bottom,
 }
 
+/// A checked authored `<length-percentage>` offset in a CSS position.
+///
+/// The value remains symbolic: percentages and calculations are not resolved against a box.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssPositionOffset {
+    value: CssLength,
+}
+
+impl CssPositionOffset {
+    /// Constructs an offset from a position-valid authored length or percentage.
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        match value {
+            CssLength::Px(_)
+            | CssLength::Dimension(_)
+            | CssLength::Percent(_)
+            | CssLength::Zero
+            | CssLength::Calc(_) => Some(Self { value }),
+            CssLength::Auto
+            | CssLength::MinContent
+            | CssLength::MaxContent
+            | CssLength::FitContent
+            | CssLength::Normal => None,
+        }
+    }
+
+    /// Returns the authored symbolic length or percentage.
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// The exact authored horizontal axis of a generic CSS `<position>`.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssHorizontalPosition {
+    Left,
+    Center,
+    Right,
+    /// An offset from the horizontal start edge without an authored edge keyword.
+    Offset(CssPositionOffset),
+    LeftOffset(CssPositionOffset),
+    RightOffset(CssPositionOffset),
+}
+
+/// The exact authored vertical axis of a generic CSS `<position>`.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssVerticalPosition {
+    Top,
+    Center,
+    Bottom,
+    /// An offset from the vertical start edge without an authored edge keyword.
+    Offset(CssPositionOffset),
+    TopOffset(CssPositionOffset),
+    BottomOffset(CssPositionOffset),
+}
+
+/// A parser-produced authored generic CSS `<position>`.
+///
+/// Both axes are explicit in this model, including axes omitted and therefore centered by the
+/// grammar. Construction is parser-owned so invalid cross-axis combinations cannot be forged.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssPositionValue {
+    horizontal: CssHorizontalPosition,
+    vertical: CssVerticalPosition,
+}
+
+impl CssPositionValue {
+    #[must_use]
+    pub(crate) const fn new(
+        horizontal: CssHorizontalPosition,
+        vertical: CssVerticalPosition,
+    ) -> Self {
+        Self {
+            horizontal,
+            vertical,
+        }
+    }
+
+    /// Returns the authored horizontal position, including its offset origin.
+    #[must_use]
+    pub const fn horizontal(&self) -> &CssHorizontalPosition {
+        &self.horizontal
+    }
+
+    /// Returns the authored vertical position, including its offset origin.
+    #[must_use]
+    pub const fn vertical(&self) -> &CssVerticalPosition {
+        &self.vertical
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum CssPositionComponent {

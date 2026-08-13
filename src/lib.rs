@@ -172,6 +172,27 @@ let _ = validate_style_attribute("color: red");
 //! dimensional validity, but it does not resolve relative units, evaluate computed ranges, or
 //! run animation timelines.
 //!
+//! # Authored generic positions
+//!
+//! Generic CSS positions retain both axes and distinguish free offsets from offsets authored
+//! against a named edge. [`CssPositionOffset`] accepts only the symbolic length-percentage domain;
+//! it does not resolve percentages, calculations, writing modes, or positioning boxes.
+//!
+//! ```
+//! use surgeist_css::{CssLength, CssPositionOffset};
+//!
+//! let offset = CssPositionOffset::try_new(
+//!     CssLength::try_percent(25.0).expect("finite authored percentage"),
+//! )
+//! .expect("position-valid offset");
+//! assert!(matches!(offset.value(), CssLength::Percent(value) if value.value() == 25.0));
+//! assert!(CssPositionOffset::try_new(CssLength::Auto).is_none());
+//! ```
+//!
+//! [`CssPositionValue`] is parser-produced with private fields. Its borrowed horizontal and
+//! vertical views make omitted centered axes and authored edge origins explicit without allowing
+//! callers to forge an invalid cross-axis combination.
+//!
 //! # Timing domains and I01 compatibility
 //!
 //! Duration literals are finite and non-negative; delay literals are finite and signed. A range

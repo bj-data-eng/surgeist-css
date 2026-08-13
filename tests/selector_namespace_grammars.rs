@@ -15,6 +15,27 @@ fn compound_selector(rule: &CssRule) -> &CssCompoundSelector {
 }
 
 #[test]
+fn selectors3_pseudos_legacy_forms_and_repeated_ids_are_typed() {
+    let report = parse_sheet(concat!(
+        ".target:target { color: red; }",
+        ".language:lang(en) { color: red; }",
+        ".visited:visited { color: red; }",
+        ".line::first-line { color: red; }",
+        ".before:before { color: red; }",
+        ".after:after { color: red; }",
+        ".legacy-line:first-line { color: red; }",
+        ".letter:first-letter { color: red; }",
+        "article#first#second.card[data-ready] > a:link { color: red; }",
+    ));
+
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    assert_eq!(report.syntax().rules().len(), 9);
+    let repeated_ids = compound_selector(&report.syntax().rules()[8]);
+    assert_eq!(repeated_ids.ids(), ["first", "second"]);
+    assert_eq!(repeated_ids.key().map(String::as_str), Some("second"));
+}
+
+#[test]
 fn namespace_rules_obey_namespaces3_prelude_ordering() {
     let source = concat!(
         "@namespace \"not a URI\";",

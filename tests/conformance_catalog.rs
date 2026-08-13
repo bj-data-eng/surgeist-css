@@ -1,11 +1,12 @@
 use surgeist_css::{
     CssAngleCalculation, CssAngleUnit, CssCalculationType, CssDelayLiteral, CssErrorCode,
     CssExclusionReason, CssFeatureKind, CssFrequencyCalculation, CssFrequencyUnit,
-    CssIntegerCalculation, CssKnownProperty, CssLengthCalculation, CssLengthDimension,
-    CssLengthUnit, CssNumberCalculation, CssPercentageCalculation, CssRecoveryAction,
-    CssResolution, CssResolutionUnit, CssSpecificationTier, CssSupportStatus, CssTimeCalculation,
-    CssTimeUnit, ErrorKind, conformance_exclusion, conformance_exclusions, feature_metadata,
-    parse_sheet, parse_style_attribute, specification_source, specification_sources,
+    CssHorizontalPosition, CssIntegerCalculation, CssKnownProperty, CssKnownPropertyValueRef,
+    CssLength, CssLengthCalculation, CssLengthDimension, CssLengthUnit, CssNumberCalculation,
+    CssPercentageCalculation, CssRecoveryAction, CssResolution, CssResolutionUnit,
+    CssSpecificationTier, CssSupportStatus, CssTimeCalculation, CssTimeUnit, CssVerticalPosition,
+    ErrorKind, conformance_exclusion, conformance_exclusions, feature_metadata, parse_sheet,
+    parse_style_attribute, property_metadata, specification_source, specification_sources,
 };
 
 #[derive(Clone, Copy)]
@@ -840,6 +841,238 @@ fn assert_c03_timing_metadata(
         "{id} remainder"
     );
     assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+}
+
+fn assert_complete_position_value_metadata(
+    id: &str,
+    spelling: &str,
+    source: &str,
+    production: &str,
+) {
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+    assert_eq!(metadata.id().as_str(), id);
+    assert_eq!(metadata.kind(), CssFeatureKind::Value, "{id} kind");
+    assert_eq!(metadata.spelling(), spelling, "{id} spelling");
+    assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+    assert_eq!(metadata.production(), production, "{id} production");
+    assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+    assert_eq!(metadata.supported_subset(), None, "{id} subset");
+    assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+    assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+}
+
+fn assert_complete_position_property_metadata(
+    id: &str,
+    canonical_name: &str,
+    property: CssKnownProperty,
+    source: &str,
+    production: &str,
+) {
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+    let property_owner = property_metadata(canonical_name)
+        .unwrap_or_else(|| panic!("missing `{canonical_name}` property metadata"));
+    assert!(
+        std::ptr::eq(metadata, property_owner.feature()),
+        "{id} owner"
+    );
+    assert_eq!(property_owner.property(), property, "{id} property owner");
+    assert_eq!(property_owner.canonical_name(), canonical_name, "{id} name");
+    assert_eq!(metadata.id().as_str(), id);
+    assert_eq!(metadata.kind(), CssFeatureKind::Property, "{id} kind");
+    assert_eq!(metadata.spelling(), canonical_name, "{id} spelling");
+    assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+    assert_eq!(metadata.production(), production, "{id} production");
+    assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+    assert_eq!(metadata.supported_subset(), None, "{id} subset");
+    assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+    assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+}
+
+#[test]
+fn official_position_metadata_matches_generic_position_behavior() {
+    let report = parse_style_attribute("object-position: right 5% bottom 2px");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::ObjectPosition(value) = report.syntax()[0]
+        .known()
+        .expect("known object-position")
+        .property_value()
+        .expect("ordinary object-position")
+    else {
+        panic!("expected object-position value");
+    };
+    assert!(matches!(
+        value.position().value().horizontal(),
+        CssHorizontalPosition::RightOffset(offset)
+            if matches!(offset.value(), CssLength::Percent(value) if value.value() == 5.0)
+    ));
+    assert!(matches!(
+        value.position().value().vertical(),
+        CssVerticalPosition::BottomOffset(offset)
+            if matches!(offset.value(), CssLength::Px(value) if value.value() == 2.0)
+    ));
+
+    assert_complete_position_value_metadata(
+        "official.value.position",
+        "<position>",
+        "O-VALUES3",
+        "#position",
+    );
+}
+
+#[test]
+fn official_background_position_metadata_matches_three_component_layer_behavior() {
+    let report = parse_style_attribute("background-position: left 10px top");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::BackgroundPosition(value) = report.syntax()[0]
+        .known()
+        .expect("known background-position")
+        .property_value()
+        .expect("ordinary background-position")
+    else {
+        panic!("expected background-position value");
+    };
+    let [layer] = value.positions().positions() else {
+        panic!("expected one background-position layer");
+    };
+    assert!(matches!(
+        layer.horizontal(),
+        CssHorizontalPosition::LeftOffset(offset)
+            if matches!(offset.value(), CssLength::Px(value) if value.value() == 10.0)
+    ));
+    assert!(matches!(layer.vertical(), CssVerticalPosition::Top));
+
+    assert_complete_position_value_metadata(
+        "official.value.background-position",
+        "<bg-position>#",
+        "O-BACKGROUNDS3",
+        "#background-position",
+    );
+}
+
+#[test]
+fn background_position_property_metadata_matches_layer_list_behavior() {
+    let report = parse_style_attribute("background-position: left top, right 4px bottom 8%");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let declaration = report.syntax()[0]
+        .known()
+        .expect("known background-position");
+    assert_eq!(declaration.property(), CssKnownProperty::BackgroundPosition);
+    let CssKnownPropertyValueRef::BackgroundPosition(value) = declaration
+        .property_value()
+        .expect("ordinary background-position")
+    else {
+        panic!("expected background-position value");
+    };
+    assert_eq!(value.positions().positions().len(), 2);
+
+    assert_complete_position_property_metadata(
+        "baseline.property.background-position",
+        "background-position",
+        CssKnownProperty::BackgroundPosition,
+        "O-BACKGROUNDS3",
+        "#propdef-background-position",
+    );
+}
+
+#[test]
+fn object_position_property_metadata_matches_current_accessor_behavior() {
+    let report = parse_style_attribute("object-position: center 25%");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let declaration = report.syntax()[0].known().expect("known object-position");
+    assert_eq!(declaration.property(), CssKnownProperty::ObjectPosition);
+    let CssKnownPropertyValueRef::ObjectPosition(value) = declaration
+        .property_value()
+        .expect("ordinary object-position")
+    else {
+        panic!("expected object-position value");
+    };
+    assert!(matches!(
+        value.position().value().horizontal(),
+        CssHorizontalPosition::Center
+    ));
+    assert!(matches!(
+        value.position().value().vertical(),
+        CssVerticalPosition::Offset(offset)
+            if matches!(offset.value(), CssLength::Percent(value) if value.value() == 25.0)
+    ));
+
+    assert_complete_position_property_metadata(
+        "official.property.object-position",
+        "object-position",
+        CssKnownProperty::ObjectPosition,
+        "O-IMAGES3",
+        "#propdef-object-position",
+    );
+}
+
+#[test]
+fn transform_origin_property_metadata_matches_directed_z_behavior() {
+    let report = parse_style_attribute("transform-origin: top 50px");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let declaration = report.syntax()[0].known().expect("known transform-origin");
+    assert_eq!(declaration.property(), CssKnownProperty::TransformOrigin);
+    let CssKnownPropertyValueRef::TransformOrigin(value) = declaration
+        .property_value()
+        .expect("ordinary transform-origin")
+    else {
+        panic!("expected transform-origin value");
+    };
+    assert!(matches!(
+        value.origin().horizontal(),
+        CssHorizontalPosition::Center
+    ));
+    assert!(matches!(
+        value.origin().vertical(),
+        CssVerticalPosition::Top
+    ));
+    assert!(matches!(
+        value.origin().z().map(|z| z.value()),
+        Some(CssLength::Px(value)) if value.value() == 50.0
+    ));
+
+    assert_complete_position_property_metadata(
+        "baseline.property.transform-origin",
+        "transform-origin",
+        CssKnownProperty::TransformOrigin,
+        "O-TRANSFORMS1",
+        "#propdef-transform-origin",
+    );
+}
+
+#[test]
+fn mask_position_property_metadata_matches_generic_layer_behavior() {
+    let report = parse_style_attribute("mask-position: left 10px bottom 20%, center 25%");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let declaration = report.syntax()[0].known().expect("known mask-position");
+    assert_eq!(declaration.property(), CssKnownProperty::MaskPosition);
+    let CssKnownPropertyValueRef::MaskPosition(value) = declaration
+        .property_value()
+        .expect("ordinary mask-position")
+    else {
+        panic!("expected mask-position value");
+    };
+    let [first, second] = value.positions().positions() else {
+        panic!("expected two mask-position layers");
+    };
+    assert!(matches!(
+        first.value().horizontal(),
+        CssHorizontalPosition::LeftOffset(offset)
+            if matches!(offset.value(), CssLength::Px(value) if value.value() == 10.0)
+    ));
+    assert!(matches!(
+        second.value().horizontal(),
+        CssHorizontalPosition::Center
+    ));
+
+    assert_complete_position_property_metadata(
+        "baseline.property.mask-position",
+        "mask-position",
+        CssKnownProperty::MaskPosition,
+        "S-MASKING1",
+        "#propdef-mask-position",
+    );
 }
 
 #[test]

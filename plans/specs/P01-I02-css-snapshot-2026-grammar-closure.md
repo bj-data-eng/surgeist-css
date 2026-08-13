@@ -4,7 +4,7 @@
 
 This is the JIT implementation contract for `P01-I02` in `surgeist-css`.
 It is subordinate to the reviewed P01 program at semantic SHA-256
-`3a2f997f5c0a07566d6620b031b5010defb19d57ed0a878de57069cd97c4efe5`
+`881345cd7e08ca20f973205fdcb8b2791a0102a08062d07eaee456aaa06cfcc9`
 and incorporates its I02-entry and source-contradiction reconciliations. The
 initiative base is the published, fetchable I01 candidate
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; the P01 reconciliation commit
@@ -283,7 +283,9 @@ feature mode, and authored input:
 The fixture SHA-256 before C09 is
 `67e69813d808ffda40e7c159fde719fbadd0447f8e4105788b0bb593931fac89`.
 The hand-authored replacement rows yield SHA-256
-`728f73c13d57dc526a02f58a68c672faf7e8e0fd1911ac30d76aba5e63be0b9d`.
+`95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`.
+The catalog scenario retains `rule:baseline.rule.supports`; `later.rule.supports`
+is the stable scenario/catalog ID, not the retained rule identity.
 Task review verifies the exact eight-row diff. No Rust test asserts either
 digest, derives expected values from production, masks a corrected case, or
 weakens comparison. Every malformed-query row, the distinct MQ4 `scripting`
@@ -669,7 +671,7 @@ I01 behavioral tests remain baseline-preservation evidence, subject only to the
 seven source-backed C07 corrections in section 3.3, the one source-backed C08
 correction in section 3.4, and the eight source-backed C09 corrections in
 section 3.5 with final fixture digest
-`728f73c13d57dc526a02f58a68c672faf7e8e0fd1911ac30d76aba5e63be0b9d`.
+`95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`.
 At I02 completion,
 the coordinator and reviewers map every acceptance item to direct source
 inspection, compiler-visible API evidence, behavioral tests, or deterministic
@@ -717,7 +719,7 @@ I02 is complete only when all predicates hold:
    scenario IDs in section 3.3, the one C08 scenario ID in section 3.4, and the
    eight C09 scenario IDs in section 3.5 carry their reviewed source-backed
    replacement observables; the C09 fixture has exact SHA-256
-   `728f73c13d57dc526a02f58a68c672faf7e8e0fd1911ac30d76aba5e63be0b9d`;
+   `95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`;
    every other accepted vector does not regress; extension status and
    provenance are truthful.
 4. All fourteen allocated findings in section 11 have implemented source and

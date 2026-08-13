@@ -9,10 +9,10 @@
 | Status | `reviewed` |
 | Cycle base | `129de7267726277b73d2cc15f1168c44c34ffcbc` |
 | Published prerequisite | C08 `129de7267726277b73d2cc15f1168c44c34ffcbc`, fetched and read back |
-| Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `3a2f997f5c0a07566d6620b031b5010defb19d57ed0a878de57069cd97c4efe5`, especially P01.12 |
-| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `6487052398b1399383d101377430dffb2d3bfde7349f53a4096e1b1023bba610`, sections 3.1, 3.5, 4.2-4.4, 5, 7, 10-12 |
+| Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `881345cd7e08ca20f973205fdcb8b2791a0102a08062d07eaee456aaa06cfcc9`, especially P01.12 |
+| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `fff4c8bfa990f2b38b9b2c3d5177f3d494558d8486b7ae9680d79bbbd651b8c4`, sections 3.1, 3.5, 4.2-4.4, 5, 7, 10-12 |
 | Reviewed ledger | `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256 `626d176a734d48c3a6202c189daeadc5ff93253c20ac6681d91f93b01ab11b0d`; media, conditional, Cascade, and imported-value rows |
-| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `90a118fc5214a0abb08a2ae76390794d2a8894ccec175d97786e074a9c69adcc`, entry `I02-C09` |
+| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `38656ff43d97bceea92445144abe38b8dd9e2bd02b5f91d11358972810e2de0b`, entry `I02-C09` |
 | Bounded outcome | Complete Media Queries 3 and Conditional Rules 3 authored syntax, add typed Cascade 4/5 import conditions, install the top-level prelude phase machine, preserve selected later-level query syntax truthfully, and apply only the reviewed eight-row oracle correction. |
 
 ## 2. Sources, Boundary, And Decisions
@@ -174,7 +174,9 @@ rows become clean through T3 and retain respectively the supports rule plus its
 nested style/color and the empty supports rule. The import row becomes clean
 through T4 and retains the import. The hand-authored replacement fixture has
 SHA-256
-`728f73c13d57dc526a02f58a68c672faf7e8e0fd1911ac30d76aba5e63be0b9d`.
+`95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`.
+The catalog scenario retains public identity `rule:baseline.rule.supports`;
+`later.rule.supports` remains only its stable scenario/catalog ID.
 Every task edits its rows before production so the public fixture reader runs
 RED. T5 and final review verify exactly eight changed rows and byte identity for
 all others. No Rust test asserts either digest, reads Rust source, derives an
@@ -370,7 +372,7 @@ ps -axo pid=,command=
 ```
 
 The fixture output must be
-`728f73c13d57dc526a02f58a68c672faf7e8e0fd1911ac30d76aba5e63be0b9d`;
+`95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`;
 direct diff must show only section 3's eight rows. Classify the Rust scan
 directly: crate-level `forbid(unsafe_code)` and authored CSS strings are not
 executable unsafe; any executable match blocks. No repository Cargo/rustc/

@@ -436,7 +436,10 @@ retain the valid syntax without the obsolete recovery diagnostics. The fixture
 SHA-256 before C09 is
 `67e69813d808ffda40e7c159fde719fbadd0447f8e4105788b0bb593931fac89`;
 the hand-authored eight-row replacement yields
-`728f73c13d57dc526a02f58a68c672faf7e8e0fd1911ac30d76aba5e63be0b9d`.
+`95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`.
+The supports catalog scenario retains the implemented public rule identity
+`baseline.rule.supports`; its scenario ID remains
+`catalog.non-property.later.rule.supports.boundary`.
 C09 task review must prove exactly those eight rows changed and every other row
 is byte-identical. Malformed media-query rows, the separately sourced MQ4
 `scripting` boundary, and every other frozen behavior remain unchanged.

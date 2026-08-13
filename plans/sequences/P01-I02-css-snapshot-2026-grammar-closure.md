@@ -4,11 +4,11 @@
 
 This sequence implements the reviewed P01-I02 specification at
 `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
-`6487052398b1399383d101377430dffb2d3bfde7349f53a4096e1b1023bba610`,
+`fff4c8bfa990f2b38b9b2c3d5177f3d494558d8486b7ae9680d79bbbd651b8c4`,
 and its official ledger at SHA-256
 `626d176a734d48c3a6202c189daeadc5ff93253c20ac6681d91f93b01ab11b0d`.
 It is subordinate to reviewed P01 semantic SHA-256
-`3a2f997f5c0a07566d6620b031b5010defb19d57ed0a878de57069cd97c4efe5`.
+`881345cd7e08ca20f973205fdcb8b2791a0102a08062d07eaee456aaa06cfcc9`.
 The published I01 base is
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; planning commits after that base
 belong to the I02 candidate range.

@@ -6,14 +6,14 @@
 | --- | --- |
 | Cycle ID | `P01-I02-C10` |
 | Owning repository | `surgeist-css` |
-| Status | `in_progress` |
+| Status | `reviewed` |
 | Cycle base | `019906900cab8295d8c33a28eb53a76b39cd85ee` |
 | Published prerequisite | C09 `019906900cab8295d8c33a28eb53a76b39cd85ee`, fetched and read back |
-| Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `7a8e26a1cd961d42e3a1275b49e278851e314d6b2df77128dcffc3654679114b`, P01.13 |
-| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `2ec98603e28bb3b1b50f5bce801ab9d87fa6ff2ae5cac4596781908b7f75c418`, sections 3.1, 3.6, 4.2-4.4, 5, 6, 10, 11 findings 2.1/2.3/2.8, and 12 |
+| Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `db899aea31b168128b4d8bd5c4be58057a9860e0de4d0d4b00f049955b16eb22`, P01.13 |
+| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `0d26ae87704ecc16c09a59f3684a3af15edfdc5082259ca2bec0135377d97f62`, sections 3.1, 3.6, 4.2-4.4, 5, 6, 10, 11 findings 2.1/2.3/2.8, and 12 |
 | Reviewed ledger | `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256 `626d176a734d48c3a6202c189daeadc5ff93253c20ac6681d91f93b01ab11b0d`; 20 `O-SELECTORS3` and 2 `O-NAMESPACES3` rows |
-| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `49dea4aefa4a09be0f990ef4412c9c892b6f28d4553306514150841ad78c37d8`, entry `I02-C10` |
-| Bounded outcome | Retain Namespaces 3 rules, make every selector consumer namespace-aware, complete the dated Selectors 3 authored grammar and public AST, preserve selected later selector extensions truthfully, and apply only the reviewed five-row oracle correction. |
+| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `29dc39ea41961e5418bfaf380080689d18100769bf0e808a5f77d37f04a1bd6f`, entry `I02-C10` |
+| Bounded outcome | Retain Namespaces 3 rules, make every selector consumer namespace-aware, complete the dated Selectors 3 authored grammar and public AST, preserve selected later selector extensions truthfully, and apply only the reviewed six-row oracle correction. |
 
 ## 2. Boundary And Current Evidence
 
@@ -44,6 +44,8 @@ projection while `ids()` exposes every authored ID. No dependency, feature,
 manifest, build logic, generated leaf artifact, or leaf MSRV changes. Root
 alone owns facade/adapters, API generation/artifacts, integration tests, and the
 gitlink after leaf publication. All owned Rust remains free of `unsafe`.
+T5 updates README, crate rustdoc, and doctests for the new public syntax and
+recovery contract; no standalone example target changes.
 
 ### 2.1 Namespace Rule And Phase Contract
 
@@ -124,22 +126,32 @@ Only these stable IDs and their expected public observables change:
 4. `catalog.non-property.baseline.selector.pseudo-class.boundary` receives the
    same clean style/color observables; and
 5. `catalog.non-property.baseline.selector.pseudo-element.boundary` receives
-   the same clean style/color observables.
+   the same clean style/color observables; and
+6. `focused.stylesheet-recovery.11` keeps both surrounding style rules and
+   declarations, but classifies the intervening valid late namespace as an
+   invalidly placed supported rule rather than an unsupported rule.
 
 The hand-authored replacement fixture has SHA-256
-`085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`.
+`96be045dc181fe5fc258e76b09458b441139504a3cae13c41897995ab3ae8f5d`.
 The undeclared-prefix `catalog.non-property.baseline.selector.complex.boundary`
-row and every other byte remain unchanged. T1 authors row 1 before namespace
-production; T4 authors rows 2-5 before selector production. No Rust test asserts
+row and every other byte remain unchanged. Row 6 preserves its non-clean flag,
+retained/value/authored fields, `DropAtRule`, position, and span; only the
+diagnostic changes to `InvalidAtRulePlacement:namespace:after imports and before
+every layer or body rule`. T1 authors rows 1 and 6 before namespace production,
+yielding interim fixture SHA-256
+`174b6cc8db6181c42176c96a214e2f8cc210247f6c430c5191a0347bb5f31b72`;
+T4 authors rows 2-5 before selector production. No Rust test asserts
 a digest, derives an expected row from production, masks a row, or compares
 source/test/catalog owner sets or counts.
 
 ## 4. Tasks
 
 At assignment start each worker records `task_base_sha="$(git rev-parse HEAD)"`.
-Each task uses two commits. The first adds a base-compilable public behavioral
-RED and runs its exact command to the intended failure; no new production symbol
-or behavior precedes it. New-symbol API assertions follow that executable RED.
+Each task uses two commits except reconciled T1, which uses its existing row-1
+RED, a second test-only row-6 recovery RED, and one production commit. A task's
+test commit adds a base-compilable public behavioral RED and runs its exact
+command to the intended failure; no new production symbol or behavior precedes
+it. New-symbol API assertions follow that executable RED.
 Every test parses authored CSS through the public front door or directly
 inspects named public metadata. No test parses or inspects Rust source, files,
 tokens, ASTs, symbols, registrations, call sites, owner sets/counts, workflow
@@ -156,7 +168,7 @@ cargo fmt --check
 git diff --check "${task_base_sha}..HEAD"
 ```
 
-Each exact two-commit task range receives a fresh independent
+Each exact task range receives a fresh independent
 `surgeist-task-reviewer` and must be `CLEAN` before the dependent task starts.
 
 ### T1 Retain Namespace Rules And Enforce Prelude Ordering
@@ -164,13 +176,21 @@ Each exact two-commit task range receives a fresh independent
 - **Dependency:** this plan independently clean.
 - **Area:** namespace models in `src/syntax.rs`; at-rule parsing, active binding
   state, and refined phases in `src/parser/mod.rs`; new
-  `tests/selector_namespace_grammars.rs`; exact fixture row 1; focused updates
+  `tests/selector_namespace_grammars.rs`; exact fixture rows 1 and 6; focused updates
   to `conditional_ordering`, `stylesheet_recovery`, `structured_errors`,
   `source_coordinates`, `app_strict_parity`, `public_surface`, and
   `i01_c01_observables`.
-- **RED:** author fixture row 1 and public behavior proving a valid namespace
-  remains recognized unsupported on base. Exact command:
+- **RED 1 (already recorded):** commit
+  `6c0d4c01e1bff041af1f1e33831d46e7a26428d1` authors row 1 and a
+  base-compilable public behavior proving a valid namespace remains recognized
+  unsupported. Its exact failing command is
   `cargo test -p surgeist-css --offline --no-default-features --test selector_namespace_grammars namespace_rules_obey_namespaces3_prelude_ordering -- --exact`.
+- **RED 2:** before any production commit, author fixture row 6 and an
+  existing-public-API assertion that the late namespace reports
+  `InvalidAtRulePlacement`, not `UnsupportedAtRule`. Run
+  `cargo test -p surgeist-css --offline --no-default-features --test selector_namespace_grammars late_namespace_is_a_placement_error_not_an_unsupported_rule -- --exact`
+  to its intended base failure. The combined test-only fixture has exact
+  SHA-256 `174b6cc8db6181c42176c96a214e2f8cc210247f6c430c5191a0347bb5f31b72`.
 - **Acceptance:** string/url and empty/invalid-URI literals; decoded checked
   prefixes; default/named and duplicate authored order; six-state table,
   encoding/import/layer/body interactions; success-only transition and binding;
@@ -178,7 +198,9 @@ Each exact two-commit task range receives a fresh independent
   sibling retention, EOF/non-BMP, validators, strict parity; public variant and
   private-field accessor evidence.
 - **Focused:** both modes for `selector_namespace_grammars conditional_ordering stylesheet_recovery structured_errors source_coordinates app_strict_parity public_surface i01_c01_observables`.
-- **Commits:** `test: specify namespace rule ordering`; `feat: add namespace rule ordering`.
+- **Commits:** existing `test: specify namespace rule ordering`; then
+  `test: specify namespace placement recovery`; then
+  `feat: add namespace rule ordering`.
 
 ### T2 Add Namespace-Qualified Type, Universal, And Attribute Selectors
 
@@ -239,7 +261,7 @@ Each exact two-commit task range receives a fresh independent
   rejection for later pseudo-elements; terminal/sequence rules; ordered
   repeated IDs with last-ID compatibility; combinator/group/attribute
   preservation; exact invalid-token/arity/placement diagnostics, siblings,
-  repeated failures, EOF/non-BMP, strict parity; final exact five-row fixture
+  repeated failures, EOF/non-BMP, strict parity; final exact six-row fixture
   diff and digest.
 - **Focused:** both modes for `selector_namespace_grammars public_surface structured_errors source_coordinates specialized_list_recovery nested_structural_recovery app_strict_parity conformance_catalog i01_c01_observables`.
 - **Commits:** `test: specify complete Selectors 3 syntax`; `feat: complete Selectors 3 syntax`.
@@ -296,8 +318,8 @@ ps -axo pid=,command=
 ```
 
 The fixture output must be
-`085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`;
-the direct diff must show only section 3's five rows. Build the canonical owned
+`96be045dc181fe5fc258e76b09458b441139504a3cae13c41897995ab3ae8f5d`;
+the direct diff must show only section 3's six rows. Build the canonical owned
 Rust manifest from tracked and nonignored untracked `*.rs`, run the exact
 `surgeist-agent` executable-unsafe regex over it, verify
 `#![forbid(unsafe_code)]`, and run both Clippy unsafe-denial matrices. Classify
@@ -309,7 +331,7 @@ After `CLEAN`, rerun the full gate at the reviewed head, run the user-required
 `cargo clean --offline`, prove `target` absent and the repository clean and
 process-free, then follow the canonical lease publication/readback gate. C10
 completes only when the 20+2 official rows are Complete, the Partial selector
-extension is exact, the five-row correction is verified, all reviews and gates
+extension is exact, the six-row correction is verified, all reviews and gates
 are clean, and the published candidate handoff names root-only follow-up.
 
 Another fixture change, a second breaking API change, unsafe requirement,

@@ -6,7 +6,7 @@
 | --- | --- |
 | Cycle ID | `P01-I02-C09` |
 | Owning repository | `surgeist-css` |
-| Status | `planned` |
+| Status | `draft` |
 | Cycle base | `129de7267726277b73d2cc15f1168c44c34ffcbc` |
 | Published prerequisite | C08 `129de7267726277b73d2cc15f1168c44c34ffcbc`, fetched and read back |
 | Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `598b10b07624e1d77929312dccbb682c1fe6139e9de029a25fa655014e3612a0`, especially P01.12 |
@@ -333,7 +333,14 @@ Each exact two-commit task range then receives a fresh independent
   import clauses/order, recovery, and downstream exclusions; handoff records only
   the two product fixture digests among otherwise SHA-free product facts;
   doctests and warning-denied rustdoc pass.
-- **Focused:** both modes for `conformance_catalog catalog_inventory media_query_grammars supports_grammars conditional_ordering public_surface structured_errors source_coordinates i01_c01_observables`; then both doctest and warning-denied rustdoc modes.
+- **Focused:** both modes for `conformance_catalog catalog_inventory media_query_grammars supports_grammars conditional_ordering public_surface structured_errors source_coordinates i01_c01_observables`; then:
+
+  ```sh
+  cargo test -p surgeist-css --offline --no-default-features --doc
+  cargo test -p surgeist-css --offline --no-default-features --features app-strict --doc
+  RUSTDOCFLAGS='-D warnings' cargo doc -p surgeist-css --offline --no-deps --no-default-features
+  RUSTDOCFLAGS='-D warnings' cargo doc -p surgeist-css --offline --no-deps --no-default-features --features app-strict
+  ```
 - **Commits:** `test: specify conditional metadata`; `docs: publish media and conditional closure`.
 
 ## 7. Final Gate, Publication, And Completion
@@ -370,14 +377,14 @@ rustdoc/`surgeist_css` process may remain. A fresh holistic reviewer then
 reviews exact range
 `129de7267726277b73d2cc15f1168c44c34ffcbc..HEAD`.
 
-Only after holistic `CLEAN` run `cargo clean --offline`, prove `target` absent,
-the worktree/process state clean, and candidate ancestry from C08. Fetch
-`origin/main`, require it still equals the C08 lease SHA, push the immutable
-candidate with explicit force-with-lease to `origin/main`, fetch again, and
-require local `HEAD`, `main`, `origin/main`, and `git ls-remote` to equal the
-candidate. C09 completes only after all MQ3 and Conditional 3 rows are Complete,
-Cascade 4/5 import ownership is truthful, the exact eight-row correction is
-verified, every task and holistic review is clean, cleanup passes, and the
-published/read-back candidate is handed off with root-only follow-up. Another
-fixture change, public break, unsafe requirement, external acquisition, or
-root/sibling mutation is a blocker requiring P01 reconciliation.
+After holistic `CLEAN`, follow the installed `surgeist-agent` canonical
+publication gate for cleanup, immutable landing, publication, and readback;
+this plan does not restate or modify that workflow authority. The user-required
+cycle cleanup includes `cargo clean --offline`, proof that `target` is absent,
+and a clean/process-free repository state before publication. C09 completes
+only after all MQ3 and Conditional 3 rows are Complete, Cascade 4/5 import
+ownership is truthful, the exact eight-row correction is verified, every task
+and holistic review is clean, cleanup passes, and the published/read-back
+candidate is handed off with root-only follow-up. Another fixture change,
+public break, unsafe requirement, external acquisition, or root/sibling
+mutation is a blocker requiring P01 reconciliation.

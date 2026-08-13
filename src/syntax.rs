@@ -9093,6 +9093,7 @@ enum CssAuthoredColorRepresentation {
     Oklab(CssAuthoredLabColor),
     Oklch(CssAuthoredLchColor),
     Predefined(CssAuthoredPredefinedColor),
+    Relative(CssAuthoredRelativeColor),
     PreservedI01(CssColor),
 }
 
@@ -9172,6 +9173,12 @@ impl CssAuthoredColor {
     pub(crate) const fn predefined(value: CssAuthoredPredefinedColor) -> Self {
         Self {
             representation: CssAuthoredColorRepresentation::Predefined(value),
+        }
+    }
+
+    pub(crate) const fn relative(value: CssAuthoredRelativeColor) -> Self {
+        Self {
+            representation: CssAuthoredColorRepresentation::Relative(value),
         }
     }
 
@@ -9285,6 +9292,15 @@ impl CssAuthoredColor {
         }
     }
 
+    /// Returns the typed preserved Color 5 relative-color branch, when present.
+    #[must_use]
+    pub const fn relative_value(&self) -> Option<&CssAuthoredRelativeColor> {
+        match &self.representation {
+            CssAuthoredColorRepresentation::Relative(value) => Some(value),
+            _ => None,
+        }
+    }
+
     #[must_use]
     pub const fn kind_name(&self) -> &'static str {
         match &self.representation {
@@ -9301,6 +9317,7 @@ impl CssAuthoredColor {
             CssAuthoredColorRepresentation::Oklab(_) => "oklab",
             CssAuthoredColorRepresentation::Oklch(_) => "oklch",
             CssAuthoredColorRepresentation::Predefined(_) => "color",
+            CssAuthoredColorRepresentation::Relative(_) => "relative",
             CssAuthoredColorRepresentation::PreservedI01(value) => value.kind_name(),
         }
     }
@@ -9318,6 +9335,7 @@ impl CssAuthoredColor {
             CssAuthoredColorRepresentation::Predefined(value) => {
                 authored_alpha_has_exact_i01_projection(value.alpha())
             }
+            CssAuthoredColorRepresentation::Relative(_) => true,
             CssAuthoredColorRepresentation::CurrentColor
             | CssAuthoredColorRepresentation::Transparent
             | CssAuthoredColorRepresentation::Hex(_)
@@ -9703,6 +9721,188 @@ pub struct CssAuthoredPredefinedColor {
     color_space: CssPredefinedColorSpace,
     channels: [CssAuthoredColorComponent; 3],
     alpha: Option<CssAuthoredColorComponent>,
+}
+
+/// The closed origin-channel environment for a preserved relative-color family.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssRelativeColorEnvironment {
+    Rgb,
+    Hsl,
+    Hwb,
+    Lab,
+    Lch,
+    Oklab,
+    Oklch,
+    PredefinedRgb(CssPredefinedColorSpace),
+    Xyz(CssPredefinedColorSpace),
+}
+
+/// The semantic result slot in which a relative-color expression is authored.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssRelativeColorResultDomain {
+    NumberPercentage,
+    Hue,
+    Alpha,
+}
+
+/// A channel name made available by one relative-color origin environment.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssRelativeColorChannel {
+    R,
+    G,
+    B,
+    H,
+    S,
+    L,
+    W,
+    A,
+    C,
+    X,
+    Y,
+    Z,
+    Alpha,
+}
+
+/// The authored kind of one validated relative-color result expression.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssRelativeColorExpressionValue {
+    None,
+    Number(CssFiniteNumber),
+    Percentage(CssFiniteNumber),
+    Angle(CssAngleLiteral),
+    Channel(CssRelativeColorChannel),
+    Calculation(CssRelativeColorCalculation),
+}
+
+/// A validated relative-color calculation retained symbolically without evaluation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssRelativeColorCalculation {
+    authored: CssAuthoredDeclarationValue,
+    result_type: CssCalculationType,
+    references: Vec<CssRelativeColorChannel>,
+}
+
+impl CssRelativeColorCalculation {
+    pub(crate) const fn new(
+        authored: CssAuthoredDeclarationValue,
+        result_type: CssCalculationType,
+        references: Vec<CssRelativeColorChannel>,
+    ) -> Self {
+        Self {
+            authored,
+            result_type,
+            references,
+        }
+    }
+
+    #[must_use]
+    pub const fn authored(&self) -> &CssAuthoredDeclarationValue {
+        &self.authored
+    }
+
+    #[must_use]
+    pub const fn result_type(&self) -> CssCalculationType {
+        self.result_type
+    }
+
+    #[must_use]
+    pub fn references(&self) -> &[CssRelativeColorChannel] {
+        &self.references
+    }
+}
+
+/// One result expression checked against a closed relative-color environment and slot domain.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTypedRelativeColorExpression {
+    environment: CssRelativeColorEnvironment,
+    result_domain: CssRelativeColorResultDomain,
+    value: CssRelativeColorExpressionValue,
+}
+
+impl CssTypedRelativeColorExpression {
+    pub(crate) const fn new(
+        environment: CssRelativeColorEnvironment,
+        result_domain: CssRelativeColorResultDomain,
+        value: CssRelativeColorExpressionValue,
+    ) -> Self {
+        Self {
+            environment,
+            result_domain,
+            value,
+        }
+    }
+
+    #[must_use]
+    pub const fn environment(&self) -> CssRelativeColorEnvironment {
+        self.environment
+    }
+
+    #[must_use]
+    pub const fn result_domain(&self) -> CssRelativeColorResultDomain {
+        self.result_domain
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssRelativeColorExpressionValue {
+        &self.value
+    }
+}
+
+/// A parser-owned relative color with an exact three-channel typed result environment.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssAuthoredRelativeColor {
+    function: CssRelativeColorFunction,
+    environment: CssRelativeColorEnvironment,
+    source: Box<CssAuthoredColor>,
+    channels: [CssTypedRelativeColorExpression; 3],
+    alpha: Option<CssTypedRelativeColorExpression>,
+}
+
+impl CssAuthoredRelativeColor {
+    pub(crate) fn new(
+        function: CssRelativeColorFunction,
+        environment: CssRelativeColorEnvironment,
+        source: CssAuthoredColor,
+        channels: [CssTypedRelativeColorExpression; 3],
+        alpha: Option<CssTypedRelativeColorExpression>,
+    ) -> Self {
+        Self {
+            function,
+            environment,
+            source: Box::new(source),
+            channels,
+            alpha,
+        }
+    }
+
+    #[must_use]
+    pub const fn function(&self) -> &CssRelativeColorFunction {
+        &self.function
+    }
+
+    #[must_use]
+    pub const fn environment(&self) -> CssRelativeColorEnvironment {
+        self.environment
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> &CssAuthoredColor {
+        &self.source
+    }
+
+    #[must_use]
+    pub const fn channels(&self) -> &[CssTypedRelativeColorExpression; 3] {
+        &self.channels
+    }
+
+    #[must_use]
+    pub const fn alpha(&self) -> Option<&CssTypedRelativeColorExpression> {
+        self.alpha.as_ref()
+    }
 }
 
 impl CssAuthoredPredefinedColor {

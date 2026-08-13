@@ -6,9 +6,63 @@ use surgeist_css::{
     CssFrequencyCalculation, CssFrequencyUnit, CssGridFlowToleranceValue, CssIntegerCalculation,
     CssIntegerValue, CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthUnit,
     CssNonNegativeNumberValue, CssNumberCalculation, CssOpacityValue, CssPercentageCalculation,
-    CssPositiveNumber, CssPositiveNumberValue, CssRecoveryAction, CssTimeCalculation, CssTimeUnit,
+    CssPositiveNumber, CssPositiveNumberValue, CssRecoveryAction, CssRelativeColorChannel,
+    CssRelativeColorExpressionValue, CssRelativeColorResultDomain, CssTimeCalculation, CssTimeUnit,
     CssZIndexValue, parse_style_attribute,
 };
+
+#[test]
+fn relative_color_calculations_retain_typed_domains_and_closed_channel_references() {
+    let report = parse_style_attribute(concat!(
+        "color: rgb(from red calc(r + 1) calc(g * 2) calc(b / 2) / calc(alpha * 0.5)); ",
+        "color: hsl(from red calc(h + 20deg) calc(s + 10%) l); ",
+        "color: oklch(from red l c calc(h + 0.25turn))",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let relatives: Vec<_> = report
+        .syntax()
+        .iter()
+        .map(|declaration| {
+            let CssKnownPropertyValueRef::Color(value) =
+                declaration.known().unwrap().property_value().unwrap()
+            else {
+                panic!("expected color wrapper");
+            };
+            value.current().relative_value().unwrap()
+        })
+        .collect();
+
+    let rgb = relatives[0];
+    assert_eq!(
+        rgb.channels()[0].result_domain(),
+        CssRelativeColorResultDomain::NumberPercentage
+    );
+    let CssRelativeColorExpressionValue::Calculation(red) = rgb.channels()[0].value() else {
+        panic!("expected typed red calculation");
+    };
+    assert_eq!(red.authored().as_css(), "calc(r + 1)");
+    assert_eq!(red.result_type(), CssCalculationType::Number);
+    assert_eq!(red.references(), &[CssRelativeColorChannel::R]);
+    let CssRelativeColorExpressionValue::Calculation(alpha) = rgb.alpha().unwrap().value() else {
+        panic!("expected typed alpha calculation");
+    };
+    assert_eq!(alpha.references(), &[CssRelativeColorChannel::Alpha]);
+    assert_eq!(
+        rgb.alpha().unwrap().result_domain(),
+        CssRelativeColorResultDomain::Alpha
+    );
+
+    for (relative, hue_index) in [(relatives[1], 0), (relatives[2], 2)] {
+        let hue = &relative.channels()[hue_index];
+        assert_eq!(hue.result_domain(), CssRelativeColorResultDomain::Hue);
+        let CssRelativeColorExpressionValue::Calculation(calculation) = hue.value() else {
+            panic!("expected typed hue calculation");
+        };
+        assert_eq!(calculation.result_type(), CssCalculationType::Angle);
+        assert_eq!(calculation.references(), &[CssRelativeColorChannel::H]);
+    }
+}
 
 #[test]
 fn perceptual_color_channels_preserve_typed_calculation_domains() {

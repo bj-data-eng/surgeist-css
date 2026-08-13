@@ -95,6 +95,43 @@ fn direct_color_wrappers_expose_perceptual_current_values_without_lossy_projecti
     assert!(predefined.i01_subset().is_none());
 }
 
+#[test]
+fn direct_color_wrappers_preserve_typed_relative_current_and_i01_views() {
+    let report = parse_style_attribute(concat!(
+        "color: rgb(from red r g b); ",
+        "background-color: color(from red xyz x y z / alpha)",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::Color(color) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected color wrapper");
+    };
+    assert!(color.current().relative_value().is_some());
+    assert!(matches!(
+        color.i01_subset(),
+        Some(surgeist_css::CssColor::Relative(_))
+    ));
+
+    let CssKnownPropertyValueRef::BackgroundColor(background) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected background-color wrapper");
+    };
+    assert!(background.current().relative_value().is_some());
+    assert!(matches!(
+        background.i01_subset(),
+        Some(surgeist_css::CssColor::Relative(_))
+    ));
+}
+
 macro_rules! assert_property_specific_css {
     ($declaration:expr, $value:expr, $expected:expr; $($variant:ident),+ $(,)?) => {
         match ($declaration.property(), $value) {

@@ -3,9 +3,11 @@ use surgeist_css::{
     CssAuthoredSystemColor, CssCalcOperator, CssErrorCode, CssExclusionReason, CssFeatureKind,
     CssGridAutoFlowAxis, CssImportance, CssKnownDeclaredValueRef, CssKnownProperty,
     CssKnownPropertyValueRef, CssMediaQueryModifier, CssPredefinedColorSpace, CssPropertyNameRef,
-    CssRecoveryAction, CssRelativeColorFunction, CssRule, CssSelectorCombinator,
-    CssSpecificationTier, CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata,
-    parse_sheet, parse_style_attribute, property_metadata, specification_source,
+    CssRecoveryAction, CssRelativeColorChannel, CssRelativeColorEnvironment,
+    CssRelativeColorExpressionValue, CssRelativeColorFunction, CssRelativeColorResultDomain,
+    CssRule, CssSelectorCombinator, CssSpecificationTier, CssSupportStatus, ErrorKind,
+    conformance_exclusion, feature_metadata, parse_sheet, parse_style_attribute, property_metadata,
+    specification_source,
 };
 
 #[test]
@@ -82,6 +84,37 @@ fn public_surface_exposes_perceptual_and_predefined_color_inspection() {
             .color_space(),
         CssPredefinedColorSpace::XyzD65,
     );
+}
+
+#[test]
+fn public_surface_exposes_typed_relative_color_inspection_without_resolution() {
+    let report =
+        parse_style_attribute("color: oklch(from rgb(from red r g b) l c calc(h + 20deg) / alpha)");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Color(value) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected color wrapper");
+    };
+    let relative = value.current().relative_value().unwrap();
+    assert_eq!(relative.environment(), CssRelativeColorEnvironment::Oklch);
+    assert_eq!(
+        relative.channels()[2].result_domain(),
+        CssRelativeColorResultDomain::Hue
+    );
+    let CssRelativeColorExpressionValue::Calculation(hue) = relative.channels()[2].value() else {
+        panic!("expected symbolic hue calculation");
+    };
+    assert_eq!(hue.references(), &[CssRelativeColorChannel::H]);
+    assert_eq!(hue.authored().as_css(), "calc(h + 20deg)");
+    assert!(relative.source().relative_value().is_some());
+    assert!(matches!(
+        value.i01_subset(),
+        Some(surgeist_css::CssColor::Relative(_))
+    ));
 }
 
 fn known_declared_value_kind(value: CssKnownDeclaredValueRef<'_>) -> &'static str {

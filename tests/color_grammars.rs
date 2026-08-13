@@ -1,7 +1,8 @@
 use surgeist_css::{
     CssAuthoredColorComponent, CssAuthoredColorSyntax, CssAuthoredHue, CssAuthoredSystemColor,
     CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssOpacityValue,
-    CssPredefinedColorSpace, parse_style_attribute,
+    CssPredefinedColorSpace, CssRelativeColorEnvironment, CssRelativeColorFunction,
+    parse_style_attribute,
 };
 
 fn color_value(source: &str) -> surgeist_css::CssColorPropertyValue {
@@ -69,8 +70,7 @@ fn perceptual_color_with_typed_math_is_retained_with_its_valid_sibling() {
 
 #[test]
 fn relative_rgb_rejects_untyped_channel_identifiers_and_retains_its_valid_sibling() {
-    let report =
-        parse_style_attribute("color: rgb(from red bogus bogus bogus); opacity: 0.5");
+    let report = parse_style_attribute("color: rgb(from red bogus bogus bogus); opacity: 0.5");
 
     assert_eq!(report.syntax().len(), 1, "{:?}", report.diagnostics());
     assert_eq!(report.diagnostics().len(), 1);
@@ -78,6 +78,209 @@ fn relative_rgb_rejects_untyped_channel_identifiers_and_retains_its_valid_siblin
         report.syntax()[0].known().map(|known| known.property()),
         Some(CssKnownProperty::Opacity),
     );
+}
+
+#[test]
+fn relative_color_families_expose_their_closed_current_environments_and_i01_projection() {
+    for (source, expected_function, expected_environment) in [
+        (
+            "color: rgb(from red r g b / alpha)",
+            CssRelativeColorFunction::Rgb,
+            CssRelativeColorEnvironment::Rgb,
+        ),
+        (
+            "color: rgba(from red r g b)",
+            CssRelativeColorFunction::Rgb,
+            CssRelativeColorEnvironment::Rgb,
+        ),
+        (
+            "color: hsla(from red h s l / alpha)",
+            CssRelativeColorFunction::Hsl,
+            CssRelativeColorEnvironment::Hsl,
+        ),
+        (
+            "color: hwb(from red h w b / alpha)",
+            CssRelativeColorFunction::Hwb,
+            CssRelativeColorEnvironment::Hwb,
+        ),
+        (
+            "color: lab(from red l a b / alpha)",
+            CssRelativeColorFunction::Lab,
+            CssRelativeColorEnvironment::Lab,
+        ),
+        (
+            "color: lch(from red l c h / alpha)",
+            CssRelativeColorFunction::Lch,
+            CssRelativeColorEnvironment::Lch,
+        ),
+        (
+            "color: oklab(from red l a b / alpha)",
+            CssRelativeColorFunction::Oklab,
+            CssRelativeColorEnvironment::Oklab,
+        ),
+        (
+            "color: oklch(from red l c h / alpha)",
+            CssRelativeColorFunction::Oklch,
+            CssRelativeColorEnvironment::Oklch,
+        ),
+        (
+            "color: color(from red display-p3 r g b / alpha)",
+            CssRelativeColorFunction::Color(CssPredefinedColorSpace::DisplayP3),
+            CssRelativeColorEnvironment::PredefinedRgb(CssPredefinedColorSpace::DisplayP3),
+        ),
+        (
+            "color: color(from red xyz x y z / alpha)",
+            CssRelativeColorFunction::Color(CssPredefinedColorSpace::XyzD65),
+            CssRelativeColorEnvironment::Xyz(CssPredefinedColorSpace::XyzD65),
+        ),
+    ] {
+        let value = color_value(source);
+        let relative = value
+            .current()
+            .relative_value()
+            .expect("typed relative-color branch");
+        assert_eq!(relative.function(), &expected_function, "{source}");
+        assert_eq!(relative.environment(), expected_environment, "{source}");
+        assert_eq!(relative.channels().len(), 3, "{source}");
+        assert!(matches!(
+            value.i01_subset(),
+            Some(surgeist_css::CssColor::Relative(_))
+        ));
+    }
+}
+
+#[test]
+fn relative_color_each_environment_accepts_its_channel_references_in_typed_math() {
+    for source in [
+        "color: rgb(from red calc(r + 1) calc(g + 1) calc(b + 1) / calc(alpha * 0.5))",
+        "color: hsl(from red calc(h + 1deg) calc(s + 1%) calc(l + 1%) / calc(alpha + 0.1))",
+        "color: hwb(from red calc(h + 1deg) calc(w + 1%) calc(b + 1%) / calc(alpha + 0.1))",
+        "color: lab(from red calc(l + 1%) calc(a + 1) calc(b + 1) / calc(alpha + 0.1))",
+        "color: lch(from red calc(l + 1%) calc(c + 1) calc(h + 1deg) / calc(alpha + 0.1))",
+        "color: oklab(from red calc(l + 1%) calc(a + 1) calc(b + 1) / calc(alpha + 0.1))",
+        "color: oklch(from red calc(l + 1%) calc(c + 1) calc(h + 1deg) / calc(alpha + 0.1))",
+        "color: color(from red rec2020 calc(r + 1) calc(g + 1) calc(b + 1) / calc(alpha + 0.1))",
+        "color: color(from red xyz-d50 calc(x + 1) calc(y + 1) calc(z + 1) / calc(alpha + 0.1))",
+    ] {
+        let value = color_value(source);
+        assert!(value.current().relative_value().is_some(), "{source}");
+        assert!(matches!(
+            value.i01_subset(),
+            Some(surgeist_css::CssColor::Relative(_))
+        ));
+    }
+}
+
+#[test]
+fn relative_color_channels_reject_foreign_names_dimensions_and_malformed_grammar() {
+    for invalid in [
+        "rgb(from red h g b)",
+        "rgb(from red r 1px b)",
+        "rgb(from red r g b / 1deg)",
+        "hsl(from red r s l)",
+        "hsl(from red h 1deg l)",
+        "hsl(from red 10% s l)",
+        "hwb(from red h s b)",
+        "lab(from red l c b)",
+        "lch(from red l a h)",
+        "oklab(from red l c b)",
+        "oklch(from red l a h)",
+        "color(from red srgb x g b)",
+        "color(from red xyz r y z)",
+        "rgb(from red calc(h + 1) g b)",
+        "oklch(from red l c calc(h + 10%))",
+        "rgb(from red r g)",
+        "rgb(from red r g b extra)",
+        "rgb(from red r g b /)",
+        "rgb(from red r g b / alpha / alpha)",
+        "rgb(from red 1e999 g b)",
+        "rgb(from red r 1e999% b)",
+        "hsl(from red 1e999deg s l)",
+        "rgb(from red calc(1e999 + 1) g b)",
+        "rgb(from red calc(3e38 * 3e38) g b)",
+        "color(from red --custom r g b)",
+        "alpha(from red r g b)",
+    ] {
+        let source = format!("color: {invalid}; opacity: 0.5");
+        let report = parse_style_attribute(&source);
+        assert_eq!(
+            report.syntax().len(),
+            1,
+            "{invalid}: {:?}",
+            report.diagnostics()
+        );
+        assert_eq!(report.diagnostics().len(), 1, "{invalid}");
+        assert_eq!(
+            report.syntax()[0].known().map(|known| known.property()),
+            Some(CssKnownProperty::Opacity),
+            "{invalid}",
+        );
+    }
+}
+
+#[test]
+fn relative_color_origins_recurse_without_evaluation() {
+    let value = color_value(concat!(
+        "color: rgb(from oklch(from color(from red xyz x y z) l c h) ",
+        "r g b / alpha)",
+    ));
+    let outer = value.current().relative_value().unwrap();
+    let middle = outer.source().relative_value().unwrap();
+    let inner = middle.source().relative_value().unwrap();
+    assert_eq!(outer.environment(), CssRelativeColorEnvironment::Rgb);
+    assert_eq!(middle.environment(), CssRelativeColorEnvironment::Oklch);
+    assert_eq!(
+        inner.environment(),
+        CssRelativeColorEnvironment::Xyz(CssPredefinedColorSpace::XyzD65)
+    );
+    assert!(matches!(
+        value.i01_subset(),
+        Some(surgeist_css::CssColor::Relative(_))
+    ));
+}
+
+#[test]
+fn relative_color_nesting_preserves_the_exact_parser_boundary() {
+    for depth in [255_usize, 256] {
+        let nested = format!(
+            "{}red{}",
+            "rgb(from ".repeat(depth),
+            " r g b)".repeat(depth),
+        );
+        let source = format!("color: {nested}; opacity: 0.5");
+        let report = parse_style_attribute(&source);
+        assert!(
+            report.is_clean(),
+            "depth {depth}: {:?}",
+            report.diagnostics()
+        );
+        assert_eq!(report.syntax().len(), 2);
+    }
+
+    {
+        let depth = 257_usize;
+        let nested = format!(
+            "{}red{}",
+            "rgb(from ".repeat(depth),
+            " r g b)".repeat(depth),
+        );
+        let source = format!("color: {nested}; opacity: 0.5");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "depth {depth}");
+        let [diagnostic] = report.diagnostics() else {
+            panic!("depth {depth}: expected one diagnostic");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            surgeist_css::CssErrorCode::NestingLimit,
+            "depth {depth}",
+        );
+        assert_eq!(
+            diagnostic.action(),
+            surgeist_css::CssRecoveryAction::StopAtNestingLimit,
+            "depth {depth}",
+        );
+    }
 }
 
 #[test]

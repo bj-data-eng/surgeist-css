@@ -1024,8 +1024,12 @@ pub(super) fn next_is_ident<'i, 't>(input: &mut Parser<'i, 't>, expected: &str) 
 pub(super) fn parse_color<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssParsedColor, ParseError<'i, Error>> {
-    if let Ok(color) = input.try_parse(parse_relative_color) {
-        return Ok(CssParsedColor::from_i01(color));
+    let start = input.position();
+    if next_is_authored_relative_color(input) {
+        let current = parse_authored_relative_color(input)
+            .map_err(|error| with_color_context(error, None))?;
+        let i01_subset = parse_compatibility_color_text(input.slice_from(start));
+        return Ok(CssParsedColor::new(current, i01_subset));
     }
     if let Ok(color) = input.try_parse(parse_color_mix) {
         return Ok(CssParsedColor::from_i01(color));
@@ -1046,6 +1050,22 @@ pub(super) fn parse_color<'i, 't>(
     parse_color_inner(input)
         .map(CssParsedColor::from_i01)
         .map_err(|error| with_color_context(error, None))
+}
+
+fn next_is_authored_relative_color<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let is_relative = match input.next() {
+        Ok(Token::Function(name)) if relative_color_function_from_name(name).is_some() => input
+            .parse_nested_block(|input| {
+                input.expect_ident_matching("from").map_err(basic)?;
+                while input.next_including_whitespace().is_ok() {}
+                Ok(())
+            })
+            .is_ok(),
+        Ok(_) | Err(_) => false,
+    };
+    input.reset(&state);
+    is_relative
 }
 
 fn parse_compatibility_only_predefined_color<'i, 't>(
@@ -1534,6 +1554,513 @@ fn parse_color_inner<'i, 't>(
         return Ok(color);
     }
     Err(invalid_color(input.current_source_location(), None))
+}
+
+fn parse_authored_relative_color<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssAuthoredColor, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let token = input.next().map_err(basic)?.clone();
+    let Token::Function(name) = token else {
+        return Err(location.new_unexpected_token_error(token));
+    };
+    let Some(function) = relative_color_function_from_name(&name) else {
+        return Err(location.new_unexpected_token_error(Token::Function(name)));
+    };
+    input
+        .parse_nested_block(|input| parse_authored_relative_color_arguments(input, function))
+        .map(CssAuthoredColor::relative)
+}
+
+fn parse_authored_relative_color_arguments<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    function: RelativeColorFunction,
+) -> std::result::Result<CssAuthoredRelativeColor, ParseError<'i, Error>> {
+    input.expect_ident_matching("from").map_err(basic)?;
+    let (source, _) = parse_color(input)?.into_parts();
+    let (function, environment, domains) = relative_color_signature(input, function)?;
+    let channels = [
+        parse_typed_relative_color_expression(input, environment, domains[0])?,
+        parse_typed_relative_color_expression(input, environment, domains[1])?,
+        parse_typed_relative_color_expression(input, environment, domains[2])?,
+    ];
+    let alpha = if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+        Some(parse_typed_relative_color_expression(
+            input,
+            environment,
+            CssRelativeColorResultDomain::Alpha,
+        )?)
+    } else {
+        None
+    };
+    input.expect_exhausted().map_err(basic)?;
+    Ok(CssAuthoredRelativeColor::new(
+        function,
+        environment,
+        source,
+        channels,
+        alpha,
+    ))
+}
+
+fn relative_color_signature<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    function: RelativeColorFunction,
+) -> std::result::Result<
+    (
+        CssRelativeColorFunction,
+        CssRelativeColorEnvironment,
+        [CssRelativeColorResultDomain; 3],
+    ),
+    ParseError<'i, Error>,
+> {
+    use CssRelativeColorResultDomain::{Hue, NumberPercentage};
+    let signature = match function {
+        RelativeColorFunction::Rgb => (
+            CssRelativeColorFunction::Rgb,
+            CssRelativeColorEnvironment::Rgb,
+            [NumberPercentage; 3],
+        ),
+        RelativeColorFunction::Hsl => (
+            CssRelativeColorFunction::Hsl,
+            CssRelativeColorEnvironment::Hsl,
+            [Hue, NumberPercentage, NumberPercentage],
+        ),
+        RelativeColorFunction::Hwb => (
+            CssRelativeColorFunction::Hwb,
+            CssRelativeColorEnvironment::Hwb,
+            [Hue, NumberPercentage, NumberPercentage],
+        ),
+        RelativeColorFunction::Lab => (
+            CssRelativeColorFunction::Lab,
+            CssRelativeColorEnvironment::Lab,
+            [NumberPercentage; 3],
+        ),
+        RelativeColorFunction::Lch => (
+            CssRelativeColorFunction::Lch,
+            CssRelativeColorEnvironment::Lch,
+            [NumberPercentage, NumberPercentage, Hue],
+        ),
+        RelativeColorFunction::Oklab => (
+            CssRelativeColorFunction::Oklab,
+            CssRelativeColorEnvironment::Oklab,
+            [NumberPercentage; 3],
+        ),
+        RelativeColorFunction::Oklch => (
+            CssRelativeColorFunction::Oklch,
+            CssRelativeColorEnvironment::Oklch,
+            [NumberPercentage, NumberPercentage, Hue],
+        ),
+        RelativeColorFunction::Color => {
+            let space = parse_relative_predefined_color_space(input)?;
+            let environment = match space {
+                CssPredefinedColorSpace::XyzD50 | CssPredefinedColorSpace::XyzD65 => {
+                    CssRelativeColorEnvironment::Xyz(space)
+                }
+                _ => CssRelativeColorEnvironment::PredefinedRgb(space),
+            };
+            (
+                CssRelativeColorFunction::Color(space),
+                environment,
+                [NumberPercentage; 3],
+            )
+        }
+    };
+    Ok(signature)
+}
+
+fn parse_typed_relative_color_expression<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    environment: CssRelativeColorEnvironment,
+    result_domain: CssRelativeColorResultDomain,
+) -> std::result::Result<CssTypedRelativeColorExpression, ParseError<'i, Error>> {
+    input.skip_whitespace();
+    let start = input.position();
+    let location = input.current_source_location();
+    let token = input.next().map_err(basic)?.clone();
+    let value = match token {
+        Token::Ident(ident) if ident.eq_ignore_ascii_case("none") => {
+            CssRelativeColorExpressionValue::None
+        }
+        Token::Ident(ident) => {
+            let Some(channel) = relative_color_channel(environment, &ident) else {
+                return Err(with_color_context(
+                    location.new_unexpected_token_error::<Error>(Token::Ident(ident)),
+                    Some("relative channel"),
+                ));
+            };
+            CssRelativeColorExpressionValue::Channel(channel)
+        }
+        Token::Number { value, .. } => CssFiniteNumber::try_new(value)
+            .map(CssRelativeColorExpressionValue::Number)
+            .ok_or_else(|| invalid_color(location, Some("relative channel")))?,
+        Token::Percentage { unit_value, .. } => CssFiniteNumber::try_new(unit_value * 100.0)
+            .map(CssRelativeColorExpressionValue::Percentage)
+            .ok_or_else(|| invalid_color(location, Some("relative channel")))?,
+        Token::Dimension { value, unit, .. }
+            if matches!(result_domain, CssRelativeColorResultDomain::Hue) =>
+        {
+            parse_relative_angle(value, &unit)
+                .map(CssRelativeColorExpressionValue::Angle)
+                .ok_or_else(|| invalid_color(location, Some("relative hue")))?
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            let mut references = Vec::new();
+            let info = input.parse_nested_block(|input| {
+                let info = parse_relative_calculation_sum(input, environment, 0, &mut references)?;
+                input.expect_exhausted().map_err(basic)?;
+                Ok(info)
+            })?;
+            if !relative_result_domain_accepts(result_domain, info.result_type) {
+                return Err(invalid_color(location, Some("relative channel")));
+            }
+            let authored = CssAuthoredDeclarationValue::new(input.slice_from(start).trim_end());
+            CssRelativeColorExpressionValue::Calculation(CssRelativeColorCalculation::new(
+                authored,
+                info.result_type,
+                references,
+            ))
+        }
+        token => {
+            return Err(with_color_context(
+                location.new_unexpected_token_error::<Error>(token),
+                Some("relative channel"),
+            ));
+        }
+    };
+    if !relative_direct_value_is_valid(result_domain, &value) {
+        return Err(invalid_color(location, Some("relative channel")));
+    }
+    Ok(CssTypedRelativeColorExpression::new(
+        environment,
+        result_domain,
+        value,
+    ))
+}
+
+fn relative_direct_value_is_valid(
+    domain: CssRelativeColorResultDomain,
+    value: &CssRelativeColorExpressionValue,
+) -> bool {
+    match value {
+        CssRelativeColorExpressionValue::None
+        | CssRelativeColorExpressionValue::Channel(_)
+        | CssRelativeColorExpressionValue::Calculation(_) => true,
+        CssRelativeColorExpressionValue::Number(_) => true,
+        CssRelativeColorExpressionValue::Percentage(_) => {
+            !matches!(domain, CssRelativeColorResultDomain::Hue)
+        }
+        CssRelativeColorExpressionValue::Angle(_) => {
+            matches!(domain, CssRelativeColorResultDomain::Hue)
+        }
+    }
+}
+
+fn relative_result_domain_accepts(
+    domain: CssRelativeColorResultDomain,
+    result_type: CssCalculationType,
+) -> bool {
+    match domain {
+        CssRelativeColorResultDomain::NumberPercentage | CssRelativeColorResultDomain::Alpha => {
+            matches!(
+                result_type,
+                CssCalculationType::Integer
+                    | CssCalculationType::Number
+                    | CssCalculationType::Percentage
+            )
+        }
+        CssRelativeColorResultDomain::Hue => matches!(
+            result_type,
+            CssCalculationType::Integer | CssCalculationType::Number | CssCalculationType::Angle
+        ),
+    }
+}
+
+fn relative_color_channel(
+    environment: CssRelativeColorEnvironment,
+    ident: &str,
+) -> Option<CssRelativeColorChannel> {
+    use CssRelativeColorChannel::{A, Alpha, B, C, G, H, L, R, S, W, X, Y, Z};
+    let channel = match environment {
+        CssRelativeColorEnvironment::Rgb | CssRelativeColorEnvironment::PredefinedRgb(_) => {
+            match_ignore_ascii_case! { ident,
+                "r" => R,
+                "g" => G,
+                "b" => B,
+                "alpha" => Alpha,
+                _ => return None,
+            }
+        }
+        CssRelativeColorEnvironment::Hsl => match_ignore_ascii_case! { ident,
+            "h" => H,
+            "s" => S,
+            "l" => L,
+            "alpha" => Alpha,
+            _ => return None,
+        },
+        CssRelativeColorEnvironment::Hwb => match_ignore_ascii_case! { ident,
+            "h" => H,
+            "w" => W,
+            "b" => B,
+            "alpha" => Alpha,
+            _ => return None,
+        },
+        CssRelativeColorEnvironment::Lab | CssRelativeColorEnvironment::Oklab => {
+            match_ignore_ascii_case! { ident,
+                "l" => L,
+                "a" => A,
+                "b" => B,
+                "alpha" => Alpha,
+                _ => return None,
+            }
+        }
+        CssRelativeColorEnvironment::Lch | CssRelativeColorEnvironment::Oklch => {
+            match_ignore_ascii_case! { ident,
+                "l" => L,
+                "c" => C,
+                "h" => H,
+                "alpha" => Alpha,
+                _ => return None,
+            }
+        }
+        CssRelativeColorEnvironment::Xyz(_) => match_ignore_ascii_case! { ident,
+            "x" => X,
+            "y" => Y,
+            "z" => Z,
+            "alpha" => Alpha,
+            _ => return None,
+        },
+    };
+    Some(channel)
+}
+
+fn relative_channel_type(
+    environment: CssRelativeColorEnvironment,
+    channel: CssRelativeColorChannel,
+) -> CssCalculationType {
+    use CssRelativeColorChannel::{A, Alpha, B, C, G, H, L, R, S, W, X, Y, Z};
+    match (environment, channel) {
+        (CssRelativeColorEnvironment::Hsl, H)
+        | (CssRelativeColorEnvironment::Hwb, H)
+        | (CssRelativeColorEnvironment::Lch, H)
+        | (CssRelativeColorEnvironment::Oklch, H) => CssCalculationType::Angle,
+        (CssRelativeColorEnvironment::Hsl, S | L)
+        | (CssRelativeColorEnvironment::Hwb, W | B)
+        | (CssRelativeColorEnvironment::Lab | CssRelativeColorEnvironment::Oklab, L)
+        | (CssRelativeColorEnvironment::Lch | CssRelativeColorEnvironment::Oklch, L) => {
+            CssCalculationType::Percentage
+        }
+        (_, R | G | B | A | C | X | Y | Z | Alpha | H | S | L | W) => CssCalculationType::Number,
+    }
+}
+
+fn parse_relative_angle(value: f32, unit: &str) -> Option<CssAngleLiteral> {
+    let unit = match unit.to_ascii_lowercase().as_str() {
+        "deg" => CssAngleUnit::Degrees,
+        "grad" => CssAngleUnit::Gradians,
+        "rad" => CssAngleUnit::Radians,
+        "turn" => CssAngleUnit::Turns,
+        _ => return None,
+    };
+    CssAngleLiteral::try_new(value, unit)
+}
+
+#[derive(Clone, Copy)]
+struct RelativeCalculationInfo {
+    result_type: CssCalculationType,
+    numeric_value: Option<f32>,
+}
+
+fn parse_relative_calculation_sum<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    environment: CssRelativeColorEnvironment,
+    depth: u16,
+    references: &mut Vec<CssRelativeColorChannel>,
+) -> std::result::Result<RelativeCalculationInfo, ParseError<'i, Error>> {
+    let mut result = parse_relative_calculation_product(input, environment, depth, references)?;
+    loop {
+        let state = input.state();
+        let location = input.current_source_location();
+        let operator = match input.next() {
+            Ok(Token::Delim('+')) => Some(1.0),
+            Ok(Token::Delim('-')) => Some(-1.0),
+            Ok(_) | Err(_) => None,
+        };
+        let Some(operator) = operator else {
+            input.reset(&state);
+            break;
+        };
+        let right = parse_relative_calculation_product(input, environment, depth, references)?;
+        if relative_sum_type(result.result_type, right.result_type).is_none() {
+            return Err(invalid_color(location, Some("relative calculation")));
+        }
+        result.numeric_value = match (result.numeric_value, right.numeric_value) {
+            (Some(left), Some(right)) => {
+                let value = left + operator * right;
+                if !value.is_finite() {
+                    return Err(invalid_color(location, Some("relative calculation")));
+                }
+                Some(value)
+            }
+            _ => None,
+        };
+    }
+    Ok(result)
+}
+
+fn parse_relative_calculation_product<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    environment: CssRelativeColorEnvironment,
+    depth: u16,
+    references: &mut Vec<CssRelativeColorChannel>,
+) -> std::result::Result<RelativeCalculationInfo, ParseError<'i, Error>> {
+    let mut result = parse_relative_calculation_unary(input, environment, depth, references)?;
+    loop {
+        let state = input.state();
+        let location = input.current_source_location();
+        let operator = match input.next() {
+            Ok(Token::Delim('*')) => Some(true),
+            Ok(Token::Delim('/')) => Some(false),
+            Ok(_) | Err(_) => None,
+        };
+        let Some(is_multiply) = operator else {
+            input.reset(&state);
+            break;
+        };
+        let right = parse_relative_calculation_unary(input, environment, depth, references)?;
+        let Some(result_type) =
+            relative_product_type(result.result_type, right.result_type, is_multiply)
+        else {
+            return Err(invalid_color(location, Some("relative calculation")));
+        };
+        if !is_multiply && matches!(right.numeric_value, Some(value) if value == 0.0) {
+            return Err(invalid_color(location, Some("relative calculation")));
+        }
+        result.numeric_value = match (result.numeric_value, right.numeric_value) {
+            (Some(left), Some(right)) => {
+                let value = if is_multiply {
+                    left * right
+                } else {
+                    left / right
+                };
+                if !value.is_finite() {
+                    return Err(invalid_color(location, Some("relative calculation")));
+                }
+                Some(value)
+            }
+            _ => None,
+        };
+        result.result_type = result_type;
+    }
+    Ok(result)
+}
+
+fn parse_relative_calculation_unary<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    environment: CssRelativeColorEnvironment,
+    depth: u16,
+    references: &mut Vec<CssRelativeColorChannel>,
+) -> std::result::Result<RelativeCalculationInfo, ParseError<'i, Error>> {
+    let state = input.state();
+    if matches!(input.next(), Ok(Token::Delim('-'))) {
+        let mut value = parse_relative_calculation_unary(input, environment, depth, references)?;
+        value.numeric_value = value.numeric_value.map(|value| -value);
+        return Ok(value);
+    }
+    input.reset(&state);
+    parse_relative_calculation_value(input, environment, depth, references)
+}
+
+fn parse_relative_calculation_value<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    environment: CssRelativeColorEnvironment,
+    depth: u16,
+    references: &mut Vec<CssRelativeColorChannel>,
+) -> std::result::Result<RelativeCalculationInfo, ParseError<'i, Error>> {
+    input.skip_whitespace();
+    let location = input.current_source_location();
+    let token = input.next().map_err(basic)?.clone();
+    let result = match token {
+        Token::Number { value, .. } if value.is_finite() => RelativeCalculationInfo {
+            result_type: CssCalculationType::Number,
+            numeric_value: Some(value),
+        },
+        Token::Percentage { unit_value, .. } if unit_value.is_finite() => RelativeCalculationInfo {
+            result_type: CssCalculationType::Percentage,
+            numeric_value: Some(unit_value * 100.0),
+        },
+        Token::Dimension { value, unit, .. } => {
+            let angle = parse_relative_angle(value, &unit)
+                .ok_or_else(|| invalid_color(location, Some("relative calculation")))?;
+            RelativeCalculationInfo {
+                result_type: CssCalculationType::Angle,
+                numeric_value: Some(angle.value()),
+            }
+        }
+        Token::Ident(ident) => {
+            let channel = relative_color_channel(environment, &ident)
+                .ok_or_else(|| invalid_color(location, Some("relative calculation")))?;
+            references.push(channel);
+            RelativeCalculationInfo {
+                result_type: relative_channel_type(environment, channel),
+                numeric_value: None,
+            }
+        }
+        Token::ParenthesisBlock => {
+            let nested_depth = checked_calculation_depth(depth, location)?;
+            input.parse_nested_block(|input| {
+                let value =
+                    parse_relative_calculation_sum(input, environment, nested_depth, references)?;
+                input.expect_exhausted().map_err(basic)?;
+                Ok(value)
+            })?
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            let nested_depth = checked_calculation_depth(depth, location)?;
+            input.parse_nested_block(|input| {
+                let value =
+                    parse_relative_calculation_sum(input, environment, nested_depth, references)?;
+                input.expect_exhausted().map_err(basic)?;
+                Ok(value)
+            })?
+        }
+        _ => return Err(invalid_color(location, Some("relative calculation"))),
+    };
+    Ok(result)
+}
+
+fn relative_sum_type(
+    left: CssCalculationType,
+    right: CssCalculationType,
+) -> Option<CssCalculationType> {
+    (left == right).then_some(left)
+}
+
+fn relative_product_type(
+    left: CssCalculationType,
+    right: CssCalculationType,
+    is_multiply: bool,
+) -> Option<CssCalculationType> {
+    let left_is_number = matches!(
+        left,
+        CssCalculationType::Integer | CssCalculationType::Number
+    );
+    let right_is_number = matches!(
+        right,
+        CssCalculationType::Integer | CssCalculationType::Number
+    );
+    if is_multiply {
+        match (left_is_number, right_is_number) {
+            (true, true) => Some(CssCalculationType::Number),
+            (true, false) => Some(right),
+            (false, true) => Some(left),
+            (false, false) => None,
+        }
+    } else if right_is_number {
+        Some(left)
+    } else {
+        None
+    }
 }
 
 fn parse_relative_color<'i, 't>(

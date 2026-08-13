@@ -165,6 +165,41 @@ fn app_strict_namespace_rules_match_ordinary_retention_ordering_and_recovery() {
     }
 }
 
+#[test]
+fn app_strict_namespace_qualified_selectors_match_ordinary_results() {
+    let clean = assert_sheet_parity(concat!(
+        "@namespace \"urn:default\";",
+        "@namespace svg \"urn:svg\";",
+        "svg|a,svg|*,*|a,|a,a[svg|href][*|title][|lang][plain] { color: red; }",
+    ));
+    assert!(clean.is_clean(), "{:?}", clean.diagnostics());
+    assert!(matches!(
+        clean.syntax().rules(),
+        [
+            CssRule::Namespace(_),
+            CssRule::Namespace(_),
+            CssRule::Style(_),
+            CssRule::Style(_),
+            CssRule::Style(_),
+            CssRule::Style(_),
+            CssRule::Style(_),
+        ]
+    ));
+
+    let recovered = assert_sheet_parity(concat!(
+        "@namespace svg \"urn:svg\";",
+        ".before {} missing|a { color: red; } .after {}",
+    ));
+    assert!(matches!(
+        recovered.syntax().rules(),
+        [CssRule::Namespace(_), CssRule::Style(_), CssRule::Style(_)]
+    ));
+    let [diagnostic] = recovered.diagnostics() else {
+        panic!("expected one undeclared-prefix diagnostic")
+    };
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropQualifiedRule);
+}
+
 fn nested_selector(depth: usize) -> String {
     format!("{}{}{}", ":is(".repeat(depth), ".leaf", ")".repeat(depth)) + "{color:red}"
 }

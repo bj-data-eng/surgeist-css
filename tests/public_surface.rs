@@ -12,12 +12,13 @@ use surgeist_css::{
     CssGenericFontFamily, CssGridAutoFlowAxis, CssHueInterpolationMethod, CssImportance,
     CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLength,
     CssLineHeightLengthPercentage, CssMediaConditionKind, CssMediaQuery, CssMediaQueryModifier,
-    CssMediaType, CssNamespaceName, CssNamespacePrefix, CssOpenTypeTag, CssPredefinedColorSpace,
-    CssPropertyNameRef, CssRecoveryAction, CssRelativeColorChannel, CssRelativeColorEnvironment,
-    CssRelativeColorExpressionValue, CssRelativeColorFunction, CssRelativeColorResultDomain,
-    CssRule, CssSelectorCombinator, CssSpecificationTier, CssSupportStatus,
-    CssSupportsConditionKind, CssSupportsConditionList, ErrorKind, conformance_exclusion,
-    feature_metadata, parse_sheet, parse_style_attribute, property_metadata, specification_source,
+    CssMediaType, CssNamespaceConstraint, CssNamespaceName, CssNamespacePrefix, CssOpenTypeTag,
+    CssPredefinedColorSpace, CssPropertyNameRef, CssRecoveryAction, CssRelativeColorChannel,
+    CssRelativeColorEnvironment, CssRelativeColorExpressionValue, CssRelativeColorFunction,
+    CssRelativeColorResultDomain, CssRule, CssSelector, CssSelectorCombinator,
+    CssSpecificationTier, CssSupportStatus, CssSupportsConditionKind, CssSupportsConditionList,
+    ErrorKind, conformance_exclusion, feature_metadata, parse_sheet, parse_style_attribute,
+    property_metadata, specification_source,
 };
 
 #[test]
@@ -39,6 +40,40 @@ fn public_surface_exposes_checked_private_field_namespace_models() {
     );
     assert!(CssNamespacePrefix::try_new("svg icon").is_none());
     assert_eq!(CssNamespaceName::new("").as_str(), "");
+}
+
+#[test]
+fn public_surface_exposes_namespace_qualified_selector_accessors_and_id_projection() {
+    let report = parse_sheet(concat!(
+        "@namespace svg \"urn:svg\";",
+        "svg|a#primary[svg|href] { color: red; }",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [CssRule::Namespace(_), CssRule::Style(rule)] = report.syntax().rules() else {
+        panic!("expected namespace and qualified style rules")
+    };
+    let CssSelector::Compound(selector) = rule.selector() else {
+        panic!("expected qualified compound selector")
+    };
+
+    let type_selector = selector.type_selector().expect("qualified type selector");
+    assert!(matches!(
+        type_selector.namespace(),
+        CssNamespaceConstraint::Named(prefix) if prefix.as_str() == "svg"
+    ));
+    assert_eq!(type_selector.local_name(), Some("a"));
+    assert_eq!(selector.tag().map(String::as_str), Some("a"));
+    assert_eq!(selector.ids(), ["primary"]);
+    assert_eq!(selector.key().map(String::as_str), Some("primary"));
+
+    let [attribute] = selector.attributes() else {
+        panic!("expected qualified attribute selector")
+    };
+    assert!(matches!(
+        attribute.namespace(),
+        CssNamespaceConstraint::Named(prefix) if prefix.as_str() == "svg"
+    ));
+    assert_eq!(attribute.name().as_str(), "href");
 }
 
 #[test]

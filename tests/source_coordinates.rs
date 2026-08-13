@@ -1155,3 +1155,18 @@ fn source_public_nodes_expose_zero_based_byte_line_and_utf16_coordinates() {
     assert_position(rule.position(), 11, 1, 2);
     assert_eq!(rule.prefix().expect("decoded prefix").as_str(), "svg");
 }
+
+#[test]
+fn undeclared_namespace_prefix_at_eof_preserves_non_bmp_coordinates() {
+    let source = "@namespace svg \"u\";/*😀*/missing|a {";
+    let report = parse_sheet(source);
+    assert!(matches!(report.syntax().rules(), [CssRule::Namespace(_)]));
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected one undeclared-prefix diagnostic")
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::InvalidSelector);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropQualifiedRule);
+    assert_position(diagnostic.error().position(), 35, 0, 33);
+    assert_position(diagnostic.span().start(), 27, 0, 25);
+    assert_position(diagnostic.span().end(), source.len(), 0, 36);
+}

@@ -2,6 +2,7 @@ use cssparser::{
     BasicParseErrorKind, Delimiter, ParseError, Parser, ToCss, Token, match_ignore_ascii_case,
 };
 
+use super::CssNamespaceBindings;
 use super::recovery::{RecoveryState, comma_member_span, recovery_action_for_error};
 use crate::error::{CssFeatureId, Error, from_parse_error, invalid_selector, selector_basic};
 use crate::syntax::*;
@@ -24,6 +25,7 @@ pub(super) struct SelectorRecovery<'a> {
     source: &'a str,
     diagnostics: &'a mut Vec<crate::CssRecoveryDiagnostic>,
     state: RecoveryState,
+    namespaces: Option<&'a CssNamespaceBindings>,
 }
 
 impl<'a> SelectorRecovery<'a> {
@@ -36,7 +38,39 @@ impl<'a> SelectorRecovery<'a> {
             source,
             diagnostics,
             state,
+            namespaces: None,
         }
+    }
+
+    pub(super) fn new_with_namespaces(
+        source: &'a str,
+        diagnostics: &'a mut Vec<crate::CssRecoveryDiagnostic>,
+        state: RecoveryState,
+        namespaces: &'a CssNamespaceBindings,
+    ) -> Self {
+        Self {
+            source,
+            diagnostics,
+            state,
+            namespaces: Some(namespaces),
+        }
+    }
+
+    fn unqualified_type_namespace(&self) -> CssNamespaceConstraint {
+        if self
+            .namespaces
+            .is_some_and(CssNamespaceBindings::has_default)
+        {
+            CssNamespaceConstraint::Default
+        } else {
+            CssNamespaceConstraint::Any
+        }
+    }
+
+    fn named_namespace(&self, prefix: &str) -> Option<CssNamespacePrefix> {
+        self.namespaces
+            .and_then(|namespaces| namespaces.active_prefix(prefix))
+            .cloned()
     }
 
     pub(super) fn check_depth<'i, 't>(
@@ -376,6 +410,138 @@ pub(super) fn parse_compound_selector_model<'i, 't>(
     parse_compound_selector_model_with_options(input, SelectorParseOptions::standard(), recovery)
 }
 
+struct ParsedTypeSelector {
+    name: CssQualifiedSelectorName,
+    legacy_projection: bool,
+}
+
+fn parse_type_selector<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    recovery: &SelectorRecovery<'_>,
+) -> std::result::Result<Option<ParsedTypeSelector>, ParseError<'i, Error>> {
+    let start = input.state();
+    let first = match input.next_including_whitespace() {
+        Ok(token) => token.clone(),
+        Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+            input.reset(&start);
+            return Ok(None);
+        }
+        Err(error) => return Err(selector_basic(error)),
+    };
+
+    match first {
+        Token::Ident(prefix_or_name) => {
+            let prefix_or_name = prefix_or_name.to_string();
+            let after_ident = input.state();
+            match input.next_including_whitespace() {
+                Ok(Token::Delim('|')) => {
+                    let local_start = input.state();
+                    let local_name = parse_qualified_local_name(input)?;
+                    let Some(prefix) = recovery.named_namespace(&prefix_or_name) else {
+                        input.reset(&local_start);
+                        return Err(invalid_selector(
+                            input,
+                            format!("undeclared selector namespace prefix `{prefix_or_name}`"),
+                        ));
+                    };
+                    let namespace = CssNamespaceConstraint::Named(prefix);
+                    let name = if let Some(local_name) = local_name {
+                        CssQualifiedSelectorName::new(namespace, local_name)
+                    } else {
+                        CssQualifiedSelectorName::universal(namespace)
+                    };
+                    Ok(Some(ParsedTypeSelector {
+                        name,
+                        legacy_projection: false,
+                    }))
+                }
+                Ok(_) => {
+                    input.reset(&after_ident);
+                    let namespace = recovery.unqualified_type_namespace();
+                    let legacy_projection = matches!(namespace, CssNamespaceConstraint::Any);
+                    Ok(Some(ParsedTypeSelector {
+                        name: CssQualifiedSelectorName::new(namespace, prefix_or_name),
+                        legacy_projection,
+                    }))
+                }
+                Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+                    input.reset(&after_ident);
+                    let namespace = recovery.unqualified_type_namespace();
+                    let legacy_projection = matches!(namespace, CssNamespaceConstraint::Any);
+                    Ok(Some(ParsedTypeSelector {
+                        name: CssQualifiedSelectorName::new(namespace, prefix_or_name),
+                        legacy_projection,
+                    }))
+                }
+                Err(error) => Err(selector_basic(error)),
+            }
+        }
+        Token::Delim('*') => {
+            let after_star = input.state();
+            if matches!(input.next_including_whitespace(), Ok(Token::Delim('|'))) {
+                let local_name = parse_qualified_local_name(input)?;
+                let namespace = CssNamespaceConstraint::Any;
+                let name = if let Some(local_name) = local_name {
+                    CssQualifiedSelectorName::new(namespace, local_name)
+                } else {
+                    CssQualifiedSelectorName::universal(namespace)
+                };
+                Ok(Some(ParsedTypeSelector {
+                    name,
+                    legacy_projection: false,
+                }))
+            } else {
+                input.reset(&after_star);
+                Ok(Some(ParsedTypeSelector {
+                    name: CssQualifiedSelectorName::universal(
+                        recovery.unqualified_type_namespace(),
+                    ),
+                    legacy_projection: false,
+                }))
+            }
+        }
+        Token::Delim('|') => {
+            let local_name = parse_qualified_local_name(input)?;
+            let namespace = CssNamespaceConstraint::ExplicitNone;
+            let name = if let Some(local_name) = local_name {
+                CssQualifiedSelectorName::new(namespace, local_name)
+            } else {
+                CssQualifiedSelectorName::universal(namespace)
+            };
+            Ok(Some(ParsedTypeSelector {
+                name,
+                legacy_projection: false,
+            }))
+        }
+        _ => {
+            input.reset(&start);
+            Ok(None)
+        }
+    }
+}
+
+fn parse_qualified_local_name<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<Option<String>, ParseError<'i, Error>> {
+    match input.next_including_whitespace() {
+        Ok(Token::Ident(name)) => Ok(Some(name.to_string())),
+        Ok(Token::Delim('*')) => Ok(None),
+        Ok(token) => {
+            let authored = token.to_css_string();
+            Err(invalid_selector(
+                input,
+                format!(
+                    "selector namespace separator must be followed by a local name or `*`, found `{authored}`"
+                ),
+            ))
+        }
+        Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => Err(
+            invalid_selector(input, "selector namespace is missing a local name"),
+        ),
+        Err(error) => Err(selector_basic(error)),
+    }
+}
+
 fn parse_compound_selector_model_with_options<'i, 't>(
     input: &mut Parser<'i, 't>,
     options: SelectorParseOptions,
@@ -397,18 +563,14 @@ fn parse_compound_selector_model_with_options<'i, 't>(
         }
     }
 
-    let mut tag_name = None;
+    let parsed_type_selector = parse_type_selector(input, recovery)?;
+    let type_selector = parsed_type_selector.map(|parsed| (parsed.name, parsed.legacy_projection));
     let mut scope_anchor = false;
     let mut key_name = None;
     let mut class_names = Vec::new();
     let mut attributes = Vec::new();
     let mut pseudo_classes = Vec::new();
     let mut pseudo_elements = None;
-
-    if let Ok(tag) = input.try_parse(Parser::expect_ident_cloned) {
-        let tag = tag.to_string();
-        tag_name = Some(tag);
-    }
 
     loop {
         let state = input.state();
@@ -454,7 +616,8 @@ fn parse_compound_selector_model_with_options<'i, 't>(
         }
 
         if input.try_parse(Parser::expect_square_bracket_block).is_ok() {
-            let attribute = input.parse_nested_block(parse_attribute_selector)?;
+            let attribute =
+                input.parse_nested_block(|input| parse_attribute_selector(input, recovery))?;
             attributes.push(attribute);
             continue;
         }
@@ -488,7 +651,7 @@ fn parse_compound_selector_model_with_options<'i, 't>(
             Ok(token) => {
                 let message = format!("unexpected selector token `{}`", token.to_css_string());
                 input.reset(&state);
-                if tag_name.is_none()
+                if type_selector.is_none()
                     && !scope_anchor
                     && key_name.is_none()
                     && class_names.is_empty()
@@ -505,7 +668,7 @@ fn parse_compound_selector_model_with_options<'i, 't>(
         }
     }
 
-    if tag_name.is_none()
+    if type_selector.is_none()
         && !scope_anchor
         && key_name.is_none()
         && class_names.is_empty()
@@ -518,79 +681,11 @@ fn parse_compound_selector_model_with_options<'i, 't>(
             "selector is missing a simple selector",
         ));
     }
-    if let (None, false, None, [class], [], [], None) = (
-        tag_name.as_ref(),
-        scope_anchor,
-        key_name.as_ref(),
-        class_names.as_slice(),
-        attributes.as_slice(),
-        pseudo_classes.as_slice(),
-        pseudo_elements.as_ref(),
-    ) {
-        return Ok(CssCompoundSelector::new(
-            None,
-            None,
-            vec![class.clone()],
-            Vec::new(),
-            Vec::new(),
-        ));
-    }
-    if let (Some(tag), false, None, [], [], [], None) = (
-        tag_name.as_ref(),
-        scope_anchor,
-        key_name.as_ref(),
-        class_names.as_slice(),
-        attributes.as_slice(),
-        pseudo_classes.as_slice(),
-        pseudo_elements.as_ref(),
-    ) {
-        return Ok(CssCompoundSelector::new(
-            Some(tag.clone()),
-            None,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-        ));
-    }
-    if let (None, false, Some(key), [], [], [], None) = (
-        tag_name.as_ref(),
-        scope_anchor,
-        key_name.as_ref(),
-        class_names.as_slice(),
-        attributes.as_slice(),
-        pseudo_classes.as_slice(),
-        pseudo_elements.as_ref(),
-    ) {
-        return Ok(CssCompoundSelector::new(
-            None,
-            Some(key.clone()),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-        ));
-    }
-    if let (None, false, None, [], [], [pseudo_class], None) = (
-        tag_name.as_ref(),
-        scope_anchor,
-        key_name.as_ref(),
-        class_names.as_slice(),
-        attributes.as_slice(),
-        pseudo_classes.as_slice(),
-        pseudo_elements.as_ref(),
-    ) {
-        return Ok(CssCompoundSelector::new(
-            None,
-            None,
-            Vec::new(),
-            Vec::new(),
-            vec![pseudo_class.clone()],
-        ));
-    }
     Ok(
-        CssCompoundSelector::new_with_scope_anchor_and_pseudo_elements(
+        CssCompoundSelector::new_with_qualified_type_and_pseudo_elements(
             scope_anchor,
-            tag_name,
-            key_name,
+            type_selector,
+            key_name.into_iter().collect(),
             class_names,
             attributes,
             pseudo_classes,
@@ -613,13 +708,15 @@ fn compound_selector_to_selector(selector: CssCompoundSelector) -> CssSelector {
     ) {
         return CssSelector::Class(class.clone());
     }
-    if let (Some(tag), None, [], [], []) = (
-        selector.tag(),
-        selector.key(),
-        selector.classes(),
-        selector.attributes(),
-        selector.pseudo_classes(),
-    ) {
+    if selector.has_legacy_type_projection()
+        && let (Some(tag), None, [], [], []) = (
+            selector.tag(),
+            selector.key(),
+            selector.classes(),
+            selector.attributes(),
+            selector.pseudo_classes(),
+        )
+    {
         return CssSelector::Tag(tag.clone());
     }
     if let (None, Some(key), [], [], []) = (
@@ -694,13 +791,15 @@ fn parse_pseudo_element<'i, 't>(
 
 fn parse_attribute_selector<'i, 't>(
     input: &mut Parser<'i, 't>,
+    recovery: &SelectorRecovery<'_>,
 ) -> std::result::Result<CssAttributeSelector, ParseError<'i, Error>> {
-    let name = input.expect_ident_cloned().map_err(selector_basic)?;
-    let name = CssAttributeName::new(name.to_string());
+    consume_selector_whitespace(input)?;
+    let (namespace, name) = parse_attribute_selector_name(input, recovery)?;
 
     let matcher = match input.next() {
         Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
-            return Ok(CssAttributeSelector::new(
+            return Ok(CssAttributeSelector::new_qualified(
+                namespace,
                 name,
                 CssAttributeMatcher::Exists,
                 CssAttributeCaseSensitivity::DocumentDefault,
@@ -736,7 +835,146 @@ fn parse_attribute_selector<'i, 't>(
 
     let case_sensitivity = parse_attribute_case_sensitivity(input)?;
     input.expect_exhausted().map_err(selector_basic)?;
-    Ok(CssAttributeSelector::new(name, matcher, case_sensitivity))
+    Ok(CssAttributeSelector::new_qualified(
+        namespace,
+        name,
+        matcher,
+        case_sensitivity,
+    ))
+}
+
+fn parse_attribute_selector_name<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    recovery: &SelectorRecovery<'_>,
+) -> std::result::Result<(CssNamespaceConstraint, CssAttributeName), ParseError<'i, Error>> {
+    match input.next_including_whitespace() {
+        Ok(Token::Ident(prefix_or_name)) => {
+            let prefix_or_name = prefix_or_name.to_string();
+            let after_ident = input.state();
+            match input.next_including_whitespace() {
+                Ok(Token::Delim('|')) => {
+                    let local_start = input.state();
+                    let local_name = input.next_including_whitespace();
+                    let local_name = match local_name {
+                        Ok(Token::Ident(name)) => name.to_string(),
+                        Ok(token) => {
+                            let authored = token.to_css_string();
+                            return Err(invalid_selector(
+                                input,
+                                format!(
+                                    "attribute namespace separator must be followed by a local name, found `{authored}`"
+                                ),
+                            ));
+                        }
+                        Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+                            return Err(invalid_selector(
+                                input,
+                                "attribute namespace is missing a local name",
+                            ));
+                        }
+                        Err(error) => return Err(selector_basic(error)),
+                    };
+                    let Some(prefix) = recovery.named_namespace(&prefix_or_name) else {
+                        input.reset(&local_start);
+                        return Err(invalid_selector(
+                            input,
+                            format!("undeclared selector namespace prefix `{prefix_or_name}`"),
+                        ));
+                    };
+                    Ok((
+                        CssNamespaceConstraint::Named(prefix),
+                        CssAttributeName::new(local_name),
+                    ))
+                }
+                Ok(_) => {
+                    input.reset(&after_ident);
+                    Ok((
+                        CssNamespaceConstraint::ExplicitNone,
+                        CssAttributeName::new(prefix_or_name),
+                    ))
+                }
+                Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+                    input.reset(&after_ident);
+                    Ok((
+                        CssNamespaceConstraint::ExplicitNone,
+                        CssAttributeName::new(prefix_or_name),
+                    ))
+                }
+                Err(error) => Err(selector_basic(error)),
+            }
+        }
+        Ok(Token::Delim('*')) => {
+            match input.next_including_whitespace() {
+                Ok(Token::Delim('|')) => {}
+                Ok(token) => {
+                    let authored = token.to_css_string();
+                    return Err(invalid_selector(
+                        input,
+                        format!(
+                            "attribute universal namespace must be followed by `|`, found `{authored}`"
+                        ),
+                    ));
+                }
+                Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => {
+                    return Err(invalid_selector(
+                        input,
+                        "attribute universal namespace is missing `|` and a local name",
+                    ));
+                }
+                Err(error) => return Err(selector_basic(error)),
+            }
+            let name = input.next_including_whitespace();
+            match name {
+                Ok(Token::Ident(name)) => Ok((
+                    CssNamespaceConstraint::Any,
+                    CssAttributeName::new(name.to_string()),
+                )),
+                Ok(token) => {
+                    let authored = token.to_css_string();
+                    Err(invalid_selector(
+                        input,
+                        format!(
+                            "attribute namespace separator must be followed by a local name, found `{authored}`"
+                        ),
+                    ))
+                }
+                Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => Err(
+                    invalid_selector(input, "attribute namespace is missing a local name"),
+                ),
+                Err(error) => Err(selector_basic(error)),
+            }
+        }
+        Ok(Token::Delim('|')) => match input.next_including_whitespace() {
+            Ok(Token::Ident(name)) => Ok((
+                CssNamespaceConstraint::ExplicitNone,
+                CssAttributeName::new(name.to_string()),
+            )),
+            Ok(token) => {
+                let authored = token.to_css_string();
+                Err(invalid_selector(
+                    input,
+                    format!(
+                        "attribute namespace separator must be followed by a local name, found `{authored}`"
+                    ),
+                ))
+            }
+            Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => Err(
+                invalid_selector(input, "attribute namespace is missing a local name"),
+            ),
+            Err(error) => Err(selector_basic(error)),
+        },
+        Ok(token) => {
+            let authored = token.to_css_string();
+            Err(invalid_selector(
+                input,
+                format!("attribute selector is missing a name before `{authored}`"),
+            ))
+        }
+        Err(error) if matches!(error.kind, BasicParseErrorKind::EndOfInput) => Err(
+            invalid_selector(input, "attribute selector is missing a name"),
+        ),
+        Err(error) => Err(selector_basic(error)),
+    }
 }
 
 fn parse_attribute_selector_value<'i, 't>(

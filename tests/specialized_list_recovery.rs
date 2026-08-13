@@ -1,6 +1,6 @@
 use surgeist_css::{
-    CssErrorCode, CssMediaConditionKind, CssMediaQuery, CssPseudoClass, CssRecoveryAction, CssRule,
-    CssSelector, ErrorKind, parse_sheet,
+    CssErrorCode, CssMediaConditionKind, CssMediaQuery, CssNamespaceConstraint, CssPseudoClass,
+    CssRecoveryAction, CssRule, CssSelector, ErrorKind, parse_sheet,
 };
 
 fn style_rule(
@@ -116,6 +116,48 @@ fn specialized_list_forgiving_selector_members_drop_independently_in_authored_or
         );
         assert_eq!(detail.expectation().as_str(), "a supported selector");
     }
+}
+
+#[test]
+fn forgiving_selector_lists_drop_only_undeclared_namespace_members() {
+    let source = concat!(
+        "@namespace svg \"urn:svg\";",
+        ":is(missing|a,svg|a,.kept) { color: red; }",
+    );
+    let report = parse_sheet(source);
+    assert!(matches!(
+        report.syntax().rules(),
+        [CssRule::Namespace(_), CssRule::Style(_)]
+    ));
+
+    let [qualified, CssSelector::Class(kept)] = forgiving_selectors(&report) else {
+        panic!("expected qualified and class members after forgiving recovery")
+    };
+    let CssSelector::Compound(qualified) = qualified else {
+        panic!("expected qualified selector model")
+    };
+    assert!(matches!(
+        qualified
+            .type_selector()
+            .expect("qualified type selector")
+            .namespace(),
+        CssNamespaceConstraint::Named(prefix) if prefix.as_str() == "svg"
+    ));
+    assert_eq!(kept, "kept");
+
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected one dropped undeclared-prefix member")
+    };
+    let start = source.find("missing|a").unwrap();
+    assert_specialized_diagnostic(
+        source,
+        diagnostic,
+        CssErrorCode::InvalidSelector,
+        CssRecoveryAction::DropSelectorListItem,
+        start,
+        start + "missing|a".len(),
+        start + "missing|".len(),
+    );
 }
 
 #[test]

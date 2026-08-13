@@ -685,6 +685,47 @@ fn namespace_prelude_errors_expose_exact_payload_span_action_and_sibling_recover
 }
 
 #[test]
+fn undeclared_selector_namespace_exposes_exact_payload_span_action_and_siblings() {
+    let failed = "SVG|a { color: red; }";
+    let source = format!("@namespace svg \"urn:svg\"; .before {{}} {failed} .after {{}}");
+    let report = parse_sheet(&source);
+    assert!(matches!(
+        report.syntax().rules(),
+        [CssRule::Namespace(_), CssRule::Style(_), CssRule::Style(_)]
+    ));
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected one undeclared-prefix diagnostic")
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::InvalidSelector);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropQualifiedRule);
+    let failed_start = source.find(failed).unwrap();
+    assert_eq!(
+        diagnostic.error().position().byte_offset().value(),
+        failed_start + "SVG|".len()
+    );
+    assert_eq!(
+        diagnostic.span().start().byte_offset().value(),
+        failed_start
+    );
+    assert_eq!(
+        diagnostic.span().end().byte_offset().value(),
+        failed_start + failed.len()
+    );
+    let ErrorKind::InvalidSelector(detail) = diagnostic.error().kind() else {
+        panic!("expected selector payload")
+    };
+    assert_eq!(
+        detail.production().expect("selector production").as_str(),
+        "baseline.selector.complex"
+    );
+    assert_eq!(detail.expectation().as_str(), "a supported selector");
+    assert_eq!(
+        detail.encountered().expect("local-name token").authored(),
+        "a"
+    );
+}
+
+#[test]
 fn error_missing_at_rule_body_reports_missing_token_position() {
     let error = parse_sheet("@media screen;").expect_err("media requires a block");
     assert_eq!(error.code(), CssErrorCode::InvalidAtRuleBody);

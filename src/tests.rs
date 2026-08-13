@@ -3021,7 +3021,8 @@ fn nesting_selector_composition_preserves_complex_chains() {
             None,
             None,
             vec!["primary".to_owned()],
-            vec![CssAttributeSelector::new(
+            vec![CssAttributeSelector::new_qualified(
+                CssNamespaceConstraint::ExplicitNone,
                 CssAttributeName::new("aria-current"),
                 CssAttributeMatcher::Equals("true".to_owned()),
                 CssAttributeCaseSensitivity::DocumentDefault,

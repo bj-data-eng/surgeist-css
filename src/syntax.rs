@@ -13484,7 +13484,7 @@ impl CssSelector {
 
     #[must_use]
     pub(crate) fn append_to_subject(parent: Self, suffix: CssCompoundSelector) -> Option<Self> {
-        if suffix.tag().is_some() || suffix.key().is_some() {
+        if suffix.type_selector().is_some() || !suffix.ids().is_empty() {
             return None;
         }
 
@@ -13941,6 +13941,72 @@ pub enum CssNthPattern {
     AnPlusB(CssNthAnPlusB),
 }
 
+/// The namespace selected by one authored selector name.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub enum CssNamespaceConstraint {
+    /// The active default namespace declared for the stylesheet.
+    Default,
+    /// No namespace, authored with a leading `|` or implied for an attribute.
+    ExplicitNone,
+    /// Any namespace, authored with `*|` or implied when no default is active.
+    Any,
+    /// The active binding for one exact, case-sensitive decoded prefix.
+    Named(CssNamespacePrefix),
+}
+
+/// One parser-produced namespace-qualified type or universal selector name.
+///
+/// The private representation admits either one decoded CSS identifier or the
+/// universal selector, never an empty or otherwise invalid local name.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssQualifiedSelectorName {
+    namespace: CssNamespaceConstraint,
+    local_name: Option<String>,
+}
+
+impl CssQualifiedSelectorName {
+    #[must_use]
+    pub(crate) fn new(namespace: CssNamespaceConstraint, local_name: String) -> Self {
+        debug_assert!(is_exact_css_identifier(&local_name));
+        Self {
+            namespace,
+            local_name: Some(local_name),
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn universal(namespace: CssNamespaceConstraint) -> Self {
+        Self {
+            namespace,
+            local_name: None,
+        }
+    }
+
+    /// Returns the namespace constraint active for this selector name.
+    #[must_use]
+    pub const fn namespace(&self) -> &CssNamespaceConstraint {
+        &self.namespace
+    }
+
+    /// Returns the decoded local identifier, or `None` for universal `*`.
+    #[must_use]
+    pub fn local_name(&self) -> Option<&str> {
+        self.local_name.as_deref()
+    }
+
+    /// Reports whether this name is the universal selector.
+    #[must_use]
+    pub const fn is_universal(&self) -> bool {
+        self.local_name.is_none()
+    }
+
+    #[must_use]
+    const fn local_name_string(&self) -> Option<&String> {
+        self.local_name.as_ref()
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CssNthAnPlusB {
     a: i32,
@@ -13967,8 +14033,9 @@ impl CssNthAnPlusB {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssCompoundSelector {
     scope_anchor: bool,
+    type_selector: Option<Box<(CssQualifiedSelectorName, bool)>>,
     tag: Option<String>,
-    key: Option<String>,
+    ids: Vec<String>,
     classes: Vec<String>,
     attributes: Vec<CssAttributeSelector>,
     pseudo_classes: Vec<CssPseudoClass>,
@@ -14017,10 +14084,43 @@ impl CssCompoundSelector {
         pseudo_classes: Vec<CssPseudoClass>,
         pseudo_elements: Option<CssPseudoElementSequence>,
     ) -> Self {
+        let type_selector = tag.map(|tag| {
+            (
+                CssQualifiedSelectorName::new(CssNamespaceConstraint::Any, tag),
+                true,
+            )
+        });
+        let ids = key.into_iter().collect();
+        Self::new_with_qualified_type_and_pseudo_elements(
+            scope_anchor,
+            type_selector,
+            ids,
+            classes,
+            attributes,
+            pseudo_classes,
+            pseudo_elements,
+        )
+    }
+
+    #[must_use]
+    pub(crate) fn new_with_qualified_type_and_pseudo_elements(
+        scope_anchor: bool,
+        type_selector: Option<(CssQualifiedSelectorName, bool)>,
+        ids: Vec<String>,
+        classes: Vec<String>,
+        attributes: Vec<CssAttributeSelector>,
+        pseudo_classes: Vec<CssPseudoClass>,
+        pseudo_elements: Option<CssPseudoElementSequence>,
+    ) -> Self {
+        let tag = type_selector
+            .as_ref()
+            .and_then(|(type_selector, _)| type_selector.local_name_string())
+            .cloned();
         Self {
             scope_anchor,
+            type_selector: type_selector.map(Box::new),
             tag,
-            key,
+            ids,
             classes,
             attributes,
             pseudo_classes,
@@ -14033,14 +14133,38 @@ impl CssCompoundSelector {
         self.scope_anchor
     }
 
+    /// Returns the current namespace-aware type or universal selector.
+    #[must_use]
+    pub fn type_selector(&self) -> Option<&CssQualifiedSelectorName> {
+        match self.type_selector.as_deref() {
+            Some((type_selector, _)) => Some(type_selector),
+            None => None,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn has_legacy_type_projection(&self) -> bool {
+        matches!(self.type_selector.as_deref(), Some((_, true)))
+    }
+
+    /// Returns the local type-name compatibility projection.
+    ///
+    /// Universal selectors have no tag projection.
     #[must_use]
     pub const fn tag(&self) -> Option<&String> {
         self.tag.as_ref()
     }
 
+    /// Returns the last authored ID as the I01 compatibility projection.
     #[must_use]
-    pub const fn key(&self) -> Option<&String> {
-        self.key.as_ref()
+    pub fn key(&self) -> Option<&String> {
+        self.ids.last()
+    }
+
+    /// Returns the parser-retained IDs in authored order.
+    #[must_use]
+    pub fn ids(&self) -> &[String] {
+        &self.ids
     }
 
     #[must_use]
@@ -14070,8 +14194,8 @@ impl CssCompoundSelector {
 
     #[allow(dead_code)] // Used by staged selector composition helpers.
     fn append_suffix(&mut self, suffix: Self) -> Option<()> {
-        debug_assert!(suffix.tag.is_none());
-        debug_assert!(suffix.key.is_none());
+        debug_assert!(suffix.type_selector.is_none());
+        debug_assert!(suffix.ids.is_empty());
         debug_assert!(!suffix.scope_anchor);
         if self.pseudo_elements.is_some() {
             return None;
@@ -14086,6 +14210,7 @@ impl CssCompoundSelector {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssAttributeSelector {
+    namespace: CssNamespaceConstraint,
     name: CssAttributeName,
     matcher: CssAttributeMatcher,
     case_sensitivity: CssAttributeCaseSensitivity,
@@ -14093,16 +14218,24 @@ pub struct CssAttributeSelector {
 
 impl CssAttributeSelector {
     #[must_use]
-    pub(crate) const fn new(
+    pub(crate) const fn new_qualified(
+        namespace: CssNamespaceConstraint,
         name: CssAttributeName,
         matcher: CssAttributeMatcher,
         case_sensitivity: CssAttributeCaseSensitivity,
     ) -> Self {
         Self {
+            namespace,
             name,
             matcher,
             case_sensitivity,
         }
+    }
+
+    /// Returns the namespace constraint for the attribute name.
+    #[must_use]
+    pub const fn namespace(&self) -> &CssNamespaceConstraint {
+        &self.namespace
     }
 
     #[must_use]

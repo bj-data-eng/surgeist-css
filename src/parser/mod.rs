@@ -1406,6 +1406,17 @@ impl CssNamespaceBindings {
             self.default.as_ref() == Some(name)
         }
     }
+
+    fn has_default(&self) -> bool {
+        self.default.is_some()
+    }
+
+    fn active_prefix(&self, prefix: &str) -> Option<&CssNamespacePrefix> {
+        self.named
+            .iter()
+            .find(|(active_prefix, _)| active_prefix.as_str() == prefix)
+            .map(|(active_prefix, _)| active_prefix)
+    }
 }
 
 impl<'s> StrictRuleParser<'s> {
@@ -1965,8 +1976,12 @@ impl<'i> QualifiedRuleParser<'i> for StrictRuleParser<'i> {
         input: &mut Parser<'i, 't>,
     ) -> std::result::Result<Self::Prelude, ParseError<'i, Self::Error>> {
         self.encoding_allowed = false;
-        let mut recovery =
-            SelectorRecovery::new(self.source, &mut self.diagnostics, self.recovery.clone());
+        let mut recovery = SelectorRecovery::new_with_namespaces(
+            self.source,
+            &mut self.diagnostics,
+            self.recovery.clone(),
+            &self.namespace_bindings,
+        );
         parse_rule_selector_list(input, &mut recovery)
     }
 

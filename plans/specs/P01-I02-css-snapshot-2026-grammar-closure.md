@@ -4,7 +4,7 @@
 
 This is the JIT implementation contract for `P01-I02` in `surgeist-css`.
 It is subordinate to the reviewed P01 program at semantic SHA-256
-`598b10b07624e1d77929312dccbb682c1fe6139e9de029a25fa655014e3612a0`
+`3a2f997f5c0a07566d6620b031b5010defb19d57ed0a878de57069cd97c4efe5`
 and incorporates its I02-entry and source-contradiction reconciliations. The
 initiative base is the published, fetchable I01 candidate
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; the P01 reconciliation commit
@@ -260,7 +260,7 @@ oracle contradiction returns to P01 reconciliation before implementation.
 ### 3.5 C09 Source-Backed Oracle Correction
 
 P01.12 reconciles eight C01 rows that encode the incomplete MQ3, Conditional 3,
-and Cascade 5 behavior allocated to C09. C09 shall replace only the expected
+and Cascade 4 behavior allocated to C09. C09 shall replace only the expected
 observables for these stable scenario IDs while preserving their entry point,
 feature mode, and authored input:
 
@@ -485,9 +485,10 @@ statement after an import or namespace does. Namespace declarations are
 top-level only. Phase transitions occur only after successful rule parsing.
 
 `@import` gains typed optional `layer`, `supports()`, and media clauses in the
-specification order. The official Cascade 4 core, reliable Cascade 5 layer
-delta, and reliable Cascade 5 supports delta are distinct atomic catalog rows.
-The supports clause shares the `@supports` condition parser.
+specification order. The official Cascade 4 `baseline.rule.import` row owns the
+target, `supports()`, and media grammar. Reliable Cascade 5 owns a distinct
+atomic layer delta and the later prelude-ordering delta; it does not own the
+supports clause. The supports clause shares the `@supports` condition parser.
 Conditional 3's imported `general-enclosed` grammar is bound to the immutable
 `X-VALUES4` repository revision and path in section 4.3 as its own atomic delta.
 That revision contributes only `<general-enclosed>`; its sibling generic boolean

@@ -4,11 +4,11 @@
 
 This sequence implements the reviewed P01-I02 specification at
 `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
-`0115345f36520278f483160b4e063ce9038c83e57441fa2b2ca92e84de1e0d76`,
+`243379a1c1d5004904675e509d6bd23c6750cc8652bb4bfe9acad0214c6ab2c2`,
 and its official ledger at SHA-256
-`09d69fd44b112a23c7a3863f11b21a6103f55beb37d0dca06cd021b33ae670e6`.
+`626d176a734d48c3a6202c189daeadc5ff93253c20ac6681d91f93b01ab11b0d`.
 It is subordinate to reviewed P01 semantic SHA-256
-`598b10b07624e1d77929312dccbb682c1fe6139e9de029a25fa655014e3612a0`.
+`3a2f997f5c0a07566d6620b031b5010defb19d57ed0a878de57069cd97c4efe5`.
 The published I01 base is
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; planning commits after that base
 belong to the I02 candidate range.
@@ -205,8 +205,9 @@ published/read-back C08 SHA.
 
 Close findings 2.4 and 2.7 and the Conditional portion of 2.1. Implement complete
 MQ3 types/features/defined-false behavior, `@supports`, dated
-`general-enclosed`, atomic Cascade 4/5 import clauses, and the exact layer/import/
-namespace/body phase machine. Exercise all rule contexts, comma recovery,
+`general-enclosed`, the official Cascade 4 import-supports clause, the atomic
+Cascade 5 layer/ordering deltas, and the exact layer/import/namespace/body phase
+machine. Exercise all rule contexts, comma recovery,
 nested groups, source-order diagnostics, and the Partial
 `ext.supports.selector` boundary against the currently supported selector parser.
 Defined-false unknown MQ3 syntax is a clean parser-owned authored node distinct

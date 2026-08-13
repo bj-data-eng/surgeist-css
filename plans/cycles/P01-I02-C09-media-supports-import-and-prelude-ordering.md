@@ -9,10 +9,10 @@
 | Status | `draft` |
 | Cycle base | `129de7267726277b73d2cc15f1168c44c34ffcbc` |
 | Published prerequisite | C08 `129de7267726277b73d2cc15f1168c44c34ffcbc`, fetched and read back |
-| Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `598b10b07624e1d77929312dccbb682c1fe6139e9de029a25fa655014e3612a0`, especially P01.12 |
-| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `0115345f36520278f483160b4e063ce9038c83e57441fa2b2ca92e84de1e0d76`, sections 3.1, 3.5, 4.2-4.4, 5, 7, 10-12 |
-| Reviewed ledger | `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256 `09d69fd44b112a23c7a3863f11b21a6103f55beb37d0dca06cd021b33ae670e6`; media, conditional, Cascade, and imported-value rows |
-| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `5701699654253ac856ce9e8947bc2fa0c03ed47260af9d31a5020e359e5d5ce7`, entry `I02-C09` |
+| Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `3a2f997f5c0a07566d6620b031b5010defb19d57ed0a878de57069cd97c4efe5`, especially P01.12 |
+| Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `243379a1c1d5004904675e509d6bd23c6750cc8652bb4bfe9acad0214c6ab2c2`, sections 3.1, 3.5, 4.2-4.4, 5, 7, 10-12 |
+| Reviewed ledger | `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256 `626d176a734d48c3a6202c189daeadc5ff93253c20ac6681d91f93b01ab11b0d`; media, conditional, Cascade, and imported-value rows |
+| Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `6970425207846e2a5430779c06d0503ec7a1dac8b195b534e9a95aeefbd1fab1`, entry `I02-C09` |
 | Bounded outcome | Complete Media Queries 3 and Conditional Rules 3 authored syntax, add typed Cascade 4/5 import conditions, install the top-level prelude phase machine, preserve selected later-level query syntax truthfully, and apply only the reviewed eight-row oracle correction. |
 
 ## 2. Sources, Boundary, And Decisions
@@ -23,7 +23,7 @@ The normative source revisions are:
 - Conditional Rules 3: <https://www.w3.org/TR/2024/CRD-css-conditional-3-20240815/>;
 - Cascade 4 core import grammar:
   <https://www.w3.org/TR/2022/CR-css-cascade-4-20220113/>;
-- Cascade 5 import-layer, import-supports, and ordering deltas:
+- Cascade 5 import-layer and ordering deltas:
   <https://www.w3.org/TR/2022/CR-css-cascade-5-20220113/>;
 - Conditional 4 selector-test delta:
   <https://www.w3.org/TR/2025/CRD-css-conditional-4-20250904/>;
@@ -183,8 +183,8 @@ expectation from production, masks a row, or compares owner sets/counts.
 ## 4. Metadata Delta
 
 Promote all fifteen `O-MEDIA3` rows and all three `O-CONDITIONAL3` rows to
-`Complete` with direct behavior. Promote the Cascade 4 core
-`baseline.rule.import` row to `Complete`. Preserve all selected MQ4/MQ5 query
+`Complete` with direct behavior. Promote the Cascade 4
+`baseline.rule.import` row—including `supports()`—to `Complete`. Preserve all selected MQ4/MQ5 query
 rows at their current exact source/tier/status unless this cycle completes their
 already-supported subset.
 
@@ -194,10 +194,11 @@ meaning:
 - `ext.media.resolution.dppx` at `R-MEDIA4#resolution`;
 - `ext.supports.general-enclosed` at immutable `X-VALUES4` provenance;
 - `ext.supports.selector` at `R-CONDITIONAL4#at-supports`, `Partial`;
-- `ext.import.layer` and `ext.import.supports` at `R-CASCADE5#at-import`;
+- `ext.import.layer` at `R-CASCADE5#at-import`;
 - `ext.stylesheet.prelude-order` at the exact Cascade 5 ordering fragment.
 
-The import core never absorbs Cascade 5 clauses. General-enclosed never absorbs
+The official Cascade 4 import row owns `supports()`; it never absorbs the
+Cascade 5 layer or ordering deltas. General-enclosed never absorbs
 the sibling generic boolean grammar. Conditional 3 never absorbs selector().
 MQ3 never absorbs dppx, comparison syntax, or later media features.
 

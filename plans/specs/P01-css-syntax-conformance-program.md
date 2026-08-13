@@ -423,7 +423,7 @@ behavior allocated to C09: `catalog.non-property.baseline.media.range-feature.bo
 `catalog.non-property.later.rule.supports.boundary`,
 `focused.specialized.media-position`, `focused.structured-errors.01`, and
 `focused.structured-errors.08`. They currently recover from valid MQ3
-`device-width` and `speech`, valid Cascade 5 `supports()` import syntax, valid
+`device-width` and `speech`, valid Cascade 4 `supports()` import syntax, valid
 Conditional 3 `@supports`, or syntactically valid defined-false unknown media
 features/values. The balanced `width: calc(1px)` expression is an unknown MQ3
 feature value, not a malformed query. Preserving those diagnostics would make

@@ -189,8 +189,10 @@ stable-ID change or complete Selectors 4 claim, by C10.
 Color 4 does not own `color-mix()` or relative colors; those retain `I-COLOR5`.
 Fonts 3 does not own `font-display` or `@font-feature-values`; those retain
 `I-FONTS4`.
-`@import layer` and `@import supports()` are separate `R-CASCADE5` atomic
-deltas, never part of the `O-CASCADE4` row.
+The `@import supports()` clause is part of the `O-CASCADE4`
+`baseline.rule.import` row. `@import layer` and the Cascade-5-specific prelude
+ordering behavior are separate `R-CASCADE5` atomic deltas; Cascade 5 does not
+own another supports row.
 
 ## 4. Baseline Aggregate Aliases
 

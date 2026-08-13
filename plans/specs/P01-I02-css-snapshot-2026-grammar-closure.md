@@ -4,7 +4,7 @@
 
 This is the JIT implementation contract for `P01-I02` in `surgeist-css`.
 It is subordinate to the reviewed P01 program at semantic SHA-256
-`08a6696c3c7f5bcaec7563ff56140a02357ed6f511fcdd9d61603b123c356d25`
+`141ff37a9e7578ec46248644200cb593d222df247f1ec1c3ec15c4ecd88ca48c`
 and incorporates its I02-entry and source-contradiction reconciliations. The
 initiative base is the published, fetchable I01 candidate
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; the P01 reconciliation commit
@@ -460,8 +460,9 @@ At initiative completion:
   exclusion, never both;
 - preserved extensions are `Complete`, `Partial`, or
   `RecognizedUnsupported` truthfully, with exact subset/remainder or diagnostic
-  identity; except for the exact seven section 3.3 source corrections, no
-  preserved I01 accepted vector regresses;
+  identity; except for the exact section 3.3 seven-row, section 3.4 one-row,
+  and section 3.5 seven-row source corrections, no preserved I01 accepted
+  vector regresses;
 - unknown spellings remain distinct from recognized unsupported spellings;
 - exact I01 baseline tests become subset-preservation tests rather than replacing
   `219`, `179`, and `40` with ungrounded new totals.
@@ -542,6 +543,21 @@ feature's exact boolean/value/min/max/unit/domain grammar. Preserve syntacticall
 complete unknown media types/features/values in typed defined-false authored
 nodes where MQ3 requires; malformed comma members retain `Never` plus
 `ReplaceMediaQueryWithNever`.
+
+Defined-false syntax is valid authored syntax and emits no recovery diagnostic.
+Add parser-owned, private-field public models that preserve the exact authored
+unknown type or parenthesized feature/value text and its first non-trivia
+position. Add `CssMediaType::Unknown` while retaining the exact spelling on the
+positioned typed-query model, and add a distinct defined-false media-condition
+kind for an unknown feature or a syntactically complete unknown value of an MQ3
+feature. These nodes expose their authored text and defined-false reason; they
+are not `CssNeverMediaQuery`, and `Never` remains solely the malformed-member
+recovery sentinel paired with a diagnostic. The recognized deferred MQ4
+`scripting` spelling is not an MQ3 unknown: its frozen boundary continues to
+recover with `InvalidMediaQuery` and `ReplaceMediaQueryWithNever` until its
+owning extension is selected. Other separately catalogued MQ4 features retain
+their existing typed or recovery behavior rather than entering the generic MQ3
+unknown path.
 
 `@supports` implements Conditional 3 declaration, `not`, `and`, `or`, grouping,
 and general-enclosed conditions with the grammar's no-mixed-operator rule. A
@@ -646,8 +662,11 @@ namespaces, rules/descriptors, queries, calculations, and property-specific
 inspection. They reiterate the excluded downstream semantics.
 
 I01 behavioral tests remain baseline-preservation evidence, subject only to the
-seven source-backed C07 corrections in section 3.3 and the one source-backed
-C08 correction in section 3.4. At I02 completion,
+seven source-backed C07 corrections in section 3.3, the one source-backed C08
+correction in section 3.4, and the seven source-backed C09 corrections in
+section 3.5 with final fixture digest
+`9e798c3b337b7ab4d34da09fbefcb6a09daf55f063789439bc32445fa6f8bd84`.
+At I02 completion,
 the coordinator and reviewers map every acceptance item to direct source
 inspection, compiler-visible API evidence, behavioral tests, or deterministic
 checks of declared product artifacts as appropriate. No Rust test encodes an
@@ -673,10 +692,10 @@ source/code shape as completion evidence.
 | `2.16` | section 8.2: typography tags/indices/global-list rules |
 | `2.17` | section 5: duplicate/empty keyframe structures |
 
-I02 also preserves all I01 finding evidence after the reviewed section 3.3
-correction. If closing a row would change another frozen section 3.1 semantic,
-require unsafe, cross an ownership boundary, or require another breaking cycle,
-stop and reconcile P01.
+I02 also preserves all I01 finding evidence after the reviewed section 3.3,
+3.4, and 3.5 corrections. If closing a row would change another frozen section
+3.1 semantic, require unsafe, cross an ownership boundary, or require another
+breaking cycle, stop and reconcile P01.
 
 ## 12. Initiative Acceptance
 
@@ -691,10 +710,12 @@ I02 is complete only when all predicates hold:
    owning artifacts, not inferred by a Rust test from owner identity sets or
    counts.
 3. The exact 219-row I01 feature baseline remains classified; the seven C07
-   scenario IDs in section 3.3 and the one C08 scenario ID in section 3.4 carry
-   their reviewed source-backed replacement observables and every other
-   accepted vector does not regress; extension status and provenance are
-   truthful.
+   scenario IDs in section 3.3, the one C08 scenario ID in section 3.4, and the
+   seven C09 scenario IDs in section 3.5 carry their reviewed source-backed
+   replacement observables; the C09 fixture has exact SHA-256
+   `9e798c3b337b7ab4d34da09fbefcb6a09daf55f063789439bc32445fa6f8bd84`;
+   every other accepted vector does not regress; extension status and
+   provenance are truthful.
 4. All fourteen allocated findings in section 11 have implemented source and
    focused exact evidence, while the reconciled I01 evidence stays green.
 5. Both ordinary front doors retain valid siblings and report every recovery;

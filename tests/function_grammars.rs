@@ -1,6 +1,6 @@
 use surgeist_css::{
-    CssErrorCode, CssKnownPropertyValueRef, CssLength, CssRecoveryAction, CssTransform,
-    CssTransformAngle, CssTransformFunctionKind, CssTransformFunctionValue,
+    CssErrorCode, CssKnownProperty, CssKnownPropertyValueRef, CssLength, CssRecoveryAction,
+    CssTransform, CssTransformAngle, CssTransformFunctionKind, CssTransformFunctionValue,
     CssTransformFunctionValueList, CssTransformLength, CssTransformLengthPercentage,
     CssTransformNonNegativeLength, CssTransformNumber, CssTransformPercentage,
     CssTransformPerspective, CssTransformPropertyValue, CssTransformScaleComponent,
@@ -176,6 +176,66 @@ fn transform_three_dimensional_rotations_are_typed() {
     assert!(matches!(
         functions.functions()[1],
         CssTransformFunctionValue::RotateZ(CssTransformAngle::Calculation(_))
+    ));
+}
+
+#[test]
+fn transform_angles_reject_percentage_calculations_and_recover_siblings() {
+    let mut wrongly_retained = Vec::new();
+    for value in [
+        "rotate(calc(10%))",
+        "skew(calc(10%))",
+        "rotate3d(1, 0, -1, calc(1deg + 10%))",
+    ] {
+        let source =
+            format!("transform: {value}; transform: rotate(calc(1turn - 90deg)); color: red");
+        let report = parse_style_attribute(&source);
+        if report.syntax().len() != 2 || report.diagnostics().len() != 1 {
+            wrongly_retained.push(value);
+            continue;
+        }
+        let [diagnostic] = report.diagnostics() else {
+            panic!("expected one diagnostic for `{value}`");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue
+        );
+        assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+        assert_eq!(
+            report.syntax()[0]
+                .known()
+                .expect("retained valid symbolic-angle transform")
+                .property(),
+            CssKnownProperty::Transform,
+        );
+        assert_eq!(
+            report.syntax()[1]
+                .known()
+                .expect("retained color sibling")
+                .property(),
+            CssKnownProperty::Color,
+        );
+
+        #[cfg(feature = "app-strict")]
+        {
+            let failure = surgeist_css::validate_style_attribute(&source)
+                .expect_err("strict validation rejects percentage-typed transform angles");
+            assert_eq!(failure.diagnostics(), report.diagnostics());
+        }
+    }
+    assert!(
+        wrongly_retained.is_empty(),
+        "retained invalid transform angles: {wrongly_retained:?}"
+    );
+
+    let property = parsed_transform_property("rotate(calc(1turn - 90deg))");
+    let CssTransformValue::Functions(functions) = property.current() else {
+        panic!("expected current transform function list");
+    };
+    assert!(matches!(
+        functions.functions()[0],
+        CssTransformFunctionValue::Rotate(CssTransformAngle::Calculation(_))
     ));
 }
 

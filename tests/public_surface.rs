@@ -2,14 +2,52 @@ use surgeist_css::{
     CssAnimationDirection, CssAuthoredColorComponent, CssAuthoredColorMix,
     CssAuthoredColorMixPercentage, CssAuthoredColorSyntax, CssAuthoredSystemColor, CssCalcOperator,
     CssColorInterpolationMethod, CssColorInterpolationSpace, CssErrorCode, CssExclusionReason,
-    CssFeatureKind, CssGridAutoFlowAxis, CssHueInterpolationMethod, CssImportance,
-    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssMediaQueryModifier,
-    CssPredefinedColorSpace, CssPropertyNameRef, CssRecoveryAction, CssRelativeColorChannel,
-    CssRelativeColorEnvironment, CssRelativeColorExpressionValue, CssRelativeColorFunction,
-    CssRelativeColorResultDomain, CssRule, CssSelectorCombinator, CssSpecificationTier,
-    CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata, parse_sheet,
-    parse_style_attribute, property_metadata, specification_source,
+    CssFeatureKind, CssFontFamilyNameKind, CssFontSize, CssFontSizeLengthPercentage,
+    CssGenericFontFamily, CssGridAutoFlowAxis, CssHueInterpolationMethod, CssImportance,
+    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLength,
+    CssLineHeightLengthPercentage, CssMediaQueryModifier, CssPredefinedColorSpace,
+    CssPropertyNameRef, CssRecoveryAction, CssRelativeColorChannel, CssRelativeColorEnvironment,
+    CssRelativeColorExpressionValue, CssRelativeColorFunction, CssRelativeColorResultDomain,
+    CssRule, CssSelectorCombinator, CssSpecificationTier, CssSupportStatus, ErrorKind,
+    conformance_exclusion, feature_metadata, parse_sheet, parse_style_attribute, property_metadata,
+    specification_source,
 };
+
+#[test]
+fn public_surface_exposes_checked_core_font_models() {
+    let report = parse_style_attribute("font-size: medium; font-family: serif");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::FontSize(size) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-size");
+    };
+    let size_kind = match size.size() {
+        CssFontSize::Medium => "medium",
+        _ => "future font size",
+    };
+    assert_eq!(size_kind, "medium");
+
+    let CssKnownPropertyValueRef::FontFamily(family) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-family");
+    };
+    let item = &family.families().families()[0];
+    assert_eq!(item.kind(), CssFontFamilyNameKind::Generic);
+    assert_eq!(item.generic_family(), Some(CssGenericFontFamily::Serif));
+
+    assert!(CssFontSizeLengthPercentage::try_new(CssLength::try_px(-1.0).unwrap()).is_none());
+    assert!(
+        CssLineHeightLengthPercentage::try_new(CssLength::try_percent(-1.0).unwrap()).is_none()
+    );
+}
 
 #[test]
 fn public_surface_exposes_typed_authored_color_inspection() {

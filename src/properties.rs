@@ -67,15 +67,15 @@ macro_rules! property_schema {
             GridColumn, "grid-column", [], "baseline.property.grid-column", CssGridLineRange, CssGridColumnPropertyValue, CssGridColumnPropertyValueRepresentation, parse_grid_line_range, { parse_grid_line_range($input)? };
             GridArea, "grid-area", [], "baseline.property.grid-area", CssGridArea, CssGridAreaPropertyValue, CssGridAreaPropertyValueRepresentation, parse_grid_area, { parse_grid_area($input)? };
             Grid, "grid", [], "baseline.property.grid", CssGrid, CssGridPropertyValue, CssGridPropertyValueRepresentation, parse_grid, { parse_grid($input)? };
-            FontSize, "font-size", [], "baseline.property.font-size", CssLength, CssFontSizePropertyValue, CssFontSizePropertyValueRepresentation, parse_font_size, { parse_font_size($input)? };
-            LineHeight, "line-height", [], "baseline.property.line-height", CssLength, CssLineHeightPropertyValue, CssLineHeightPropertyValueRepresentation, parse_line_height, { parse_line_height($input)? };
+            FontSize, "font-size", [], "baseline.property.font-size", CssFontSize, CssFontSizePropertyValue, CssFontSizePropertyValueRepresentation, parse_font_size, { parse_font_size($input)? };
+            LineHeight, "line-height", [], "baseline.property.line-height", CssLineHeight, CssLineHeightPropertyValue, CssLineHeightPropertyValueRepresentation, parse_line_height, { parse_line_height($input)? };
             WritingMode, "writing-mode", [], "baseline.property.writing-mode", CssWritingMode, CssWritingModePropertyValue, CssWritingModePropertyValueRepresentation, parse_writing_mode, { parse_writing_mode($input)? };
             TextAlign, "text-align", [], "baseline.property.text-align", CssTextAlign, CssTextAlignPropertyValue, CssTextAlignPropertyValueRepresentation, parse_text_align, { parse_text_align($input)? };
             TextAlignLast, "text-align-last", [], "baseline.property.text-align-last", CssTextAlignLast, CssTextAlignLastPropertyValue, CssTextAlignLastPropertyValueRepresentation, parse_text_align_last, { parse_text_align_last($input)? };
             TextIndent, "text-indent", [], "baseline.property.text-indent", CssTextIndent, CssTextIndentPropertyValue, CssTextIndentPropertyValueRepresentation, parse_text_indent, { parse_text_indent($input)? };
             VerticalAlign, "vertical-align", [], "baseline.property.vertical-align", CssVerticalAlign, CssVerticalAlignPropertyValue, CssVerticalAlignPropertyValueRepresentation, parse_vertical_align, { parse_vertical_align($input)? };
             FontFamily, "font-family", [], "baseline.property.font-family", CssFontFamilyList, CssFontFamilyPropertyValue, CssFontFamilyPropertyValueRepresentation, parse_font_family_list, { parse_font_family_list($input)? };
-            Font, "font", [], "baseline.property.font", CssFont, CssFontPropertyValue, CssFontPropertyValueRepresentation, parse_font, { parse_font($input)? };
+            Font, "font", [], "baseline.property.font", CssFontValue, CssFontPropertyValue, CssFontPropertyValueRepresentation, parse_font, { parse_font($input)? };
             FontWeight, "font-weight", [], "baseline.property.font-weight", CssFontWeight, CssFontWeightPropertyValue, CssFontWeightPropertyValueRepresentation, parse_font_weight, { parse_font_weight($input)? };
             FontStyle, "font-style", [], "baseline.property.font-style", CssFontStyle, CssFontStylePropertyValue, CssFontStylePropertyValueRepresentation, parse_font_style, { parse_font_style($input)? };
             FontStretch, "font-stretch", [], "baseline.property.font-stretch", CssFontStretch, CssFontStretchPropertyValue, CssFontStretchPropertyValueRepresentation, parse_font_stretch, { parse_font_stretch($input)? };
@@ -385,6 +385,65 @@ fn transform_origin_i01_projection(value: &CssTransformOrigin) -> Option<CssPosi
     value.legacy().cloned()
 }
 
+fn font_size_i01_projection(value: &CssFontSize) -> Option<CssLength> {
+    match value {
+        CssFontSize::LengthPercentage(value) => Some(value.value().clone()),
+        CssFontSize::XxSmall
+        | CssFontSize::XSmall
+        | CssFontSize::Small
+        | CssFontSize::Medium
+        | CssFontSize::Large
+        | CssFontSize::XLarge
+        | CssFontSize::XxLarge
+        | CssFontSize::Larger
+        | CssFontSize::Smaller => None,
+    }
+}
+
+fn line_height_i01_projection(value: &CssLineHeight) -> Option<CssLength> {
+    match value {
+        CssLineHeight::Normal => Some(CssLength::Normal),
+        CssLineHeight::Number(CssNonNegativeNumberValue::Literal(value))
+            if value.value() == 0.0 =>
+        {
+            Some(CssLength::Zero)
+        }
+        CssLineHeight::Number(_) => None,
+        CssLineHeight::LengthPercentage(value) => Some(value.value().clone()),
+    }
+}
+
+fn font_family_i01_projection(value: &CssFontFamilyList) -> Option<CssFontFamilyList> {
+    let families = value
+        .families()
+        .iter()
+        .map(|family| match family.kind() {
+            CssFontFamilyNameKind::Generic => CssFontFamilyName::ident_sequence(family.as_str()),
+            CssFontFamilyNameKind::Quoted | CssFontFamilyNameKind::IdentSequence => family.clone(),
+        })
+        .collect();
+    CssFontFamilyList::try_new(families)
+}
+
+fn font_i01_projection(value: &CssFontValue) -> Option<CssFont> {
+    let CssFontValue::Explicit(value) = value else {
+        return None;
+    };
+    let line_height = match value.line_height() {
+        Some(value) => Some(line_height_i01_projection(value)?),
+        None => None,
+    };
+    CssFont::try_new(
+        value.style(),
+        value.variant(),
+        value.weight(),
+        value.stretch(),
+        font_size_i01_projection(value.size())?,
+        line_height,
+        font_family_i01_projection(value.families())?,
+    )
+}
+
 macro_rules! define_current_property_value {
     (
         $canonical:literal, $wrapper:ident, $representation:ident,
@@ -640,6 +699,62 @@ macro_rules! define_grid_property_value {
 }
 
 macro_rules! define_property_value {
+    (
+        FontSize, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontSize,
+            CssLength,
+            size,
+            font_size_i01_projection
+        );
+    };
+    (
+        LineHeight, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssLineHeight,
+            CssLength,
+            line_height,
+            line_height_i01_projection
+        );
+    };
+    (
+        FontFamily, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontFamilyList,
+            CssFontFamilyList,
+            families,
+            font_family_i01_projection
+        );
+    };
+    (
+        Font, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssFontValue,
+            CssFont,
+            font,
+            font_i01_projection
+        );
+    };
     (
         GridTemplateRows, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident

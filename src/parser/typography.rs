@@ -1,26 +1,76 @@
 use cssparser::{ParseError, Parser, Token, match_ignore_ascii_case};
 
-use super::values::{LengthGrammar, next_is_comma, parse_color, parse_integer, parse_length_with};
+use super::values::{
+    CalculationRoot, LengthGrammar, next_is_comma, parse_color, parse_integer, parse_length_with,
+    parse_typed_calculation,
+};
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
 
 pub(super) fn parse_font_size<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssLength, ParseError<'i, Error>> {
-    parse_length_with(input, LengthGrammar::FontSize)
+) -> std::result::Result<CssFontSize, ParseError<'i, Error>> {
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        return match_ignore_ascii_case! { &ident,
+            "xx-small" => Ok(CssFontSize::XxSmall),
+            "x-small" => Ok(CssFontSize::XSmall),
+            "small" => Ok(CssFontSize::Small),
+            "medium" => Ok(CssFontSize::Medium),
+            "large" => Ok(CssFontSize::Large),
+            "x-large" => Ok(CssFontSize::XLarge),
+            "xx-large" => Ok(CssFontSize::XxLarge),
+            "larger" => Ok(CssFontSize::Larger),
+            "smaller" => Ok(CssFontSize::Smaller),
+            _ => Err(unsupported_value(
+                input,
+                None,
+                unsupported_keyword_reason("font-size", ident.as_ref()),
+            )),
+        };
+    }
+
+    let value = parse_length_with(input, LengthGrammar::FontSize)?;
+    CssFontSizeLengthPercentage::try_new(value)
+        .map(CssFontSize::LengthPercentage)
+        .ok_or_else(|| unsupported_value(input, None, "font-size must be non-negative"))
 }
 
 pub(super) fn parse_line_height<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssLength, ParseError<'i, Error>> {
+) -> std::result::Result<CssLineHeight, ParseError<'i, Error>> {
     if input
         .try_parse(|input| input.expect_ident_matching("normal"))
         .is_ok()
     {
-        Ok(CssLength::Normal)
-    } else {
-        parse_length_with(input, LengthGrammar::LineHeight)
+        return Ok(CssLineHeight::Normal);
+    }
+
+    if let Ok(number) = input.try_parse(parse_line_height_number) {
+        return Ok(CssLineHeight::Number(number));
+    }
+
+    let value = parse_length_with(input, LengthGrammar::LineHeight)?;
+    CssLineHeightLengthPercentage::try_new(value)
+        .map(CssLineHeight::LengthPercentage)
+        .ok_or_else(|| unsupported_value(input, None, "line-height must be non-negative"))
+}
+
+fn parse_line_height_number<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssNonNegativeNumberValue, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Number { value, .. } => CssNonNegativeNumber::try_new(*value)
+            .map(CssNonNegativeNumberValue::Literal)
+            .ok_or_else(|| {
+                unsupported_value_at(location, None, "line-height must be non-negative")
+            }),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Number))
+            .map(CssNumberCalculation::from_expression)
+            .map(CssNonNegativeNumberValue::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
     }
 }
 
@@ -177,15 +227,58 @@ pub(super) fn parse_font_family_name<'i, 't>(
     }
 
     if parts.is_empty() {
-        Err(unsupported_value(input, None, "font family name is empty"))
-    } else {
-        Ok(CssFontFamilyName::ident_sequence(parts.join(" ")))
+        return Err(unsupported_value(input, None, "font family name is empty"));
     }
+
+    if parts.len() == 1
+        && let Some(generic) = generic_font_family(&parts[0])
+    {
+        return Ok(CssFontFamilyName::generic(generic, parts.remove(0)));
+    }
+
+    if parts
+        .iter()
+        .any(|part| generic_font_family(part).is_some() || is_css_wide_keyword(part))
+    {
+        return Err(unsupported_value(
+            input,
+            None,
+            "font family identifier sequences cannot contain reserved keywords",
+        ));
+    }
+
+    Ok(CssFontFamilyName::ident_sequence(parts.join(" ")))
+}
+
+fn generic_font_family(ident: &str) -> Option<CssGenericFontFamily> {
+    if ident.eq_ignore_ascii_case("serif") {
+        Some(CssGenericFontFamily::Serif)
+    } else if ident.eq_ignore_ascii_case("sans-serif") {
+        Some(CssGenericFontFamily::SansSerif)
+    } else if ident.eq_ignore_ascii_case("cursive") {
+        Some(CssGenericFontFamily::Cursive)
+    } else if ident.eq_ignore_ascii_case("fantasy") {
+        Some(CssGenericFontFamily::Fantasy)
+    } else if ident.eq_ignore_ascii_case("monospace") {
+        Some(CssGenericFontFamily::Monospace)
+    } else {
+        None
+    }
+}
+
+fn is_css_wide_keyword(ident: &str) -> bool {
+    ["initial", "inherit", "unset", "revert", "revert-layer"]
+        .iter()
+        .any(|keyword| ident.eq_ignore_ascii_case(keyword))
 }
 
 pub(super) fn parse_font<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssFont, ParseError<'i, Error>> {
+) -> std::result::Result<CssFontValue, ParseError<'i, Error>> {
+    if let Ok(system) = input.try_parse(parse_system_font) {
+        return Ok(CssFontValue::System(system));
+    }
+
     let mut style = None;
     let mut variant = None;
     let mut weight = None;
@@ -267,8 +360,29 @@ pub(super) fn parse_font<'i, 't>(
     };
     let families = parse_font_family_list(input)?;
 
-    CssFont::try_new(style, variant, weight, stretch, size, line_height, families)
+    CssExplicitFont::try_new(style, variant, weight, stretch, size, line_height, families)
+        .map(CssFontValue::Explicit)
         .ok_or_else(|| unsupported_value(input, None, "invalid font shorthand"))
+}
+
+fn parse_system_font<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssSystemFont, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    input.expect_exhausted().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "caption" => Ok(CssSystemFont::Caption),
+        "icon" => Ok(CssSystemFont::Icon),
+        "menu" => Ok(CssSystemFont::Menu),
+        "message-box" => Ok(CssSystemFont::MessageBox),
+        "small-caption" => Ok(CssSystemFont::SmallCaption),
+        "status-bar" => Ok(CssSystemFont::StatusBar),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("font", ident.as_ref()),
+        )),
+    }
 }
 
 pub(super) fn parse_font_weight<'i, 't>(

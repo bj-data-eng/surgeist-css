@@ -5204,12 +5204,34 @@ impl CssVerticalAlignLength {
 pub enum CssFontFamilyNameKind {
     Quoted,
     IdentSequence,
+    Generic,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssGenericFontFamily {
+    Serif,
+    SansSerif,
+    Cursive,
+    Fantasy,
+    Monospace,
+}
+
+#[derive(Clone, Eq, PartialEq)]
 pub struct CssFontFamilyName {
     kind: CssFontFamilyNameKind,
     value: String,
+    generic: Option<CssGenericFontFamily>,
+}
+
+impl std::fmt::Debug for CssFontFamilyName {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CssFontFamilyName")
+            .field("kind", &self.kind)
+            .field("value", &self.value)
+            .finish()
+    }
 }
 
 impl CssFontFamilyName {
@@ -5233,6 +5255,15 @@ impl CssFontFamilyName {
         Self::new(CssFontFamilyNameKind::IdentSequence, value)
     }
 
+    #[must_use]
+    pub(crate) fn generic(generic: CssGenericFontFamily, value: impl Into<String>) -> Self {
+        Self {
+            kind: CssFontFamilyNameKind::Generic,
+            value: value.into(),
+            generic: Some(generic),
+        }
+    }
+
     fn try_new(kind: CssFontFamilyNameKind, value: impl Into<String>) -> Option<Self> {
         let value = value.into();
         if value.is_empty() {
@@ -5246,6 +5277,7 @@ impl CssFontFamilyName {
         Self {
             kind,
             value: value.into(),
+            generic: None,
         }
     }
 
@@ -5257,6 +5289,11 @@ impl CssFontFamilyName {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.value
+    }
+
+    #[must_use]
+    pub const fn generic_family(&self) -> Option<CssGenericFontFamily> {
+        self.generic
     }
 }
 
@@ -5433,6 +5470,150 @@ pub enum CssFontFeatureValue {
     On,
     Off,
     Integer(i32),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssFontSizeLengthPercentage {
+    value: CssLength,
+}
+
+impl CssFontSizeLengthPercentage {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        is_non_negative_length_percentage(&value).then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssFontSize {
+    XxSmall,
+    XSmall,
+    Small,
+    Medium,
+    Large,
+    XLarge,
+    XxLarge,
+    Larger,
+    Smaller,
+    LengthPercentage(CssFontSizeLengthPercentage),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssLineHeightLengthPercentage {
+    value: CssLength,
+}
+
+impl CssLineHeightLengthPercentage {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        is_non_negative_length_percentage(&value).then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssLineHeight {
+    Normal,
+    Number(CssNonNegativeNumberValue),
+    LengthPercentage(CssLineHeightLengthPercentage),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssSystemFont {
+    Caption,
+    Icon,
+    Menu,
+    MessageBox,
+    SmallCaption,
+    StatusBar,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssExplicitFont {
+    style: Option<CssFontStyle>,
+    variant: Option<CssFontVariant>,
+    weight: Option<CssFontWeight>,
+    stretch: Option<CssFontStretch>,
+    size: CssFontSize,
+    line_height: Option<CssLineHeight>,
+    families: CssFontFamilyList,
+}
+
+impl CssExplicitFont {
+    #[must_use]
+    pub fn try_new(
+        style: Option<CssFontStyle>,
+        variant: Option<CssFontVariant>,
+        weight: Option<CssFontWeight>,
+        stretch: Option<CssFontStretch>,
+        size: CssFontSize,
+        line_height: Option<CssLineHeight>,
+        families: CssFontFamilyList,
+    ) -> Option<Self> {
+        (!families.families().is_empty()).then_some(Self {
+            style,
+            variant,
+            weight,
+            stretch,
+            size,
+            line_height,
+            families,
+        })
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<CssFontStyle> {
+        self.style
+    }
+
+    #[must_use]
+    pub const fn variant(&self) -> Option<CssFontVariant> {
+        self.variant
+    }
+
+    #[must_use]
+    pub const fn weight(&self) -> Option<CssFontWeight> {
+        self.weight
+    }
+
+    #[must_use]
+    pub const fn stretch(&self) -> Option<CssFontStretch> {
+        self.stretch
+    }
+
+    #[must_use]
+    pub const fn size(&self) -> &CssFontSize {
+        &self.size
+    }
+
+    #[must_use]
+    pub const fn line_height(&self) -> Option<&CssLineHeight> {
+        self.line_height.as_ref()
+    }
+
+    #[must_use]
+    pub const fn families(&self) -> &CssFontFamilyList {
+        &self.families
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssFontValue {
+    Explicit(CssExplicitFont),
+    System(CssSystemFont),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -6628,6 +6809,19 @@ fn is_font_size_length(length: &CssLength) -> bool {
             | CssLength::Zero
             | CssLength::Calc(_)
     )
+}
+
+fn is_non_negative_length_percentage(length: &CssLength) -> bool {
+    match length {
+        CssLength::Px(value) | CssLength::Percent(value) => value.value() >= 0.0,
+        CssLength::Dimension(value) => value.value() >= 0.0,
+        CssLength::Zero | CssLength::Calc(_) => true,
+        CssLength::Auto
+        | CssLength::MinContent
+        | CssLength::MaxContent
+        | CssLength::FitContent
+        | CssLength::Normal => false,
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

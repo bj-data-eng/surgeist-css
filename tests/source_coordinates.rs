@@ -18,6 +18,37 @@ fn assert_position(position: CssSourcePosition, byte_offset: usize, line: u32, c
 }
 
 #[test]
+fn font_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
+    let source = "--😀: 1; font: menu serif; color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("mispositioned system font must recover once");
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    assert_position(diagnostic.error().position(), 17, 0, 15);
+    assert_position(diagnostic.span().start(), 11, 0, 9);
+    assert_position(diagnostic.span().end(), 28, 0, 26);
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected font property error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::Font);
+    assert_eq!(detail.encountered().unwrap().kind(), CssTokenKind::Ident);
+    assert_eq!(detail.encountered().unwrap().authored(), "menu");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects the recovered font shorthand");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn timing_type_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
     let source = "--😀: 1; transition-duration: calc(1px + 2px); color: red";
     let report = parse_style_attribute(source);

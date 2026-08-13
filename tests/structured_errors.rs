@@ -7,6 +7,41 @@ use surgeist_css::{
 };
 
 #[test]
+fn invalid_core_font_value_has_exact_property_diagnostic_and_retains_its_sibling() {
+    let source = "font-size: -1px; color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 1);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("negative font size must recover once");
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    assert_eq!(diagnostic.span().start().byte_offset().value(), 0);
+    assert_eq!(diagnostic.span().end().byte_offset().value(), 16);
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected property value error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::FontSize);
+    let encountered = detail.encountered().expect("responsible negative length");
+    assert_eq!(encountered.kind(), CssTokenKind::Dimension);
+    assert_eq!(encountered.authored(), "-1px");
+    assert_eq!(
+        report.syntax()[0].known().unwrap().property(),
+        CssKnownProperty::Color,
+    );
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects the recovered font size");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn color_domain_failure_reports_the_responsible_component_and_retains_its_sibling() {
     let source = "color: hsl(20px 30% 40%); opacity: 0.5";
     let report = parse_style_attribute(source);

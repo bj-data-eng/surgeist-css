@@ -55,6 +55,51 @@ fn direct_color_wrappers_keep_current_i01_global_and_substitution_branches_disti
 }
 
 #[test]
+fn core_font_wrappers_keep_current_i01_global_and_substitution_branches_distinct() {
+    let report = parse_style_attribute(concat!(
+        "font-size: 16px; line-height: normal; ",
+        "font-family: Arial, serif; font: italic 16px/normal Arial; ",
+        "font-size: var(--size); font: inherit",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    for index in 0..4 {
+        let value = report.syntax()[index]
+            .known()
+            .unwrap()
+            .property_value()
+            .unwrap();
+        match value {
+            CssKnownPropertyValueRef::FontSize(value) => {
+                assert!(value.i01_subset().is_some());
+                let _ = value.size();
+            }
+            CssKnownPropertyValueRef::LineHeight(value) => {
+                assert!(value.i01_subset().is_some());
+                let _ = value.line_height();
+            }
+            CssKnownPropertyValueRef::FontFamily(value) => {
+                assert!(value.i01_subset().is_some());
+                let _ = value.families();
+            }
+            CssKnownPropertyValueRef::Font(value) => {
+                assert!(value.i01_subset().is_some());
+                let _ = value.font();
+            }
+            _ => panic!("expected core font wrapper"),
+        }
+    }
+    assert!(matches!(
+        report.syntax()[4].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::SubstitutionDependent(_)
+    ));
+    assert!(matches!(
+        report.syntax()[5].known().unwrap().declared_value(),
+        CssKnownDeclaredValueRef::Global(_)
+    ));
+}
+
+#[test]
 fn direct_color_wrappers_expose_perceptual_current_values_without_lossy_projection() {
     let report = parse_style_attribute(concat!(
         "color: lab(calc(40% + 10%) 20 30); ",

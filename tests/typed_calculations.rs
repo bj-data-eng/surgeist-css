@@ -3,13 +3,74 @@ use surgeist_css::{
     CssAuthoredHue, CssCalcLength, CssCalculationExpressionRef, CssCalculationProductOperator,
     CssCalculationType, CssCalculationValueRef, CssErrorCode, CssFilterAmount,
     CssFilterFunctionValue, CssFilterNumber, CssFilterPercentage, CssFilterValue, CssFlexValue,
-    CssFrequencyCalculation, CssFrequencyUnit, CssGridFlowToleranceValue, CssIntegerCalculation,
-    CssIntegerValue, CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthUnit,
-    CssNonNegativeNumberValue, CssNumberCalculation, CssOpacityValue, CssPercentageCalculation,
-    CssPositiveNumber, CssPositiveNumberValue, CssRecoveryAction, CssRelativeColorChannel,
+    CssFontSize, CssFrequencyCalculation, CssFrequencyUnit, CssGridFlowToleranceValue,
+    CssIntegerCalculation, CssIntegerValue, CssKnownPropertyValueRef, CssLength,
+    CssLengthCalculation, CssLengthUnit, CssLineHeight, CssNonNegativeNumberValue,
+    CssNumberCalculation, CssOpacityValue, CssPercentageCalculation, CssPositiveNumber,
+    CssPositiveNumberValue, CssRecoveryAction, CssRelativeColorChannel,
     CssRelativeColorExpressionValue, CssRelativeColorResultDomain, CssTimeCalculation, CssTimeUnit,
     CssZIndexValue, parse_style_attribute,
 };
+
+#[test]
+fn core_font_calculations_preserve_number_and_length_percentage_domains() {
+    let report = parse_style_attribute(concat!(
+        "font-size: calc((1em + 10%) * 2); ",
+        "line-height: calc(1 + 0.5); ",
+        "line-height: calc((1em + 10%) * 2)",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::FontSize(size) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected font-size");
+    };
+    assert!(matches!(
+        size.size(),
+        CssFontSize::LengthPercentage(value)
+            if matches!(
+                value.value(),
+                CssLength::Calc(CssCalcLength::Typed(calculation))
+                    if calculation.result_type() == CssCalculationType::LengthPercentage
+            )
+    ));
+
+    let CssKnownPropertyValueRef::LineHeight(number) = report.syntax()[1]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected line-height number");
+    };
+    assert!(matches!(
+        number.line_height(),
+        CssLineHeight::Number(CssNonNegativeNumberValue::Calculation(calculation))
+            if calculation.result_type() == CssCalculationType::Number
+    ));
+
+    let CssKnownPropertyValueRef::LineHeight(length) = report.syntax()[2]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected line-height length-percentage");
+    };
+    assert!(matches!(
+        length.line_height(),
+        CssLineHeight::LengthPercentage(value)
+            if matches!(
+                value.value(),
+                CssLength::Calc(CssCalcLength::Typed(calculation))
+                    if calculation.result_type() == CssCalculationType::LengthPercentage
+            )
+    ));
+}
 
 #[test]
 fn relative_color_calculations_retain_typed_domains_and_closed_channel_references() {

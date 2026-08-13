@@ -311,7 +311,7 @@ fn transition_i01_projection(value: &CssTransitionValue) -> Option<CssTransition
         value.property().cloned(),
         duration,
         delay,
-        value.legacy_timing_function().cloned(),
+        value.timing_function().cloned(),
     )
 }
 
@@ -341,7 +341,7 @@ fn animation_i01_projection(value: &CssAnimationValue) -> Option<CssAnimation> {
         name: value.name().cloned(),
         duration,
         delay,
-        timing_function: value.legacy_timing_function().cloned(),
+        timing_function: value.timing_function().cloned(),
         iteration_count,
         direction: value.direction(),
         fill_mode: value.fill_mode(),

@@ -129,7 +129,7 @@ macro_rules! property_schema {
             BorderBottomColor, "border-bottom-color", [], "baseline.property.border-bottom-color", CssColor, CssBorderBottomColorPropertyValue, CssBorderBottomColorPropertyValueRepresentation, parse_color, { parse_color($input)? };
             BorderLeftColor, "border-left-color", [], "baseline.property.border-left-color", CssColor, CssBorderLeftColorPropertyValue, CssBorderLeftColorPropertyValueRepresentation, parse_color, { parse_color($input)? };
             BackgroundImage, "background-image", [], "baseline.property.background-image", CssImageLayerList, CssBackgroundImagePropertyValue, CssBackgroundImagePropertyValueRepresentation, parse_image_layer_list, { parse_image_layer_list($input)? };
-            BackgroundPosition, "background-position", [], "baseline.property.background-position", CssPositionList, CssBackgroundPositionPropertyValue, CssBackgroundPositionPropertyValueRepresentation, parse_deferred_position_list, { parse_deferred_position_list($input)? };
+            BackgroundPosition, "background-position", [], "baseline.property.background-position", CssBackgroundPositionList, CssBackgroundPositionPropertyValue, CssBackgroundPositionPropertyValueRepresentation, parse_background_position_list, { parse_background_position_list($input)? };
             BackgroundSize, "background-size", [], "baseline.property.background-size", CssBackgroundSizeList, CssBackgroundSizePropertyValue, CssBackgroundSizePropertyValueRepresentation, parse_background_size_list, { parse_background_size_list($input)? };
             BackgroundRepeat, "background-repeat", [], "baseline.property.background-repeat", CssBackgroundRepeatList, CssBackgroundRepeatPropertyValue, CssBackgroundRepeatPropertyValueRepresentation, parse_background_repeat_list, { parse_background_repeat_list($input)? };
             BackgroundOrigin, "background-origin", [], "baseline.property.background-origin", CssBackgroundBox, CssBackgroundOriginPropertyValue, CssBackgroundOriginPropertyValueRepresentation, parse_background_box, { parse_background_box($input)? };
@@ -173,7 +173,7 @@ macro_rules! property_schema {
             Mask, "mask", [], "baseline.property.mask", CssMaskList, CssMaskPropertyValue, CssMaskPropertyValueRepresentation, parse_mask_list, { parse_mask_list($input)? };
             MaskImage, "mask-image", [], "baseline.property.mask-image", CssImageLayerList, CssMaskImagePropertyValue, CssMaskImagePropertyValueRepresentation, parse_image_layer_list, { parse_image_layer_list($input)? };
             MaskSize, "mask-size", [], "baseline.property.mask-size", CssBackgroundSizeList, CssMaskSizePropertyValue, CssMaskSizePropertyValueRepresentation, parse_background_size_list, { parse_background_size_list($input)? };
-            MaskPosition, "mask-position", [], "baseline.property.mask-position", CssPositionList, CssMaskPositionPropertyValue, CssMaskPositionPropertyValueRepresentation, parse_position_list, { parse_position_list($input)? };
+            MaskPosition, "mask-position", [], "baseline.property.mask-position", CssMaskPositionList, CssMaskPositionPropertyValue, CssMaskPositionPropertyValueRepresentation, parse_mask_position_list, { parse_mask_position_list($input)? };
             MaskRepeat, "mask-repeat", [], "baseline.property.mask-repeat", CssBackgroundRepeatList, CssMaskRepeatPropertyValue, CssMaskRepeatPropertyValueRepresentation, parse_background_repeat_list, { parse_background_repeat_list($input)? };
             TransitionProperty, "transition-property", [], "baseline.property.transition-property", CssTransitionPropertyList, CssTransitionPropertyPropertyValue, CssTransitionPropertyPropertyValueRepresentation, parse_transition_property_list, { parse_transition_property_list($input)? };
             TransitionDuration, "transition-duration", [], "baseline.property.transition-duration", CssTimeList, CssTransitionDurationPropertyValue, CssTransitionDurationPropertyValueRepresentation, parse_duration_list, { parse_duration_list($input)? };
@@ -357,6 +357,26 @@ fn animation_list_i01_projection(value: &CssAnimationValueList) -> Option<CssAni
     CssAnimationList::try_new(values)
 }
 
+fn background_position_list_i01_projection(
+    value: &CssBackgroundPositionList,
+) -> Option<CssPositionList> {
+    let positions = value
+        .positions()
+        .iter()
+        .map(|position| position.legacy().cloned())
+        .collect::<Option<Vec<_>>>()?;
+    CssPositionList::try_new(positions)
+}
+
+fn mask_position_list_i01_projection(value: &CssMaskPositionList) -> Option<CssPositionList> {
+    let positions = value
+        .positions()
+        .iter()
+        .map(|position| position.legacy().cloned())
+        .collect::<Option<Vec<_>>>()?;
+    CssPositionList::try_new(positions)
+}
+
 macro_rules! define_current_property_value {
     (
         $canonical:literal, $wrapper:ident, $representation:ident,
@@ -407,6 +427,34 @@ macro_rules! define_current_property_value {
 }
 
 macro_rules! define_property_value {
+    (
+        BackgroundPosition, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBackgroundPositionList,
+            CssPositionList,
+            positions,
+            background_position_list_i01_projection
+        );
+    };
+    (
+        MaskPosition, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssMaskPositionList,
+            CssPositionList,
+            positions,
+            mask_position_list_i01_projection
+        );
+    };
     (
         TransitionDuration, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident

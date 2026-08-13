@@ -6,9 +6,10 @@ use surgeist_css::{
 struct InvalidEasingCase {
     source: &'static str,
     property: CssKnownProperty,
-    position: usize,
-    span_end: usize,
-    encountered: Option<(CssTokenKind, &'static str)>,
+    position_marker: &'static str,
+    position_offset: usize,
+    encountered_kind: CssTokenKind,
+    encountered_authored: &'static str,
 }
 
 fn assert_invalid_easing_is_dropped(case: &InvalidEasingCase) {
@@ -49,14 +50,19 @@ fn assert_invalid_easing_is_dropped(case: &InvalidEasingCase) {
         "{}",
         case.source,
     );
+    let responsible = case
+        .source
+        .find(case.position_marker)
+        .expect("responsible easing token")
+        + case.position_offset;
     assert_eq!(
         diagnostic.error().position().byte_offset().value(),
-        case.position
+        responsible
     );
     assert_eq!(diagnostic.span().start().byte_offset().value(), 0);
     assert_eq!(
         diagnostic.span().end().byte_offset().value(),
-        case.span_end,
+        case.source.find(';').expect("declaration end") + 1,
         "{}",
         case.source,
     );
@@ -70,17 +76,16 @@ fn assert_invalid_easing_is_dropped(case: &InvalidEasingCase) {
         "{}",
         case.source,
     );
-    match (detail.encountered(), case.encountered) {
-        (Some(actual), Some((kind, authored))) => {
-            assert_eq!(actual.kind(), kind, "{}", case.source);
-            assert_eq!(actual.authored(), authored, "{}", case.source);
-        }
-        (None, None) => {}
-        (actual, expected) => panic!(
-            "{}: encountered token mismatch: actual={actual:?}, expected={expected:?}",
-            case.source,
-        ),
-    }
+    let encountered = detail
+        .encountered()
+        .expect("responsible easing argument token");
+    assert_eq!(encountered.kind(), case.encountered_kind, "{}", case.source);
+    assert_eq!(
+        encountered.authored(),
+        case.encountered_authored,
+        "{}",
+        case.source
+    );
 
     #[cfg(feature = "app-strict")]
     {
@@ -101,30 +106,34 @@ fn cubic_bezier_rejects_x_coordinates_outside_the_closed_unit_interval() {
         InvalidEasingCase {
             source: "transition-timing-function: cubic-bezier(-0.01, 0, 0.5, 1); color: red",
             property: CssKnownProperty::TransitionTimingFunction,
-            position: 28,
-            span_end: 64,
-            encountered: Some((CssTokenKind::Function, "cubic-bezier")),
+            position_marker: "-0.01",
+            position_offset: 0,
+            encountered_kind: CssTokenKind::Number,
+            encountered_authored: "-0.01",
         },
         InvalidEasingCase {
             source: "animation-timing-function: cubic-bezier(0.5, -20, 1.01, 20); color: red",
             property: CssKnownProperty::AnimationTimingFunction,
-            position: 27,
-            span_end: 63,
-            encountered: Some((CssTokenKind::Function, "cubic-bezier")),
+            position_marker: "1.01",
+            position_offset: 0,
+            encountered_kind: CssTokenKind::Number,
+            encountered_authored: "1.01",
         },
         InvalidEasingCase {
             source: "transition: opacity 1s cubic-bezier(2, -20, 0, 20); color: red",
             property: CssKnownProperty::Transition,
-            position: 25,
-            span_end: 51,
-            encountered: Some((CssTokenKind::Function, "cubic-bezier")),
+            position_marker: "cubic-bezier",
+            position_offset: 0,
+            encountered_kind: CssTokenKind::Function,
+            encountered_authored: "cubic-bezier(",
         },
         InvalidEasingCase {
             source: "animation: fade 1s cubic-bezier(0, -20, -1, 20); color: red",
             property: CssKnownProperty::Animation,
-            position: 19,
-            span_end: 50,
-            encountered: Some((CssTokenKind::Function, "cubic-bezier")),
+            position_marker: "cubic-bezier",
+            position_offset: 0,
+            encountered_kind: CssTokenKind::Function,
+            encountered_authored: "cubic-bezier(",
         },
     ] {
         assert_invalid_easing_is_dropped(&case);
@@ -137,30 +146,34 @@ fn steps_jump_none_rejects_a_single_interval() {
         InvalidEasingCase {
             source: "transition-timing-function: steps(1, jump-none); color: red",
             property: CssKnownProperty::TransitionTimingFunction,
-            position: 28,
-            span_end: 47,
-            encountered: Some((CssTokenKind::Function, "steps")),
+            position_marker: "steps(1",
+            position_offset: "steps(".len(),
+            encountered_kind: CssTokenKind::Number,
+            encountered_authored: "1",
         },
         InvalidEasingCase {
             source: "animation-timing-function: steps(1, JUMP-NONE); color: red",
             property: CssKnownProperty::AnimationTimingFunction,
-            position: 27,
-            span_end: 46,
-            encountered: Some((CssTokenKind::Function, "steps")),
+            position_marker: "steps(1",
+            position_offset: "steps(".len(),
+            encountered_kind: CssTokenKind::Number,
+            encountered_authored: "1",
         },
         InvalidEasingCase {
             source: "transition: opacity 1s steps(1, jump-none); color: red",
             property: CssKnownProperty::Transition,
-            position: 25,
-            span_end: 44,
-            encountered: Some((CssTokenKind::Function, "steps")),
+            position_marker: "steps",
+            position_offset: 0,
+            encountered_kind: CssTokenKind::Function,
+            encountered_authored: "steps(",
         },
         InvalidEasingCase {
             source: "animation: fade 1s steps(1, jump-none); color: red",
             property: CssKnownProperty::Animation,
-            position: 19,
-            span_end: 38,
-            encountered: Some((CssTokenKind::Function, "steps")),
+            position_marker: "steps",
+            position_offset: 0,
+            encountered_kind: CssTokenKind::Function,
+            encountered_authored: "steps(",
         },
     ] {
         assert_invalid_easing_is_dropped(&case);

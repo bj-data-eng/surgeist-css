@@ -257,6 +257,37 @@ occurrences still recover with `DropDescriptor`; valid duplicates are retained
 and effective-last exactly as section 5 already requires. Any further frozen
 oracle contradiction returns to P01 reconciliation before implementation.
 
+### 3.5 C09 Source-Backed Oracle Correction
+
+P01.12 reconciles seven C01 rows that encode the incomplete MQ3, Conditional 3,
+and Cascade 5 behavior allocated to C09. C09 shall replace only the expected
+observables for these stable scenario IDs while preserving their entry point,
+feature mode, and authored input:
+
+- `catalog.non-property.baseline.media.range-feature.boundary` retains valid
+  `device-width` without an `InvalidMediaQuery` diagnostic;
+- `catalog.non-property.baseline.media.type.boundary` retains valid `speech`
+  without an `InvalidMediaQuery` diagnostic;
+- `catalog.non-property.baseline.rule.import.boundary` retains the import and
+  its valid `supports(display: grid)` clause without a replacement diagnostic;
+- `catalog.non-property.later.rule.supports.boundary` and
+  `focused.structured-errors.01` retain valid `@supports` rules, including the
+  former row's nested style rule and color declaration;
+- `focused.specialized.media-position` and `focused.structured-errors.08`
+  retain syntactically valid unknown media features as typed defined-false
+  queries without diagnostics.
+
+The fixture SHA-256 before C09 is
+`67e69813d808ffda40e7c159fde719fbadd0447f8e4105788b0bb593931fac89`.
+The hand-authored replacement rows yield SHA-256
+`9e798c3b337b7ab4d34da09fbefcb6a09daf55f063789439bc32445fa6f8bd84`.
+Task review verifies the exact seven-row diff. No Rust test asserts either
+digest, derives expected values from production, masks a corrected case, or
+weakens comparison. Every malformed-query row, the distinct MQ4 `scripting`
+boundary, and every other fixture row remain byte-for-byte identical. Any
+additional frozen-oracle contradiction returns to P01 reconciliation before
+implementation.
+
 ## 4. Conformance Profile And Catalog
 
 ### 4.1 Tiers, Sources, And Dispositions

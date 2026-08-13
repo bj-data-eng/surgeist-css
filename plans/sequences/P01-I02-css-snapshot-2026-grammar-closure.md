@@ -199,7 +199,8 @@ published/read-back C08 SHA.
   published/read back; P01.12 reconciles the imported `<general-enclosed>`
   binding to immutable `X-VALUES4` repository provenance without importing its
   sibling boolean grammar, and assigns the separate Conditional 4 selector-test
-  delta to `R-CONDITIONAL4`.
+  delta to `R-CONDITIONAL4`. P01.12 and specification section 3.5 also freeze
+  the exact seven source-backed C09 fixture corrections and replacement digest.
 
 Close findings 2.4 and 2.7 and the Conditional portion of 2.1. Implement complete
 MQ3 types/features/defined-false behavior, `@supports`, dated
@@ -212,7 +213,8 @@ Exit: MQ3 and Conditional 3 are Complete; later MQ/container extensions retain
 their separate provenance and recovery behavior. The Conditional 4 selector
 delta remains separately sourced and Partial. **Handoff:** phase table and
 media/supports/import row promotions, recovery/consumer evidence,
-reviews/matrix/cleanup, and published/read-back C09 SHA.
+exact seven-row fixture diff and replacement digest, reviews/matrix/cleanup,
+and published/read-back C09 SHA.
 
 ### I02-C10 Namespaces And Complete Selectors 3
 
@@ -313,8 +315,8 @@ cleanup, then published/read-back I02 SHA and root-only actions.
 ## 3. Cross-Cycle Invariants
 
 Every cycle preserves the I01 behavioral corpus's authored inputs and public
-observables except for C07's exact seven and C08's exact one reviewed
-source-backed replacement observables; every unaffected row remains
+observables except for C07's exact seven, C08's exact one, and C09's exact seven
+reviewed source-backed replacement observables; every unaffected row remains
 byte-identical. Every cycle also
 preserves all prior completed I02 vectors, parser progress/depth guarantees,
 diagnostic ordering and coordinates, custom/substitution authored text,

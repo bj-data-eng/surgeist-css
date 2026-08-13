@@ -252,6 +252,10 @@ fn transform_origin_accepts_every_directed_two_dimension_and_z_branch() {
         "50px 75%",
         "top 50px",
         "bottom 50px",
+        "top calc(1px * 2)",
+        "bottom calc(1px * 2)",
+        "left calc(1px * 2)",
+        "center calc(1px * 2)",
         "left top 50px",
         "top left 50px",
         "50px top calc(1px * 2)",
@@ -317,6 +321,17 @@ fn transform_origin_exposes_the_directed_two_dimension_and_optional_z_split() {
         Some(CssLength::Calc(CssCalcLength::Typed(calculation)))
             if calculation.result_type() == surgeist_css::CssCalculationType::Length
     ));
+
+    for value in ["left calc(1px * 2)", "center calc(1px * 2)"] {
+        assert!(transform_origin(value).z().is_none(), "{value}");
+    }
+    for value in ["top calc(1px * 2)", "bottom calc(1px * 2)"] {
+        assert!(matches!(
+            transform_origin(value).z().map(CssTransformOriginZ::value),
+            Some(CssLength::Calc(CssCalcLength::Typed(calculation)))
+                if calculation.result_type() == surgeist_css::CssCalculationType::Length
+        ));
+    }
 }
 
 #[test]
@@ -383,6 +398,20 @@ fn object_and_transform_origin_invalid_z_mutations_drop_only_the_declaration() {
             "top 10px 20px",
             "20px",
             CssTokenKind::Dimension,
+        ),
+        (
+            "transform-origin",
+            Some(CssKnownProperty::TransformOrigin),
+            "top calc(10%)",
+            "calc(",
+            CssTokenKind::Function,
+        ),
+        (
+            "transform-origin",
+            Some(CssKnownProperty::TransformOrigin),
+            "top calc(1px + 10%)",
+            "calc(",
+            CssTokenKind::Function,
         ),
         (
             "transform-origin",

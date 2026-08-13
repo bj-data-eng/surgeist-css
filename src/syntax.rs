@@ -6163,6 +6163,112 @@ impl CssMaskPositionList {
     }
 }
 
+/// A parser-produced authored value of the `object-position` property.
+///
+/// Object positioning uses generic `<position>` exactly. The value remains symbolic and does not
+/// resolve percentages against an object or positioning area.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssObjectPosition {
+    value: CssPositionValue,
+}
+
+impl CssObjectPosition {
+    #[must_use]
+    pub(crate) const fn new(value: CssPositionValue) -> Self {
+        Self { value }
+    }
+
+    /// Returns the exact authored generic position.
+    #[must_use]
+    pub const fn value(&self) -> &CssPositionValue {
+        &self.value
+    }
+}
+
+/// A checked authored `<length>` on the transform-origin z axis.
+///
+/// Percentages and mixed length-percentage calculations are not valid on this axis. A well-typed
+/// length calculation remains symbolic because range evaluation belongs to computed values.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformOriginZ {
+    value: CssLength,
+}
+
+impl CssTransformOriginZ {
+    /// Constructs a z value from an authored length without a percentage component.
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        match &value {
+            CssLength::Px(_) | CssLength::Dimension(_) | CssLength::Zero => Some(Self { value }),
+            CssLength::Calc(calculation) if !calculation.uses_percentage() => Some(Self { value }),
+            CssLength::Percent(_)
+            | CssLength::Auto
+            | CssLength::MinContent
+            | CssLength::MaxContent
+            | CssLength::FitContent
+            | CssLength::Normal
+            | CssLength::Calc(_) => None,
+        }
+    }
+
+    /// Returns the authored symbolic z length.
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// A parser-produced authored value of the `transform-origin` property.
+///
+/// Both 2D axes are explicit, and the optional z axis can contain only a checked authored length.
+/// Construction is parser-owned so the directed greedy split cannot be bypassed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformOrigin {
+    horizontal: CssHorizontalPosition,
+    vertical: CssVerticalPosition,
+    z: Option<CssTransformOriginZ>,
+    legacy: Option<CssPosition>,
+}
+
+impl CssTransformOrigin {
+    #[must_use]
+    pub(crate) fn new(
+        position: CssPositionValue,
+        z: Option<CssTransformOriginZ>,
+        legacy: Option<CssPosition>,
+    ) -> Self {
+        Self {
+            horizontal: position.horizontal,
+            vertical: position.vertical,
+            z,
+            legacy,
+        }
+    }
+
+    /// Returns the authored horizontal position.
+    #[must_use]
+    pub const fn horizontal(&self) -> &CssHorizontalPosition {
+        &self.horizontal
+    }
+
+    /// Returns the authored vertical position.
+    #[must_use]
+    pub const fn vertical(&self) -> &CssVerticalPosition {
+        &self.vertical
+    }
+
+    /// Returns the optional authored z length.
+    #[must_use]
+    pub const fn z(&self) -> Option<&CssTransformOriginZ> {
+        self.z.as_ref()
+    }
+
+    #[must_use]
+    pub(crate) const fn legacy(&self) -> Option<&CssPosition> {
+        self.legacy.as_ref()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum CssPositionComponent {

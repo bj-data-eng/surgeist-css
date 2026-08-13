@@ -458,7 +458,7 @@ reconciliation.
 
 C09 is published and read back at
 `019906900cab8295d8c33a28eb53a76b39cd85ee`. JIT discovery for I02-C10 proved
-that five frozen C01 boundary rows encode exactly the incomplete Selectors 3
+that six frozen C01 boundary/recovery rows encode exactly the incomplete Selectors 3
 and Namespaces 3 behavior allocated to C10:
 
 - `catalog.non-property.baseline.selector.extension-state.boundary` rejects the
@@ -470,7 +470,10 @@ and Namespaces 3 behavior allocated to C10:
 - `catalog.non-property.baseline.selector.pseudo-element.boundary` rejects the
   required `::first-line` pseudo-element; and
 - `catalog.non-property.later.rule.namespace.boundary` rejects the required
-  top-level `@namespace svg url(https://example.test/svg);` declaration.
+  top-level `@namespace svg url(https://example.test/svg);` declaration; and
+- `focused.stylesheet-recovery.11` classifies a syntactically valid namespace
+  declaration after a body rule as unsupported rather than as a supported rule
+  in an invalid position.
 
 The immutable Selectors 3 Recommendation requires those selector spellings,
 and the immutable Namespaces 3 Recommendation requires that namespace-rule
@@ -481,15 +484,20 @@ remains invalid because it contains no earlier declaration for the named
 prefix.
 
 P01 therefore authorizes one source-backed C10 oracle correction limited to
-those five stable IDs and authored inputs. The four selector rows become clean,
+those six stable IDs and authored inputs. The four selector rows become clean,
 retain their style rule and red color declaration, and remove only the obsolete
 selector diagnostic. The namespace row becomes clean, retains public rule
 identity `later.rule.namespace`, and removes only the obsolete unsupported-rule
-diagnostic. The fixture SHA-256 before C10 is
+diagnostic. The recovery row preserves its non-clean status, retained before and
+after style rules and declarations, authored values, `DropAtRule` action,
+responsible position, and span; only the diagnostic code/root/payload changes
+from `UnsupportedAtRule:namespace:later.rule.namespace` to
+`InvalidAtRulePlacement:namespace:after imports and before every layer or body
+rule`. The fixture SHA-256 before C10 is
 `95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`;
-the hand-authored five-row replacement yields
-`085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`.
-C10 task review must prove exactly those five rows changed and every other row
+the hand-authored six-row replacement yields
+`96be045dc181fe5fc258e76b09458b441139504a3cae13c41897995ab3ae8f5d`.
+C10 task review must prove exactly those six rows changed and every other row
 is byte-identical. No Rust test asserts either digest, derives expectations
 from production, masks a corrected row, or uses source/test owner sets or
 counts as completion evidence.

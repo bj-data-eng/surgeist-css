@@ -1698,3 +1698,47 @@ fn diagnostics(input: Input) -> Vec<(CssErrorCode, Option<&'static str>)> {
         })
         .collect()
 }
+
+#[test]
+fn object_position_recognition_does_not_recognize_other_images_three_properties() {
+    let object = parse_style_attribute("object-position: left top");
+    assert!(object.is_clean(), "{:?}", object.diagnostics());
+    assert_eq!(
+        object.syntax()[0]
+            .known()
+            .expect("known object position")
+            .property(),
+        CssKnownProperty::ObjectPosition,
+    );
+
+    for property in ["object-fit", "image-rendering", "image-orientation"] {
+        let source = format!("{property}: auto; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{source}: expected one unknown-property diagnostic");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::UnknownProperty,
+            "{source}"
+        );
+        assert_eq!(
+            diagnostic.action(),
+            CssRecoveryAction::DropDeclaration,
+            "{source}"
+        );
+        let ErrorKind::UnknownProperty(detail) = diagnostic.error().kind() else {
+            panic!("{source}: expected unknown-property payload");
+        };
+        assert_eq!(detail.name().as_str(), property, "{source}");
+        assert_eq!(
+            report.syntax()[0]
+                .known()
+                .expect("retained color declaration")
+                .property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+    }
+}

@@ -6,7 +6,7 @@
 | --- | --- |
 | Cycle ID | `P01-I02-C09` |
 | Owning repository | `surgeist-css` |
-| Status | `draft` |
+| Status | `reviewed` |
 | Cycle base | `129de7267726277b73d2cc15f1168c44c34ffcbc` |
 | Published prerequisite | C08 `129de7267726277b73d2cc15f1168c44c34ffcbc`, fetched and read back |
 | Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `3a2f997f5c0a07566d6620b031b5010defb19d57ed0a878de57069cd97c4efe5`, especially P01.12 |

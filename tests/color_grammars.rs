@@ -20,6 +20,22 @@ fn opacity_percentage_is_retained_with_its_valid_sibling() {
 }
 
 #[test]
+fn deprecated_system_color_is_retained_with_its_valid_sibling() {
+    let report = parse_style_attribute("color: ActiveBorder; opacity: 0.5");
+
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    assert_eq!(report.syntax().len(), 2);
+    assert_eq!(
+        report.syntax()[0].known().map(|known| known.property()),
+        Some(CssKnownProperty::Color),
+    );
+    assert_eq!(
+        report.syntax()[1].known().map(|known| known.property()),
+        Some(CssKnownProperty::Opacity),
+    );
+}
+
+#[test]
 fn opacity_preserves_finite_authored_number_and_percentage_branches() {
     let report = parse_style_attribute(concat!(
         "opacity: 0.5; ",

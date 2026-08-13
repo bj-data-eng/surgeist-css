@@ -4,7 +4,7 @@
 
 This is the JIT implementation contract for `P01-I02` in `surgeist-css`.
 It is subordinate to the reviewed P01 program at semantic SHA-256
-`7a8e26a1cd961d42e3a1275b49e278851e314d6b2df77128dcffc3654679114b`
+`db899aea31b168128b4d8bd5c4be58057a9860e0de4d0d4b00f049955b16eb22`
 and incorporates its I02-entry and source-contradiction reconciliations. The
 initiative base is the published, fetchable I01 candidate
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; the P01 reconciliation commit
@@ -295,7 +295,7 @@ implementation.
 
 ### 3.6 C10 Source-Backed Oracle Correction
 
-P01.13 reconciles five C01 rows that encode the incomplete Selectors 3 and
+P01.13 reconciles six C01 rows that encode the incomplete Selectors 3 and
 Namespaces 3 behavior allocated to C10. C10 shall replace only the expected
 observables for these stable scenario IDs while preserving their entry point,
 feature mode, and authored input:
@@ -309,15 +309,23 @@ feature mode, and authored input:
 - `catalog.non-property.baseline.selector.pseudo-element.boundary` retains
   valid `::first-line`; and
 - `catalog.non-property.later.rule.namespace.boundary` retains the valid
-  top-level namespace declaration.
+  top-level namespace declaration; and
+- `focused.stylesheet-recovery.11` retains both surrounding style rules while
+  diagnosing the intervening syntactically valid namespace declaration as a
+  supported rule in an invalid position.
 
 The four selector rows become clean and retain the style rule plus red color
 declaration. The namespace row becomes clean and retains
-`rule:later.rule.namespace`. The fixture SHA-256 before C10 is
+`rule:later.rule.namespace`. The recovery row remains non-clean and preserves
+its retained rules/declarations, values, authored declarations, `DropAtRule`
+action, responsible position, and span; only the diagnostic code/root/payload
+changes from `UnsupportedAtRule:namespace:later.rule.namespace` to
+`InvalidAtRulePlacement:namespace:after imports and before every layer or body
+rule`. The fixture SHA-256 before C10 is
 `95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`;
 the hand-authored replacement rows yield SHA-256
-`085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`.
-Task review verifies the exact five-row diff. No Rust test asserts either
+`96be045dc181fe5fc258e76b09458b441139504a3cae13c41897995ab3ae8f5d`.
+Task review verifies the exact six-row diff. No Rust test asserts either
 digest, derives expected values from production, masks a corrected case, or
 uses source/test owner sets or counts as completeness evidence. The distinct
 undeclared-prefix `svg|a` boundary and every other fixture row remain
@@ -497,7 +505,7 @@ At initiative completion:
 - preserved extensions are `Complete`, `Partial`, or
   `RecognizedUnsupported` truthfully, with exact subset/remainder or diagnostic
   identity; except for the exact section 3.3 seven-row, section 3.4 one-row,
-  section 3.5 eight-row, and section 3.6 five-row source corrections, no
+  section 3.5 eight-row, and section 3.6 six-row source corrections, no
   preserved I01 accepted vector regresses;
 - unknown spellings remain distinct from recognized unsupported spellings;
 - exact I01 baseline tests become subset-preservation tests rather than replacing
@@ -774,9 +782,9 @@ inspection. They reiterate the excluded downstream semantics.
 I01 behavioral tests remain baseline-preservation evidence, subject only to the
 seven source-backed C07 corrections in section 3.3, the one source-backed C08
 correction in section 3.4, and the eight source-backed C09 corrections in
-section 3.5, plus the five source-backed C10 corrections in section 3.6, with
+section 3.5, plus the six source-backed C10 corrections in section 3.6, with
 the post-C10 fixture digest
-`085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`.
+`96be045dc181fe5fc258e76b09458b441139504a3cae13c41897995ab3ae8f5d`.
 At I02 completion,
 the coordinator and reviewers map every acceptance item to direct source
 inspection, compiler-visible API evidence, behavioral tests, or deterministic
@@ -822,10 +830,10 @@ I02 is complete only when all predicates hold:
    counts.
 3. The exact 219-row I01 feature baseline remains classified; the seven C07
    scenario IDs in section 3.3, the one C08 scenario ID in section 3.4, and the
-   eight C09 scenario IDs in section 3.5 and five C10 scenario IDs in section
+   eight C09 scenario IDs in section 3.5 and six C10 scenario IDs in section
    3.6 carry their reviewed source-backed replacement observables; the C10
    fixture has exact SHA-256
-   `085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`;
+   `96be045dc181fe5fc258e76b09458b441139504a3cae13c41897995ab3ae8f5d`;
    every other accepted vector does not regress; extension status and
    provenance are truthful.
 4. All fourteen allocated findings in section 11 have implemented source and

@@ -126,14 +126,23 @@ do not change.
 
 ## 5. Tasks
 
-For every task, “focused targets” means one exact offline command per listed
-target under `--no-default-features` and again with `--features app-strict`.
-Each task then runs full package tests in both modes, Clippy in both modes with
-`--all-targets -- -F unsafe-code -D warnings`, `cargo fmt --check`, and
-`git diff --check <task-base>..HEAD`. Tests parse authored CSS only through the
-public crate API; parsing or inspecting Rust source, files, symbols, test or
-catalog registration, owner sets/counts, workflow state, or call counts is
-prohibited repository-wide.
+At assignment start and before any test or production edit, each worker runs
+`task_base_sha="$(git rev-parse HEAD)"`, records that immutable SHA in its task
+result, and keeps it as the task-base value. After the task-specific focused
+loop, each worker runs this exact common GREEN tail with that recorded value:
+
+```sh
+cargo test -p surgeist-css --offline --no-default-features
+cargo test -p surgeist-css --offline --no-default-features --features app-strict
+cargo clippy -p surgeist-css --offline --no-default-features --all-targets -- -F unsafe-code -D warnings
+cargo clippy -p surgeist-css --offline --no-default-features --features app-strict --all-targets -- -F unsafe-code -D warnings
+cargo fmt --check
+git diff --check "${task_base_sha}..HEAD"
+```
+
+Tests parse authored CSS only through the public crate API; parsing or
+inspecting Rust source, files, symbols, test or catalog registration, owner
+sets/counts, workflow state, or call counts is prohibited repository-wide.
 
 ### T1 Publish Structurally Valid Grid Repetition
 
@@ -146,7 +155,8 @@ prohibited repository-wide.
 - **RED:** first commit is base-compilable public behavior using only existing
   APIs and fails because nested repeat or `repeat(auto-fit, 1fr)` is retained;
   the three hand-authored fixture replacements fail on the same base. New-symbol
-  compile evidence may follow only after this executable RED.
+  compile evidence may follow only after this executable RED. Exact RED command:
+  `cargo test -p surgeist-css --offline --no-default-features --test grid_repetition grid_repeat_models_reject_invalid_cross_products -- --exact`.
 - **Acceptance:** all structural languages in section 2; one-token invalid
   mutations; all direct/aggregate consumers; exact current/I01 projection;
   calculation and 255/256/257 depth boundaries; non-BMP coordinates; complete
@@ -154,7 +164,12 @@ prohibited repository-wide.
   three fixture rows changed at this task.
 - **Focused targets:** `grid_repetition`, `numeric_domains`, `property_schema`,
   `public_surface`, `structured_errors`, `source_coordinates`,
-  `i01_c01_observables`, and affected owning parser tests.
+  `i01_c01_observables`, executed exactly as:
+
+  ```sh
+  for target in grid_repetition numeric_domains property_schema public_surface structured_errors source_coordinates i01_c01_observables; do cargo test -p surgeist-css --offline --no-default-features --test "$target"; done
+  for target in grid_repetition numeric_domains property_schema public_surface structured_errors source_coordinates i01_c01_observables; do cargo test -p surgeist-css --offline --no-default-features --features app-strict --test "$target"; done
+  ```
 - **Intended commits:** `test: specify structurally valid Grid repetition`;
   `feat: type Grid repetition`.
 
@@ -169,7 +184,8 @@ prohibited repository-wide.
   calculation-selector, catalog, or docs edit.
 - **RED:** first commit is base-compilable public behavior and fails because an
   empty rule/block or duplicate offset is rejected; the four exact fixture
-  replacements also execute RED before production changes.
+  replacements also execute RED before production changes. Exact RED command:
+  `cargo test -p surgeist-css --offline --no-default-features --test keyframe_structures keyframes_preserve_empty_and_duplicate_authored_structure -- --exact`.
 - **Acceptance:** empty rules and blocks; duplicate blocks and list-local/cross-
   block offsets in authored order; declaration and invalid-block smallest-unit
   recovery; retained empty parents; positions, depth, EOF, repeated failures,
@@ -179,7 +195,12 @@ prohibited repository-wide.
 - **Focused targets:** `keyframe_structures`, `nested_structural_recovery`,
   `specialized_recovery_boundaries`, `declaration_importance`, `public_surface`,
   `structured_errors`, `source_coordinates`, `app_strict_parity`,
-  `i01_c01_observables`, and affected owning parser tests.
+  `i01_c01_observables`, executed exactly as:
+
+  ```sh
+  for target in keyframe_structures nested_structural_recovery specialized_recovery_boundaries declaration_importance public_surface structured_errors source_coordinates app_strict_parity i01_c01_observables; do cargo test -p surgeist-css --offline --no-default-features --test "$target"; done
+  for target in keyframe_structures nested_structural_recovery specialized_recovery_boundaries declaration_importance public_surface structured_errors source_coordinates app_strict_parity i01_c01_observables; do cargo test -p surgeist-css --offline --no-default-features --features app-strict --test "$target"; done
+  ```
 - **Intended commits:** `test: specify empty and duplicate keyframes`;
   `feat: preserve authored keyframe structure`.
 
@@ -192,15 +213,26 @@ prohibited repository-wide.
 - **RED:** base-compilable explicit metadata behavior fails because
   `ext.value.grid-repeat` is absent and the six property/keyframe subset and
   remainder boundaries are stale, while paired independent parser behavior
-  already passes. No set/count/completeness proxy.
+  already passes. No set/count/completeness proxy. Exact RED command:
+  `cargo test -p surgeist-css --offline --no-default-features --test conformance_catalog grid_and_keyframe_metadata_matches_preserved_boundaries -- --exact`.
 - **Acceptance:** section 4 exact IDs/source/fragments/status/owner/named behavior;
   unrelated rows unchanged; docs state compatibility/current boundaries,
   source-backed oracle correction, and exclusions; handoff contains no SHA,
   review/publication/completion state, or command manifest.
 - **Focused targets:** `conformance_catalog`, `catalog_inventory`,
   `grid_repetition`, `keyframe_structures`, `property_schema`, `public_surface`,
-  `structured_errors`, `source_coordinates`, and `i01_c01_observables`; then
-  doctests and warnings-denied rustdoc in both modes and placeholder scans.
+  `structured_errors`, `source_coordinates`, and `i01_c01_observables`, followed
+  by doctests and warnings-denied rustdoc, executed exactly as:
+
+  ```sh
+  for target in conformance_catalog catalog_inventory grid_repetition keyframe_structures property_schema public_surface structured_errors source_coordinates i01_c01_observables; do cargo test -p surgeist-css --offline --no-default-features --test "$target"; done
+  for target in conformance_catalog catalog_inventory grid_repetition keyframe_structures property_schema public_surface structured_errors source_coordinates i01_c01_observables; do cargo test -p surgeist-css --offline --no-default-features --features app-strict --test "$target"; done
+  cargo test -p surgeist-css --offline --no-default-features --doc
+  cargo test -p surgeist-css --offline --no-default-features --features app-strict --doc
+  RUSTDOCFLAGS='-D warnings' cargo doc -p surgeist-css --offline --no-deps --no-default-features
+  RUSTDOCFLAGS='-D warnings' cargo doc -p surgeist-css --offline --no-deps --no-default-features --features app-strict
+  ! rg -n 'TO''DO|TB''D|FIX''ME|\?''\?''\?' README.md src/lib.rs plans/handoffs/P01-I02-C07-grid-repetition-and-keyframe-structure.md
+  ```
 - **Intended commits:** `test: specify Grid and keyframe metadata`;
   `docs: publish Grid and keyframe structure`.
 
@@ -249,11 +281,15 @@ cargo clean --offline
 test ! -e target
 git status --short --branch
 ps -axo pid=,command=
+candidate_sha="$(git rev-parse HEAD)"
+test "$candidate_sha" = "$(git rev-parse main)"
 git fetch origin main
+test "$(git rev-parse refs/remotes/origin/main)" = "597265b574be01c88a3ce559cc2bc07e02791da3"
 git push --force-with-lease=refs/heads/main:597265b574be01c88a3ce559cc2bc07e02791da3 origin "${candidate_sha}:refs/heads/main"
 git fetch origin main
-git rev-parse HEAD refs/remotes/origin/main
-git ls-remote origin refs/heads/main
+test "$(git rev-parse HEAD)" = "$candidate_sha"
+test "$(git rev-parse refs/remotes/origin/main)" = "$candidate_sha"
+test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$candidate_sha"
 ```
 
 Before the push, `candidate_sha` is set to and checked against the immutable

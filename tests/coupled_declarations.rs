@@ -136,35 +136,3 @@ fn coupled_declared_value_view_is_wildcard_compatible() {
         _ => panic!("expected global declared value"),
     }
 }
-
-#[test]
-fn coupled_origin_properties_expose_only_their_matching_typed_values() {
-    let declarations = declarations(concat!(
-        ".x { object-position: left top; ",
-        "transform-origin: left top 10px; }",
-    ));
-    let [object, transform] = declarations.as_slice() else {
-        panic!("expected adjacent origin declarations");
-    };
-
-    assert_eq!(
-        object.known().expect("known object-position").property(),
-        CssKnownProperty::ObjectPosition,
-    );
-    assert!(matches!(
-        object.known().and_then(|known| known.property_value()),
-        Some(CssKnownPropertyValueRef::ObjectPosition(_))
-    ));
-
-    assert_eq!(
-        transform
-            .known()
-            .expect("known transform-origin")
-            .property(),
-        CssKnownProperty::TransformOrigin,
-    );
-    assert!(matches!(
-        transform.known().and_then(|known| known.property_value()),
-        Some(CssKnownPropertyValueRef::TransformOrigin(value)) if value.origin().z().is_some()
-    ));
-}

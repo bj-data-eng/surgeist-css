@@ -230,6 +230,41 @@ fn specialized_list_not_has_nth_and_ordinary_selector_lists_remain_unforgiving()
 }
 
 #[test]
+fn selectors3_pseudos_preserve_forgiving_and_unforgiving_list_recovery() {
+    let source = ":is(:target,:lang(en),:marker,:visited) { color: red; }";
+    let report = parse_sheet(source);
+    assert!(matches!(
+        forgiving_selectors(&report),
+        [
+            CssSelector::PseudoClass(CssPseudoClass::Target),
+            CssSelector::PseudoClass(CssPseudoClass::Lang(range)),
+            CssSelector::PseudoClass(CssPseudoClass::Visited),
+        ] if range.as_str() == "en"
+    ));
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected one dropped double-colon-only pseudo member")
+    };
+    let start = source.find(":marker").unwrap();
+    assert_specialized_diagnostic(
+        source,
+        diagnostic,
+        CssErrorCode::InvalidSelector,
+        CssRecoveryAction::DropSelectorListItem,
+        start,
+        start + ":marker".len(),
+        start + ":marker".len(),
+    );
+
+    let unforgiving = parse_sheet(":not(:target,:marker,:visited) { color: red; }");
+    assert!(unforgiving.syntax().rules().is_empty());
+    let [diagnostic] = unforgiving.diagnostics() else {
+        panic!("expected whole-rule recovery for invalid :not() member")
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::InvalidSelector);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropQualifiedRule);
+}
+
+#[test]
 fn specialized_list_media_members_become_never_in_authored_order() {
     let cases = [
         (

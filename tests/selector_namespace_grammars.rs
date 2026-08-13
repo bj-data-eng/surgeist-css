@@ -1,7 +1,8 @@
 use surgeist_css::{
-    CssCompoundSelector, CssErrorCode, CssNamespaceConstraint, CssNamespaceName,
-    CssNamespacePrefix, CssRecoveryAction, CssRule, CssScopedRule, CssSelector,
-    CssSupportsConditionKind, ErrorKind, parse_sheet,
+    CssCompoundSelector, CssErrorCode, CssLanguageRange, CssNamespaceConstraint, CssNamespaceName,
+    CssNamespacePrefix, CssPseudoClass, CssPseudoElement, CssRecoveryAction, CssRule,
+    CssScopedRule, CssSelector, CssSelectorCombinator, CssSupportsConditionKind, ErrorKind,
+    parse_sheet,
 };
 
 fn compound_selector(rule: &CssRule) -> &CssCompoundSelector {
@@ -30,9 +31,88 @@ fn selectors3_pseudos_legacy_forms_and_repeated_ids_are_typed() {
 
     assert!(report.is_clean(), "{:?}", report.diagnostics());
     assert_eq!(report.syntax().rules().len(), 9);
-    let repeated_ids = compound_selector(&report.syntax().rules()[8]);
-    assert_eq!(repeated_ids.ids(), ["first", "second"]);
-    assert_eq!(repeated_ids.key().map(String::as_str), Some("second"));
+
+    let target = compound_selector(&report.syntax().rules()[0]);
+    assert!(matches!(target.pseudo_classes(), [CssPseudoClass::Target]));
+    let language = compound_selector(&report.syntax().rules()[1]);
+    assert!(matches!(
+        language.pseudo_classes(),
+        [CssPseudoClass::Lang(range)] if range.as_str() == "en"
+    ));
+    let visited = compound_selector(&report.syntax().rules()[2]);
+    assert!(matches!(
+        visited.pseudo_classes(),
+        [CssPseudoClass::Visited]
+    ));
+
+    for (index, expected) in [
+        (3, CssPseudoElement::FirstLine),
+        (4, CssPseudoElement::Before),
+        (5, CssPseudoElement::After),
+        (6, CssPseudoElement::FirstLine),
+        (7, CssPseudoElement::FirstLetter),
+    ] {
+        let selector = compound_selector(&report.syntax().rules()[index]);
+        assert_eq!(
+            selector
+                .pseudo_elements()
+                .expect("typed pseudo-element")
+                .pseudo_elements(),
+            [expected]
+        );
+    }
+
+    let CssRule::Style(complex) = &report.syntax().rules()[8] else {
+        panic!("expected complex selector style rule")
+    };
+    let CssSelector::Complex(complex) = complex.selector() else {
+        panic!("expected preserved child combinator")
+    };
+    assert_eq!(complex.first().ids(), ["first", "second"]);
+    assert_eq!(complex.first().key().map(String::as_str), Some("second"));
+    assert_eq!(complex.first().classes(), ["card"]);
+    assert_eq!(complex.first().attributes().len(), 1);
+    let [subject] = complex.rest() else {
+        panic!("expected one complex selector part")
+    };
+    assert_eq!(subject.combinator(), CssSelectorCombinator::Child);
+    assert!(matches!(
+        subject.selector().pseudo_classes(),
+        [CssPseudoClass::Link]
+    ));
+
+    assert_eq!(
+        CssLanguageRange::try_new("en-US")
+            .expect("decoded identifier")
+            .as_str(),
+        "en-US"
+    );
+    assert!(CssLanguageRange::try_new("en US").is_none());
+}
+
+#[test]
+fn selectors3_official_pseudo_matrix_and_escaped_language_identifier_are_clean() {
+    let report = parse_sheet(concat!(
+        ":root,:link,:visited,:target,:lang(e\\6e),:hover,:active,:focus,",
+        ":enabled,:disabled,:checked,:indeterminate,:first-child,:last-child,",
+        ":only-child,:empty,:nth-child(2n+1),:nth-last-child(2),",
+        ":first-of-type,:last-of-type,:only-of-type,:nth-of-type(odd),",
+        ":nth-last-of-type(even),:not(.excluded) { color: red; }",
+        ".line::first-line { color: red; }",
+        ".letter::first-letter { color: red; }",
+        ".before::before { color: red; }",
+        ".after::after { color: red; }",
+    ));
+
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    assert_eq!(report.syntax().rules().len(), 28);
+    let CssRule::Style(escaped) = &report.syntax().rules()[4] else {
+        panic!("expected escaped language style rule")
+    };
+    assert!(matches!(
+        escaped.selector(),
+        CssSelector::PseudoClass(CssPseudoClass::Lang(range)) if range.as_str() == "en"
+    ));
 }
 
 #[test]

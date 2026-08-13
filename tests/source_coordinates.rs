@@ -1170,3 +1170,70 @@ fn undeclared_namespace_prefix_at_eof_preserves_non_bmp_coordinates() {
     assert_position(diagnostic.span().start(), 27, 0, 25);
     assert_position(diagnostic.span().end(), source.len(), 0, 36);
 }
+
+#[test]
+fn selectors3_language_errors_preserve_non_bmp_and_eof_coordinates() {
+    let source = "/*😀*/.before {} .bad:lang(\"en\") {} .after {}";
+    let report = parse_sheet(source);
+    assert!(matches!(
+        report.syntax().rules(),
+        [CssRule::Style(_), CssRule::Style(_)]
+    ));
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected one invalid language-range diagnostic")
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::InvalidSelector);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropQualifiedRule);
+    let start = source.find(".bad").unwrap();
+    let end = start + ".bad:lang(\"en\") {}".len();
+    let responsible = source.find("\"en\"").unwrap();
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(responsible - 2).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().start(),
+        start,
+        0,
+        u32::try_from(start - 2).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        end,
+        0,
+        u32::try_from(end - 2).unwrap(),
+    );
+
+    let eof_source = "/*😀*/.before {} .bad:lang(";
+    let eof = parse_sheet(eof_source);
+    assert!(matches!(eof.syntax().rules(), [CssRule::Style(_)]));
+    let [diagnostic] = eof.diagnostics() else {
+        panic!("expected one EOF language-range diagnostic")
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidQualifiedRule
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropQualifiedRule);
+    assert_position(
+        diagnostic.error().position(),
+        eof_source.len(),
+        0,
+        u32::try_from(eof_source.len() - 2).unwrap(),
+    );
+    let eof_start = eof_source.find(".bad").unwrap();
+    assert_position(
+        diagnostic.span().start(),
+        eof_start,
+        0,
+        u32::try_from(eof_start - 2).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        eof_source.len(),
+        0,
+        u32::try_from(eof_source.len() - 2).unwrap(),
+    );
+}

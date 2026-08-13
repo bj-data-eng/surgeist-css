@@ -10,10 +10,11 @@ use surgeist_css::{
     CssFontVariantLigatureState, CssFontVariantLigatureValues, CssFontVariantNumericFigure,
     CssFontVariantNumericValues, CssFontVariantPosition, CssFontVariantValues,
     CssGenericFontFamily, CssGridAutoFlowAxis, CssHueInterpolationMethod, CssImportance,
-    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLength,
-    CssLineHeightLengthPercentage, CssMediaConditionKind, CssMediaQuery, CssMediaQueryModifier,
-    CssMediaType, CssNamespaceConstraint, CssNamespaceName, CssNamespacePrefix, CssOpenTypeTag,
-    CssPredefinedColorSpace, CssPropertyNameRef, CssRecoveryAction, CssRelativeColorChannel,
+    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLanguageRange,
+    CssLength, CssLineHeightLengthPercentage, CssMediaConditionKind, CssMediaQuery,
+    CssMediaQueryModifier, CssMediaType, CssNamespaceConstraint, CssNamespaceName,
+    CssNamespacePrefix, CssOpenTypeTag, CssPredefinedColorSpace, CssPropertyNameRef,
+    CssPseudoClass, CssPseudoElement, CssRecoveryAction, CssRelativeColorChannel,
     CssRelativeColorEnvironment, CssRelativeColorExpressionValue, CssRelativeColorFunction,
     CssRelativeColorResultDomain, CssRule, CssSelector, CssSelectorCombinator,
     CssSpecificationTier, CssSupportStatus, CssSupportsConditionKind, CssSupportsConditionList,
@@ -74,6 +75,41 @@ fn public_surface_exposes_namespace_qualified_selector_accessors_and_id_projecti
         CssNamespaceConstraint::Named(prefix) if prefix.as_str() == "svg"
     ));
     assert_eq!(attribute.name().as_str(), "href");
+}
+
+#[test]
+fn public_surface_exposes_checked_selectors3_language_pseudos_and_ordered_ids() {
+    let report = parse_sheet("a#first#second:lang(e\\6e)::first-line { color: red; }");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [CssRule::Style(rule)] = report.syntax().rules() else {
+        panic!("expected one retained style rule")
+    };
+    let CssSelector::Compound(selector) = rule.selector() else {
+        panic!("expected compound selector")
+    };
+
+    assert_eq!(selector.ids(), ["first", "second"]);
+    assert_eq!(selector.key().map(String::as_str), Some("second"));
+    assert!(matches!(
+        selector.pseudo_classes(),
+        [CssPseudoClass::Lang(range)] if range.as_str() == "en"
+    ));
+    assert_eq!(
+        selector
+            .pseudo_elements()
+            .expect("first-line pseudo-element")
+            .pseudo_elements(),
+        [CssPseudoElement::FirstLine]
+    );
+
+    assert_eq!(
+        CssLanguageRange::try_new("en-US")
+            .expect("one decoded CSS identifier")
+            .as_str(),
+        "en-US"
+    );
+    assert!(CssLanguageRange::try_new("").is_none());
+    assert!(CssLanguageRange::try_new("en US").is_none());
 }
 
 #[test]

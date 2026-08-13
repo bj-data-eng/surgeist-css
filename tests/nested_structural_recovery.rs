@@ -200,6 +200,40 @@ fn nested_structural_repeated_failures_retain_empty_permitted_group_and_later_si
 }
 
 #[test]
+fn nested_selectors3_failures_retain_valid_pseudo_siblings_in_authored_order() {
+    let first = ".bad:lang() { color: black; }";
+    let second = ".bad::first-line:hover { color: black; }";
+    let source = format!(
+        "@media screen {{ .before:target {{ color: red; }} {first} {second} .after:visited {{ color: blue; }} }}"
+    );
+    let report = parse_sheet(&source);
+
+    let [CssRule::Media(media)] = report.syntax().rules() else {
+        panic!("expected retained media group")
+    };
+    assert_eq!(media.rules().len(), 2);
+    assert_eq!(report.diagnostics().len(), 2);
+    assert_drop(
+        &source,
+        &report.diagnostics()[0],
+        first,
+        0,
+        CssErrorCode::InvalidSelector,
+        CssRecoveryAction::DropQualifiedRule,
+        source.find(first).unwrap() + first.find(')').unwrap(),
+    );
+    assert_drop(
+        &source,
+        &report.diagnostics()[1],
+        second,
+        0,
+        CssErrorCode::InvalidSelector,
+        CssRecoveryAction::DropQualifiedRule,
+        source.find(second).unwrap() + second.find(":hover").unwrap(),
+    );
+}
+
+#[test]
 fn nested_structural_style_and_scope_at_rule_failures_keep_authored_siblings() {
     let failed = "@mystery fn({x; y});";
     let style_source = format!(

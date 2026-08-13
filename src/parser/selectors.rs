@@ -544,7 +544,7 @@ fn parse_compound_selector_model_with_options<'i, 't>(
     let parsed_type_selector = parse_type_selector(input, recovery)?;
     let type_selector = parsed_type_selector.map(|parsed| (parsed.name, parsed.legacy_projection));
     let mut scope_anchor = false;
-    let mut key_name = None;
+    let mut id_names = Vec::new();
     let mut class_names = Vec::new();
     let mut attributes = Vec::new();
     let mut pseudo_classes = Vec::new();
@@ -610,6 +610,14 @@ fn parse_compound_selector_model_with_options<'i, 't>(
                 }
                 let sequence = parse_pseudo_element_sequence(input)?;
                 pseudo_elements = Some(sequence);
+            } else if let Ok(first) = input.try_parse(parse_legacy_pseudo_element) {
+                if !options.allow_pseudo_elements {
+                    return Err(invalid_selector(
+                        input,
+                        "pseudo-elements are not supported in this selector context",
+                    ));
+                }
+                pseudo_elements = Some(parse_pseudo_element_sequence_from_first(input, first)?);
             } else {
                 let pseudo_class = parse_pseudo_class_with_options(input, options, recovery)?;
                 pseudo_classes.push(pseudo_class);
@@ -621,7 +629,7 @@ fn parse_compound_selector_model_with_options<'i, 't>(
         match input.next() {
             Ok(Token::IDHash(key)) => {
                 let key = key.to_string();
-                key_name = Some(key);
+                id_names.push(key);
             }
             Ok(Token::Delim('|')) => {
                 return Err(invalid_selector(input, "unsupported selector namespace"));
@@ -631,7 +639,7 @@ fn parse_compound_selector_model_with_options<'i, 't>(
                 input.reset(&state);
                 if type_selector.is_none()
                     && !scope_anchor
-                    && key_name.is_none()
+                    && id_names.is_empty()
                     && class_names.is_empty()
                     && attributes.is_empty()
                     && pseudo_classes.is_empty()
@@ -648,7 +656,7 @@ fn parse_compound_selector_model_with_options<'i, 't>(
 
     if type_selector.is_none()
         && !scope_anchor
-        && key_name.is_none()
+        && id_names.is_empty()
         && class_names.is_empty()
         && attributes.is_empty()
         && pseudo_classes.is_empty()
@@ -663,7 +671,7 @@ fn parse_compound_selector_model_with_options<'i, 't>(
         CssCompoundSelector::new_with_qualified_type_and_pseudo_elements(
             scope_anchor,
             type_selector,
-            key_name.into_iter().collect(),
+            id_names,
             class_names,
             attributes,
             pseudo_classes,
@@ -677,9 +685,9 @@ fn compound_selector_to_selector(selector: CssCompoundSelector) -> CssSelector {
         return CssSelector::Compound(selector);
     }
 
-    if let (None, None, [class], [], []) = (
+    if let (None, [], [class], [], []) = (
         selector.tag(),
-        selector.key(),
+        selector.ids(),
         selector.classes(),
         selector.attributes(),
         selector.pseudo_classes(),
@@ -687,9 +695,9 @@ fn compound_selector_to_selector(selector: CssCompoundSelector) -> CssSelector {
         return CssSelector::Class(class.clone());
     }
     if selector.has_legacy_type_projection()
-        && let (Some(tag), None, [], [], []) = (
+        && let (Some(tag), [], [], [], []) = (
             selector.tag(),
-            selector.key(),
+            selector.ids(),
             selector.classes(),
             selector.attributes(),
             selector.pseudo_classes(),
@@ -697,18 +705,18 @@ fn compound_selector_to_selector(selector: CssCompoundSelector) -> CssSelector {
     {
         return CssSelector::Tag(tag.clone());
     }
-    if let (None, Some(key), [], [], []) = (
+    if let (None, [key], [], [], []) = (
         selector.tag(),
-        selector.key(),
+        selector.ids(),
         selector.classes(),
         selector.attributes(),
         selector.pseudo_classes(),
     ) {
         return CssSelector::Key(key.clone());
     }
-    if let (None, None, [], [], [pseudo_class]) = (
+    if let (None, [], [], [], [pseudo_class]) = (
         selector.tag(),
-        selector.key(),
+        selector.ids(),
         selector.classes(),
         selector.attributes(),
         selector.pseudo_classes(),
@@ -721,7 +729,15 @@ fn compound_selector_to_selector(selector: CssCompoundSelector) -> CssSelector {
 fn parse_pseudo_element_sequence<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssPseudoElementSequence, ParseError<'i, Error>> {
-    let mut pseudo_elements = vec![parse_pseudo_element(input)?];
+    let first = parse_pseudo_element(input)?;
+    parse_pseudo_element_sequence_from_first(input, first)
+}
+
+fn parse_pseudo_element_sequence_from_first<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    first: CssPseudoElement,
+) -> std::result::Result<CssPseudoElementSequence, ParseError<'i, Error>> {
+    let mut pseudo_elements = vec![first];
     loop {
         if input
             .try_parse(|input| {
@@ -739,6 +755,23 @@ fn parse_pseudo_element_sequence<'i, 't>(
         .ok_or_else(|| invalid_selector(input, "unsupported pseudo-element sequence"))
 }
 
+fn parse_legacy_pseudo_element<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssPseudoElement, ParseError<'i, Error>> {
+    let name = input.expect_ident_cloned()?;
+    match_ignore_ascii_case! { &name,
+        "before" => Ok(CssPseudoElement::Before),
+        "after" => Ok(CssPseudoElement::After),
+        "first-line" => Ok(CssPseudoElement::FirstLine),
+        "first-letter" => Ok(CssPseudoElement::FirstLetter),
+        _ => Err(
+            input
+                .new_basic_unexpected_token_error(Token::Ident(name))
+                .into(),
+        ),
+    }
+}
+
 fn parse_pseudo_element<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssPseudoElement, ParseError<'i, Error>> {
@@ -747,6 +780,8 @@ fn parse_pseudo_element<'i, 't>(
         Ok(Token::Ident(name)) => match_ignore_ascii_case! { &name,
             "before" => Ok(CssPseudoElement::Before),
             "after" => Ok(CssPseudoElement::After),
+            "first-line" => Ok(CssPseudoElement::FirstLine),
+            "first-letter" => Ok(CssPseudoElement::FirstLetter),
             "marker" => Ok(CssPseudoElement::Marker),
             "selection" => Ok(CssPseudoElement::Selection),
             "backdrop" => Ok(CssPseudoElement::Backdrop),
@@ -1037,6 +1072,9 @@ fn parse_named_pseudo_class<'i>(
     match_ignore_ascii_case! { name,
         "root" => Ok(CssPseudoClass::Root),
         "scope" => Ok(CssPseudoClass::Scope),
+        "link" => Ok(CssPseudoClass::Link),
+        "visited" => Ok(CssPseudoClass::Visited),
+        "target" => Ok(CssPseudoClass::Target),
         "hover" => Ok(CssPseudoClass::Hover),
         "active" => Ok(CssPseudoClass::Active),
         "focus" => Ok(CssPseudoClass::Focus),
@@ -1082,6 +1120,7 @@ fn parse_function_pseudo_class<'i, 't>(
         "nth-last-child" => CssPseudoClass::NthLastChild(parse_nth_child_pattern(input, options, recovery)?),
         "nth-of-type" => CssPseudoClass::NthOfType(parse_nth_pattern(input)?),
         "nth-last-of-type" => CssPseudoClass::NthLastOfType(parse_nth_pattern(input)?),
+        "lang" => CssPseudoClass::Lang(parse_language_range(input)?),
         "not" => CssPseudoClass::Not(parse_pseudo_selector_list_with_options(input, options.without_pseudo_elements(), recovery)?),
         "is" => CssPseudoClass::Is(parse_forgiving_pseudo_selector_list(input, options.without_pseudo_elements(), recovery)?),
         "where" => CssPseudoClass::Where(parse_forgiving_pseudo_selector_list(input, options.without_pseudo_elements(), recovery)?),
@@ -1091,6 +1130,14 @@ fn parse_function_pseudo_class<'i, 't>(
     };
     input.expect_exhausted().map_err(selector_basic)?;
     Ok(pseudo_class)
+}
+
+fn parse_language_range<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssLanguageRange, ParseError<'i, Error>> {
+    let value = input.expect_ident_cloned().map_err(selector_basic)?;
+    CssLanguageRange::try_new(value.to_string())
+        .ok_or_else(|| invalid_selector(input, "`:lang()` requires one CSS identifier"))
 }
 
 fn parse_pseudo_selector_list_with_options<'i, 't>(

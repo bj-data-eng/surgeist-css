@@ -206,6 +206,36 @@ fn app_strict_namespace_qualified_selectors_match_ordinary_results() {
     assert_eq!(diagnostic.action(), CssRecoveryAction::DropQualifiedRule);
 }
 
+#[test]
+fn app_strict_selectors3_pseudos_repeated_ids_and_recovery_match_ordinary_results() {
+    let clean = assert_sheet_parity(concat!(
+        "a#first#second:link[data-ready] > .target:target { color: red; }",
+        ".language:lang(e\\6e) { color: red; }",
+        ".line:first-line { color: red; }",
+        ".letter::first-letter { color: red; }",
+    ));
+    assert!(clean.is_clean(), "{:?}", clean.diagnostics());
+    assert_eq!(clean.syntax().rules().len(), 4);
+
+    let recovered = assert_sheet_parity(concat!(
+        ".before:visited { color: red; }",
+        ".bad:lang() { color: black; }",
+        ".bad:marker { color: black; }",
+        ".after:target { color: blue; }",
+    ));
+    assert!(matches!(
+        recovered.syntax().rules(),
+        [CssRule::Style(_), CssRule::Style(_)]
+    ));
+    assert_eq!(recovered.diagnostics().len(), 2);
+    assert!(
+        recovered
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.action() == CssRecoveryAction::DropQualifiedRule)
+    );
+}
+
 fn nested_selector(depth: usize) -> String {
     format!("{}{}{}", ":is(".repeat(depth), ".leaf", ")".repeat(depth)) + "{color:red}"
 }

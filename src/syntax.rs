@@ -13764,6 +13764,10 @@ impl CssRelativeSelectorList {
 pub enum CssPseudoClass {
     Root,
     Scope,
+    Link,
+    Visited,
+    Target,
+    Lang(CssLanguageRange),
     Hover,
     Active,
     Focus,
@@ -13814,6 +13818,10 @@ impl CssPseudoClass {
             Self::Has(selectors) => selectors.has_pseudo_elements(),
             Self::Root
             | Self::Scope
+            | Self::Link
+            | Self::Visited
+            | Self::Target
+            | Self::Lang(_)
             | Self::Hover
             | Self::Active
             | Self::Focus
@@ -13849,11 +13857,37 @@ impl CssPseudoClass {
     }
 }
 
+/// One checked, decoded identifier authored as a Selectors 3 `:lang()` range.
+///
+/// This value preserves selector syntax only. It does not compare languages or
+/// resolve inherited language metadata.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct CssLanguageRange {
+    value: String,
+}
+
+impl CssLanguageRange {
+    /// Constructs a language range from exactly one decoded CSS identifier.
+    #[must_use]
+    pub fn try_new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        is_exact_css_identifier(&value).then_some(Self { value })
+    }
+
+    /// Returns the exact decoded identifier.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CssPseudoElement {
     Before,
     After,
+    FirstLine,
+    FirstLetter,
     Marker,
     Selection,
     Backdrop,
@@ -13890,6 +13924,8 @@ impl CssPseudoElementSequence {
             pseudo_elements,
             [CssPseudoElement::Before]
                 | [CssPseudoElement::After]
+                | [CssPseudoElement::FirstLine]
+                | [CssPseudoElement::FirstLetter]
                 | [CssPseudoElement::Marker]
                 | [CssPseudoElement::Selection]
                 | [CssPseudoElement::Backdrop]

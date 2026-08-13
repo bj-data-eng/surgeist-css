@@ -42,6 +42,47 @@ fn invalid_core_font_value_has_exact_property_diagnostic_and_retains_its_sibling
 }
 
 #[test]
+fn selectors3_invalid_language_and_pseudo_element_sequences_drop_exact_rules() {
+    let failures = [
+        ".empty:lang() { color: black; }",
+        ".string:lang(\"en\") { color: black; }",
+        ".many:lang(en fr) { color: black; }",
+        ".later:marker { color: black; }",
+        ".terminal::first-line:hover { color: black; }",
+        ".sequence::first-letter::marker { color: black; }",
+    ];
+    let source = format!(
+        ".before {{ color: red; }} {} .after {{ color: blue; }}",
+        failures.join(" ")
+    );
+    let report = parse_sheet(&source);
+
+    assert!(matches!(
+        report.syntax().rules(),
+        [CssRule::Style(_), CssRule::Style(_)]
+    ));
+    assert_eq!(report.diagnostics().len(), failures.len());
+    for (diagnostic, failure) in report.diagnostics().iter().zip(failures) {
+        assert_eq!(diagnostic.error().code(), CssErrorCode::InvalidSelector);
+        assert_eq!(diagnostic.action(), CssRecoveryAction::DropQualifiedRule);
+        let start = source.find(failure).expect("failed rule start");
+        assert_eq!(diagnostic.span().start().byte_offset().value(), start);
+        assert_eq!(
+            diagnostic.span().end().byte_offset().value(),
+            start + failure.len()
+        );
+        let ErrorKind::InvalidSelector(detail) = diagnostic.error().kind() else {
+            panic!("expected selector error for {failure}")
+        };
+        assert_eq!(
+            detail.production().expect("selector production").as_str(),
+            "baseline.selector.complex"
+        );
+        assert_eq!(detail.expectation().as_str(), "a supported selector");
+    }
+}
+
+#[test]
 fn font_feature_list_separator_error_has_exact_identity_span_and_recovery() {
     let source = r#"font-feature-settings: "kern",, "liga" on; color: red"#;
     let report = parse_style_attribute(source);

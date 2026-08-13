@@ -2270,7 +2270,7 @@ fn parses_supported_generated_marker_pseudo_element_chains() {
 #[test]
 fn rejects_invalid_pseudo_element_forms_and_non_terminal_positions() {
     for css in [
-        ":before { color: black; }",
+        ":marker { color: black; }",
         "::part(foo) { color: black; }",
         "::unknown { color: black; }",
         ".button::before:hover { color: black; }",
@@ -3669,6 +3669,9 @@ fn practical_pseudo_class_matrix_accepts_supported_and_rejects_unsupported_forms
         ".field:has(.field > .icon) { color: black; }",
         ":modal { color: black; }",
         ":read-only { color: black; }",
+        ":visited { color: black; }",
+        ":target { color: black; }",
+        ":lang(en) { color: black; }",
     ];
 
     for css in accepted {
@@ -3676,9 +3679,6 @@ fn practical_pseudo_class_matrix_accepts_supported_and_rejects_unsupported_forms
     }
 
     let rejected = [
-        ":visited { color: black; }",
-        ":target { color: black; }",
-        ":lang(en) { color: black; }",
         ":host { color: black; }",
         ":state(open) { color: black; }",
         ":hover() { color: black; }",

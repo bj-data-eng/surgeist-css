@@ -1386,7 +1386,7 @@ const EXPECTED: &[ExpectedFeature] = &[
         recognized_code: None,
         positive: Some(Input::Sheet(".button:hover { color: red; }")),
         negative: Some((
-            Input::Sheet(".link:visited { color: red; }"),
+            Input::Sheet(".host:host { color: red; }"),
             CssErrorCode::InvalidSelector,
         )),
     },
@@ -1404,7 +1404,7 @@ const EXPECTED: &[ExpectedFeature] = &[
         recognized_code: None,
         positive: Some(Input::Sheet(".item:nth-child(2n+1) { color: red; }")),
         negative: Some((
-            Input::Sheet(".item:lang(en) { color: red; }"),
+            Input::Sheet(".item:dir(ltr) { color: red; }"),
             CssErrorCode::InvalidSelector,
         )),
     },
@@ -1422,7 +1422,7 @@ const EXPECTED: &[ExpectedFeature] = &[
         recognized_code: None,
         positive: Some(Input::Sheet(".button:focus-visible { color: red; }")),
         negative: Some((
-            Input::Sheet(".target:target { color: red; }"),
+            Input::Sheet(".link:local-link { color: red; }"),
             CssErrorCode::InvalidSelector,
         )),
     },
@@ -1476,7 +1476,7 @@ const EXPECTED: &[ExpectedFeature] = &[
         recognized_code: None,
         positive: Some(Input::Sheet(".item::before { content: \"x\"; }")),
         negative: Some((
-            Input::Sheet(".item::first-line { color: red; }"),
+            Input::Sheet(".item::part(label) { color: red; }"),
             CssErrorCode::InvalidSelector,
         )),
     },

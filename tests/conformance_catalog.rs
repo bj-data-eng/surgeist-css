@@ -1,6 +1,10 @@
 use surgeist_css::{
-    CssErrorCode, CssExclusionReason, CssFeatureKind, CssRecoveryAction, CssSpecificationTier,
-    CssSupportStatus, ErrorKind, conformance_exclusion, conformance_exclusions, feature_metadata,
+    CssAngleCalculation, CssAngleUnit, CssCalculationType, CssDelayLiteral, CssErrorCode,
+    CssExclusionReason, CssFeatureKind, CssFrequencyCalculation, CssFrequencyUnit,
+    CssIntegerCalculation, CssKnownProperty, CssLengthCalculation, CssLengthDimension,
+    CssLengthUnit, CssNumberCalculation, CssPercentageCalculation, CssRecoveryAction,
+    CssResolution, CssResolutionUnit, CssSpecificationTier, CssSupportStatus, CssTimeCalculation,
+    CssTimeUnit, ErrorKind, conformance_exclusion, conformance_exclusions, feature_metadata,
     parse_sheet, parse_style_attribute, specification_source, specification_sources,
 };
 
@@ -41,6 +45,33 @@ const SELECTOR_REMAINDER: &str =
     "Other valid forms of the cited Selectors production are outside the I01 subset.";
 const QUERY_REMAINDER: &str =
     "Other valid forms of the cited query production are outside the I01 subset.";
+const DIMENSION_SUBSET: &str =
+    "Selected typed length, angle, time, frequency, and resolution dimensions are supported.";
+const DIMENSION_REMAINDER: &str =
+    "Other valid CSS dimension families remain for their owning later grammar cycles.";
+const ANGLE_SUBSET: &str = "The public typed angle model and calculation root are supported.";
+const ANGLE_REMAINDER: &str =
+    "Angle property consumers remain for their owning later grammar cycles.";
+const ANGLE_PERCENTAGE_SUBSET: &str =
+    "The public typed angle and percentage calculation models are supported.";
+const ANGLE_PERCENTAGE_REMAINDER: &str =
+    "Angle-percentage property consumers remain for their owning later grammar cycles.";
+const TIME_PERCENTAGE_SUBSET: &str =
+    "The public typed time and percentage calculation models are supported.";
+const TIME_PERCENTAGE_REMAINDER: &str =
+    "Time-percentage property consumers remain for their owning later grammar cycles.";
+const FREQUENCY_SUBSET: &str =
+    "The public typed frequency model and calculation root are supported.";
+const FREQUENCY_REMAINDER: &str =
+    "Frequency property consumers remain for their owning later grammar cycles.";
+const FREQUENCY_PERCENTAGE_SUBSET: &str =
+    "The public typed frequency and percentage calculation models are supported.";
+const FREQUENCY_PERCENTAGE_REMAINDER: &str =
+    "Frequency-percentage property consumers remain for their owning later grammar cycles.";
+const CALC_SUBSET: &str = "Typed sum, product, division, negation, grouping, and nested calc() trees are supported for the C03 roots and integrated property consumers.";
+const CALC_REMAINDER: &str = "Angle, frequency, Media resolution, keyframe percentage, font-feature numeric, and C05 function-owned consumer integrations remain for their owning later cycles.";
+const TIMING_SUBSET: &str = "The I01 shorthand components plus C03 duration, signed delay, iteration, and typed calculation syntax are supported.";
+const TIMING_REMAINDER: &str = "C05 easing and function grammar closure remains unsupported.";
 
 const EXPECTED: &[ExpectedFeature] = &[
     ExpectedFeature {
@@ -749,6 +780,376 @@ const EXPECTED: &[ExpectedFeature] = &[
         )),
     },
 ];
+
+fn assert_c03_value_metadata(
+    id: &str,
+    spelling: &str,
+    production: &str,
+    status: CssSupportStatus,
+    subset: Option<&str>,
+    remainder: Option<&str>,
+) {
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+    assert_eq!(metadata.id().as_str(), id);
+    assert_eq!(metadata.kind(), CssFeatureKind::Value, "{id} kind");
+    assert_eq!(metadata.spelling(), spelling, "{id} spelling");
+    assert_eq!(metadata.source().id().as_str(), "O-VALUES3", "{id} source");
+    assert_eq!(metadata.production(), production, "{id} production");
+    assert_eq!(metadata.status(), status, "{id} status");
+    assert_eq!(metadata.supported_subset(), subset, "{id} subset");
+    assert_eq!(
+        metadata.unsupported_remainder(),
+        remainder,
+        "{id} remainder"
+    );
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+}
+
+fn assert_c03_timing_metadata(
+    id: &str,
+    property: &str,
+    source: &str,
+    production: &str,
+    status: CssSupportStatus,
+    subset: Option<&str>,
+    remainder: Option<&str>,
+) {
+    let report = parse_style_attribute(property);
+    assert!(report.is_clean(), "{property}: {:?}", report.diagnostics());
+    let [declaration] = report.syntax().as_slice() else {
+        panic!("{property}: expected one retained declaration");
+    };
+    let known = declaration.known().expect("known timing declaration");
+    assert_eq!(known.property().stable_id(), id, "{property} identity");
+
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+    assert_eq!(metadata.id().as_str(), id);
+    assert_eq!(metadata.kind(), CssFeatureKind::Property, "{id} kind");
+    assert_eq!(
+        metadata.spelling(),
+        known.property().canonical_name(),
+        "{id} spelling"
+    );
+    assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+    assert_eq!(metadata.production(), production, "{id} production");
+    assert_eq!(metadata.status(), status, "{id} status");
+    assert_eq!(metadata.supported_subset(), subset, "{id} subset");
+    assert_eq!(
+        metadata.unsupported_remainder(),
+        remainder,
+        "{id} remainder"
+    );
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+}
+
+#[test]
+fn official_integer_metadata_matches_checked_integer_behavior() {
+    let value = CssIntegerCalculation::literal(-3);
+    assert_eq!(value.result_type(), CssCalculationType::Integer);
+    assert_c03_value_metadata(
+        "official.value.integer",
+        "<integer>",
+        "#integers",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn official_number_metadata_matches_checked_number_behavior() {
+    let value = CssNumberCalculation::try_literal(-3.5).expect("finite number");
+    assert_eq!(value.result_type(), CssCalculationType::Number);
+    assert_c03_value_metadata(
+        "official.value.number",
+        "<number>",
+        "#numbers",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn official_dimension_metadata_matches_checked_dimension_behavior() {
+    let value = CssLengthDimension::try_new(1.5, CssLengthUnit::Rem).expect("finite dimension");
+    assert_eq!(value.value(), 1.5);
+    assert_eq!(value.unit(), CssLengthUnit::Rem);
+    assert_c03_value_metadata(
+        "official.value.dimension",
+        "<dimension>",
+        "#dimensions",
+        CssSupportStatus::Partial,
+        Some(DIMENSION_SUBSET),
+        Some(DIMENSION_REMAINDER),
+    );
+}
+
+#[test]
+fn official_percentage_metadata_matches_checked_percentage_behavior() {
+    let value = CssPercentageCalculation::try_literal(-12.5).expect("finite percentage");
+    assert_eq!(value.result_type(), CssCalculationType::Percentage);
+    assert_c03_value_metadata(
+        "official.value.percentage",
+        "<percentage>",
+        "#percentages",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn official_length_metadata_matches_checked_length_behavior() {
+    let value = CssLengthCalculation::try_dimension(2.0, CssLengthUnit::Cqw)
+        .expect("finite length dimension");
+    assert_eq!(value.result_type(), CssCalculationType::Length);
+    assert_c03_value_metadata(
+        "official.value.length",
+        "<length>",
+        "#lengths",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn official_length_percentage_metadata_matches_mixed_length_parser_behavior() {
+    let report = parse_style_attribute("width: calc((1px + 2%) * 3)");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    assert_eq!(
+        report.syntax()[0].known().unwrap().property(),
+        CssKnownProperty::Width
+    );
+    assert_c03_value_metadata(
+        "official.value.length-percentage",
+        "<length-percentage>",
+        "#mixed-percentages",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn official_angle_metadata_matches_checked_angle_behavior() {
+    let value = CssAngleCalculation::try_literal(-0.5, CssAngleUnit::Turns).expect("finite angle");
+    assert_eq!(value.result_type(), CssCalculationType::Angle);
+    assert_c03_value_metadata(
+        "official.value.angle",
+        "<angle>",
+        "#angles",
+        CssSupportStatus::Partial,
+        Some(ANGLE_SUBSET),
+        Some(ANGLE_REMAINDER),
+    );
+}
+
+#[test]
+fn official_angle_percentage_metadata_matches_checked_mixed_models() {
+    let angle =
+        CssAngleCalculation::try_literal(45.0, CssAngleUnit::Degrees).expect("finite angle");
+    let percentage = CssPercentageCalculation::try_literal(25.0).expect("finite percentage");
+    assert_eq!(angle.result_type(), CssCalculationType::Angle);
+    assert_eq!(percentage.result_type(), CssCalculationType::Percentage);
+    assert_c03_value_metadata(
+        "official.value.angle-percentage",
+        "<angle-percentage>",
+        "#mixed-percentages",
+        CssSupportStatus::Partial,
+        Some(ANGLE_PERCENTAGE_SUBSET),
+        Some(ANGLE_PERCENTAGE_REMAINDER),
+    );
+}
+
+#[test]
+fn official_time_metadata_matches_checked_time_behavior() {
+    let value =
+        CssDelayLiteral::try_new(-250.0, CssTimeUnit::Milliseconds).expect("finite signed time");
+    assert_eq!(value.value(), -250.0);
+    assert_eq!(value.unit(), CssTimeUnit::Milliseconds);
+    assert_c03_value_metadata(
+        "official.value.time",
+        "<time>",
+        "#time",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn official_time_percentage_metadata_matches_checked_mixed_models() {
+    let time = CssTimeCalculation::try_literal(-1.0, CssTimeUnit::Seconds).expect("finite time");
+    let percentage = CssPercentageCalculation::try_literal(50.0).expect("finite percentage");
+    assert_eq!(time.result_type(), CssCalculationType::Time);
+    assert_eq!(percentage.result_type(), CssCalculationType::Percentage);
+    assert_c03_value_metadata(
+        "official.value.time-percentage",
+        "<time-percentage>",
+        "#mixed-percentages",
+        CssSupportStatus::Partial,
+        Some(TIME_PERCENTAGE_SUBSET),
+        Some(TIME_PERCENTAGE_REMAINDER),
+    );
+}
+
+#[test]
+fn official_frequency_metadata_matches_checked_frequency_behavior() {
+    let value = CssFrequencyCalculation::try_literal(440.0, CssFrequencyUnit::Hertz)
+        .expect("finite frequency");
+    assert_eq!(value.result_type(), CssCalculationType::Frequency);
+    assert_c03_value_metadata(
+        "official.value.frequency",
+        "<frequency>",
+        "#frequency",
+        CssSupportStatus::Partial,
+        Some(FREQUENCY_SUBSET),
+        Some(FREQUENCY_REMAINDER),
+    );
+}
+
+#[test]
+fn official_frequency_percentage_metadata_matches_checked_mixed_models() {
+    let frequency = CssFrequencyCalculation::try_literal(1.5, CssFrequencyUnit::Kilohertz)
+        .expect("finite frequency");
+    let percentage = CssPercentageCalculation::try_literal(75.0).expect("finite percentage");
+    assert_eq!(frequency.result_type(), CssCalculationType::Frequency);
+    assert_eq!(percentage.result_type(), CssCalculationType::Percentage);
+    assert_c03_value_metadata(
+        "official.value.frequency-percentage",
+        "<frequency-percentage>",
+        "#mixed-percentages",
+        CssSupportStatus::Partial,
+        Some(FREQUENCY_PERCENTAGE_SUBSET),
+        Some(FREQUENCY_PERCENTAGE_REMAINDER),
+    );
+}
+
+#[test]
+fn official_resolution_metadata_matches_checked_resolution_behavior() {
+    let value = CssResolution::try_new(2.0, CssResolutionUnit::Dppx).expect("finite resolution");
+    assert_eq!(value.value().value(), 2.0);
+    assert_eq!(value.unit(), CssResolutionUnit::Dppx);
+    assert_c03_value_metadata(
+        "official.value.resolution",
+        "<resolution>",
+        "#resolution",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn official_calc_metadata_matches_typed_calculation_parser_behavior() {
+    let report = parse_style_attribute("width: calc((1px + 2%) * 3)");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    assert_eq!(
+        report.syntax()[0].known().unwrap().property(),
+        CssKnownProperty::Width
+    );
+    assert_c03_value_metadata(
+        "official.value.calc",
+        "calc()",
+        "#calc-notation,#calc-syntax,#calc-type-checking",
+        CssSupportStatus::Partial,
+        Some(CALC_SUBSET),
+        Some(CALC_REMAINDER),
+    );
+}
+
+#[test]
+fn transition_duration_metadata_matches_typed_duration_behavior() {
+    assert_c03_timing_metadata(
+        "baseline.property.transition-duration",
+        "transition-duration: calc((1s + 250ms) * 2)",
+        "I-TRANSITIONS1",
+        "#propdef-transition-duration",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn transition_delay_metadata_matches_signed_delay_behavior() {
+    assert_c03_timing_metadata(
+        "baseline.property.transition-delay",
+        "transition-delay: -250ms",
+        "I-TRANSITIONS1",
+        "#propdef-transition-delay",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn animation_duration_metadata_matches_typed_duration_behavior() {
+    assert_c03_timing_metadata(
+        "baseline.property.animation-duration",
+        "animation-duration: calc(1s + 250ms)",
+        "I-ANIMATIONS1",
+        "#propdef-animation-duration",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn animation_delay_metadata_matches_signed_delay_behavior() {
+    assert_c03_timing_metadata(
+        "baseline.property.animation-delay",
+        "animation-delay: -1s",
+        "I-ANIMATIONS1",
+        "#propdef-animation-delay",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn animation_iteration_count_metadata_matches_typed_iteration_behavior() {
+    assert_c03_timing_metadata(
+        "baseline.property.animation-iteration-count",
+        "animation-iteration-count: calc((1 + 2) * 3)",
+        "I-ANIMATIONS1",
+        "#propdef-animation-iteration-count",
+        CssSupportStatus::Complete,
+        None,
+        None,
+    );
+}
+
+#[test]
+fn transition_metadata_matches_c03_shorthand_behavior_and_c05_remainder() {
+    assert_c03_timing_metadata(
+        "baseline.property.transition",
+        "transition: opacity calc(1s + 250ms) linear -200ms",
+        "I-TRANSITIONS1",
+        "#propdef-transition",
+        CssSupportStatus::Partial,
+        Some(TIMING_SUBSET),
+        Some(TIMING_REMAINDER),
+    );
+}
+
+#[test]
+fn animation_metadata_matches_c03_shorthand_behavior_and_c05_remainder() {
+    assert_c03_timing_metadata(
+        "baseline.property.animation",
+        "animation: fade calc(1s + 250ms) linear calc((1 + 2) * 3) -200ms both running",
+        "I-ANIMATIONS1",
+        "#propdef-animation",
+        CssSupportStatus::Partial,
+        Some(TIMING_SUBSET),
+        Some(TIMING_REMAINDER),
+    );
+}
 
 #[test]
 fn named_conformance_records_expose_declared_metadata() {

@@ -52,9 +52,26 @@ pub(super) fn parse_url<'i, 't>(
 pub(super) fn parse_position_list<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssPositionList, ParseError<'i, Error>> {
+    parse_position_list_with_mode(input, false)
+}
+
+pub(super) fn parse_deferred_position_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssPositionList, ParseError<'i, Error>> {
+    parse_position_list_with_mode(input, true)
+}
+
+fn parse_position_list_with_mode<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    deferred: bool,
+) -> std::result::Result<CssPositionList, ParseError<'i, Error>> {
     let mut positions = Vec::new();
     loop {
-        positions.push(parse_css_position(input)?);
+        positions.push(if deferred {
+            parse_css_position_deferred(input)?
+        } else {
+            parse_css_position(input)?
+        });
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -79,15 +96,26 @@ pub(super) fn parse_css_position<'i, 't>(
 pub(super) fn parse_css_position_legacy<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssPosition, ParseError<'i, Error>> {
-    parse_css_position_legacy_components(input)
+    parse_css_position_legacy_components(input, false)
+}
+
+pub(super) fn parse_css_position_deferred<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssPosition, ParseError<'i, Error>> {
+    parse_css_position_legacy_components(input, true)
 }
 
 fn parse_css_position_legacy_components<'i, 't>(
     input: &mut Parser<'i, 't>,
+    allow_typed_calculation: bool,
 ) -> std::result::Result<CssPosition, ParseError<'i, Error>> {
     let mut components = Vec::new();
     while !input.is_exhausted() && !next_is_comma(input) && !next_is_delim(input, '/') {
-        components.push(parse_legacy_position_component(input, &components)?);
+        components.push(parse_legacy_position_component(
+            input,
+            &components,
+            allow_typed_calculation,
+        )?);
         if components.len() > 4 {
             return Err(unsupported_value(
                 input,
@@ -103,6 +131,7 @@ fn parse_css_position_legacy_components<'i, 't>(
 fn parse_legacy_position_component<'i, 't>(
     input: &mut Parser<'i, 't>,
     previous: &[CssPositionComponent],
+    allow_typed_calculation: bool,
 ) -> std::result::Result<CssPositionComponent, ParseError<'i, Error>> {
     let state = input.state();
     if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
@@ -127,8 +156,12 @@ fn parse_legacy_position_component<'i, 't>(
         };
     }
     input.reset(&state);
-    parse_length_with_context_legacy(input, LengthGrammar::Position, "position")
-        .map(CssPositionComponent::Length)
+    if allow_typed_calculation {
+        parse_length_with(input, LengthGrammar::Position)
+    } else {
+        parse_length_with_context_legacy(input, LengthGrammar::Position, "position")
+    }
+    .map(CssPositionComponent::Length)
 }
 
 #[derive(Clone, Debug)]

@@ -112,7 +112,19 @@ derives expected behavior from production, masks the row, or compares owner
 sets/counts. Task review directly verifies exactly one row changed and public
 tests separately prove occurrence order `[One, Two]` and effective value `Two`.
 
-## 4. Metadata Delta
+## 4. Impacts
+
+The public API effect is additive current authored models, accessors, property
+identities, and metadata; frozen compatibility signatures remain. Dependencies,
+features, manifests, build logic, and leaf-generated artifacts are unchanged.
+The leaf declares no independent MSRV; C08 uses the existing edition/toolchain
+contract and does not change the compatible MSRV owned by root integration.
+T7 updates leaf docs/examples and the product handoff. After publication, root
+alone may promote the gitlink, regenerate API audit artifacts, and verify its
+MSRV. No root or sibling file changes in this cycle. All owned Rust remains
+free of `unsafe`.
+
+## 5. Metadata Delta
 
 Promote all sixteen O-FONTS3 property ledger rows and all ten O-FONTS3
 non-property ledger rows to `Complete` with direct named behavior. Promote
@@ -128,7 +140,7 @@ Each subset names only the behavior in section 2 and each remainder names the
 unselected Fonts 4 grammar. No source, ledger count, exclusion, baseline alias,
 dependency, feature, or existing stable-ID meaning changes.
 
-## 5. Tasks
+## 6. Tasks
 
 At assignment start each worker records `task_base_sha="$(git rev-parse HEAD)"`.
 After its focused loop it runs this exact common GREEN tail:
@@ -288,7 +300,7 @@ sets/counts, workflow state, or incidental call counts is prohibited.
 - **RED:** paired grammar behavior passes but direct named metadata remains
   Partial/Reserved. Exact command:
   `cargo test -p surgeist-css --offline --no-default-features --test conformance_catalog fonts3_and_preserved_fonts4_metadata_are_truthful -- --exact`.
-- **Acceptance:** section 4 exact rows/source/fragments/status/subset/remainder;
+- **Acceptance:** section 5 exact rows/source/fragments/status/subset/remainder;
   no set/count proxy; docs expose current/I01, recovery, and downstream limits;
   handoff records only the two product fixture digests among otherwise SHA-free
   product facts; doctests and warning-denied rustdoc pass.
@@ -304,7 +316,7 @@ sets/counts, workflow state, or incidental call counts is prohibited.
   ```
 - **Commits:** `test: specify Fonts 3 and Fonts 4 metadata`; `docs: publish Fonts 3 typography and font-face closure`.
 
-## 6. Final Gate, Publication, And Completion
+## 7. Final Gate, Publication, And Completion
 
 After all seven task ranges are independently `CLEAN`, make the separate
 status-only `complete` commit, then run:

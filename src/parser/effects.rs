@@ -1096,7 +1096,11 @@ pub(super) fn parse_clip_path<'i, 't>(
             "circle" => parse_circle_shape(input).map(CssBasicShapeValue::Circle),
             "ellipse" => parse_ellipse_shape(input).map(CssBasicShapeValue::Ellipse),
             "polygon" => parse_polygon_shape(input).map(CssBasicShapeValue::Polygon),
-            _ => unreachable!("clip-path function name checked before nested parsing"),
+            _ => Err(unsupported_value(
+                input,
+                None,
+                "unsupported basic-shape function",
+            )),
         }?;
         if !input.is_exhausted() {
             return Err(unsupported_value(

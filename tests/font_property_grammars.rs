@@ -1,5 +1,5 @@
 use surgeist_css::{
-    CssFontFamilyNameKind, CssFontSize, CssFontValue, CssGenericFontFamily,
+    CssFontFamilyNameKind, CssFontSize, CssFontStyle, CssFontValue, CssGenericFontFamily,
     CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLineHeight,
     CssNonNegativeNumberValue, CssSystemFont, parse_style_attribute,
 };
@@ -256,5 +256,45 @@ fn system_fonts_are_whole_values_and_explicit_components_are_unique() {
         let report = parse_style_attribute(&source);
         assert_eq!(report.syntax().len(), 1, "{source}");
         assert_eq!(report.diagnostics().len(), 1, "{source}");
+    }
+}
+
+#[test]
+fn font_shorthand_retains_ambiguous_normal_before_explicit_style() {
+    let report = parse_style_attribute(concat!(
+        "font: normal italic 16px serif; ",
+        "font: normal normal italic 16px serif; ",
+        "font: normal normal normal italic 16px serif; ",
+        "font: normal small-caps italic 16px serif; ",
+        "font: normal 700 italic 16px serif; ",
+        "font: normal condensed oblique 16px serif",
+    ));
+
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    assert_eq!(report.syntax().len(), 6);
+
+    for (index, expected_style) in [
+        CssFontStyle::Italic,
+        CssFontStyle::Italic,
+        CssFontStyle::Italic,
+        CssFontStyle::Italic,
+        CssFontStyle::Italic,
+        CssFontStyle::Oblique,
+    ]
+    .iter()
+    .enumerate()
+    {
+        let CssKnownPropertyValueRef::Font(value) = report.syntax()[index]
+            .known()
+            .expect("retained known font declaration")
+            .property_value()
+            .expect("retained current font value")
+        else {
+            panic!("expected font shorthand at declaration {index}");
+        };
+        let CssFontValue::Explicit(explicit) = value.font() else {
+            panic!("expected explicit font shorthand at declaration {index}");
+        };
+        assert_eq!(explicit.style(), Some(*expected_style));
     }
 }

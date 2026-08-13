@@ -4,11 +4,11 @@
 
 This sequence implements the reviewed P01-I02 specification at
 `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
-`fff4c8bfa990f2b38b9b2c3d5177f3d494558d8486b7ae9680d79bbbd651b8c4`,
+`2ec98603e28bb3b1b50f5bce801ab9d87fa6ff2ae5cac4596781908b7f75c418`,
 and its official ledger at SHA-256
 `626d176a734d48c3a6202c189daeadc5ff93253c20ac6681d91f93b01ab11b0d`.
 It is subordinate to reviewed P01 semantic SHA-256
-`881345cd7e08ca20f973205fdcb8b2791a0102a08062d07eaee456aaa06cfcc9`.
+`7a8e26a1cd961d42e3a1275b49e278851e314d6b2df77128dcffc3654679114b`.
 The published I01 base is
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; planning commits after that base
 belong to the I02 candidate range.
@@ -18,13 +18,12 @@ prior cycle's reviewed, verified, published/read-back handoff and the
 user-required clean, process-free post-cycle state. C14 additionally requires a
 separate exact-range initiative review before its publication. No grammar task
 begins before C01 publication. Except for the exact seven-scenario C07,
-one-scenario C08, and eight-scenario C09 source-backed oracle corrections
-reviewed in specification sections 3.3-3.5, a need for a second breaking cycle,
-another frozen I01
-semantic change, unsafe, external acquisition, or root/sibling edit stops and
-returns to P01. Exact
-commands and gate choreography belong to each JIT cycle plan and the canonical
-Surgeist workflow.
+one-scenario C08, eight-scenario C09, and five-scenario C10 source-backed oracle
+corrections reviewed in specification sections 3.3-3.6, a need for a second
+breaking cycle, another frozen I01 semantic change, unsafe, external
+acquisition, or root/sibling edit stops and returns to P01. Exact commands and
+gate choreography belong to each JIT cycle plan and the canonical Surgeist
+workflow.
 
 ## 2. Ordered Cycles
 
@@ -223,25 +222,31 @@ and published/read-back C09 SHA.
 
 ### I02-C10 Namespaces And Complete Selectors 3
 
-- **Owner/source:** `surgeist-css`; specification sections 3.1, 4.2-4.4, 5
-  namespace ordering, 6, 10, 11 findings 2.3/2.8 and namespace 2.1, and 12;
-  ledger namespace/selector rows.
-- **Prerequisite/entry:** C09 top-level phase machine is published/read back;
-  namespace slots and selector inventories exist from C02; C09's
-  `ext.supports.selector` row is Partial against the pre-C10 selector subset.
+- **Owner/source:** `surgeist-css`; specification sections 3.1, 3.6, 4.2-4.4,
+  5 namespace ordering, 6, 10, 11 findings 2.3/2.8 and namespace 2.1, and 12;
+  ledger namespace/selector rows; P01.13.
+- **Prerequisite/entry:** C09 top-level phase machine is published/read back at
+  `019906900cab8295d8c33a28eb53a76b39cd85ee`; namespace slots and selector
+  inventories exist from C02; C09's `ext.supports.selector` row is Partial
+  against the pre-C10 selector subset.
 
 Close findings 2.3 and 2.8 and the namespace portion of 2.1. Add namespace rules,
 qualified names, active-prefix validation, universal/type/attribute forms,
 complete Selectors 3 pseudo classes/elements/combinators, ordered repeated IDs,
-and exact legacy spellings. Expand the existing `ext.supports.selector` Partial
-subset through the same namespace-aware complex-selector parser without claiming
-complete Selectors 4. Preserve I01 Selectors 4 forgiving/unforgiving, nesting,
-and scope behavior.
+and exact legacy spellings. Refine the prelude phase so an initial layer still
+permits imports but permanently blocks later namespaces. Keep
+`ext.supports.selector` Partial: expand its typed subset through the same
+namespace-aware complex-selector parser and retain other balanced Selectors 4
+content as general-enclosed without a recovery diagnostic. Preserve I01
+Selectors 4 forgiving/unforgiving, nesting, and scope behavior. Apply only
+section 3.6's five reviewed fixture replacements.
 
-Exit: every official selector ledger row is Complete with public AST,
-tokenization, namespace, diagnostic, recovery, and mutation evidence. **Handoff:**
-namespace/selector IDs and public/recovery matrices, reviews/matrix/cleanup, and
-published/read-back C10 SHA.
+Exit: exactly the 20 `O-SELECTORS3` and 2 `O-NAMESPACES3` official rows are
+Complete with public AST, tokenization, namespace, diagnostic, recovery, and
+mutation evidence; the fixture digest is
+`085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`.
+**Handoff:** namespace/selector IDs, exact five-row fixture diff, public/recovery
+matrices, reviews/matrix/cleanup, and published/read-back C10 SHA.
 
 ### I02-C11 Counter Styles And Page Rules
 
@@ -320,9 +325,9 @@ cleanup, then published/read-back I02 SHA and root-only actions.
 ## 3. Cross-Cycle Invariants
 
 Every cycle preserves the I01 behavioral corpus's authored inputs and public
-observables except for C07's exact seven, C08's exact one, and C09's exact eight
-reviewed source-backed replacement observables; every unaffected row remains
-byte-identical. Every cycle also
+observables except for C07's exact seven, C08's exact one, C09's exact eight,
+and C10's exact five reviewed source-backed replacement observables; every
+unaffected row remains byte-identical. Every cycle also
 preserves all prior completed I02 vectors, parser progress/depth guarantees,
 diagnostic ordering and coordinates, custom/substitution authored text,
 declaration importance, parser-owned valid states, and ordinary/`app-strict`

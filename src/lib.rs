@@ -323,6 +323,66 @@ let _ = validate_style_attribute("color: red");
 //! and `clip-path` retain explicit Partial metadata boundaries; support for a typed
 //! function does not promote an aggregate or an unselected production.
 //!
+//! # Authored colors and frozen I01 compatibility
+//!
+//! The current color model preserves authored Color 4 syntax. It distinguishes
+//! named, transparent, current, hexadecimal, current and deprecated system,
+//! legacy and modern RGB/HSL, HWB, Lab/LCH, Oklab/Oklch, and predefined
+//! `color()` branches. Finite specified components remain authored when they are
+//! outside a computed range, and typed calculations remain symbolic. The current
+//! opacity model similarly preserves finite numbers and percentages, including
+//! signed and out-of-range specified values.
+//!
+//! Color-bearing property wrappers expose their current value through
+//! `current()`, and the opacity wrapper exposes its current [`CssOpacityValue`]
+//! through `value()`. Their `i01_subset()` is a separate frozen compatibility
+//! view: every frozen I01 input keeps its exact projection, while a newly
+//! accepted current value returns `None` when [`CssColor`] or [`CssOpacity`]
+//! cannot represent it without loss. A missing compatibility projection does
+//! not make the current value invalid.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssAuthoredSystemColor, CssKnownPropertyValueRef, CssOpacityValue,
+//!     parse_style_attribute,
+//! };
+//!
+//! let report = parse_style_attribute("color: ActiveBorder; opacity: 150%");
+//! assert!(report.is_clean());
+//!
+//! let CssKnownPropertyValueRef::Color(color) = report.syntax()[0]
+//!     .known().expect("known color")
+//!     .property_value().expect("ordinary color")
+//! else { panic!("expected color") };
+//! assert_eq!(
+//!     color.current().system(),
+//!     Some(CssAuthoredSystemColor::ActiveBorder),
+//! );
+//! assert!(color.i01_subset().is_none());
+//!
+//! let CssKnownPropertyValueRef::Opacity(opacity) = report.syntax()[1]
+//!     .known().expect("known opacity")
+//!     .property_value().expect("ordinary opacity")
+//! else { panic!("expected opacity") };
+//! assert!(matches!(opacity.value(), CssOpacityValue::Percentage(value)
+//!     if value.value() == 150.0));
+//! assert!(opacity.i01_subset().is_none());
+//! ```
+//!
+//! The preserved Color 5 surface is intentionally narrower. Relative colors
+//! cover `rgb`/`rgba`, `hsl`/`hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch`,
+//! and predefined RGB/XYZ `color()` spaces with closed per-family channel
+//! environments. `color-mix()` requires an interpolation method and exactly two
+//! colors, accepts optional trailing percentages, and permits hue interpolation
+//! methods only in polar spaces. `alpha()`, custom color profiles,
+//! `light-dark()`, and `device-cmyk()` are not part of this surface.
+//!
+//! These values remain authored syntax. This crate does not clamp computed
+//! color or opacity values, resolve `currentcolor` or system colors, evaluate
+//! relative channels or calculations, perform color conversion or gamut mapping,
+//! resolve a mix, apply contrast, serialize computed colors, or lower colors
+//! into a sibling crate.
+//!
 //! # Timing domains and I01 compatibility
 //!
 //! Duration literals are finite and non-negative; delay literals are finite and signed. A range

@@ -288,6 +288,67 @@ reference-box combinations remain outside the selected shape subset.
 their explicit Partial catalog boundaries; support for one typed function does
 not promote an aggregate or an unselected production.
 
+## Authored colors and frozen I01 compatibility
+
+The current color model preserves the authored Color 4 grammar rather than a
+computed color. It distinguishes named, transparent, current, hexadecimal,
+current and deprecated system, legacy and modern RGB/HSL, HWB, Lab/LCH,
+Oklab/Oklch, and predefined `color()` branches. Finite specified components
+remain authored even when they are outside a computed range, and typed
+calculations remain symbolic. The current opacity model likewise preserves a
+finite number or percentage, including signed and out-of-range specified
+values.
+
+Color-bearing property wrappers expose the current value through `current()`,
+and the opacity wrapper exposes its current `CssOpacityValue` through `value()`.
+Their `i01_subset()` remains a separate frozen compatibility projection: every
+frozen I01 input keeps its exact projection, while a newly accepted current
+value returns `None` when the old `CssColor` or `CssOpacity` model cannot
+represent it without loss. A missing I01 projection does not make the current
+value invalid.
+
+```rust
+use surgeist_css::{
+    CssAuthoredSystemColor, CssKnownPropertyValueRef, CssOpacityValue,
+    parse_style_attribute,
+};
+
+let report = parse_style_attribute("color: ActiveBorder; opacity: 150%");
+assert!(report.is_clean());
+
+let CssKnownPropertyValueRef::Color(color) = report.syntax()[0]
+    .known().expect("known color")
+    .property_value().expect("ordinary color")
+else { panic!("expected color") };
+assert_eq!(
+    color.current().system(),
+    Some(CssAuthoredSystemColor::ActiveBorder),
+);
+assert!(color.i01_subset().is_none());
+
+let CssKnownPropertyValueRef::Opacity(opacity) = report.syntax()[1]
+    .known().expect("known opacity")
+    .property_value().expect("ordinary opacity")
+else { panic!("expected opacity") };
+assert!(matches!(opacity.value(), CssOpacityValue::Percentage(value)
+    if value.value() == 150.0));
+assert!(opacity.i01_subset().is_none());
+```
+
+The preserved Color 5 surface is intentionally narrower: relative colors cover
+`rgb`/`rgba`, `hsl`/`hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch`, and
+predefined RGB/XYZ `color()` spaces with closed per-family channel
+environments. `color-mix()` requires an interpolation method and exactly two
+colors, accepts optional trailing percentages, and permits hue interpolation
+methods only in polar spaces. This crate does not provide `alpha()`, custom
+color profiles, `light-dark()`, or `device-cmyk()`.
+
+These values remain authored syntax. This crate does not clamp computed color
+or opacity values, resolve `currentcolor` or system colors, evaluate relative
+channels or calculations, perform color conversion or gamut mapping, resolve a
+mix, apply contrast, serialize computed colors, or lower colors into a sibling
+crate.
+
 `CssImportance` and `CssSupportStatus` are deliberately closed and may be
 matched exhaustively. Every other public enum is non-exhaustive and requires a
 wildcard in downstream matches. This declaration inspection migration changes
@@ -356,8 +417,6 @@ Enable the additive `app-strict` feature to expose `validate_sheet` and `validat
 This crate owns authored CSS syntax, intrinsic grammar validation, recovery boundaries, diagnostics, and support metadata. It does not apply cascade or inheritance, substitute or resolve variables, evaluate queries, match selectors, resolve URLs or resources, perform layout or painting, serialize a CSSOM, or lower CSS into sibling Surgeist types. Root-owned integration owns cross-crate lowering and generated API audit artifacts.
 
 CSS custom properties are parsed as authored syntax. Custom property names are case-sensitive, `var(...)` references and fallback token text remain symbolic, and supported properties containing `var(...)` parse as variable-dependent authored values. This crate does not resolve variables, run cascade substitution, or validate post-substitution values.
-
-Colors are parsed as authored CSS color syntax. `surgeist-css` accepts named colors, alpha hex, modern color functions, `currentcolor`, system colors, `color-mix()`, and relative color syntax as typed syntax, but does not resolve system colors, substitute variables, evaluate relative channels, mix colors, convert color spaces, or adapt colors to a renderer gamut. Downstream style/render layers own those resolution steps.
 
 Pseudo-classes for UI interaction, form state, structure, selector-list filtering, and overlay state are parsed as authored selector syntax. This crate does not evaluate pseudo-class matches; runtime matching belongs to downstream Surgeist layers with node and interaction state.
 

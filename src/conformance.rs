@@ -2893,159 +2893,23 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
         "I02-C12",
         SharedValueTypedPositiveAndMutation
     ),
-    reserved_coverage!(
-        "official.value.color",
-        Value,
-        O_COLOR4,
-        "#color-type",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.alpha",
-        Value,
-        O_COLOR4,
-        "#alpha-syntax",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.hue",
-        Value,
-        O_COLOR4,
-        "#hue-syntax",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.rgb",
-        Value,
-        O_COLOR4,
-        "#rgb-functions",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.hex-color",
-        Value,
-        O_COLOR4,
-        "#hex-notation",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.named-color",
-        Value,
-        O_COLOR4,
-        "#named-colors",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.system-color",
-        Value,
-        O_COLOR4,
-        "#css-system-colors",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.deprecated-system-color",
-        Value,
-        O_COLOR4,
-        "#css-system-colors",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transparent",
-        Value,
-        O_COLOR4,
-        "#transparent-color",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.currentcolor",
-        Value,
-        O_COLOR4,
-        "#currentcolor-color",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.hsl",
-        Value,
-        O_COLOR4,
-        "#the-hsl-notation",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.hwb",
-        Value,
-        O_COLOR4,
-        "#the-hwb-notation",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.lab",
-        Value,
-        O_COLOR4,
-        "#specifying-lab-lch",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.lch",
-        Value,
-        O_COLOR4,
-        "#specifying-lab-lch",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.oklab",
-        Value,
-        O_COLOR4,
-        "#specifying-oklab-oklch",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.oklch",
-        Value,
-        O_COLOR4,
-        "#specifying-oklab-oklch",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.predefined-color",
-        Value,
-        O_COLOR4,
-        "#color-function",
-        "crate::parser::values",
-        "I02-C06",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.color"),
+    active_coverage!("official.value.alpha"),
+    active_coverage!("official.value.hue"),
+    active_coverage!("official.value.rgb"),
+    active_coverage!("official.value.hex-color"),
+    active_coverage!("official.value.named-color"),
+    active_coverage!("official.value.system-color"),
+    active_coverage!("official.value.deprecated-system-color"),
+    active_coverage!("official.value.transparent"),
+    active_coverage!("official.value.currentcolor"),
+    active_coverage!("official.value.hsl"),
+    active_coverage!("official.value.hwb"),
+    active_coverage!("official.value.lab"),
+    active_coverage!("official.value.lch"),
+    active_coverage!("official.value.oklab"),
+    active_coverage!("official.value.oklch"),
+    active_coverage!("official.value.predefined-color"),
     reserved_coverage!(
         "official.value.background-layer",
         Value,
@@ -3523,6 +3387,11 @@ const CLIP_PATH_SUBSET: &str =
     "none, URL, and typed inset(), circle(), ellipse(), and polygon() functions are supported.";
 const CLIP_PATH_REMAINDER: &str =
     "Reference-box combinations and path(), shape(), rect(), and xywh() remain unsupported.";
+const COLOR5_RELATIVE_SUBSET: &str = "The eight preserved relative-color families are supported: rgb()/rgba(), hsl()/hsla(), hwb(), lab(), lch(), oklab(), oklch(), and color() in a predefined RGB or XYZ space.";
+const COLOR5_RELATIVE_REMAINDER: &str = "alpha(), custom-profile parameters, and other unselected CSS Color 5 color functions remain unsupported.";
+const COLOR5_MIX_SUBSET: &str = "The preserved color-mix() subset requires an interpolation method, exactly two colors, optional trailing percentages, and a predefined or polar color space.";
+const COLOR5_MIX_REMAINDER: &str =
+    "Other valid forms of the dated CSS Color 5 color-mix() production remain unsupported.";
 
 const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
     match property {
@@ -3836,7 +3705,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 309] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 336] = [
     CssFeatureMetadata::partial(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -4059,6 +3928,199 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 309] = [
         "<resolution>",
         O_VALUES3,
         "#resolution",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.color",
+        CssFeatureKind::Value,
+        "<color>",
+        O_COLOR4,
+        "#color-type",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.alpha",
+        CssFeatureKind::Value,
+        "<alpha-value>",
+        O_COLOR4,
+        "#alpha-syntax",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.hue",
+        CssFeatureKind::Value,
+        "<hue>",
+        O_COLOR4,
+        "#hue-syntax",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.rgb",
+        CssFeatureKind::Value,
+        "rgb()/rgba()",
+        O_COLOR4,
+        "#rgb-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.hex-color",
+        CssFeatureKind::Value,
+        "<hex-color>",
+        O_COLOR4,
+        "#hex-notation",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.named-color",
+        CssFeatureKind::Value,
+        "<named-color>",
+        O_COLOR4,
+        "#named-colors",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.system-color",
+        CssFeatureKind::Value,
+        "<system-color>",
+        O_COLOR4,
+        "#css-system-colors",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.deprecated-system-color",
+        CssFeatureKind::Value,
+        "<deprecated-system-color>",
+        O_COLOR4,
+        "#css-system-colors",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transparent",
+        CssFeatureKind::Value,
+        "transparent",
+        O_COLOR4,
+        "#transparent-color",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.currentcolor",
+        CssFeatureKind::Value,
+        "currentColor",
+        O_COLOR4,
+        "#currentcolor-color",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.hsl",
+        CssFeatureKind::Value,
+        "hsl()/hsla()",
+        O_COLOR4,
+        "#the-hsl-notation",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.hwb",
+        CssFeatureKind::Value,
+        "hwb()",
+        O_COLOR4,
+        "#the-hwb-notation",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.lab",
+        CssFeatureKind::Value,
+        "lab()",
+        O_COLOR4,
+        "#specifying-lab-lch",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.lch",
+        CssFeatureKind::Value,
+        "lch()",
+        O_COLOR4,
+        "#specifying-lab-lch",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.oklab",
+        CssFeatureKind::Value,
+        "oklab()",
+        O_COLOR4,
+        "#specifying-oklab-oklch",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.oklch",
+        CssFeatureKind::Value,
+        "oklch()",
+        O_COLOR4,
+        "#specifying-oklab-oklch",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.predefined-color",
+        CssFeatureKind::Value,
+        "color()",
+        O_COLOR4,
+        "#color-function",
+    ),
+    CssFeatureMetadata::partial(
+        "ext.value.relative-color",
+        CssFeatureKind::Value,
+        "relative color syntax",
+        I_COLOR5,
+        "#relative-colors,#relative-syntax",
+        COLOR5_RELATIVE_SUBSET,
+        COLOR5_RELATIVE_REMAINDER,
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.relative-color.rgb",
+        CssFeatureKind::Value,
+        "relative rgb()/rgba()",
+        I_COLOR5,
+        "#relative-RGB",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.relative-color.hsl",
+        CssFeatureKind::Value,
+        "relative hsl()/hsla()",
+        I_COLOR5,
+        "#relative-HSL",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.relative-color.hwb",
+        CssFeatureKind::Value,
+        "relative hwb()",
+        I_COLOR5,
+        "#relative-HWB",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.relative-color.lab",
+        CssFeatureKind::Value,
+        "relative lab()",
+        I_COLOR5,
+        "#relative-Lab",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.relative-color.oklab",
+        CssFeatureKind::Value,
+        "relative oklab()",
+        I_COLOR5,
+        "#relative-Oklab",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.relative-color.lch",
+        CssFeatureKind::Value,
+        "relative lch()",
+        I_COLOR5,
+        "#relative-LCH",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.relative-color.oklch",
+        CssFeatureKind::Value,
+        "relative oklch()",
+        I_COLOR5,
+        "#relative-OkLCh",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.relative-color.predefined",
+        CssFeatureKind::Value,
+        "relative color()",
+        I_COLOR5,
+        "#relative-color-function",
+    ),
+    CssFeatureMetadata::partial(
+        "ext.value.color-mix",
+        CssFeatureKind::Value,
+        "color-mix()",
+        I_COLOR5,
+        "#funcdef-color-mix",
+        COLOR5_MIX_SUBSET,
+        COLOR5_MIX_REMAINDER,
     ),
     CssFeatureMetadata::complete(
         "official.value.position",
@@ -5140,7 +5202,13 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 309] = [
         "border-left-width",
         "baseline.property.border-left-width"
     ),
-    property_feature!(CssKnownProperty::Color, "color", "baseline.property.color"),
+    CssFeatureMetadata::complete_property(
+        "baseline.property.color",
+        CssKnownProperty::Color,
+        "color",
+        "#propdef-color",
+        &[],
+    ),
     property_feature!(
         CssKnownProperty::Background,
         "background",
@@ -5277,10 +5345,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 309] = [
         "#propdef-box-shadow",
         &[],
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.opacity",
         CssKnownProperty::Opacity,
         "opacity",
-        "baseline.property.opacity"
+        "#propdef-opacity",
+        &[],
     ),
     property_feature!(
         CssKnownProperty::FlexGrow,

@@ -610,3 +610,93 @@ fn layered_position_mutations_report_exact_property_token_span_and_recovery() {
         }
     }
 }
+
+#[test]
+fn property_specific_origin_mutations_report_exact_payload_span_and_recovery() {
+    for (property, known_property, value, responsible, token_kind) in [
+        (
+            "object-position",
+            CssKnownProperty::ObjectPosition,
+            "left top 10px",
+            "10px",
+            CssTokenKind::Dimension,
+        ),
+        (
+            "transform-origin",
+            CssKnownProperty::TransformOrigin,
+            "left top 50%",
+            "50%",
+            CssTokenKind::Percentage,
+        ),
+        (
+            "transform-origin",
+            CssKnownProperty::TransformOrigin,
+            "top 10px 20px",
+            "20px",
+            CssTokenKind::Dimension,
+        ),
+        (
+            "transform-origin",
+            CssKnownProperty::TransformOrigin,
+            "left top 10px 20px",
+            "20px",
+            CssTokenKind::Dimension,
+        ),
+    ] {
+        let source = format!("{property}: {value}; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{source}: expected one origin diagnostic");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue
+        );
+        assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+        let responsible_offset = source.rfind(responsible).expect("responsible token");
+        assert_eq!(
+            diagnostic.error().position().byte_offset().value(),
+            responsible_offset,
+            "{source}",
+        );
+        assert_eq!(diagnostic.error().position().line().value(), 0, "{source}");
+        assert_eq!(
+            diagnostic.error().position().column().value() as usize,
+            responsible_offset,
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.span().start().byte_offset().value(),
+            0,
+            "{source}"
+        );
+        assert_eq!(
+            diagnostic.span().end().byte_offset().value(),
+            source.find(';').expect("declaration semicolon") + 1,
+            "{source}",
+        );
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("{source}: expected property-value root");
+        };
+        assert_eq!(detail.property(), known_property, "{source}");
+        let encountered = detail.encountered().expect("responsible origin token");
+        assert_eq!(encountered.kind(), token_kind, "{source}");
+        assert_eq!(encountered.authored(), responsible, "{source}");
+        assert_eq!(
+            report.syntax()[0]
+                .known()
+                .expect("retained color declaration")
+                .property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+
+        #[cfg(feature = "app-strict")]
+        {
+            let failure = surgeist_css::validate_style_attribute(&source)
+                .expect_err("strict validation rejects the recovered origin mutation");
+            assert_eq!(failure.diagnostics(), report.diagnostics(), "{source}");
+        }
+    }
+}

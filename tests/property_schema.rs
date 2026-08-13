@@ -143,6 +143,7 @@ macro_rules! with_property_value_variants {
             BorderLeftColor,
             BackgroundImage,
             BackgroundPosition,
+            ObjectPosition,
             BackgroundSize,
             BackgroundRepeat,
             BackgroundOrigin,
@@ -378,6 +379,7 @@ const PROPERTY_DISPATCH_VECTORS: &[DispatchVector] = &[
     dispatch_vector!("border-left-color", "#fff"),
     dispatch_vector!("background-image", "url(\"hero.png\"), none"),
     dispatch_vector!("background-position", "left 10px top 20%"),
+    dispatch_vector!("object-position", "right 5% bottom 2px"),
     dispatch_vector!("background-size", "cover, 10px auto"),
     dispatch_vector!("background-repeat", "repeat-x, no-repeat round"),
     dispatch_vector!("background-origin", "content-box"),
@@ -592,6 +594,57 @@ fn layered_position_wrappers_keep_current_global_and_substitution_branches_disti
     let substitution = report.syntax()[3]
         .known()
         .expect("substitution-dependent declaration");
+    assert!(substitution.property_value().is_none());
+    assert!(substitution.global().is_none());
+    assert!(substitution.substitution_dependent().is_some());
+}
+
+#[test]
+fn object_and_transform_origin_wrappers_keep_current_global_and_substitution_branches_distinct() {
+    let report = parse_style_attribute(concat!(
+        "object-position: left 10px bottom 20%; ",
+        "transform-origin: top 5px; ",
+        "object-position: inherit; ",
+        "transform-origin: var(--origin)",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let object = report.syntax()[0].known().expect("object declaration");
+    let CssKnownPropertyValueRef::ObjectPosition(value) =
+        object.property_value().expect("ordinary object position")
+    else {
+        panic!("expected object-position value");
+    };
+    assert!(matches!(
+        value.position().value().horizontal(),
+        surgeist_css::CssHorizontalPosition::LeftOffset(_)
+    ));
+    assert!(object.global().is_none());
+    assert!(object.substitution_dependent().is_none());
+
+    let transform = report.syntax()[1]
+        .known()
+        .expect("transform-origin declaration");
+    let CssKnownPropertyValueRef::TransformOrigin(value) = transform
+        .property_value()
+        .expect("ordinary transform origin")
+    else {
+        panic!("expected transform-origin value");
+    };
+    assert!(value.origin().z().is_some());
+    assert!(transform.global().is_none());
+    assert!(transform.substitution_dependent().is_none());
+
+    let global = report.syntax()[2].known().expect("global declaration");
+    assert_eq!(global.property(), CssKnownProperty::ObjectPosition);
+    assert!(global.property_value().is_none());
+    assert!(global.global().is_some());
+    assert!(global.substitution_dependent().is_none());
+
+    let substitution = report.syntax()[3]
+        .known()
+        .expect("substitution-dependent declaration");
+    assert_eq!(substitution.property(), CssKnownProperty::TransformOrigin);
     assert!(substitution.property_value().is_none());
     assert!(substitution.global().is_none());
     assert!(substitution.substitution_dependent().is_some());

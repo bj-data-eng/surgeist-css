@@ -3110,15 +3110,7 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
         "I02-C13",
         SharedValueTypedPositiveAndMutation
     ),
-    reserved_coverage!(
-        "official.value.shadow",
-        Value,
-        O_BACKGROUNDS3,
-        "#box-shadow",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.shadow"),
     reserved_coverage!(
         "official.value.image",
         Value,
@@ -3252,123 +3244,19 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
         "I02-C08",
         SharedValueTypedPositiveAndMutation
     ),
-    reserved_coverage!(
-        "official.value.transform-list",
-        Value,
-        O_TRANSFORMS1,
-        "#transform-function-lists",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform-function",
-        Value,
-        O_TRANSFORMS1,
-        "#transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform.matrix",
-        Value,
-        O_TRANSFORMS1,
-        "#two-d-transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform.translate",
-        Value,
-        O_TRANSFORMS1,
-        "#two-d-transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform.translate-x",
-        Value,
-        O_TRANSFORMS1,
-        "#two-d-transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform.translate-y",
-        Value,
-        O_TRANSFORMS1,
-        "#two-d-transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform.scale",
-        Value,
-        O_TRANSFORMS1,
-        "#two-d-transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform.scale-x",
-        Value,
-        O_TRANSFORMS1,
-        "#two-d-transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform.scale-y",
-        Value,
-        O_TRANSFORMS1,
-        "#two-d-transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform.rotate",
-        Value,
-        O_TRANSFORMS1,
-        "#two-d-transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform.skew",
-        Value,
-        O_TRANSFORMS1,
-        "#two-d-transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform.skew-x",
-        Value,
-        O_TRANSFORMS1,
-        "#two-d-transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.transform.skew-y",
-        Value,
-        O_TRANSFORMS1,
-        "#two-d-transform-functions",
-        "crate::parser::effects",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.transform-list"),
+    active_coverage!("official.value.transform-function"),
+    active_coverage!("official.value.transform.matrix"),
+    active_coverage!("official.value.transform.translate"),
+    active_coverage!("official.value.transform.translate-x"),
+    active_coverage!("official.value.transform.translate-y"),
+    active_coverage!("official.value.transform.scale"),
+    active_coverage!("official.value.transform.scale-x"),
+    active_coverage!("official.value.transform.scale-y"),
+    active_coverage!("official.value.transform.rotate"),
+    active_coverage!("official.value.transform.skew"),
+    active_coverage!("official.value.transform.skew-x"),
+    active_coverage!("official.value.transform.skew-y"),
     reserved_coverage!(
         "official.value.blend-mode",
         Value,
@@ -3378,42 +3266,10 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
         "I02-C12",
         SharedValueTypedPositiveAndMutation
     ),
-    reserved_coverage!(
-        "official.value.easing-function",
-        Value,
-        O_EASING1,
-        "#easing-functions",
-        "crate::parser::timing",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.cubic-bezier-easing",
-        Value,
-        O_EASING1,
-        "#cubic-bezier-easing-functions",
-        "crate::parser::timing",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.step-easing",
-        Value,
-        O_EASING1,
-        "#step-easing-functions",
-        "crate::parser::timing",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.step-position",
-        Value,
-        O_EASING1,
-        "#step-easing-functions",
-        "crate::parser::timing",
-        "I02-C05",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.easing-function"),
+    active_coverage!("official.value.cubic-bezier-easing"),
+    active_coverage!("official.value.step-easing"),
+    active_coverage!("official.value.step-position"),
     active_coverage!("later.rule.counter-style"),
     reserved_coverage!(
         "official.descriptor.counter-style.system",
@@ -3655,8 +3511,18 @@ const FREQUENCY_PERCENTAGE_REMAINDER: &str =
     "Frequency-percentage property consumers remain for their owning later grammar cycles.";
 const CALC_SUBSET: &str = "Typed sum, product, division, negation, grouping, and nested calc() trees are supported for the C03 roots and integrated property consumers.";
 const CALC_REMAINDER: &str = "Angle, frequency, Media resolution, keyframe percentage, font-feature numeric, and C05 function-owned consumer integrations remain for their owning later cycles.";
-const TIMING_SUBSET: &str = "The I01 shorthand components plus C03 duration, signed delay, iteration, and typed calculation syntax are supported.";
-const TIMING_REMAINDER: &str = "C05 easing and function grammar closure remains unsupported.";
+const TIMING_SUBSET: &str = "The I01 shorthand components plus C03 duration, signed delay, iteration, and typed calculation syntax and C05 easing functions are supported.";
+const TIMING_REMAINDER: &str =
+    "Other valid forms of the cited shorthand production remain unsupported.";
+const BASIC_SHAPE_SUBSET: &str =
+    "Typed inset(), circle(), ellipse(), and polygon() functions are supported.";
+const BASIC_SHAPE_REMAINDER: &str = "path(), shape(), rect(), and xywh() remain unsupported.";
+const BACKDROP_FILTER_SUBSET: &str = "The exact I01 filter-function-list subset preserved at bc5394f:src/parser/effects.rs is supported with typed current values.";
+const BACKDROP_FILTER_REMAINDER: &str = "Every Filter Effects 2 behavior absent from that preserved baseline subset remains unsupported.";
+const CLIP_PATH_SUBSET: &str =
+    "none, URL, and typed inset(), circle(), ellipse(), and polygon() functions are supported.";
+const CLIP_PATH_REMAINDER: &str =
+    "Reference-box combinations and path(), shape(), rect(), and xywh() remain unsupported.";
 
 const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
     match property {
@@ -3970,7 +3836,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 265] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 309] = [
     CssFeatureMetadata::partial(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -4207,6 +4073,316 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 265] = [
         "<bg-position>#",
         O_BACKGROUNDS3,
         "#background-position",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform-list",
+        CssFeatureKind::Value,
+        "<transform-list>",
+        O_TRANSFORMS1,
+        "#transform-function-lists",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform-function",
+        CssFeatureKind::Value,
+        "<transform-function>",
+        O_TRANSFORMS1,
+        "#transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform.matrix",
+        CssFeatureKind::Value,
+        "matrix()",
+        O_TRANSFORMS1,
+        "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform.translate",
+        CssFeatureKind::Value,
+        "translate()",
+        O_TRANSFORMS1,
+        "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform.translate-x",
+        CssFeatureKind::Value,
+        "translateX()",
+        O_TRANSFORMS1,
+        "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform.translate-y",
+        CssFeatureKind::Value,
+        "translateY()",
+        O_TRANSFORMS1,
+        "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform.scale",
+        CssFeatureKind::Value,
+        "scale()",
+        O_TRANSFORMS1,
+        "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform.scale-x",
+        CssFeatureKind::Value,
+        "scaleX()",
+        O_TRANSFORMS1,
+        "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform.scale-y",
+        CssFeatureKind::Value,
+        "scaleY()",
+        O_TRANSFORMS1,
+        "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform.rotate",
+        CssFeatureKind::Value,
+        "rotate()",
+        O_TRANSFORMS1,
+        "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform.skew",
+        CssFeatureKind::Value,
+        "skew()",
+        O_TRANSFORMS1,
+        "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform.skew-x",
+        CssFeatureKind::Value,
+        "skewX()",
+        O_TRANSFORMS1,
+        "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.transform.skew-y",
+        CssFeatureKind::Value,
+        "skewY()",
+        O_TRANSFORMS1,
+        "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.easing-function",
+        CssFeatureKind::Value,
+        "<easing-function>",
+        O_EASING1,
+        "#easing-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.cubic-bezier-easing",
+        CssFeatureKind::Value,
+        "cubic-bezier()",
+        O_EASING1,
+        "#cubic-bezier-easing-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.step-easing",
+        CssFeatureKind::Value,
+        "steps()",
+        O_EASING1,
+        "#step-easing-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.step-position",
+        CssFeatureKind::Value,
+        "<step-position>",
+        O_EASING1,
+        "#step-easing-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.shadow",
+        CssFeatureKind::Value,
+        "<shadow>",
+        O_BACKGROUNDS3,
+        "#box-shadow",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.transform.matrix3d",
+        CssFeatureKind::Value,
+        "matrix3d()",
+        I_TRANSFORMS2,
+        "#funcdef-matrix3d",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.transform.perspective",
+        CssFeatureKind::Value,
+        "perspective()",
+        I_TRANSFORMS2,
+        "#funcdef-perspective",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.transform.rotate3d",
+        CssFeatureKind::Value,
+        "rotate3d()",
+        I_TRANSFORMS2,
+        "#funcdef-rotate3d",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.transform.rotate-x",
+        CssFeatureKind::Value,
+        "rotateX()",
+        I_TRANSFORMS2,
+        "#funcdef-rotatex",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.transform.rotate-y",
+        CssFeatureKind::Value,
+        "rotateY()",
+        I_TRANSFORMS2,
+        "#funcdef-rotatey",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.transform.rotate-z",
+        CssFeatureKind::Value,
+        "rotateZ()",
+        I_TRANSFORMS2,
+        "#funcdef-rotatez",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.transform.scale3d",
+        CssFeatureKind::Value,
+        "scale3d()",
+        I_TRANSFORMS2,
+        "#funcdef-scale3d",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.transform.scale-z",
+        CssFeatureKind::Value,
+        "scaleZ()",
+        I_TRANSFORMS2,
+        "#funcdef-scalez",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.transform.translate3d",
+        CssFeatureKind::Value,
+        "translate3d()",
+        I_TRANSFORMS2,
+        "#funcdef-translate3d",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.transform.translate-z",
+        CssFeatureKind::Value,
+        "translateZ()",
+        I_TRANSFORMS2,
+        "#funcdef-translatez",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.filter-function-list",
+        CssFeatureKind::Value,
+        "<filter-function-list>",
+        I_FILTER1,
+        "#FilterProperty",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.filter.blur",
+        CssFeatureKind::Value,
+        "blur()",
+        I_FILTER1,
+        "#funcdef-filter-blur",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.filter.brightness",
+        CssFeatureKind::Value,
+        "brightness()",
+        I_FILTER1,
+        "#funcdef-filter-brightness",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.filter.contrast",
+        CssFeatureKind::Value,
+        "contrast()",
+        I_FILTER1,
+        "#funcdef-filter-contrast",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.filter.grayscale",
+        CssFeatureKind::Value,
+        "grayscale()",
+        I_FILTER1,
+        "#funcdef-filter-grayscale",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.filter.hue-rotate",
+        CssFeatureKind::Value,
+        "hue-rotate()",
+        I_FILTER1,
+        "#funcdef-filter-hue-rotate",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.filter.invert",
+        CssFeatureKind::Value,
+        "invert()",
+        I_FILTER1,
+        "#funcdef-filter-invert",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.filter.opacity",
+        CssFeatureKind::Value,
+        "opacity()",
+        I_FILTER1,
+        "#funcdef-filter-opacity",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.filter.saturate",
+        CssFeatureKind::Value,
+        "saturate()",
+        I_FILTER1,
+        "#funcdef-filter-saturate",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.filter.sepia",
+        CssFeatureKind::Value,
+        "sepia()",
+        I_FILTER1,
+        "#funcdef-filter-sepia",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.filter.drop-shadow",
+        CssFeatureKind::Value,
+        "drop-shadow()",
+        I_FILTER1,
+        "#funcdef-filter-drop-shadow",
+    ),
+    CssFeatureMetadata::partial(
+        "ext.value.basic-shape",
+        CssFeatureKind::Value,
+        "<basic-shape>",
+        S_SHAPES1,
+        "#typedef-basic-shape",
+        BASIC_SHAPE_SUBSET,
+        BASIC_SHAPE_REMAINDER,
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.basic-shape.inset",
+        CssFeatureKind::Value,
+        "inset()",
+        S_SHAPES1,
+        "#funcdef-basic-shape-inset",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.basic-shape.circle",
+        CssFeatureKind::Value,
+        "circle()",
+        S_SHAPES1,
+        "#funcdef-basic-shape-circle",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.basic-shape.ellipse",
+        CssFeatureKind::Value,
+        "ellipse()",
+        S_SHAPES1,
+        "#funcdef-basic-shape-ellipse",
+    ),
+    CssFeatureMetadata::complete(
+        "ext.value.basic-shape.polygon",
+        CssFeatureKind::Value,
+        "polygon()",
+        S_SHAPES1,
+        "#funcdef-basic-shape-polygon",
     ),
     CssFeatureMetadata::partial(
         "official.value.calc",
@@ -5094,10 +5270,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 265] = [
         "border-bottom-left-radius",
         "baseline.property.border-bottom-left-radius"
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.box-shadow",
         CssKnownProperty::BoxShadow,
         "box-shadow",
-        "baseline.property.box-shadow"
+        "#propdef-box-shadow",
+        &[],
     ),
     property_feature!(
         CssKnownProperty::Opacity,
@@ -5171,10 +5349,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 265] = [
         "outline-width",
         "baseline.property.outline-width"
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.transform",
         CssKnownProperty::Transform,
         "transform",
-        "baseline.property.transform"
+        "#propdef-transform",
+        &[],
     ),
     CssFeatureMetadata::complete_property(
         "baseline.property.transform-origin",
@@ -5194,20 +5374,30 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 265] = [
         "baseline.property.rotate"
     ),
     property_feature!(CssKnownProperty::Scale, "scale", "baseline.property.scale"),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.filter",
         CssKnownProperty::Filter,
         "filter",
-        "baseline.property.filter"
+        "#propdef-filter",
+        &[],
     ),
-    property_feature!(
+    CssFeatureMetadata::partial_property_with_boundary(
+        "baseline.property.backdrop-filter",
         CssKnownProperty::BackdropFilter,
         "backdrop-filter",
-        "baseline.property.backdrop-filter"
+        "#propdef-backdrop-filter",
+        &[],
+        BACKDROP_FILTER_SUBSET,
+        BACKDROP_FILTER_REMAINDER,
     ),
-    property_feature!(
+    CssFeatureMetadata::partial_property_with_boundary(
+        "baseline.property.clip-path",
         CssKnownProperty::ClipPath,
         "clip-path",
-        "baseline.property.clip-path"
+        "#propdef-clip-path",
+        &[],
+        CLIP_PATH_SUBSET,
+        CLIP_PATH_REMAINDER,
     ),
     property_feature!(CssKnownProperty::Mask, "mask", "baseline.property.mask"),
     property_feature!(
@@ -5251,10 +5441,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 265] = [
         "#propdef-transition-delay",
         &[],
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.transition-timing-function",
         CssKnownProperty::TransitionTimingFunction,
         "transition-timing-function",
-        "baseline.property.transition-timing-function"
+        "#propdef-transition-timing-function",
+        &[],
     ),
     CssFeatureMetadata::partial_property_with_boundary(
         "baseline.property.transition",
@@ -5284,10 +5476,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 265] = [
         "#propdef-animation-delay",
         &[],
     ),
-    property_feature!(
+    CssFeatureMetadata::complete_property(
+        "baseline.property.animation-timing-function",
         CssKnownProperty::AnimationTimingFunction,
         "animation-timing-function",
-        "baseline.property.animation-timing-function"
+        "#propdef-animation-timing-function",
+        &[],
     ),
     CssFeatureMetadata::complete_property(
         "baseline.property.animation-iteration-count",
@@ -5549,8 +5743,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 265] = [
 
 /// Returns the immutable support catalog in stable inventory order.
 ///
-/// The preserved I01 records retain their exact lookup identities. Atomic records
-/// added for the four baseline aliases follow those records.
+/// Preserved I01 records retain their exact lookup identities, and later atomic
+/// records retain their source-specific identities.
 #[must_use]
 pub fn feature_catalog() -> &'static [CssFeatureMetadata] {
     &FEATURE_CATALOG

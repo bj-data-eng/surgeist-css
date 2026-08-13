@@ -252,6 +252,77 @@ let _ = validate_style_attribute("color: red");
 //! cascade, substitution, contextual resolution, layout, painting, transforms, and cross-crate
 //! lowering remain outside this surface.
 //!
+//! # Dedicated authored function grammars
+//!
+//! Current property accessors expose dedicated typed function families while
+//! `i01_subset()` remains the frozen compatibility view. Transform wrappers return
+//! [`CssTransformValue`], timing-function wrappers expose [`CssEasingValue`] lists,
+//! filter and backdrop-filter wrappers return [`CssFilterValue`], box-shadow returns
+//! [`CssBoxShadow`], and clip-path returns an optional [`CssClipPathValue`]. A current
+//! value can be valid when its I01 projection is `None`; compatibility data is not the
+//! current grammar.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssBasicShapeValue, CssClipPathValue, CssFilterFunctionValue, CssFilterValue,
+//!     CssKnownPropertyValueRef, CssTransformFunctionValue, CssTransformValue,
+//!     parse_style_attribute,
+//! };
+//!
+//! let report = parse_style_attribute(concat!(
+//!     "transform: translate3d(10%, 2px, 4em) rotate(45deg); ",
+//!     "filter: blur(2px) drop-shadow(red 1px 2px 3px); ",
+//!     "clip-path: polygon(round 2px, 0 0, 100% 0)",
+//! ));
+//! assert!(report.is_clean());
+//!
+//! let CssKnownPropertyValueRef::Transform(transform) = report.syntax()[0]
+//!     .known().expect("known transform")
+//!     .property_value().expect("ordinary transform")
+//! else { panic!("expected transform") };
+//! assert!(matches!(
+//!     transform.current(),
+//!     CssTransformValue::Functions(functions)
+//!         if matches!(functions.functions()[0], CssTransformFunctionValue::Translate3d(_))
+//! ));
+//!
+//! let CssKnownPropertyValueRef::Filter(filter) = report.syntax()[1]
+//!     .known().expect("known filter")
+//!     .property_value().expect("ordinary filter")
+//! else { panic!("expected filter") };
+//! assert!(matches!(
+//!     filter.current(),
+//!     CssFilterValue::Functions(functions)
+//!         if matches!(functions.functions()[1], CssFilterFunctionValue::DropShadow(_))
+//! ));
+//!
+//! let CssKnownPropertyValueRef::ClipPath(clip) = report.syntax()[2]
+//!     .known().expect("known clip path")
+//!     .property_value().expect("ordinary clip path")
+//! else { panic!("expected clip-path") };
+//! assert!(matches!(
+//!     clip.current(),
+//!     Some(CssClipPathValue::BasicShape(CssBasicShapeValue::Polygon(polygon)))
+//!         if polygon.round().is_some()
+//! ));
+//! ```
+//!
+//! The typed transform family covers the selected two-dimensional Transforms 1
+//! functions and the preserved I01 three-dimensional subset with exact arity,
+//! separators, and dimensions. Easing values distinguish keywords,
+//! `cubic-bezier()`, and `steps()`. Box shadows and filter `drop-shadow()` have
+//! separate models, filter lists preserve URL/function order, and the selected
+//! basic-shape family exposes `inset()`, `circle()`, `ellipse()`, and `polygon()`,
+//! including polygon `round <length>`.
+//!
+//! These are authored syntax values. This crate does not multiply transform matrices,
+//! interpolate or evaluate easing, render shadows or filters, resolve URLs, compute
+//! shape geometry, perform layout or painting, or lower values into sibling crates.
+//! `path()`, `shape()`, `rect()`, `xywh()`, and clip-path reference-box combinations
+//! remain outside the selected subset. `transition`, `animation`, `backdrop-filter`,
+//! and `clip-path` retain explicit Partial metadata boundaries; support for a typed
+//! function does not promote an aggregate or an unselected production.
+//!
 //! # Timing domains and I01 compatibility
 //!
 //! Duration literals are finite and non-negative; delay literals are finite and signed. A range
@@ -410,7 +481,7 @@ let _ = validate_style_attribute("color: red");
 //!
 //! # Support metadata and application policy
 //!
-//! [`feature_catalog`] describes each bounded I01 production as
+//! [`feature_catalog`] describes each declared conformance production as
 //! [`CssSupportStatus::Complete`], [`CssSupportStatus::Partial`], or
 //! [`CssSupportStatus::RecognizedUnsupported`]. Partial records state both their
 //! accepted subset and valid-but-unsupported remainder. A diagnostic-free use of

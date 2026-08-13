@@ -3,9 +3,16 @@ use cssparser::{ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
 use super::values::{
     CalculationRoot, next_is_comma, parse_custom_ident_from_str_at, parse_typed_calculation,
 };
-use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
+use crate::error::{CssFeatureId, Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
+
+pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] = &[
+    CssFeatureId::new("official.value.easing-function"),
+    CssFeatureId::new("official.value.cubic-bezier-easing"),
+    CssFeatureId::new("official.value.step-easing"),
+    CssFeatureId::new("official.value.step-position"),
+];
 
 pub(super) fn parse_duration_list<'i, 't>(
     input: &mut Parser<'i, 't>,

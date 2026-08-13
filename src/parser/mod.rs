@@ -199,6 +199,16 @@ static ATOMIC_IMPLEMENTATION_INVENTORIES: &[CssAtomicImplementationInventory] = 
         kind: CssAtomicImplementationKind::SharedValue,
         stable_ids: background::IMPLEMENTED_SHARED_VALUES,
     },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::effects",
+        kind: CssAtomicImplementationKind::SharedValue,
+        stable_ids: effects::IMPLEMENTED_SHARED_VALUES,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::timing",
+        kind: CssAtomicImplementationKind::SharedValue,
+        stable_ids: timing::IMPLEMENTED_SHARED_VALUES,
+    },
 ];
 
 pub(crate) const fn atomic_implementation_inventories()

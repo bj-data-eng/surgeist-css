@@ -10,9 +10,52 @@ use super::values::{
     next_is_ident, parse_length_with_context, parse_length_with_context_legacy, parse_number,
     parse_typed_calculation,
 };
-use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
+use crate::error::{CssFeatureId, Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
+
+pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] = &[
+    CssFeatureId::new("official.value.transform-list"),
+    CssFeatureId::new("official.value.transform-function"),
+    CssFeatureId::new("official.value.transform.matrix"),
+    CssFeatureId::new("official.value.transform.translate"),
+    CssFeatureId::new("official.value.transform.translate-x"),
+    CssFeatureId::new("official.value.transform.translate-y"),
+    CssFeatureId::new("official.value.transform.scale"),
+    CssFeatureId::new("official.value.transform.scale-x"),
+    CssFeatureId::new("official.value.transform.scale-y"),
+    CssFeatureId::new("official.value.transform.rotate"),
+    CssFeatureId::new("official.value.transform.skew"),
+    CssFeatureId::new("official.value.transform.skew-x"),
+    CssFeatureId::new("official.value.transform.skew-y"),
+    CssFeatureId::new("official.value.shadow"),
+    CssFeatureId::new("ext.value.transform.matrix3d"),
+    CssFeatureId::new("ext.value.transform.perspective"),
+    CssFeatureId::new("ext.value.transform.rotate3d"),
+    CssFeatureId::new("ext.value.transform.rotate-x"),
+    CssFeatureId::new("ext.value.transform.rotate-y"),
+    CssFeatureId::new("ext.value.transform.rotate-z"),
+    CssFeatureId::new("ext.value.transform.scale3d"),
+    CssFeatureId::new("ext.value.transform.scale-z"),
+    CssFeatureId::new("ext.value.transform.translate3d"),
+    CssFeatureId::new("ext.value.transform.translate-z"),
+    CssFeatureId::new("ext.value.filter-function-list"),
+    CssFeatureId::new("ext.value.filter.blur"),
+    CssFeatureId::new("ext.value.filter.brightness"),
+    CssFeatureId::new("ext.value.filter.contrast"),
+    CssFeatureId::new("ext.value.filter.grayscale"),
+    CssFeatureId::new("ext.value.filter.hue-rotate"),
+    CssFeatureId::new("ext.value.filter.invert"),
+    CssFeatureId::new("ext.value.filter.opacity"),
+    CssFeatureId::new("ext.value.filter.saturate"),
+    CssFeatureId::new("ext.value.filter.sepia"),
+    CssFeatureId::new("ext.value.filter.drop-shadow"),
+    CssFeatureId::new("ext.value.basic-shape"),
+    CssFeatureId::new("ext.value.basic-shape.inset"),
+    CssFeatureId::new("ext.value.basic-shape.circle"),
+    CssFeatureId::new("ext.value.basic-shape.ellipse"),
+    CssFeatureId::new("ext.value.basic-shape.polygon"),
+];
 
 pub(super) fn parse_transform<'i, 't>(
     input: &mut Parser<'i, 't>,

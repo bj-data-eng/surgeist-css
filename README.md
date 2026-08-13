@@ -214,6 +214,80 @@ loss. `object-position` is additive and has no I01 projection. Position use
 inside gradients, transforms, filters, and basic shapes remains on its separate
 function grammar boundary.
 
+## Dedicated authored function grammars
+
+Current property accessors expose dedicated typed function families while
+`i01_subset()` remains the frozen compatibility view. `transform.current()`
+returns `CssTransformValue`, timing-function wrappers expose current
+`CssEasingValue` lists, `filter.current()` and `backdrop-filter.current()` return
+`CssFilterValue`, `box-shadow.current()` returns `CssBoxShadow`, and
+`clip-path.current()` returns an optional `CssClipPathValue`. A current value can
+be valid when its I01 projection is `None`; consumers must not treat the
+compatibility view as the current grammar.
+
+```rust
+use surgeist_css::{
+    CssBasicShapeValue, CssClipPathValue, CssFilterFunctionValue, CssFilterValue,
+    CssKnownPropertyValueRef, CssTransformFunctionValue, CssTransformValue,
+    parse_style_attribute,
+};
+
+let report = parse_style_attribute(concat!(
+    "transform: translate3d(10%, 2px, 4em) rotate(45deg); ",
+    "filter: blur(2px) drop-shadow(red 1px 2px 3px); ",
+    "clip-path: polygon(round 2px, 0 0, 100% 0)",
+));
+assert!(report.is_clean());
+
+let CssKnownPropertyValueRef::Transform(transform) = report.syntax()[0]
+    .known().expect("known transform")
+    .property_value().expect("ordinary transform")
+else { panic!("expected transform") };
+assert!(matches!(
+    transform.current(),
+    CssTransformValue::Functions(functions)
+        if matches!(functions.functions()[0], CssTransformFunctionValue::Translate3d(_))
+));
+
+let CssKnownPropertyValueRef::Filter(filter) = report.syntax()[1]
+    .known().expect("known filter")
+    .property_value().expect("ordinary filter")
+else { panic!("expected filter") };
+assert!(matches!(
+    filter.current(),
+    CssFilterValue::Functions(functions)
+        if matches!(functions.functions()[1], CssFilterFunctionValue::DropShadow(_))
+));
+
+let CssKnownPropertyValueRef::ClipPath(clip) = report.syntax()[2]
+    .known().expect("known clip path")
+    .property_value().expect("ordinary clip path")
+else { panic!("expected clip-path") };
+assert!(matches!(
+    clip.current(),
+    Some(CssClipPathValue::BasicShape(CssBasicShapeValue::Polygon(polygon)))
+        if polygon.round().is_some()
+));
+```
+
+The typed transform family covers the selected two-dimensional Transforms 1
+functions and the preserved I01 three-dimensional subset with exact arity,
+separator, and dimension domains. Easing values distinguish keywords,
+`cubic-bezier()`, and `steps()`. Box shadows and filter `drop-shadow()` use
+different models, so filter shadows cannot contain `inset` or spread. Filter
+lists preserve URL/function order and typed function-specific operands. The
+selected basic-shape family exposes `inset()`, `circle()`, `ellipse()`, and
+`polygon()`, including polygon `round <length>`.
+
+These are authored syntax values. This crate does not multiply transform
+matrices, interpolate or evaluate easing, render shadows or filters, resolve
+URLs, compute shape geometry, perform layout or painting, or lower values into
+sibling crates. `path()`, `shape()`, `rect()`, `xywh()`, and clip-path
+reference-box combinations remain outside the selected shape subset.
+`transition`, `animation`, `backdrop-filter`, and `clip-path` therefore retain
+their explicit Partial catalog boundaries; support for one typed function does
+not promote an aggregate or an unselected production.
+
 `CssImportance` and `CssSupportStatus` are deliberately closed and may be
 matched exhaustively. Every other public enum is non-exhaustive and requires a
 wildcard in downstream matches. This declaration inspection migration changes
@@ -223,7 +297,7 @@ Each diagnostic exposes a typed error and stable root code, the first responsibl
 
 CSS custom properties preserve case-sensitive names and authored value text, including interior trivia. Known-property values whose grammar depends on `var(...)` remain substitution-dependent authored values. The crate recognizes terminal `!important` but does not apply cascade or perform custom-property substitution or post-substitution validation.
 
-The independent support catalog reports an exact support status for each bounded I01 production: `Complete`, `Partial`, or `RecognizedUnsupported`. Partial records document both the accepted subset and valid-but-unsupported remainder. A clean use of a partial production's supported subset is accepted; status is metadata about the whole named production, not a parse-result validity flag.
+The independent support catalog reports an exact support status for each declared conformance production: `Complete`, `Partial`, or `RecognizedUnsupported`. Partial records document both the accepted subset and valid-but-unsupported remainder. A clean use of a partial production's supported subset is accepted; status is metadata about the whole named production, not a parse-result validity flag.
 
 ## Conformance sources and atomic records
 

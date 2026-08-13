@@ -4,7 +4,7 @@
 
 This is the JIT implementation contract for `P01-I02` in `surgeist-css`.
 It is subordinate to the reviewed P01 program at semantic SHA-256
-`141ff37a9e7578ec46248644200cb593d222df247f1ec1c3ec15c4ecd88ca48c`
+`598b10b07624e1d77929312dccbb682c1fe6139e9de029a25fa655014e3612a0`
 and incorporates its I02-entry and source-contradiction reconciliations. The
 initiative base is the published, fetchable I01 candidate
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; the P01 reconciliation commit
@@ -259,7 +259,7 @@ oracle contradiction returns to P01 reconciliation before implementation.
 
 ### 3.5 C09 Source-Backed Oracle Correction
 
-P01.12 reconciles seven C01 rows that encode the incomplete MQ3, Conditional 3,
+P01.12 reconciles eight C01 rows that encode the incomplete MQ3, Conditional 3,
 and Cascade 5 behavior allocated to C09. C09 shall replace only the expected
 observables for these stable scenario IDs while preserving their entry point,
 feature mode, and authored input:
@@ -268,6 +268,9 @@ feature mode, and authored input:
   `device-width` without an `InvalidMediaQuery` diagnostic;
 - `catalog.non-property.baseline.media.type.boundary` retains valid `speech`
   without an `InvalidMediaQuery` diagnostic;
+- `catalog.non-property.baseline.rule.media.boundary` retains the balanced
+  unknown MQ3 feature value `width: calc(1px)` as defined-false syntax without
+  an `InvalidMediaQuery` diagnostic;
 - `catalog.non-property.baseline.rule.import.boundary` retains the import and
   its valid `supports(display: grid)` clause without a replacement diagnostic;
 - `catalog.non-property.later.rule.supports.boundary` and
@@ -280,8 +283,8 @@ feature mode, and authored input:
 The fixture SHA-256 before C09 is
 `67e69813d808ffda40e7c159fde719fbadd0447f8e4105788b0bb593931fac89`.
 The hand-authored replacement rows yield SHA-256
-`9e798c3b337b7ab4d34da09fbefcb6a09daf55f063789439bc32445fa6f8bd84`.
-Task review verifies the exact seven-row diff. No Rust test asserts either
+`728f73c13d57dc526a02f58a68c672faf7e8e0fd1911ac30d76aba5e63be0b9d`.
+Task review verifies the exact eight-row diff. No Rust test asserts either
 digest, derives expected values from production, masks a corrected case, or
 weakens comparison. Every malformed-query row, the distinct MQ4 `scripting`
 boundary, and every other fixture row remain byte-for-byte identical. Any
@@ -461,7 +464,7 @@ At initiative completion:
 - preserved extensions are `Complete`, `Partial`, or
   `RecognizedUnsupported` truthfully, with exact subset/remainder or diagnostic
   identity; except for the exact section 3.3 seven-row, section 3.4 one-row,
-  and section 3.5 seven-row source corrections, no preserved I01 accepted
+  and section 3.5 eight-row source corrections, no preserved I01 accepted
   vector regresses;
 - unknown spellings remain distinct from recognized unsupported spellings;
 - exact I01 baseline tests become subset-preservation tests rather than replacing
@@ -663,9 +666,9 @@ inspection. They reiterate the excluded downstream semantics.
 
 I01 behavioral tests remain baseline-preservation evidence, subject only to the
 seven source-backed C07 corrections in section 3.3, the one source-backed C08
-correction in section 3.4, and the seven source-backed C09 corrections in
+correction in section 3.4, and the eight source-backed C09 corrections in
 section 3.5 with final fixture digest
-`9e798c3b337b7ab4d34da09fbefcb6a09daf55f063789439bc32445fa6f8bd84`.
+`728f73c13d57dc526a02f58a68c672faf7e8e0fd1911ac30d76aba5e63be0b9d`.
 At I02 completion,
 the coordinator and reviewers map every acceptance item to direct source
 inspection, compiler-visible API evidence, behavioral tests, or deterministic
@@ -711,9 +714,9 @@ I02 is complete only when all predicates hold:
    counts.
 3. The exact 219-row I01 feature baseline remains classified; the seven C07
    scenario IDs in section 3.3, the one C08 scenario ID in section 3.4, and the
-   seven C09 scenario IDs in section 3.5 carry their reviewed source-backed
+   eight C09 scenario IDs in section 3.5 carry their reviewed source-backed
    replacement observables; the C09 fixture has exact SHA-256
-   `9e798c3b337b7ab4d34da09fbefcb6a09daf55f063789439bc32445fa6f8bd84`;
+   `728f73c13d57dc526a02f58a68c672faf7e8e0fd1911ac30d76aba5e63be0b9d`;
    every other accepted vector does not regress; extension status and
    provenance are truthful.
 4. All fourteen allocated findings in section 11 have implemented source and

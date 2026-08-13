@@ -4,11 +4,11 @@
 
 This sequence implements the reviewed P01-I02 specification at
 `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
-`4ee24a288c5f3669264485f5ae5ec919d36c4c510f8a2a2f4e4d453d0cd272c3`,
+`6695f4a2df2fb341b748d49559e6fc187703462c9e3d06e7a35e44a7f27a9206`,
 and its official ledger at SHA-256
 `09d69fd44b112a23c7a3863f11b21a6103f55beb37d0dca06cd021b33ae670e6`.
 It is subordinate to reviewed P01 semantic SHA-256
-`141ff37a9e7578ec46248644200cb593d222df247f1ec1c3ec15c4ecd88ca48c`.
+`598b10b07624e1d77929312dccbb682c1fe6139e9de029a25fa655014e3612a0`.
 The published I01 base is
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; planning commits after that base
 belong to the I02 candidate range.
@@ -18,7 +18,7 @@ prior cycle's reviewed, verified, published/read-back handoff and the
 user-required clean, process-free post-cycle state. C14 additionally requires a
 separate exact-range initiative review before its publication. No grammar task
 begins before C01 publication. Except for the exact seven-scenario C07,
-one-scenario C08, and seven-scenario C09 source-backed oracle corrections
+one-scenario C08, and eight-scenario C09 source-backed oracle corrections
 reviewed in specification sections 3.3-3.5, a need for a second breaking cycle,
 another frozen I01
 semantic change, unsafe, external acquisition, or root/sibling edit stops and
@@ -201,7 +201,7 @@ published/read-back C08 SHA.
   binding to immutable `X-VALUES4` repository provenance without importing its
   sibling boolean grammar, and assigns the separate Conditional 4 selector-test
   delta to `R-CONDITIONAL4`. P01.12 and specification section 3.5 also freeze
-  the exact seven source-backed C09 fixture corrections and replacement digest.
+  the exact eight source-backed C09 fixture corrections and replacement digest.
 
 Close findings 2.4 and 2.7 and the Conditional portion of 2.1. Implement complete
 MQ3 types/features/defined-false behavior, `@supports`, dated
@@ -217,7 +217,7 @@ Exit: MQ3 and Conditional 3 are Complete; later MQ/container extensions retain
 their separate provenance and recovery behavior. The Conditional 4 selector
 delta remains separately sourced and Partial. **Handoff:** phase table and
 media/supports/import row promotions, recovery/consumer evidence,
-exact seven-row fixture diff and replacement digest, reviews/matrix/cleanup,
+exact eight-row fixture diff and replacement digest, reviews/matrix/cleanup,
 and published/read-back C09 SHA.
 
 ### I02-C10 Namespaces And Complete Selectors 3
@@ -319,7 +319,7 @@ cleanup, then published/read-back I02 SHA and root-only actions.
 ## 3. Cross-Cycle Invariants
 
 Every cycle preserves the I01 behavioral corpus's authored inputs and public
-observables except for C07's exact seven, C08's exact one, and C09's exact seven
+observables except for C07's exact seven, C08's exact one, and C09's exact eight
 reviewed source-backed replacement observables; every unaffected row remains
 byte-identical. Every cycle also
 preserves all prior completed I02 vectors, parser progress/depth guarantees,

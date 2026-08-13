@@ -415,27 +415,29 @@ keeps it Partial against the complex-selector grammar supported at that point.
 C10's namespace and complete Selectors 3 work expands that same row's supported
 subset without changing its identity or falsely claiming complete Selectors 4.
 
-JIT discovery also proved that seven frozen C01 rows encode the exact incomplete
+JIT discovery also proved that eight frozen C01 rows encode the exact incomplete
 behavior allocated to C09: `catalog.non-property.baseline.media.range-feature.boundary`,
 `catalog.non-property.baseline.media.type.boundary`,
 `catalog.non-property.baseline.rule.import.boundary`,
+`catalog.non-property.baseline.rule.media.boundary`,
 `catalog.non-property.later.rule.supports.boundary`,
 `focused.specialized.media-position`, `focused.structured-errors.01`, and
 `focused.structured-errors.08`. They currently recover from valid MQ3
 `device-width` and `speech`, valid Cascade 5 `supports()` import syntax, valid
 Conditional 3 `@supports`, or syntactically valid defined-false unknown media
-features. Preserving those diagnostics would make C09's reviewed completion
-claims false.
+features/values. The balanced `width: calc(1px)` expression is an unknown MQ3
+feature value, not a malformed query. Preserving those diagnostics would make
+C09's reviewed completion claims false.
 
 P01 therefore authorizes one source-backed C09 oracle correction limited to
-those seven stable IDs and authored inputs. Their clean state, retained syntax,
+those eight stable IDs and authored inputs. Their clean state, retained syntax,
 values, authored declarations, and diagnostics change only as required to
 retain the valid syntax without the obsolete recovery diagnostics. The fixture
 SHA-256 before C09 is
 `67e69813d808ffda40e7c159fde719fbadd0447f8e4105788b0bb593931fac89`;
-the hand-authored seven-row replacement yields
-`9e798c3b337b7ab4d34da09fbefcb6a09daf55f063789439bc32445fa6f8bd84`.
-C09 task review must prove exactly those seven rows changed and every other row
+the hand-authored eight-row replacement yields
+`728f73c13d57dc526a02f58a68c672faf7e8e0fd1911ac30d76aba5e63be0b9d`.
+C09 task review must prove exactly those eight rows changed and every other row
 is byte-identical. Malformed media-query rows, the separately sourced MQ4
 `scripting` boundary, and every other frozen behavior remain unchanged.
 

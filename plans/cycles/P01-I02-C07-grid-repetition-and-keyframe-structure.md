@@ -146,6 +146,8 @@ sets/counts, workflow state, or call counts is prohibited repository-wide.
 
 ### T1 Publish Structurally Valid Grid Repetition
 
+- **Dependency:** published/read-back C06, independently clean C07
+  reconciliation, and this cycle plan independently clean.
 - **Files/area:** current Grid models in `src/syntax.rs`; `src/parser/grid.rs`;
   the six exact property wrappers/aggregate representations and dispatch in
   `src/properties.rs`; the three Grid fixture rows; stale Grid behavioral
@@ -177,6 +179,7 @@ sets/counts, workflow state, or call counts is prohibited repository-wide.
 
 ### T2 Preserve Empty And Duplicate Keyframes
 
+- **Dependency:** T1 independently clean over its complete ordered range.
 - **Files/area:** keyframe structure in `src/syntax.rs` and
   `src/parser/keyframes.rs`; the four keyframe fixture rows; replace only stale
   keyframe behavior oracles; new `tests/keyframe_structures.rs` plus
@@ -210,6 +213,8 @@ sets/counts, workflow state, or call counts is prohibited repository-wide.
 
 ### T3 Publish Grid And Keyframe Metadata, Docs, And Handoff
 
+- **Dependency:** T1 and T2 independently clean over their complete ordered
+  ranges.
 - **Files/area:** `src/conformance.rs`; inventory-only Grid parser declaration;
   explicit named public metadata tests; README and crate rustdoc; new
   revision-SHA-free

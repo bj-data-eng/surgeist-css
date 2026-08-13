@@ -326,7 +326,7 @@ productions within section 2 are owned.
 | `O-CONDITIONAL3` | Conditional Rules 3 | <https://www.w3.org/TR/2024/CRD-css-conditional-3-20240815/> | `@media`, `@supports`, conditions |
 | `O-SELECTORS3` | Selectors 3 | <https://www.w3.org/TR/2018/REC-selectors-3-20181106/> | complete selector grammar |
 | `O-NAMESPACES3` | Namespaces 3 | <https://www.w3.org/TR/2014/REC-css-namespaces-3-20140320/> | `@namespace`, qualified selector names |
-| `O-CASCADE4` | Cascade 4 | <https://www.w3.org/TR/2022/CR-css-cascade-4-20220113/> | global keywords and importance syntax only |
+| `O-CASCADE4` | Cascade 4 | <https://www.w3.org/TR/2022/CR-css-cascade-4-20220113/> | `@import` core, global keywords, and importance syntax |
 | `O-VALUES3` | Values and Units 3 | <https://www.w3.org/TR/2024/CRD-css-values-3-20240322/> | primitive values, units, typed math |
 | `O-VARIABLES1` | Custom Properties 1 | <https://www.w3.org/TR/2022/CR-css-variables-1-20220616/> | custom declarations and symbolic `var()` |
 | `O-BOX3` | Box Model 3 | <https://www.w3.org/TR/2024/REC-css-box-3-20240411/> | margin, padding, box values |

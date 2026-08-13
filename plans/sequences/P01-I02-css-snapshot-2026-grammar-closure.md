@@ -4,7 +4,7 @@
 
 This sequence implements the reviewed P01-I02 specification at
 `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
-`6695f4a2df2fb341b748d49559e6fc187703462c9e3d06e7a35e44a7f27a9206`,
+`0115345f36520278f483160b4e063ce9038c83e57441fa2b2ca92e84de1e0d76`,
 and its official ledger at SHA-256
 `09d69fd44b112a23c7a3863f11b21a6103f55beb37d0dca06cd021b33ae670e6`.
 It is subordinate to reviewed P01 semantic SHA-256

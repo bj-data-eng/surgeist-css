@@ -3,9 +3,113 @@ use surgeist_css::{
     CssAnimationIterationValue, CssAnimationIterationValueList, CssAnimationName,
     CssAnimationPlayState, CssCalculationExpressionRef, CssCalculationType, CssDelay, CssDelayList,
     CssDelayLiteral, CssDuration, CssDurationList, CssDurationLiteral, CssEasing, CssErrorCode,
-    CssKnownPropertyValueRef, CssRecoveryAction, CssTimeUnit, CssTransitionProperty,
-    parse_style_attribute,
+    CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction, CssSourcePosition, CssTimeUnit,
+    CssTokenKind, CssTransitionProperty, ErrorKind, parse_style_attribute,
 };
+
+fn for_each_permutation(
+    components: &mut [&'static str],
+    index: usize,
+    visit: &mut impl FnMut(&[&'static str]),
+) {
+    if index == components.len() {
+        visit(components);
+        return;
+    }
+
+    for swap_index in index..components.len() {
+        components.swap(index, swap_index);
+        for_each_permutation(components, index + 1, visit);
+        components.swap(index, swap_index);
+    }
+}
+
+fn assert_ascii_position(position: CssSourcePosition, byte_offset: usize) {
+    assert_eq!(position.byte_offset().value(), byte_offset);
+    assert_eq!(position.line().value(), 0);
+    assert_eq!(position.column().value(), byte_offset as u32);
+}
+
+fn assert_retained_color_sibling(
+    source: &str,
+    report: &surgeist_css::CssParseReport<surgeist_css::CssDeclarationList>,
+) {
+    let [declaration] = report.syntax().as_slice() else {
+        panic!("{source}: valid color sibling must be retained exactly once");
+    };
+    assert_eq!(
+        declaration
+            .known()
+            .expect("retained known color")
+            .property(),
+        CssKnownProperty::Color,
+        "{source}",
+    );
+}
+
+struct InvalidTimingCase {
+    source: &'static str,
+    property: CssKnownProperty,
+    position: usize,
+    span_end: usize,
+    encountered: Option<(CssTokenKind, &'static str)>,
+}
+
+fn assert_invalid_timing_case(case: &InvalidTimingCase) {
+    let report = parse_style_attribute(case.source);
+    assert_retained_color_sibling(case.source, &report);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("{}: expected one exact timing diagnostic", case.source);
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue,
+        "{}",
+        case.source,
+    );
+    assert_eq!(
+        diagnostic.action(),
+        CssRecoveryAction::DropDeclaration,
+        "{}",
+        case.source,
+    );
+    assert_ascii_position(diagnostic.error().position(), case.position);
+    assert_ascii_position(diagnostic.span().start(), 0);
+    assert_ascii_position(diagnostic.span().end(), case.span_end);
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("{}: expected typed property-value detail", case.source);
+    };
+    assert_eq!(detail.property(), case.property, "{}", case.source);
+    assert_eq!(
+        detail.expectation().as_str(),
+        "a value accepted by the property's grammar",
+        "{}",
+        case.source,
+    );
+    match (detail.encountered(), case.encountered) {
+        (Some(actual), Some((kind, authored))) => {
+            assert_eq!(actual.kind(), kind, "{}", case.source);
+            assert_eq!(actual.authored(), authored, "{}", case.source);
+        }
+        (None, None) => {}
+        (actual, expected) => panic!(
+            "{}: encountered token mismatch: actual={actual:?}, expected={expected:?}",
+            case.source,
+        ),
+    }
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(case.source)
+            .expect_err("strict validation must reject the recovered timing declaration");
+        assert_eq!(
+            failure.diagnostics(),
+            report.diagnostics(),
+            "{}",
+            case.source
+        );
+    }
+}
 
 #[test]
 fn duration_and_delay_literals_enforce_distinct_finite_sign_domains() {
@@ -300,61 +404,296 @@ fn animation_shorthand_exposes_all_eight_current_components() {
 }
 
 #[test]
-fn invalid_timing_order_lists_types_and_trailing_tokens_recover_later_siblings() {
-    for source in [
-        "transition-duration: -1s; color: red",
-        "animation-duration: -1ms; color: red",
-        "transition: opacity -1s 2s; color: red",
-        "animation: fade -1s 2s; color: red",
-        "transition: opacity 1s 2s 3s; color: red",
-        "animation: fade 1s 2s 3s; color: red",
-        "transition-duration: 1s,; color: red",
-        "animation-delay: -1s,,2s; color: red",
-        "transition-duration: calc(1px + 2px); color: red",
-        "animation-iteration-count: calc(1s + 2s); color: red",
-        "transition-delay: 1s trailing; color: red",
-    ] {
-        let report = parse_style_attribute(source);
-        assert_eq!(report.syntax().len(), 1, "{source}");
-        let [diagnostic] = report.diagnostics() else {
-            panic!("{source}: expected exactly one recovered declaration");
-        };
-        assert_eq!(
-            diagnostic.error().code(),
-            CssErrorCode::InvalidPropertyValue,
-            "{source}"
-        );
-        assert_eq!(
-            diagnostic.action(),
-            CssRecoveryAction::DropDeclaration,
-            "{source}"
-        );
-    }
-}
+fn every_transition_component_order_preserves_first_time_and_second_time_domains() {
+    let mut components = ["opacity", "1s", "-2ms", "ease-in"];
+    for_each_permutation(&mut components, 0, &mut |order| {
+        let duration_index = order
+            .iter()
+            .position(|component| *component == "1s")
+            .unwrap();
+        let delay_index = order
+            .iter()
+            .position(|component| *component == "-2ms")
+            .unwrap();
+        if duration_index > delay_index {
+            return;
+        }
 
-#[test]
-fn non_finite_timing_and_iteration_tokens_are_rejected_without_losing_siblings() {
-    for source in [
-        "transition-duration: 1e999s; color: red",
-        "transition-delay: -1e999s; color: red",
-        "animation-duration: calc(1e999s); color: red",
-        "animation-delay: calc(-1e999s); color: red",
-        "animation-iteration-count: 1e999; color: red",
-        "animation-iteration-count: calc(1e999); color: red",
-    ] {
-        let report = parse_style_attribute(source);
-        assert_eq!(report.syntax().len(), 1, "{source}");
-        assert_eq!(report.diagnostics().len(), 1, "{source}");
-        assert_eq!(
-            report.diagnostics()[0].error().code(),
-            CssErrorCode::InvalidPropertyValue,
+        let source = format!("transition: {}", order.join(" "));
+        let report = parse_style_attribute(&source);
+        assert!(report.is_clean(), "{source}: {:?}", report.diagnostics());
+        let [declaration] = report.syntax().as_slice() else {
+            panic!("{source}: expected one transition declaration");
+        };
+        let CssKnownPropertyValueRef::Transition(value) = declaration
+            .known()
+            .expect("known transition")
+            .property_value()
+            .expect("ordinary transition")
+        else {
+            panic!("{source}: expected transition wrapper");
+        };
+        let [transition] = value.transitions().values() else {
+            panic!("{source}: expected one transition item");
+        };
+        assert!(
+            matches!(transition.property(), Some(CssTransitionProperty::Custom(property)) if property.as_str() == "opacity"),
             "{source}",
         );
+        assert!(
+            matches!(transition.duration(), Some(CssDuration::Literal(literal)) if literal.value() == 1.0 && literal.unit() == CssTimeUnit::Seconds),
+            "{source}",
+        );
+        assert!(
+            matches!(transition.delay(), Some(CssDelay::Literal(literal)) if literal.value() == -2.0 && literal.unit() == CssTimeUnit::Milliseconds),
+            "{source}",
+        );
+        assert!(
+            matches!(transition.timing_function(), Some(CssEasing::EaseIn)),
+            "{source}",
+        );
+
+        #[cfg(feature = "app-strict")]
+        assert_eq!(
+            surgeist_css::validate_style_attribute(&source)
+                .expect("strict validation accepts every valid transition order"),
+            *report.syntax(),
+            "{source}",
+        );
+    });
+}
+
+#[test]
+fn every_animation_component_order_preserves_all_eight_typed_domains() {
+    let mut components = [
+        "fade", "1s", "-2ms", "ease-in", "2", "reverse", "both", "paused",
+    ];
+    for_each_permutation(&mut components, 0, &mut |order| {
+        let duration_index = order
+            .iter()
+            .position(|component| *component == "1s")
+            .unwrap();
+        let delay_index = order
+            .iter()
+            .position(|component| *component == "-2ms")
+            .unwrap();
+        if duration_index > delay_index {
+            return;
+        }
+
+        let source = format!("animation: {}", order.join(" "));
+        let report = parse_style_attribute(&source);
+        assert!(report.is_clean(), "{source}: {:?}", report.diagnostics());
+        let [declaration] = report.syntax().as_slice() else {
+            panic!("{source}: expected one animation declaration");
+        };
+        let CssKnownPropertyValueRef::Animation(value) = declaration
+            .known()
+            .expect("known animation")
+            .property_value()
+            .expect("ordinary animation")
+        else {
+            panic!("{source}: expected animation wrapper");
+        };
+        let [animation] = value.animations().values() else {
+            panic!("{source}: expected one animation item");
+        };
+        assert!(
+            matches!(animation.name(), Some(CssAnimationName::Custom(name)) if name.as_str() == "fade"),
+            "{source}",
+        );
+        assert!(
+            matches!(animation.duration(), Some(CssDuration::Literal(literal)) if literal.value() == 1.0 && literal.unit() == CssTimeUnit::Seconds),
+            "{source}",
+        );
+        assert!(
+            matches!(animation.delay(), Some(CssDelay::Literal(literal)) if literal.value() == -2.0 && literal.unit() == CssTimeUnit::Milliseconds),
+            "{source}",
+        );
+        assert!(
+            matches!(animation.timing_function(), Some(CssEasing::EaseIn)),
+            "{source}",
+        );
+        assert!(
+            matches!(animation.iteration_count(), Some(CssAnimationIterationValue::Number(number)) if number.value() == 2.0),
+            "{source}",
+        );
+        assert_eq!(
+            animation.direction(),
+            Some(CssAnimationDirection::Reverse),
+            "{source}",
+        );
+        assert_eq!(
+            animation.fill_mode(),
+            Some(CssAnimationFillMode::Both),
+            "{source}",
+        );
+        assert_eq!(
+            animation.play_state(),
+            Some(CssAnimationPlayState::Paused),
+            "{source}",
+        );
+
+        #[cfg(feature = "app-strict")]
+        assert_eq!(
+            surgeist_css::validate_style_attribute(&source)
+                .expect("strict validation accepts every valid animation order"),
+            *report.syntax(),
+            "{source}",
+        );
+    });
+}
+
+#[test]
+fn every_invalid_timing_category_has_exact_public_diagnostics_and_strict_parity() {
+    for case in [
+        InvalidTimingCase {
+            source: "transition: opacity -1s 2s; color: red",
+            property: CssKnownProperty::Transition,
+            position: 20,
+            span_end: 27,
+            encountered: Some((CssTokenKind::Dimension, "-1s")),
+        },
+        InvalidTimingCase {
+            source: "animation: fade -1s 2s; color: red",
+            property: CssKnownProperty::Animation,
+            position: 16,
+            span_end: 23,
+            encountered: Some((CssTokenKind::Dimension, "-1s")),
+        },
+        InvalidTimingCase {
+            source: "transition: opacity 1s ease linear; color: red",
+            property: CssKnownProperty::Transition,
+            position: 28,
+            span_end: 35,
+            encountered: Some((CssTokenKind::Ident, "linear")),
+        },
+        InvalidTimingCase {
+            source: "animation: fade 1s reverse alternate; color: red",
+            property: CssKnownProperty::Animation,
+            position: 27,
+            span_end: 37,
+            encountered: Some((CssTokenKind::Ident, "alternate")),
+        },
+        InvalidTimingCase {
+            source: "transition: opacity 1s -2s 3s; color: red",
+            property: CssKnownProperty::Transition,
+            position: 27,
+            span_end: 30,
+            encountered: Some((CssTokenKind::Dimension, "3s")),
+        },
+        InvalidTimingCase {
+            source: "animation: fade 1s -2s 3s; color: red",
+            property: CssKnownProperty::Animation,
+            position: 23,
+            span_end: 26,
+            encountered: Some((CssTokenKind::Dimension, "3s")),
+        },
+        InvalidTimingCase {
+            source: "transition-duration: ; color: red",
+            property: CssKnownProperty::TransitionDuration,
+            position: 21,
+            span_end: 22,
+            encountered: None,
+        },
+        InvalidTimingCase {
+            source: "animation-delay: ; color: red",
+            property: CssKnownProperty::AnimationDelay,
+            position: 17,
+            span_end: 18,
+            encountered: None,
+        },
+        InvalidTimingCase {
+            source: "transition-duration: 1e999s; color: red",
+            property: CssKnownProperty::TransitionDuration,
+            position: 21,
+            span_end: 28,
+            encountered: Some((CssTokenKind::Dimension, "1e999s")),
+        },
+        InvalidTimingCase {
+            source: "transition-delay: -1e999s; color: red",
+            property: CssKnownProperty::TransitionDelay,
+            position: 18,
+            span_end: 26,
+            encountered: Some((CssTokenKind::Dimension, "-1e999s")),
+        },
+        InvalidTimingCase {
+            source: "animation-duration: calc(1e999s); color: red",
+            property: CssKnownProperty::AnimationDuration,
+            position: 25,
+            span_end: 33,
+            encountered: Some((CssTokenKind::Dimension, "1e999s")),
+        },
+        InvalidTimingCase {
+            source: "animation-delay: calc(-1e999s); color: red",
+            property: CssKnownProperty::AnimationDelay,
+            position: 22,
+            span_end: 31,
+            encountered: Some((CssTokenKind::Dimension, "-1e999s")),
+        },
+        InvalidTimingCase {
+            source: "animation-iteration-count: 1e999; color: red",
+            property: CssKnownProperty::AnimationIterationCount,
+            position: 27,
+            span_end: 33,
+            encountered: Some((CssTokenKind::Number, "1e999")),
+        },
+        InvalidTimingCase {
+            source: "animation-iteration-count: calc(1e999); color: red",
+            property: CssKnownProperty::AnimationIterationCount,
+            position: 32,
+            span_end: 39,
+            encountered: Some((CssTokenKind::Number, "1e999")),
+        },
+        InvalidTimingCase {
+            source: "transition-duration: calc(1px + 2px); color: red",
+            property: CssKnownProperty::TransitionDuration,
+            position: 26,
+            span_end: 37,
+            encountered: Some((CssTokenKind::Dimension, "1px")),
+        },
+        InvalidTimingCase {
+            source: "animation-iteration-count: calc(1s + 2s); color: red",
+            property: CssKnownProperty::AnimationIterationCount,
+            position: 32,
+            span_end: 41,
+            encountered: Some((CssTokenKind::Dimension, "1s")),
+        },
+        InvalidTimingCase {
+            source: "transition-duration: 1s,; color: red",
+            property: CssKnownProperty::TransitionDuration,
+            position: 24,
+            span_end: 25,
+            encountered: None,
+        },
+        InvalidTimingCase {
+            source: "animation-delay: -1s,,2s; color: red",
+            property: CssKnownProperty::AnimationDelay,
+            position: 21,
+            span_end: 25,
+            encountered: Some((CssTokenKind::Comma, ",")),
+        },
+        InvalidTimingCase {
+            source: "transition-delay: 1s trailing; color: red",
+            property: CssKnownProperty::TransitionDelay,
+            position: 21,
+            span_end: 30,
+            encountered: Some((CssTokenKind::Ident, "trailing")),
+        },
+        InvalidTimingCase {
+            source: "animation-duration: 1s trailing; color: red",
+            property: CssKnownProperty::AnimationDuration,
+            position: 23,
+            span_end: 32,
+            encountered: Some((CssTokenKind::Ident, "trailing")),
+        },
+    ] {
+        assert_invalid_timing_case(&case);
     }
 }
 
 #[test]
-fn repeated_timing_failures_and_calculation_depth_boundaries_are_panic_free() {
+fn repeated_timing_failures_and_depth_255_256_257_have_exact_recovery_behavior() {
     let mut source = String::new();
     for _ in 0..128 {
         source.push_str("transition: -1s 2s;");
@@ -376,7 +715,34 @@ fn repeated_timing_failures_and_calculation_depth_boundaries_are_panic_free() {
             "depth {depth}: {:?}",
             report.diagnostics()
         );
-        assert_eq!(report.syntax().len(), 2);
+        let [duration, color] = report.syntax().as_slice() else {
+            panic!("depth {depth}: duration and color must both be retained");
+        };
+        let CssKnownPropertyValueRef::TransitionDuration(duration) = duration
+            .known()
+            .expect("known duration")
+            .property_value()
+            .expect("ordinary duration")
+        else {
+            panic!("depth {depth}: expected transition-duration wrapper");
+        };
+        assert!(matches!(
+            duration.durations().values(),
+            [CssDuration::Calculation(calculation)]
+                if calculation.result_type() == CssCalculationType::Time
+        ));
+        assert_eq!(
+            color.known().expect("known color sibling").property(),
+            CssKnownProperty::Color,
+        );
+
+        #[cfg(feature = "app-strict")]
+        assert_eq!(
+            surgeist_css::validate_style_attribute(&source)
+                .expect("strict validation accepts supported calculation depth"),
+            *report.syntax(),
+            "depth {depth}",
+        );
     }
 
     let depth = 257_usize;
@@ -386,10 +752,25 @@ fn repeated_timing_failures_and_calculation_depth_boundaries_are_panic_free() {
         ")".repeat(depth)
     );
     let report = parse_style_attribute(&source);
-    assert_eq!(report.syntax().len(), 1);
+    assert_retained_color_sibling(&source, &report);
     let [diagnostic] = report.diagnostics() else {
         panic!("over-limit timing calculation must produce one diagnostic");
     };
     assert_eq!(diagnostic.error().code(), CssErrorCode::NestingLimit);
     assert_eq!(diagnostic.action(), CssRecoveryAction::StopAtNestingLimit);
+    assert_ascii_position(diagnostic.error().position(), 1_301);
+    assert_ascii_position(diagnostic.span().start(), 0);
+    assert_ascii_position(diagnostic.span().end(), 1_566);
+    let ErrorKind::NestingLimit(detail) = diagnostic.error().kind() else {
+        panic!("depth 257 must expose typed nesting-limit detail");
+    };
+    assert_eq!(detail.limit(), 256);
+    assert_eq!(detail.enclosing_production().as_str(), "css.declaration");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(&source)
+            .expect_err("strict validation rejects depth 257");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
 }

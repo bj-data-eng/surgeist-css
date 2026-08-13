@@ -220,7 +220,7 @@ fn blur_hue_rotate_and_drop_shadow_expose_distinct_typed_payloads() {
 }
 
 #[test]
-fn box_shadow_accepts_component_orders_and_rejects_interleaved_lengths() {
+fn box_shadow_accepts_component_orders_and_rejects_invalid_components() {
     let report = parse_style_attribute(concat!(
         "box-shadow: red inset -1px 2px 3px -4px, ",
         "5px 6px blue inset, inset 7px 8px; color: red"
@@ -245,7 +245,6 @@ fn box_shadow_accepts_component_orders_and_rejects_interleaved_lengths() {
     assert!(shadows.shadows()[1].color().is_some());
 
     for value in [
-        "1px red 2px",
         "1px 2px -3px",
         "1px 2px red blue",
         "inset inset 1px 2px",
@@ -258,6 +257,74 @@ fn box_shadow_accepts_component_orders_and_rejects_interleaved_lengths() {
 }
 
 #[test]
+fn box_shadow_accepts_interleaved_color_between_offsets() {
+    let source = "box-shadow: 1px red 2px; color: blue";
+    let report = parse_style_attribute(source);
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::BoxShadow(value) = report.syntax()[0]
+        .known()
+        .expect("known box-shadow declaration")
+        .property_value()
+        .expect("ordinary box-shadow value")
+    else {
+        panic!("expected box-shadow");
+    };
+    let CssBoxShadow::Shadows(shadows) = value.current() else {
+        panic!("expected shadow list");
+    };
+    let [shadow] = shadows.shadows() else {
+        panic!("expected one shadow");
+    };
+    assert!(matches!(shadow.offset_x(), CssLength::Px(value) if value.value() == 1.0));
+    assert!(matches!(shadow.offset_y(), CssLength::Px(value) if value.value() == 2.0));
+    let color = shadow
+        .color()
+        .and_then(|color| color.as_rgba())
+        .expect("red interleaved color");
+    assert_eq!((color.red(), color.green(), color.blue()), (255, 0, 0));
+
+    #[cfg(feature = "app-strict")]
+    assert_eq!(
+        surgeist_css::validate_style_attribute(source),
+        Ok(report.syntax().clone())
+    );
+}
+
+#[test]
+fn drop_shadow_accepts_interleaved_color_between_offsets() {
+    let source = "filter: drop-shadow(1px red 2px); color: blue";
+    let report = parse_style_attribute(source);
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Filter(value) = report.syntax()[0]
+        .known()
+        .expect("known filter declaration")
+        .property_value()
+        .expect("ordinary filter value")
+    else {
+        panic!("expected filter");
+    };
+    let CssFilterValue::Functions(functions) = value.current() else {
+        panic!("expected current filter function list");
+    };
+    let [CssFilterFunctionValue::DropShadow(shadow)] = functions.functions() else {
+        panic!("expected one typed drop-shadow");
+    };
+    assert!(matches!(shadow.offset_x(), CssLength::Px(value) if value.value() == 1.0));
+    assert!(matches!(shadow.offset_y(), CssLength::Px(value) if value.value() == 2.0));
+    let color = shadow
+        .color()
+        .and_then(|color| color.as_rgba())
+        .expect("red interleaved color");
+    assert_eq!((color.red(), color.green(), color.blue()), (255, 0, 0));
+
+    #[cfg(feature = "app-strict")]
+    assert_eq!(
+        surgeist_css::validate_style_attribute(source),
+        Ok(report.syntax().clone())
+    );
+}
+
+#[test]
 fn filter_lists_reject_empty_unknown_repeated_and_trailing_mutations() {
     for value in [
         "none blur(1px)",
@@ -266,7 +333,6 @@ fn filter_lists_reject_empty_unknown_repeated_and_trailing_mutations() {
         "hue-rotate(1deg, 2deg)",
         "drop-shadow()",
         "drop-shadow(red red 1px 2px)",
-        "drop-shadow(1px red 2px)",
         "unknown(1)",
         "blur(1px), opacity(1)",
         "blur(1px) trailing",

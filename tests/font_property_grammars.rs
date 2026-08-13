@@ -298,3 +298,17 @@ fn font_shorthand_retains_ambiguous_normal_before_explicit_style() {
         assert_eq!(explicit.style(), Some(*expected_style));
     }
 }
+
+#[test]
+fn opentype_tags_and_indices_enforce_ascii_and_nonnegative_domains() {
+    let report = parse_style_attribute(
+        "font-feature-settings: \"éabc\"; font-feature-settings: \"kern\" -1; color: red",
+    );
+
+    assert_eq!(report.syntax().len(), 1);
+    assert_eq!(report.diagnostics().len(), 2);
+    assert_eq!(
+        report.syntax()[0].known().unwrap().property(),
+        CssKnownProperty::Color,
+    );
+}

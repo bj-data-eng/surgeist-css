@@ -2,8 +2,8 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssErrorCode, CssImportance, CssKnownProperty, CssKnownPropertyValueRef, CssRule, ErrorKind,
-    parse_sheet, parse_style_attribute,
+    CssErrorCode, CssImportance, CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction,
+    CssRule, ErrorKind, parse_sheet, parse_style_attribute,
 };
 
 macro_rules! assert_property_specific_css {
@@ -644,5 +644,59 @@ fn typed_length_calculations_are_accepted_by_the_exact_current_consumer_set() {
             "later function grammar changed: {source}"
         );
         assert!(report.syntax().is_empty(), "{source}");
+    }
+}
+
+#[test]
+fn deferred_basic_shape_math_drops_only_the_invalid_declaration() {
+    for shape in [
+        "circle(calc((1px + 2%) * 3))",
+        "ellipse(calc((1px + 2%) * 3) 10px)",
+        "inset(calc((1px + 2%) * 3))",
+    ] {
+        let invalid = format!("clip-path: {shape};");
+        let source = format!("{invalid} color: red");
+        let report = parse_style_attribute(&source);
+
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        assert_eq!(
+            report.syntax()[0].known().unwrap().property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{source}: expected one recovered declaration");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue,
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.action(),
+            CssRecoveryAction::DropDeclaration,
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.span().start().byte_offset().value(),
+            0,
+            "{source}"
+        );
+        assert_eq!(
+            diagnostic.span().end().byte_offset().value(),
+            invalid.len(),
+            "{source}",
+        );
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("{source}: expected property-value detail");
+        };
+        assert_eq!(detail.property(), CssKnownProperty::ClipPath, "{source}");
+
+        #[cfg(feature = "app-strict")]
+        {
+            let failure = surgeist_css::validate_style_attribute(&source)
+                .expect_err("recovered basic-shape math must fail strict validation");
+            assert_eq!(failure.diagnostics(), report.diagnostics(), "{source}");
+        }
     }
 }

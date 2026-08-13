@@ -386,3 +386,29 @@ through the existing effective typed accessors. Invalid descriptor occurrences
 still recover at the descriptor boundary and do not erase an earlier or later
 valid occurrence. Any further C01-oracle contradiction or public-contract break
 stops again for a new P01 reconciliation.
+
+## P01.12 C09 Imported-Grammar Source Reconciliation
+
+C08 is published and read back at
+`129de7267726277b73d2cc15f1168c44c34ffcbc`. JIT discovery for I02-C09 proved
+that the selected `X-VALUES4` URL cannot own the Conditional 3
+`<general-enclosed>` delta allocated to C09. The immutable 12 March 2024 Values
+4 Working Draft contains no `<general-enclosed>` production; csswg-drafts added
+the generic boolean and `<general-enclosed>` grammar on 17 June 2024 in commit
+`720ea2863696971ea6a6744e0f23acbb3e6936bd`, file
+`css-values-4/Overview.bs`.
+
+P01 therefore preserves the stable `X-VALUES4` source identity and Surgeist
+extension tier while replacing its non-owning dated URL with that exact
+repository revision and path. The selected production is only
+`<general-enclosed>` as imported by the dated Conditional 3 grammar; no other
+editor-draft Values 4 syntax enters the profile. This is a provenance correction,
+not a moving-source exception: the commit and path are immutable and the
+implementation remains bounded by the reviewed I02 atomic ledger row.
+
+The correction changes no frozen I01 parser behavior, public contract, fixture,
+official Snapshot source, dependency, feature, or repository boundary. C09 must
+prove the exact function/parenthesis balanced-token grammar, authored retention,
+and malformed-condition recovery through public parser behavior. Any need to
+consume later boolean grammar beyond this one imported production, or any
+further unresolved source ownership, stops again for P01 reconciliation.

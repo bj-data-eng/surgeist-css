@@ -4,11 +4,11 @@
 
 This sequence implements the reviewed P01-I02 specification at
 `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
-`be98886dc9a957a18f1dd7553b88ef8396c211001c89902de23ca5802443dc70`,
+`b8767d626e2ff3aebf4aeea526518778bb00cb001a1da24fa546d56f2314718a`,
 and its official ledger at SHA-256
-`09ecbf2dcaafbd402b24642f1244ce0be3568fd8a85b993c0218e2e7c0deac6d`.
+`746e8fe722eea56c2b6d3d8072480a91fb2473a6c25296cd466556f4bef51ced`.
 It is subordinate to reviewed P01 semantic SHA-256
-`8e865db87cc4f68b91319664ce19ee63bcbd8df4a75943880539d11cbfadfc89`.
+`e7219f734010db9e5772f587c6a394f5eef3020c0512240229f5e5f77829d986`.
 The published I01 base is
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; planning commits after that base
 belong to the I02 candidate range.
@@ -196,11 +196,13 @@ published/read-back C08 SHA.
   ordering/imports, 7, 10, 11 findings 2.4/2.7 and conditional 2.1, and 12;
   ledger media/conditional/Cascade rows.
 - **Prerequisite/entry:** C02 inventories and C03 numeric/ratio domains are
-  published/read back; dated imported-grammar bindings remain unchanged.
+  published/read back; P01.12 reconciles the imported `<general-enclosed>`
+  binding to immutable `X-VALUES4` repository provenance without importing its
+  sibling boolean grammar.
 
 Close findings 2.4 and 2.7 and the Conditional portion of 2.1. Implement complete
 MQ3 types/features/defined-false behavior, `@supports`, dated
-general-enclosed, atomic Cascade 4/5 import clauses, and the exact layer/import/
+`general-enclosed`, atomic Cascade 4/5 import clauses, and the exact layer/import/
 namespace/body phase machine. Exercise all rule contexts, comma recovery,
 nested groups, and source-order diagnostics.
 

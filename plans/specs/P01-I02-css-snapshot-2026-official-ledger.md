@@ -174,9 +174,11 @@ aliases are part of the named row rather than another row.
 + 15 media type/feature + 97 shared value/function = 167
 ```
 
-Conditional 3's imported `general-enclosed` grammar is frozen to
-`X-VALUES4` at <https://www.w3.org/TR/2024/WD-css-values-4-20240312/> as the
-atomic `ext.supports.general-enclosed` delta. The Conditional 3 `@media` shell
+Conditional 3's imported `general-enclosed` grammar is frozen to `X-VALUES4` at
+csswg-drafts commit `720ea2863696971ea6a6744e0f23acbb3e6936bd`, file
+`css-values-4/Overview.bs`, as the atomic `ext.supports.general-enclosed` delta.
+The selected slice is only `<general-enclosed>`; the adjacent generic boolean
+grammar is not another ledger row. The Conditional 3 `@media` shell
 and `baseline.rule.media` record bind to `O-CONDITIONAL3`. Their imported
 `<media-query-list>` grammar binds to the selected `O-MEDIA3` core plus the
 separately catalogued `R-MEDIA4` deltas, not a moving Media Queries reference.

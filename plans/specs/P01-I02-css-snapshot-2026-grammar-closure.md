@@ -4,9 +4,9 @@
 
 This is the JIT implementation contract for `P01-I02` in `surgeist-css`.
 It is subordinate to the reviewed P01 program at semantic SHA-256
-`fc53da090fdef779582bb4480d3e7943816470977af6abefe3468b2c10d3e064`
-and incorporates its I02-entry reconciliation. The initiative base is the
-published, fetchable I01 candidate
+`e7219f734010db9e5772f587c6a394f5eef3020c0512240229f5e5f77829d986`
+and incorporates its I02-entry and source-contradiction reconciliations. The
+initiative base is the published, fetchable I01 candidate
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; the P01 reconciliation commit
 `537b97b46e0ab8625413b005f74eb79eeaa0ac64` is planning-only evidence and is
 also part of the I02 implementation range.
@@ -355,7 +355,7 @@ extension.
 | `X-CONDITIONAL5` | Surgeist extension | <https://www.w3.org/TR/2025/WD-css-conditional-5-20251030/> |
 | `X-CASCADE6` | Surgeist extension | <https://www.w3.org/TR/2024/WD-css-cascade-6-20240906/> |
 | `X-PSEUDO4` | Surgeist extension | <https://www.w3.org/TR/2025/WD-css-pseudo-4-20250627/> |
-| `X-VALUES4` | Surgeist extension | <https://www.w3.org/TR/2024/WD-css-values-4-20240312/> |
+| `X-VALUES4` | Surgeist extension | `720ea2863696971ea6a6744e0f23acbb3e6936bd:css-values-4/Overview.bs` |
 | `X-MEDIA5` | Surgeist extension | <https://www.w3.org/TR/2026/WD-mediaqueries-5-20260219/> |
 | `X-OVERFLOW3` | Surgeist extension | <https://www.w3.org/TR/2025/WD-css-overflow-3-20251007/> |
 | `X-SIZING4` | Surgeist extension | <https://www.w3.org/TR/2021/WD-css-sizing-4-20210520/> |
@@ -383,7 +383,7 @@ provenance for container-query or style-query syntax.
 
 The immutable official coverage universe is
 `plans/specs/P01-I02-css-snapshot-2026-official-ledger.md`, SHA-256
-`09ecbf2dcaafbd402b24642f1244ce0be3568fd8a85b993c0218e2e7c0deac6d`.
+`746e8fe722eea56c2b6d3d8072480a91fb2473a6c25296cd466556f4bef51ced`.
 It enumerates exactly 162 property units, 167 non-property units, the one
 normative legacy-shorthand alias, all supersession mappings, and the complete
 selected exclusion remainder. The implementation may consume its stable IDs in
@@ -453,8 +453,10 @@ top-level only. Phase transitions occur only after successful rule parsing.
 specification order. The official Cascade 4 core, reliable Cascade 5 layer
 delta, and reliable Cascade 5 supports delta are distinct atomic catalog rows.
 The supports clause shares the `@supports` condition parser.
-Conditional 3's imported `general-enclosed` grammar is bound to the dated
-`X-VALUES4` source in section 4.3 as its own atomic delta. The `@media` rule
+Conditional 3's imported `general-enclosed` grammar is bound to the immutable
+`X-VALUES4` repository revision and path in section 4.3 as its own atomic delta.
+That revision contributes only `<general-enclosed>`; its sibling generic boolean
+grammar is not imported into this profile. The `@media` rule
 shell and `baseline.rule.media` record bind to `O-CONDITIONAL3`; their imported
 `<media-query-list>` grammar binds to the `O-MEDIA3` core plus separately
 catalogued `R-MEDIA4` deltas. No moving imported URL becomes conformance input.

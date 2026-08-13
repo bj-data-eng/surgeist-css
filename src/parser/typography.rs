@@ -283,6 +283,7 @@ pub(super) fn parse_font<'i, 't>(
     let mut variant = None;
     let mut weight = None;
     let mut stretch = None;
+    let mut normal_count = 0;
     let size;
 
     loop {
@@ -301,21 +302,14 @@ pub(super) fn parse_font<'i, 't>(
 
         if let Ok(()) = input.try_parse(|input| {
             input.expect_ident_matching("normal").map_err(basic)?;
-            if style.is_none() {
-                style = Some(CssFontStyle::Normal);
-            } else if variant.is_none() {
-                variant = Some(CssFontVariant::Normal);
-            } else if weight.is_none() {
-                weight = Some(CssFontWeight::Normal);
-            } else if stretch.is_none() {
-                stretch = Some(CssFontStretch::Normal);
-            } else {
+            if normal_count == 4 {
                 return Err(unsupported_value(
                     input,
                     None,
                     "duplicate font normal component",
                 ));
             }
+            normal_count += 1;
             Ok(())
         }) {
             continue;
@@ -351,6 +345,24 @@ pub(super) fn parse_font<'i, 't>(
             None,
             "unsupported font shorthand component before size",
         ));
+    }
+
+    for _ in 0..normal_count {
+        if style.is_none() {
+            style = Some(CssFontStyle::Normal);
+        } else if variant.is_none() {
+            variant = Some(CssFontVariant::Normal);
+        } else if weight.is_none() {
+            weight = Some(CssFontWeight::Normal);
+        } else if stretch.is_none() {
+            stretch = Some(CssFontStretch::Normal);
+        } else {
+            return Err(unsupported_value(
+                input,
+                None,
+                "duplicate font normal component",
+            ));
+        }
     }
 
     let line_height = if input.try_parse(|input| input.expect_delim('/')).is_ok() {

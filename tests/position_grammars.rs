@@ -2,10 +2,40 @@ use surgeist_css::{
     CssBackgroundRepeat, CssBackgroundRepeatStyle, CssBackgroundSize, CssCalcLength, CssErrorCode,
     CssHorizontalPosition, CssHorizontalPositionKeyword, CssImageLayer, CssKnownProperty,
     CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthUnit, CssMaskLayer,
-    CssMaskList, CssPosition, CssPositionComponent, CssPositionOffset, CssRecoveryAction,
-    CssTokenKind, CssUrl, CssVerticalPosition, CssVerticalPositionKeyword, ErrorKind,
-    parse_style_attribute,
+    CssMaskList, CssObjectPosition, CssPosition, CssPositionComponent, CssPositionOffset,
+    CssRecoveryAction, CssTokenKind, CssTransformOrigin, CssTransformOriginZ, CssUrl,
+    CssVerticalPosition, CssVerticalPositionKeyword, ErrorKind, parse_style_attribute,
 };
+
+fn object_position(value: &str) -> CssObjectPosition {
+    let source = format!("object-position: {value}");
+    let report = parse_style_attribute(&source);
+    assert!(report.is_clean(), "{source}: {:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::ObjectPosition(value) = report.syntax()[0]
+        .known()
+        .expect("known object-position declaration")
+        .property_value()
+        .expect("ordinary object-position")
+    else {
+        panic!("expected object-position value");
+    };
+    value.position().clone()
+}
+
+fn transform_origin(value: &str) -> CssTransformOrigin {
+    let source = format!("transform-origin: {value}");
+    let report = parse_style_attribute(&source);
+    assert!(report.is_clean(), "{source}: {:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::TransformOrigin(value) = report.syntax()[0]
+        .known()
+        .expect("known transform-origin declaration")
+        .property_value()
+        .expect("ordinary transform-origin")
+    else {
+        panic!("expected transform-origin value");
+    };
+    value.origin().clone()
+}
 
 fn assert_generic_position_accepted(value: &str) {
     let source = format!("mask-position: {value}");
@@ -178,6 +208,36 @@ fn object_position_parser_preserves_ordinary_global_and_substitution_branches() 
 }
 
 #[test]
+fn object_position_exposes_the_exact_generic_position_model() {
+    let position = object_position("right 5% bottom 2px");
+    assert!(matches!(
+        position.value().horizontal(),
+        CssHorizontalPosition::RightOffset(offset)
+            if matches!(offset.value(), CssLength::Percent(value) if value.value() == 5.0)
+    ));
+    assert!(matches!(
+        position.value().vertical(),
+        CssVerticalPosition::BottomOffset(offset)
+            if matches!(offset.value(), CssLength::Px(value) if value.value() == 2.0)
+    ));
+
+    for value in [
+        "left",
+        "top",
+        "25%",
+        "left top",
+        "top left",
+        "left 25%",
+        "25% top",
+        "25% 75%",
+        "left 10px bottom 20%",
+        "bottom 20% left 10px",
+    ] {
+        let _ = object_position(value);
+    }
+}
+
+#[test]
 fn transform_origin_accepts_every_directed_two_dimension_and_z_branch() {
     for value in [
         "left",
@@ -214,6 +274,75 @@ fn transform_origin_accepts_every_directed_two_dimension_and_z_branch() {
             value.as_css(),
             source.trim_start_matches("transform-origin: ")
         );
+    }
+}
+
+#[test]
+fn transform_origin_exposes_the_directed_two_dimension_and_optional_z_split() {
+    for value in ["left 50px", "center 50px"] {
+        let origin = transform_origin(value);
+        assert!(origin.z().is_none(), "{value}");
+        assert!(matches!(
+            origin.vertical(),
+            CssVerticalPosition::Offset(offset)
+                if matches!(offset.value(), CssLength::Px(value) if value.value() == 50.0)
+        ));
+    }
+
+    for (value, vertical) in [
+        ("top 50px", CssVerticalPositionKeyword::Top),
+        ("bottom 50px", CssVerticalPositionKeyword::Bottom),
+    ] {
+        let origin = transform_origin(value);
+        assert!(matches!(origin.horizontal(), CssHorizontalPosition::Center));
+        assert!(matches!(
+            (origin.vertical(), vertical),
+            (CssVerticalPosition::Top, CssVerticalPositionKeyword::Top)
+                | (
+                    CssVerticalPosition::Bottom,
+                    CssVerticalPositionKeyword::Bottom
+                )
+        ));
+        assert!(matches!(
+            origin.z().map(CssTransformOriginZ::value),
+            Some(CssLength::Px(length)) if length.value() == 50.0
+        ));
+    }
+
+    let origin = transform_origin("left top calc(1px * 2)");
+    assert!(matches!(origin.horizontal(), CssHorizontalPosition::Left));
+    assert!(matches!(origin.vertical(), CssVerticalPosition::Top));
+    assert!(matches!(
+        origin.z().map(CssTransformOriginZ::value),
+        Some(CssLength::Calc(CssCalcLength::Typed(calculation)))
+            if calculation.result_type() == surgeist_css::CssCalculationType::Length
+    ));
+}
+
+#[test]
+fn transform_origin_z_construction_accepts_only_authored_lengths() {
+    for value in [
+        CssLength::try_px(10.0).expect("finite px"),
+        CssLength::try_dimension(-2.0, CssLengthUnit::Em).expect("finite dimension"),
+        CssLength::Zero,
+        CssLength::Calc(CssCalcLength::Typed(
+            CssLengthCalculation::try_dimension(2.0, CssLengthUnit::Px)
+                .expect("finite length calculation"),
+        )),
+    ] {
+        let z = CssTransformOriginZ::try_new(value.clone()).expect("transform z length");
+        assert_eq!(z.value(), &value);
+    }
+
+    for value in [
+        CssLength::try_percent(25.0).expect("finite percentage"),
+        CssLength::Calc(CssCalcLength::Typed(
+            CssLengthCalculation::try_percentage(40.0).expect("finite percentage calculation"),
+        )),
+        CssLength::Auto,
+        CssLength::Normal,
+    ] {
+        assert!(CssTransformOriginZ::try_new(value).is_none());
     }
 }
 

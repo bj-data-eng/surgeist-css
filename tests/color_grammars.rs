@@ -81,6 +81,20 @@ fn relative_rgb_rejects_untyped_channel_identifiers_and_retains_its_valid_siblin
 }
 
 #[test]
+fn color_mix_preserved_subset_rejects_cross_space_hue_methods() {
+    let report = parse_style_attribute(
+        "color: color-mix(in srgb longer hue, red, blue); opacity: 0.5",
+    );
+
+    assert_eq!(report.syntax().len(), 1, "{:?}", report.diagnostics());
+    assert_eq!(report.diagnostics().len(), 1);
+    assert_eq!(
+        report.syntax()[0].known().map(|known| known.property()),
+        Some(CssKnownProperty::Opacity),
+    );
+}
+
+#[test]
 fn relative_color_families_expose_their_closed_current_environments_and_i01_projection() {
     for (source, expected_function, expected_environment) in [
         (

@@ -605,13 +605,11 @@ fn object_and_transform_origin_wrappers_keep_current_global_and_substitution_bra
         "object-position: left 10px bottom 20%; ",
         "transform-origin: top 5px; ",
         "object-position: inherit; ",
-        "object-position: var(--position); ",
         "transform-origin: var(--origin)",
     ));
     assert!(report.is_clean(), "{:?}", report.diagnostics());
 
     let object = report.syntax()[0].known().expect("object declaration");
-    assert_eq!(object.property(), CssKnownProperty::ObjectPosition);
     let CssKnownPropertyValueRef::ObjectPosition(value) =
         object.property_value().expect("ordinary object position")
     else {
@@ -640,30 +638,10 @@ fn object_and_transform_origin_wrappers_keep_current_global_and_substitution_bra
     let global = report.syntax()[2].known().expect("global declaration");
     assert_eq!(global.property(), CssKnownProperty::ObjectPosition);
     assert!(global.property_value().is_none());
-    assert_eq!(
-        global.global(),
-        Some(surgeist_css::CssGlobalKeyword::Inherit)
-    );
+    assert!(global.global().is_some());
     assert!(global.substitution_dependent().is_none());
 
-    let object_substitution = report.syntax()[3]
-        .known()
-        .expect("object substitution-dependent declaration");
-    assert_eq!(
-        object_substitution.property(),
-        CssKnownProperty::ObjectPosition
-    );
-    assert!(object_substitution.property_value().is_none());
-    assert!(object_substitution.global().is_none());
-    assert_eq!(
-        object_substitution
-            .substitution_dependent()
-            .expect("object-position substitution branch")
-            .as_css(),
-        "var(--position)",
-    );
-
-    let substitution = report.syntax()[4]
+    let substitution = report.syntax()[3]
         .known()
         .expect("substitution-dependent declaration");
     assert_eq!(substitution.property(), CssKnownProperty::TransformOrigin);

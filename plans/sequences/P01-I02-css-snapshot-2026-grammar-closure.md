@@ -4,11 +4,11 @@
 
 This sequence implements the reviewed P01-I02 specification at
 `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
-`b7b8aa699c05943ab3972087e8e64c91b887ad1f7b27114ec8014dd7e7c1005a`,
+`be98886dc9a957a18f1dd7553b88ef8396c211001c89902de23ca5802443dc70`,
 and its official ledger at SHA-256
 `09ecbf2dcaafbd402b24642f1244ce0be3568fd8a85b993c0218e2e7c0deac6d`.
 It is subordinate to reviewed P01 semantic SHA-256
-`fc53da090fdef779582bb4480d3e7943816470977af6abefe3468b2c10d3e064`.
+`8e865db87cc4f68b91319664ce19ee63bcbd8df4a75943880539d11cbfadfc89`.
 The published I01 base is
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; planning commits after that base
 belong to the I02 candidate range.
@@ -17,10 +17,11 @@ Only the next cycle plan may be authored. Entry to each later cycle requires the
 prior cycle's reviewed, verified, published/read-back handoff and the
 user-required clean, process-free post-cycle state. C14 additionally requires a
 separate exact-range initiative review before its publication. No grammar task
-begins before C01 publication. Except for the exact seven-scenario
-source-backed C07 oracle correction reviewed in specification section 3.3, a
-need for a second breaking cycle, another frozen I01 semantic change, unsafe,
-external acquisition, or root/sibling edit stops and returns to P01. Exact
+begins before C01 publication. Except for the exact seven-scenario C07 and
+one-scenario C08 source-backed oracle corrections reviewed in specification
+sections 3.3-3.4, a need for a second breaking cycle, another frozen I01
+semantic change, unsafe, external acquisition, or root/sibling edit stops and
+returns to P01. Exact
 commands and gate choreography belong to each JIT cycle plan and the canonical
 Surgeist workflow.
 
@@ -167,8 +168,11 @@ SHA.
 
 - **Owner/source:** `surgeist-css`; specification sections 4.2-4.4, 5
   descriptors, 8.2 typography, 9-10, 11 finding 2.16, and 12; ledger Fonts rows.
-- **Prerequisite/entry:** C03 published/read back; numeric/range types and atomic
-  descriptor/property inventories are clean.
+- **Prerequisite/entry:** C07 published/read back at
+  `21e33f121fd414c55bb229f0eab25ab41cfa7325`; numeric/range types and atomic
+  descriptor/property inventories are clean; the source-backed C07 fixture
+  baseline is SHA-256
+  `99bbb897710969949d7b596d14fbd352d5d3121a6c4cf663b8ca100154057f8b`.
 
 Close finding 2.16; complete four-ASCII OpenType tags, non-negative feature
 values, family/global boundaries, official font properties, Fonts 3 descriptors,
@@ -179,7 +183,10 @@ sets. Preserve selected Fonts 4 descriptor deltas and recognized-unsupported
 observable; its authored input and every other fixture row remain unchanged.
 
 Exit: Fonts 3 property/descriptor/value rows are Complete with exact public and
-recovery vectors; Fonts 4 rows remain truthfully classified. **Handoff:** exact
+recovery vectors; Fonts 4 rows remain truthfully classified; direct review
+proves exactly the section 3.4 row changed and the replacement fixture is
+SHA-256 `67e69813d808ffda40e7c159fde719fbadd0447f8e4105788b0bb593931fac89`.
+**Handoff:** both fixture digests and the exact one-row diff evidence; exact
 Fonts 3/4 dispositions, public/migration evidence, reviews/matrix/cleanup, and
 published/read-back C08 SHA.
 

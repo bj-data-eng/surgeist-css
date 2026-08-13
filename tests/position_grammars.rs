@@ -1,8 +1,10 @@
 use surgeist_css::{
-    CssCalcLength, CssErrorCode, CssHorizontalPosition, CssHorizontalPositionKeyword,
-    CssKnownProperty, CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthUnit,
-    CssPositionComponent, CssPositionOffset, CssRecoveryAction, CssVerticalPosition,
-    CssVerticalPositionKeyword, parse_style_attribute,
+    CssBackgroundRepeat, CssBackgroundRepeatStyle, CssBackgroundSize, CssCalcLength, CssErrorCode,
+    CssHorizontalPosition, CssHorizontalPositionKeyword, CssImageLayer, CssKnownProperty,
+    CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthUnit, CssMaskLayer,
+    CssMaskList, CssPosition, CssPositionComponent, CssPositionOffset, CssRecoveryAction,
+    CssTokenKind, CssUrl, CssVerticalPosition, CssVerticalPositionKeyword, ErrorKind,
+    parse_style_attribute,
 };
 
 fn assert_generic_position_accepted(value: &str) {
@@ -310,6 +312,107 @@ fn background_accepts_three_components_that_mask_rejects() {
                 .expect_err("strict validation rejects mask-only three-component syntax");
             assert_eq!(failure.diagnostics(), mask.diagnostics(), "{mask_source}");
         }
+    }
+}
+
+#[test]
+fn mask_shorthand_rejects_a_three_component_position_and_recovers_at_the_declaration() {
+    let source = "mask: url(mask.png) left 10px top / contain no-repeat; color: red";
+    let report = parse_style_attribute(source);
+
+    assert_eq!(report.syntax().len(), 1);
+    assert_eq!(
+        report.syntax()[0]
+            .known()
+            .expect("retained color declaration")
+            .property(),
+        CssKnownProperty::Color,
+    );
+    let [diagnostic] = report.diagnostics() else {
+        panic!("three-component mask position must produce one diagnostic");
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    let responsible_offset = source.find("left").expect("invalid position start");
+    assert_eq!(
+        diagnostic.error().position().byte_offset().value(),
+        responsible_offset,
+    );
+    assert_eq!(diagnostic.error().position().line().value(), 0);
+    assert_eq!(
+        diagnostic.error().position().column().value() as usize,
+        responsible_offset,
+    );
+    assert_eq!(diagnostic.span().start().byte_offset().value(), 0);
+    assert_eq!(
+        diagnostic.span().end().byte_offset().value(),
+        source.find(';').expect("mask declaration semicolon") + 1,
+    );
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected structured mask property-value error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::Mask);
+    let encountered = detail.encountered().expect("invalid position start token");
+    assert_eq!(encountered.kind(), CssTokenKind::Ident);
+    assert_eq!(encountered.authored(), "left");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered mask shorthand");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
+fn mask_shorthand_preserves_valid_image_position_size_and_repeat_components() {
+    let source = "mask: url(mask.png) center / contain no-repeat";
+    let report = parse_style_attribute(source);
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let [declaration] = report.syntax().as_slice() else {
+        panic!("valid mask shorthand must retain one declaration");
+    };
+    let known = declaration.known().expect("known mask declaration");
+    assert_eq!(known.property(), CssKnownProperty::Mask);
+    let CssKnownPropertyValueRef::Mask(value) = known
+        .property_value()
+        .expect("ordinary mask shorthand value")
+    else {
+        panic!("expected typed mask shorthand value");
+    };
+    assert_eq!(value.as_css(), "url(mask.png) center / contain no-repeat");
+
+    let expected = CssMaskList::try_new(vec![
+        CssMaskLayer::try_new(
+            Some(CssImageLayer::Url(
+                CssUrl::try_new("mask.png").expect("nonempty URL"),
+            )),
+            Some(
+                CssPosition::try_new(vec![CssPositionComponent::Horizontal(
+                    CssHorizontalPositionKeyword::Center,
+                )])
+                .expect("valid center position"),
+            ),
+            Some(CssBackgroundSize::Contain),
+            Some(CssBackgroundRepeat::Axes {
+                x: CssBackgroundRepeatStyle::NoRepeat,
+                y: CssBackgroundRepeatStyle::NoRepeat,
+            }),
+        )
+        .expect("nonempty mask layer"),
+    ])
+    .expect("nonempty mask list");
+    assert_eq!(value.i01_subset(), Some(&expected));
+
+    #[cfg(feature = "app-strict")]
+    {
+        let strict = surgeist_css::validate_style_attribute(source)
+            .expect("strict validation accepts valid mask shorthand");
+        assert_eq!(strict, report.syntax().clone());
     }
 }
 

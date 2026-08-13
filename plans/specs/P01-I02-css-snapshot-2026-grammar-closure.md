@@ -397,7 +397,8 @@ At initiative completion:
   exclusion, never both;
 - preserved extensions are `Complete`, `Partial`, or
   `RecognizedUnsupported` truthfully, with exact subset/remainder or diagnostic
-  identity; no preserved I01 accepted vector regresses;
+  identity; except for the exact seven section 3.3 source corrections, no
+  preserved I01 accepted vector regresses;
 - unknown spellings remain distinct from recognized unsupported spellings;
 - exact I01 baseline tests become subset-preservation tests rather than replacing
   `219`, `179`, and `40` with ungrounded new totals.

@@ -118,6 +118,7 @@ pub enum CssRule {
     Keyframes(CssKeyframesRule),
     Style(CssStyleRule),
     Media(CssMediaRule),
+    Supports(CssSupportsRule),
     Container(CssContainerRule),
     Scope(CssScopeRule),
 }
@@ -1495,6 +1496,199 @@ impl CssMediaRule {
     }
 }
 
+/// A parser-produced Conditional Rules 3 `@supports` group rule.
+///
+/// The condition and children preserve authored syntax only. This value does
+/// not evaluate support, match selectors, apply cascade, or resolve values.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssSupportsRule {
+    condition: CssSupportsCondition,
+    rules: Vec<CssRule>,
+    position: CssSourcePosition,
+}
+
+impl CssSupportsRule {
+    #[must_use]
+    pub(crate) const fn new(
+        condition: CssSupportsCondition,
+        rules: Vec<CssRule>,
+        position: CssSourcePosition,
+    ) -> Self {
+        Self {
+            condition,
+            rules,
+            position,
+        }
+    }
+
+    #[must_use]
+    pub const fn condition(&self) -> &CssSupportsCondition {
+        &self.condition
+    }
+
+    #[must_use]
+    pub fn rules(&self) -> &[CssRule] {
+        &self.rules
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+}
+
+/// One positioned authored supports condition.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssSupportsCondition {
+    kind: CssSupportsConditionKind,
+    position: CssSourcePosition,
+}
+
+impl CssSupportsCondition {
+    #[must_use]
+    pub(crate) const fn new(kind: CssSupportsConditionKind, position: CssSourcePosition) -> Self {
+        Self { kind, position }
+    }
+
+    #[must_use]
+    pub const fn kind(&self) -> &CssSupportsConditionKind {
+        &self.kind
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+
+    pub(crate) fn into_kind(self) -> CssSupportsConditionKind {
+        self.kind
+    }
+}
+
+/// The complete authored shape of one supports condition.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq)]
+pub enum CssSupportsConditionKind {
+    Declaration(Box<CssSupportsDeclaration>),
+    Selector(CssSelector),
+    GeneralEnclosed(CssGeneralEnclosed),
+    Not(Box<CssSupportsCondition>),
+    And(CssSupportsConditionList),
+    Or(CssSupportsConditionList),
+}
+
+/// A checked list used by `and` and `or` supports conditions.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssSupportsConditionList {
+    conditions: Vec<CssSupportsCondition>,
+}
+
+impl CssSupportsConditionList {
+    #[must_use]
+    pub fn try_new(conditions: Vec<CssSupportsCondition>) -> Option<Self> {
+        (conditions.len() >= 2).then_some(Self { conditions })
+    }
+
+    #[must_use]
+    pub(crate) fn new(conditions: Vec<CssSupportsCondition>) -> Self {
+        debug_assert!(conditions.len() >= 2);
+        Self { conditions }
+    }
+
+    #[must_use]
+    pub fn conditions(&self) -> &[CssSupportsCondition] {
+        &self.conditions
+    }
+}
+
+/// One syntactically valid declaration test inside a supports condition.
+///
+/// Unknown properties and values outside the current property grammar remain
+/// valid authored tests. `known()` is populated only when the existing schema
+/// parser can provide its property-coupled typed declaration view.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssSupportsDeclaration {
+    authored: String,
+    property: String,
+    importance: CssImportance,
+    known: Option<CssKnownDeclaration>,
+    position: CssSourcePosition,
+}
+
+impl CssSupportsDeclaration {
+    #[must_use]
+    pub(crate) fn new(
+        authored: impl Into<String>,
+        property: impl Into<String>,
+        importance: CssImportance,
+        known: Option<CssKnownDeclaration>,
+        position: CssSourcePosition,
+    ) -> Self {
+        let authored = authored.into();
+        let property = property.into();
+        debug_assert!(!authored.is_empty());
+        debug_assert!(!property.is_empty());
+        Self {
+            authored,
+            property,
+            importance,
+            known,
+            position,
+        }
+    }
+
+    #[must_use]
+    pub fn authored(&self) -> &str {
+        &self.authored
+    }
+
+    #[must_use]
+    pub fn property(&self) -> &str {
+        &self.property
+    }
+
+    #[must_use]
+    pub const fn importance(&self) -> CssImportance {
+        self.importance
+    }
+
+    #[must_use]
+    pub const fn known(&self) -> Option<&CssKnownDeclaration> {
+        self.known.as_ref()
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+}
+
+/// One exact balanced unsupported function or parenthesis condition unit.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssGeneralEnclosed {
+    authored: String,
+    position: CssSourcePosition,
+}
+
+impl CssGeneralEnclosed {
+    #[must_use]
+    pub(crate) fn new(authored: impl Into<String>, position: CssSourcePosition) -> Self {
+        let authored = authored.into();
+        debug_assert!(!authored.is_empty());
+        Self { authored, position }
+    }
+
+    #[must_use]
+    pub fn authored(&self) -> &str {
+        &self.authored
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssContainerRule {
     name: Option<CssContainerName>,
@@ -1642,6 +1836,7 @@ impl CssScopedRuleList {
 pub enum CssScopedRule {
     Style(CssScopedStyleRule),
     Media(CssScopedMediaRule),
+    Supports(CssScopedSupportsRule),
     Container(CssScopedContainerRule),
     LayerStatement(CssScopedLayerStatementRule),
     LayerBlock(CssScopedLayerBlockRule),
@@ -1754,6 +1949,44 @@ impl CssScopedMediaRule {
     #[must_use]
     pub const fn query(&self) -> &CssMediaQueryList {
         &self.query
+    }
+
+    #[must_use]
+    pub const fn rules(&self) -> &CssScopedRuleList {
+        &self.rules
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+}
+
+/// A parser-produced supports group inside a scoped rule list.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssScopedSupportsRule {
+    condition: CssSupportsCondition,
+    rules: CssScopedRuleList,
+    position: CssSourcePosition,
+}
+
+impl CssScopedSupportsRule {
+    #[must_use]
+    pub(crate) const fn new(
+        condition: CssSupportsCondition,
+        rules: CssScopedRuleList,
+        position: CssSourcePosition,
+    ) -> Self {
+        Self {
+            condition,
+            rules,
+            position,
+        }
+    }
+
+    #[must_use]
+    pub const fn condition(&self) -> &CssSupportsCondition {
+        &self.condition
     }
 
     #[must_use]

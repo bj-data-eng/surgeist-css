@@ -59,6 +59,9 @@ fn nested_structural_group_contexts_retain_siblings_around_balanced_at_rule_fail
         format!("@layer theme {{ .before {{ color: red; }} {failed} .after {{ color: blue; }} }}"),
         format!("@media screen {{ .before {{ color: red; }} {failed} .after {{ color: blue; }} }}"),
         format!(
+            "@supports (display: grid) {{ .before {{ color: red; }} {failed} .after {{ color: blue; }} }}"
+        ),
+        format!(
             "@container (width > 1px) {{ .before {{ color: red; }} {failed} .after {{ color: blue; }} }}"
         ),
     ];
@@ -68,6 +71,7 @@ fn nested_structural_group_contexts_retain_siblings_around_balanced_at_rule_fail
         let children = match &report.syntax().rules()[0] {
             CssRule::LayerBlock(rule) => rule.rules(),
             CssRule::Media(rule) => rule.rules(),
+            CssRule::Supports(rule) => rule.rules(),
             CssRule::Container(rule) => rule.rules(),
             unexpected => panic!("expected group parent, got {unexpected:?}"),
         };

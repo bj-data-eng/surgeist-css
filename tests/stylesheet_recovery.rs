@@ -430,12 +430,6 @@ fn stylesheet_recovery_top_level_failure_classes_have_one_exact_parent_drop() {
             responsible: "@unknown",
         },
         Case {
-            failed: "@supports (display: grid) { nested: fn({x;y}); }",
-            code: CssErrorCode::UnsupportedAtRule,
-            action: CssRecoveryAction::DropAtRule,
-            responsible: "@supports",
-        },
-        Case {
             failed: "@import \"late.css\";",
             code: CssErrorCode::InvalidAtRulePlacement,
             action: CssRecoveryAction::DropAtRule,

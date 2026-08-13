@@ -75,6 +75,34 @@ fn app_strict_accepts_defined_false_media_syntax_and_rejects_only_malformed_reco
     }
 }
 
+#[test]
+fn app_strict_supports_conditions_match_ordinary_retention_and_recovery() {
+    let clean = assert_sheet_parity(concat!(
+        "@supports (display: grid) and (mystery: value) {}",
+        "@supports selector(.x > .y) {}",
+        "@supports future(any([tokens])) {}",
+    ));
+    assert!(clean.is_clean());
+    assert!(
+        clean
+            .syntax()
+            .rules()
+            .iter()
+            .all(|rule| matches!(rule, CssRule::Supports(_)))
+    );
+
+    let recovered = assert_sheet_parity(concat!(
+        "@supports (a:b) and (c:d) or (e:f) {}",
+        "@supports (color: red) {}",
+    ));
+    assert!(matches!(recovered.syntax().rules(), [CssRule::Supports(_)]));
+    assert_eq!(recovered.diagnostics().len(), 1);
+    assert_eq!(
+        recovered.diagnostics()[0].action(),
+        CssRecoveryAction::DropAtRule
+    );
+}
+
 fn nested_selector(depth: usize) -> String {
     format!("{}{}{}", ":is(".repeat(depth), ".leaf", ")".repeat(depth)) + "{color:red}"
 }

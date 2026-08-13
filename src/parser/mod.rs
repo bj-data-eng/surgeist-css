@@ -19,6 +19,7 @@ mod nesting;
 mod queries;
 mod recovery;
 mod selectors;
+mod supports;
 mod timing;
 mod typography;
 mod values;
@@ -53,6 +54,7 @@ use selectors::{
     SelectorRecovery, parse_rule_selector_list, parse_scope_boundary_selector_list,
     parse_scoped_style_selector_list,
 };
+use supports::{parse_supports_condition, with_supports_prelude_context};
 use timing::*;
 use typography::*;
 use values::*;
@@ -805,6 +807,7 @@ fn split_scoped_style_declaration_run(
 fn scoped_group_rules(rule: &CssScopedRule) -> Option<&[CssScopedRule]> {
     match rule {
         CssScopedRule::Media(rule) => Some(rule.rules().rules()),
+        CssScopedRule::Supports(rule) => Some(rule.rules().rules()),
         CssScopedRule::Container(rule) => Some(rule.rules().rules()),
         CssScopedRule::LayerBlock(rule) => Some(rule.rules().rules()),
         CssScopedRule::Scope(rule) => Some(rule.rules().rules()),
@@ -817,6 +820,11 @@ fn rebuild_scoped_group_rule(rule: CssScopedRule, rules: Vec<CssScopedRule>) -> 
     match rule {
         CssScopedRule::Media(rule) => CssScopedRule::Media(CssScopedMediaRule::new(
             rule.query().clone(),
+            rules,
+            rule.position(),
+        )),
+        CssScopedRule::Supports(rule) => CssScopedRule::Supports(CssScopedSupportsRule::new(
+            rule.condition().clone(),
             rules,
             rule.position(),
         )),
@@ -879,6 +887,17 @@ fn into_scoped_rule(rule: CssRule) -> Option<CssScopedRule> {
             ),
             rule.position(),
         ))),
+        CssRule::Supports(rule) => Some(CssScopedRule::Supports(CssScopedSupportsRule::new(
+            rule.condition().clone(),
+            CssScopedRuleList::from_rules(
+                rule.rules()
+                    .iter()
+                    .cloned()
+                    .filter_map(into_scoped_rule)
+                    .collect(),
+            ),
+            rule.position(),
+        ))),
         CssRule::Container(rule) => Some(CssScopedRule::Container(CssScopedContainerRule::new(
             rule.name().cloned(),
             rule.condition().clone(),
@@ -905,6 +924,7 @@ fn scoped_rule_start(rule: &CssScopedRule) -> usize {
             );
         }
         CssScopedRule::Media(rule) => rule.position(),
+        CssScopedRule::Supports(rule) => rule.position(),
         CssScopedRule::Container(rule) => rule.position(),
         CssScopedRule::LayerStatement(rule) => rule.position(),
         CssScopedRule::LayerBlock(rule) => rule.position(),
@@ -918,6 +938,7 @@ fn group_rules(rule: &CssRule) -> Option<&[CssRule]> {
     match rule {
         CssRule::LayerBlock(rule) => Some(rule.rules()),
         CssRule::Media(rule) => Some(rule.rules()),
+        CssRule::Supports(rule) => Some(rule.rules()),
         CssRule::Container(rule) => Some(rule.rules()),
         _ => None,
     }
@@ -932,6 +953,11 @@ fn rebuild_group_rule(rule: CssRule, rules: Vec<CssRule>) -> CssRule {
         )),
         CssRule::Media(rule) => CssRule::Media(CssMediaRule::new(
             rule.query().clone(),
+            rules,
+            rule.position(),
+        )),
+        CssRule::Supports(rule) => CssRule::Supports(CssSupportsRule::new(
+            rule.condition().clone(),
             rules,
             rule.position(),
         )),
@@ -959,6 +985,7 @@ fn rule_start(rule: &CssRule) -> usize {
             );
         }
         CssRule::Media(rule) => rule.position(),
+        CssRule::Supports(rule) => rule.position(),
         CssRule::Container(rule) => rule.position(),
         CssRule::Scope(rule) => rule.position(),
     }
@@ -1315,6 +1342,7 @@ enum StrictAtRulePrelude {
     FontFace,
     Keyframes(CssKeyframesName),
     Media(CssMediaQueryList),
+    Supports(CssSupportsCondition),
     Container(CssContainerPrelude),
     Scope(CssScopePrelude),
 }
@@ -1328,6 +1356,7 @@ impl StrictAtRulePrelude {
             Self::FontFace => "baseline.rule.font-face",
             Self::Keyframes(_) => "baseline.rule.keyframes",
             Self::Media(_) => "baseline.rule.media",
+            Self::Supports(_) => "baseline.rule.supports",
             Self::Container(_) => "baseline.rule.container",
             Self::Scope(_) => "baseline.rule.scope",
         }
@@ -1491,6 +1520,15 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 }
                 Ok(StrictAtRulePrelude::Media(query))
             },
+            "supports" => {
+                let condition = parse_supports_condition(
+                    self.source,
+                    input,
+                    &mut self.diagnostics,
+                    &self.recovery,
+                ).map_err(with_supports_prelude_context)?;
+                Ok(StrictAtRulePrelude::Supports(condition))
+            },
             "container" => {
                 let prelude = parse_container_prelude(input).map_err(|error| {
                     with_at_rule_prelude_context(
@@ -1570,6 +1608,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
             StrictAtRulePrelude::FontFace => Err(()),
             StrictAtRulePrelude::Keyframes(_) => Err(()),
             StrictAtRulePrelude::Media(_) => Err(()),
+            StrictAtRulePrelude::Supports(_) => Err(()),
             StrictAtRulePrelude::Container(_) => Err(()),
             StrictAtRulePrelude::Scope(_) => Err(()),
         }
@@ -1649,6 +1688,21 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 self.mark_non_import_top_level_rule();
                 Ok(vec![CssRule::Media(CssMediaRule::new(
                     query,
+                    rules,
+                    crate::source::CssSourcePosition::from_cssparser(
+                        start.position(),
+                        start.source_location(),
+                    ),
+                ))])
+            }
+            StrictAtRulePrelude::Supports(condition) => {
+                let recovered =
+                    parse_nested_group_rules(self.source, input, self.recovery.clone())?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
+                self.mark_non_import_top_level_rule();
+                Ok(vec![CssRule::Supports(CssSupportsRule::new(
+                    condition,
                     rules,
                     crate::source::CssSourcePosition::from_cssparser(
                         start.position(),
@@ -2070,6 +2124,7 @@ struct ScopedRuleParser<'s> {
 
 enum ScopedAtRulePrelude {
     Media(CssMediaQueryList),
+    Supports(CssSupportsCondition),
     Container(CssContainerPrelude),
     Layer(Vec<CssLayerName>),
     Scope(CssScopePrelude),
@@ -2079,6 +2134,7 @@ impl ScopedAtRulePrelude {
     fn production(&self) -> &'static str {
         match self {
             Self::Media(_) => "baseline.rule.media",
+            Self::Supports(_) => "baseline.rule.supports",
             Self::Container(_) => "baseline.rule.container",
             Self::Layer(_) => "baseline.rule.layer-block",
             Self::Scope(_) => "baseline.rule.scope",
@@ -2114,6 +2170,15 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser<'i> {
                     ));
                 }
                 Ok(ScopedAtRulePrelude::Media(query))
+            },
+            "supports" => {
+                let condition = parse_supports_condition(
+                    self.source,
+                    input,
+                    &mut self.diagnostics,
+                    &self.recovery,
+                ).map_err(with_supports_prelude_context)?;
+                Ok(ScopedAtRulePrelude::Supports(condition))
             },
             "container" => {
                 let prelude = parse_container_prelude(input).map_err(|error| {
@@ -2195,6 +2260,7 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser<'i> {
                 )])
             }
             ScopedAtRulePrelude::Media(_)
+            | ScopedAtRulePrelude::Supports(_)
             | ScopedAtRulePrelude::Container(_)
             | ScopedAtRulePrelude::Scope(_) => Err(()),
         }
@@ -2220,6 +2286,14 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser<'i> {
                 let rules = recovered.syntax;
                 Ok(vec![CssScopedRule::Media(CssScopedMediaRule::new(
                     query, rules, position,
+                ))])
+            }
+            ScopedAtRulePrelude::Supports(condition) => {
+                let recovered = parse_scoped_rule_list(self.source, input, self.recovery.clone())?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
+                Ok(vec![CssScopedRule::Supports(CssScopedSupportsRule::new(
+                    condition, rules, position,
                 ))])
             }
             ScopedAtRulePrelude::Container(prelude) => {
@@ -2501,7 +2575,7 @@ pub(super) enum DeclarationMode {
 
 pub(super) struct ParsedDeclaration {
     pub(super) body: CssDeclarationBody,
-    importance: CssImportance,
+    pub(super) importance: CssImportance,
     pub(super) position: crate::source::CssSourcePosition,
 }
 

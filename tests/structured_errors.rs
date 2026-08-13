@@ -586,7 +586,7 @@ fn basic_shape_failures_report_clip_path_and_retain_valid_siblings() {
 }
 
 #[test]
-fn error_unknown_and_recognized_unsupported_at_rules_have_distinct_codes() {
+fn unknown_at_rules_remain_distinct_from_supported_conditional_rules() {
     let unknown = parse_sheet("@not-a-css-rule;").expect_err("unknown at-rule must fail");
     assert_eq!(unknown.code(), CssErrorCode::UnknownAtRule);
     match unknown.kind() {
@@ -596,16 +596,9 @@ fn error_unknown_and_recognized_unsupported_at_rules_have_distinct_codes() {
         _ => panic!("unexpected error root"),
     }
 
-    let unsupported = parse_sheet("@supports (display: grid) {}")
-        .expect_err("known unsupported at-rule must fail");
-    assert_eq!(unsupported.code(), CssErrorCode::UnsupportedAtRule);
-    match unsupported.kind() {
-        ErrorKind::UnsupportedAtRule(detail) => {
-            assert_eq!(detail.name().as_str(), "supports");
-            assert_eq!(detail.feature().as_str(), "later.rule.supports");
-        }
-        _ => panic!("unexpected error root"),
-    }
+    let supports = parse_sheet("@supports (display: grid) {}");
+    assert!(supports.is_clean(), "{:?}", supports.diagnostics());
+    assert!(matches!(supports.syntax().rules(), [CssRule::Supports(_)]));
 }
 
 #[test]

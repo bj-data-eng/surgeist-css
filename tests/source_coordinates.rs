@@ -6,8 +6,8 @@ use common::CssParseReportTestExt;
 use surgeist_css::{
     CssByteOffset, CssDefinedFalseMediaReason, CssErrorCode, CssKnownProperty, CssLineIndex,
     CssMediaConditionKind, CssMediaQuery, CssMediaType, CssRecoveryAction, CssRule,
-    CssSourcePosition, CssSourceSpan, CssTokenKind, CssUtf16ColumnIndex, ErrorKind, parse_sheet,
-    parse_style_attribute,
+    CssSourcePosition, CssSourceSpan, CssSupportsConditionKind, CssTokenKind, CssUtf16ColumnIndex,
+    ErrorKind, parse_sheet, parse_style_attribute,
 };
 
 fn assert_copy_hash_ord<T: Copy + Eq + Ord + Hash>() {}
@@ -68,6 +68,47 @@ fn defined_false_media_nodes_preserve_exact_non_bmp_byte_and_utf16_positions() {
         defined_false.reason(),
         CssDefinedFalseMediaReason::UnknownFeature
     );
+}
+
+#[test]
+fn supports_nodes_preserve_exact_non_bmp_byte_and_utf16_positions() {
+    let source = "/*😀*/\n@supports /*🦊*/ (D\\69splay: grid) {}";
+    let report = parse_sheet(source);
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [CssRule::Supports(rule)] = report.syntax().rules() else {
+        panic!("expected supports rule");
+    };
+    let CssSupportsConditionKind::Declaration(declaration) = rule.condition().kind() else {
+        panic!("expected declaration condition");
+    };
+
+    let rule_offset = source.find("@supports").unwrap();
+    let condition_offset = source.find("(D\\69splay").unwrap();
+    let declaration_offset = source.find("D\\69splay").unwrap();
+    assert_position(rule.position(), rule_offset, 1, 0);
+    assert_position(
+        rule.condition().position(),
+        condition_offset,
+        1,
+        u32::try_from(
+            source[source.find('\n').unwrap() + 1..condition_offset]
+                .encode_utf16()
+                .count(),
+        )
+        .unwrap(),
+    );
+    assert_position(
+        declaration.position(),
+        declaration_offset,
+        1,
+        u32::try_from(
+            source[source.find('\n').unwrap() + 1..declaration_offset]
+                .encode_utf16()
+                .count(),
+        )
+        .unwrap(),
+    );
+    assert_eq!(declaration.property(), "D\\69splay");
 }
 
 #[test]

@@ -1196,6 +1196,12 @@ fn rule_observables(
                 rule_observables(child, retained, frozen);
             }
         }
+        CssRule::Supports(rule) => {
+            retained.push("rule:baseline.rule.supports".to_owned());
+            for child in rule.rules() {
+                rule_observables(child, retained, frozen);
+            }
+        }
         CssRule::Container(rule) => {
             retained.push("rule:baseline.rule.container".to_owned());
             for child in rule.rules() {
@@ -1225,6 +1231,12 @@ fn scoped_rule_observables(
             retained.extend(ids);
         }
         CssScopedRule::Media(rule) => {
+            for child in rule.rules().rules() {
+                scoped_rule_observables(child, retained, frozen);
+            }
+        }
+        CssScopedRule::Supports(rule) => {
+            retained.push("rule:baseline.rule.supports".to_owned());
             for child in rule.rules().rules() {
                 scoped_rule_observables(child, retained, frozen);
             }

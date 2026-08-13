@@ -360,6 +360,32 @@ fn block_item_recovery_group_rule_merges_child_diagnostic_without_parent_drop() 
 }
 
 #[test]
+fn block_item_recovery_supports_merges_child_diagnostic_without_parent_drop() {
+    let unit = "bad: fn({x; y});";
+    let source =
+        format!("@supports (display: grid) {{ .inside {{ width: 1px; {unit} height: 2px; }} }}");
+    let report = parse_sheet(&source);
+    let [CssRule::Supports(supports)] = report.syntax().rules() else {
+        panic!("expected retained supports parent");
+    };
+    let [CssRule::Style(inside)] = supports.rules() else {
+        panic!("expected retained supports child");
+    };
+    assert_eq!(property_names(inside.declarations()), ["width", "height"]);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("one child declaration diagnostic without parent drop");
+    };
+    assert_drop(
+        &source,
+        diagnostic,
+        unit,
+        CssErrorCode::UnknownProperty,
+        CssRecoveryAction::DropDeclaration,
+        source.find("bad").unwrap(),
+    );
+}
+
+#[test]
 fn block_item_recovery_font_face_drops_bad_and_retains_duplicate_optional_descriptors() {
     let source = "@font-face { font-family: Inter; mystery: fn(a;b); src: url(i); font-display: swap; font-display: block; unicode-range: U+0-7F; }";
     let report = parse_sheet(source);

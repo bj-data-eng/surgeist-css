@@ -30,13 +30,14 @@ pub(super) fn preflight_specialized_eof_limit(
         .get(target.unit_start..target.opening_offset)
         .unwrap_or_default()
         .trim_start();
-    let is_media = prefix
-        .strip_prefix('@')
-        .is_some_and(|value| value.trim_start().starts_with("media"));
+    let at_rule = prefix.strip_prefix('@').map(str::trim_start);
+    let is_media = at_rule.is_some_and(|value| value.starts_with("media"));
+    let is_supports = at_rule.is_some_and(|value| value.starts_with("supports"));
     if target
         .first_root_curly
         .is_some_and(|curly| curly < target.opening_offset)
         && !is_media
+        && !is_supports
     {
         return None;
     }
@@ -45,6 +46,8 @@ pub(super) fn preflight_specialized_eof_limit(
         opening_offset: target.opening_offset,
         enclosing_production: if is_media {
             "baseline.media.query-list"
+        } else if is_supports {
+            "baseline.rule.supports"
         } else {
             "baseline.selector.complex"
         },
@@ -478,6 +481,7 @@ pub(super) struct StructuralParent {
 pub(super) enum GroupKind {
     Layer,
     Media,
+    Supports,
     Container,
     Scope,
     Style,
@@ -490,6 +494,7 @@ impl GroupKind {
         match self {
             Self::Layer => "baseline.rule.layer-block",
             Self::Media => "baseline.rule.media",
+            Self::Supports => "baseline.rule.supports",
             Self::Container => "baseline.rule.container",
             Self::Scope => "baseline.rule.scope",
             Self::Style => "baseline.rule.style",
@@ -637,7 +642,7 @@ pub(super) fn preflight_structural_nesting(
                 starts.push(token_end);
                 starts
             }
-            GroupKind::Layer | GroupKind::Media | GroupKind::Container
+            GroupKind::Layer | GroupKind::Media | GroupKind::Supports | GroupKind::Container
                 if !style_context_starts.is_empty() =>
             {
                 let mut starts = style_context_starts;
@@ -646,6 +651,7 @@ pub(super) fn preflight_structural_nesting(
             }
             GroupKind::Layer
             | GroupKind::Media
+            | GroupKind::Supports
             | GroupKind::Container
             | GroupKind::Scope
             | GroupKind::Component
@@ -696,6 +702,7 @@ fn group_kind(source: &str, unit_start: usize, opening_offset: usize) -> GroupKi
     {
         "layer" => GroupKind::Layer,
         "media" => GroupKind::Media,
+        "supports" => GroupKind::Supports,
         "container" => GroupKind::Container,
         "scope" => GroupKind::Scope,
         _ => GroupKind::Other,

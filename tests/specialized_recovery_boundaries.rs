@@ -58,12 +58,24 @@ fn nested_media(depth: usize, close: bool) -> String {
     source
 }
 
+fn nested_supports(depth: usize, close: bool) -> String {
+    let mut source = String::from("@supports ");
+    source.push_str(&"f(".repeat(depth));
+    source.push('x');
+    if close {
+        source.push_str(&")".repeat(depth));
+        source.push_str("{.leaf{color:red}}");
+    }
+    source
+}
+
 #[test]
 fn specialized_boundary_final_rule_blocks_retain_with_one_exact_eof_closure() {
     let sources = [
         ".x{color:red",
         "@layer{.x{color:red;}",
         "@media screen{.x{color:red;}",
+        "@supports (display:grid){.x{color:red;}",
         "@container (width > 1px){.x{color:red;}",
         "@scope{.x{color:red;}",
         "@font-face{font-family:Demo;src:url(\"demo.woff2\");",
@@ -348,6 +360,37 @@ fn specialized_boundary_media_depth_is_exact_at_255_256_and_257() {
 }
 
 #[test]
+fn specialized_boundary_supports_depth_is_exact_at_255_256_and_257() {
+    for depth in [255, 256] {
+        let source = nested_supports(depth, true);
+        let report = parse_sheet(&source);
+        assert!(
+            report.is_clean(),
+            "depth {depth}: {:?}",
+            report.diagnostics()
+        );
+        assert!(matches!(report.syntax().rules(), [CssRule::Supports(_)]));
+    }
+
+    let source = nested_supports(257, true);
+    let report = parse_sheet(&source);
+    assert!(report.syntax().rules().is_empty());
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected one supports nesting diagnostic")
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::NestingLimit);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::StopAtNestingLimit);
+    let ErrorKind::NestingLimit(detail) = diagnostic.error().kind() else {
+        panic!("expected typed nesting-limit detail")
+    };
+    assert_eq!(detail.limit(), 256);
+    assert_eq!(
+        detail.enclosing_production().as_str(),
+        "baseline.rule.supports"
+    );
+}
+
+#[test]
 fn specialized_boundary_eof_over_limit_has_only_the_limit_action() {
     let mut declaration = String::from(".x{--v:");
     declaration.push_str(&"f(".repeat(256));
@@ -355,6 +398,7 @@ fn specialized_boundary_eof_over_limit_has_only_the_limit_action() {
     for source in [
         nested_selector(257, false),
         nested_media(257, false),
+        nested_supports(257, false),
         declaration,
     ] {
         let report = parse_sheet(&source);

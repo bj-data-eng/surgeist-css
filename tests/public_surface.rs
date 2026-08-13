@@ -15,9 +15,35 @@ use surgeist_css::{
     CssMediaType, CssOpenTypeTag, CssPredefinedColorSpace, CssPropertyNameRef, CssRecoveryAction,
     CssRelativeColorChannel, CssRelativeColorEnvironment, CssRelativeColorExpressionValue,
     CssRelativeColorFunction, CssRelativeColorResultDomain, CssRule, CssSelectorCombinator,
-    CssSpecificationTier, CssSupportStatus, ErrorKind, conformance_exclusion, feature_metadata,
-    parse_sheet, parse_style_attribute, property_metadata, specification_source,
+    CssSpecificationTier, CssSupportStatus, CssSupportsConditionKind, CssSupportsConditionList,
+    ErrorKind, conformance_exclusion, feature_metadata, parse_sheet, parse_style_attribute,
+    property_metadata, specification_source,
 };
+
+#[test]
+fn public_surface_exposes_private_field_supports_models_and_checked_lists() {
+    let report = parse_sheet("@supports (display: grid) {} @supports selector(.x > .y) {}");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [CssRule::Supports(declaration), CssRule::Supports(selector)] = report.syntax().rules()
+    else {
+        panic!("expected supports rules");
+    };
+    assert!(matches!(
+        declaration.condition().kind(),
+        CssSupportsConditionKind::Declaration(_)
+    ));
+    assert!(matches!(
+        selector.condition().kind(),
+        CssSupportsConditionKind::Selector(_)
+    ));
+    assert!(CssSupportsConditionList::try_new(vec![declaration.condition().clone()]).is_none());
+    let list = CssSupportsConditionList::try_new(vec![
+        declaration.condition().clone(),
+        selector.condition().clone(),
+    ])
+    .expect("two conditions form a checked operator list");
+    assert_eq!(list.conditions().len(), 2);
+}
 
 #[test]
 fn public_surface_exposes_parser_owned_defined_false_media_models() {
@@ -356,6 +382,7 @@ fn rule_kind(rule: &CssRule) -> &'static str {
         CssRule::Keyframes(_) => "keyframes",
         CssRule::Style(_) => "style",
         CssRule::Media(_) => "media",
+        CssRule::Supports(_) => "supports",
         CssRule::Container(_) => "container",
         CssRule::Scope(_) => "scope",
         _ => "future rule",

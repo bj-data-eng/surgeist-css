@@ -3445,7 +3445,6 @@ fn nesting_rejects_unsupported_at_rules_inside_style_blocks() {
         r#".card { @import "x.css"; }"#,
         r#".card { @font-face { font-family: Inter; src: url("inter.woff2"); } }"#,
         ".card { @keyframes fade { from { opacity: 0; } } }",
-        ".card { @supports (display: flex) { color: black; } }",
     ] {
         assert!(parse_sheet(css).is_err(), "{css} should reject");
     }
@@ -5788,7 +5787,6 @@ fn advanced_css_surface_matrix_accepts_supported_forms() {
 #[test]
 fn advanced_css_surface_matrix_rejects_unsupported_forms() {
     let rejected = [
-        "@supports (display: grid) { .panel { color: black; } }",
         r#"@import url("late.css"); .panel { color: black; } @import url("later.css");"#,
         r#"@import url("theme.css") supports(display: grid);"#,
         "@font-face { font-family: Inter; }",

@@ -1205,22 +1205,6 @@ const EXPECTED: &[ExpectedFeature] = &[
         )),
     },
     ExpectedFeature {
-        id: "later.rule.supports",
-        kind: CssFeatureKind::Rule,
-        spelling: "@supports",
-        source: ExpectedSource::Id("O-CONDITIONAL3"),
-        production: "#at-supports",
-        status: CssSupportStatus::RecognizedUnsupported,
-        supported_subset: None,
-        unsupported_remainder: None,
-        recognized_code: Some(CssErrorCode::UnsupportedAtRule),
-        positive: None,
-        negative: Some((
-            Input::Sheet("@supports (display: grid) { .x { color: red; } }"),
-            CssErrorCode::UnsupportedAtRule,
-        )),
-    },
-    ExpectedFeature {
         id: "later.rule.counter-style",
         kind: CssFeatureKind::Rule,
         spelling: "@counter-style",

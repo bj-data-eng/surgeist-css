@@ -10,6 +10,7 @@ use super::selectors::{
     SelectorRecovery, consume_selector_whitespace, parse_complex_selector_part,
     parse_compound_selector_model, parse_rule_selector,
 };
+use super::supports::{parse_supports_condition, with_supports_prelude_context};
 use super::{
     CssContainerPrelude, CssScopePrelude, Recovered, StrictDeclarationParser,
     block_item_diagnostic, consume_failed_rule_block, is_declaration_recovery_unit,
@@ -177,6 +178,7 @@ enum StyleBlockItem {
 
 enum NestedStyleAtRulePrelude {
     Media(CssMediaQueryList),
+    Supports(CssSupportsCondition),
     Container(CssContainerPrelude),
     Layer(Vec<CssLayerName>),
     Scope(CssScopePrelude),
@@ -186,6 +188,7 @@ impl NestedStyleAtRulePrelude {
     fn production(&self) -> &'static str {
         match self {
             Self::Media(_) => "baseline.rule.media",
+            Self::Supports(_) => "baseline.rule.supports",
             Self::Container(_) => "baseline.rule.container",
             Self::Layer(_) => "baseline.rule.layer-block",
             Self::Scope(_) => "baseline.rule.scope",
@@ -221,6 +224,15 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
                     ));
                 }
                 Ok(NestedStyleAtRulePrelude::Media(query))
+            },
+            "supports" => {
+                let condition = parse_supports_condition(
+                    self.source,
+                    input,
+                    &mut self.diagnostics,
+                    &self.recovery,
+                ).map_err(with_supports_prelude_context)?;
+                Ok(NestedStyleAtRulePrelude::Supports(condition))
             },
             "container" => {
                 let prelude = parse_container_prelude(input).map_err(|error| {
@@ -321,6 +333,18 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
                 self.diagnostics.extend(recovered.diagnostics);
                 let rules = recovered.syntax;
                 CssRule::Media(CssMediaRule::new(query, rules, position))
+            }
+            NestedStyleAtRulePrelude::Supports(condition) => {
+                let recovered = parse_style_rule_block(
+                    self.source,
+                    self.parent_selectors.clone(),
+                    position,
+                    input,
+                    self.recovery.clone(),
+                )?;
+                self.diagnostics.extend(recovered.diagnostics);
+                let rules = recovered.syntax;
+                CssRule::Supports(CssSupportsRule::new(condition, rules, position))
             }
             NestedStyleAtRulePrelude::Container(prelude) => {
                 let recovered = parse_style_rule_block(

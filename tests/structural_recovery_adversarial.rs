@@ -12,6 +12,13 @@ fn nested_layers(depth: usize, tail: &str) -> String {
     source
 }
 
+fn nested_supports(depth: usize, tail: &str) -> String {
+    let mut source = "@supports (display:grid){".repeat(depth);
+    source.push_str(&"}".repeat(depth));
+    source.push_str(tail);
+    source
+}
+
 fn component_value(total_depth: usize, opener: &str, closer: &str) -> String {
     let component_depth = total_depth.saturating_sub(1);
     format!(
@@ -184,6 +191,25 @@ fn structural_recovery_accepts_256_rule_blocks_and_drops_only_level_257() {
             .value(),
         failed_start + "@layer".len(),
     );
+}
+
+#[test]
+fn structural_preflight_preserves_256_nested_supports_groups_and_later_sibling() {
+    let source = nested_supports(256, ".after{}");
+    let report = parse_sheet(&source);
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [CssRule::Supports(rule), CssRule::Style(after)] = report.syntax().rules() else {
+        panic!("expected supports chain and later style");
+    };
+    let mut rule = rule;
+    let mut depth = 1;
+    while let [CssRule::Supports(nested)] = rule.rules() {
+        rule = nested;
+        depth += 1;
+    }
+    assert_eq!(depth, 256);
+    assert!(rule.rules().is_empty());
+    assert!(after.declarations().is_empty());
 }
 
 #[test]

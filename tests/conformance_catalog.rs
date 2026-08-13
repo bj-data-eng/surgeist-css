@@ -5,11 +5,11 @@ use surgeist_css::{
     CssFrequencyUnit, CssHorizontalPosition, CssIntegerCalculation, CssKnownProperty,
     CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthDimension, CssLengthUnit,
     CssNumberCalculation, CssPercentageCalculation, CssRecoveryAction, CssResolution,
-    CssResolutionUnit, CssRule, CssSpecificationTier, CssSupportStatus, CssTimeCalculation,
-    CssTimeUnit, CssTransformFunctionValue, CssTransformPerspective, CssTransformScaleComponent,
-    CssTransformValue, CssVerticalPosition, ErrorKind, conformance_exclusion,
-    conformance_exclusions, feature_metadata, parse_sheet, parse_style_attribute,
-    property_metadata, specification_source, specification_sources,
+    CssResolutionUnit, CssRule, CssSpecificationTier, CssSupportStatus, CssSupportsConditionKind,
+    CssTimeCalculation, CssTimeUnit, CssTransformFunctionValue, CssTransformPerspective,
+    CssTransformScaleComponent, CssTransformValue, CssVerticalPosition, ErrorKind,
+    conformance_exclusion, conformance_exclusions, feature_metadata, parse_sheet,
+    parse_style_attribute, property_metadata, specification_source, specification_sources,
 };
 
 #[derive(Clone, Copy)]
@@ -43,6 +43,8 @@ const BASELINE_RULE_REMAINDER: &str =
     "Other valid forms of the cited rule production are outside the I01 subset.";
 const SELECTOR_REMAINDER: &str =
     "Other valid forms of the cited Selectors production are outside the I01 subset.";
+const SUPPORTS_SELECTOR_SUBSET: &str = "selector() accepts complete Selectors 3 plus the selected I01 extensions: i and s attribute modifiers; :scope, :focus-visible, :focus-within, :required, :optional, :valid, :invalid, :placeholder-shown, :modal, :fullscreen, :popover-open, :default, :indeterminate, :read-only, :read-write, :in-range, and :out-of-range; :is(), :where(), :has(), selector-list :not(), and nth-child of lists; and ::marker, ::selection, ::backdrop, and generated-marker sequences.";
+const SUPPORTS_SELECTOR_REMAINDER: &str = "The || combinator, unselected Selectors 4 pseudo-classes and pseudo-elements, and syntax outside those atomic extension rows remain outside the typed subset; balanced content is preserved as general-enclosed authored syntax.";
 const QUERY_REMAINDER: &str =
     "Other valid forms of the cited query production are outside the I01 subset.";
 const DIMENSION_SUBSET: &str =
@@ -2403,20 +2405,239 @@ fn media_conditional_and_import_metadata_are_truthful() {
     assert_eq!(selector.source().id().as_str(), "R-CONDITIONAL4");
     assert_eq!(selector.production(), "#at-supports");
     assert_eq!(selector.status(), CssSupportStatus::Partial);
-    assert_eq!(
-        selector.supported_subset(),
-        Some(
-            "selector() accepts the current typed complex-selector subset and preserves other balanced selector content as general-enclosed authored syntax."
-        )
-    );
+    assert_eq!(selector.supported_subset(), Some(SUPPORTS_SELECTOR_SUBSET));
     assert_eq!(
         selector.unsupported_remainder(),
-        Some(
-            "Namespace-qualified selectors and the remaining Selectors 3 grammar await I02-C10; this row does not claim complete Selectors 4."
-        )
+        Some(SUPPORTS_SELECTOR_REMAINDER)
     );
     assert_eq!(selector.recognized_unsupported_code(), None);
     assert!(selector.baseline_alias_targets().is_empty());
+}
+
+#[test]
+fn selectors3_and_namespace_metadata_are_truthful() {
+    let selectors = parse_sheet(concat!(
+        ":root,:link,:visited,:target,:lang(en),:hover,:active,:focus,",
+        ":enabled,:disabled,:checked,:indeterminate,:first-child,:last-child,",
+        ":only-child,:empty,:nth-child(2n+1),:nth-last-child(2),",
+        ":first-of-type,:last-of-type,:only-of-type,:nth-of-type(odd),",
+        ":nth-last-of-type(even),:not(.excluded) { color: red; }",
+        "article#first#second.card[data-ready][lang|=\"en\"][title^=\"lead\"] ",
+        "> section + a ~ p { color: red; }",
+        ".line::first-line { color: red; }",
+        ".letter:first-letter { color: red; }",
+        ".generated:before { color: red; }",
+    ));
+    assert!(
+        selectors.is_clean(),
+        "paired Selectors 3 grammar behavior: {:?}",
+        selectors.diagnostics()
+    );
+
+    let qualified = parse_sheet(concat!(
+        "@namespace svg \"urn:svg\";",
+        "svg|a,svg|*,*|a,|a,[svg|href],[*|title],[|lang],[plain] { color: red; }",
+        "@supports selector(svg|a) {}",
+    ));
+    assert!(
+        qualified.is_clean(),
+        "paired namespace grammar behavior: {:?}",
+        qualified.diagnostics()
+    );
+    assert!(matches!(
+        qualified.syntax().rules().first(),
+        Some(CssRule::Namespace(_))
+    ));
+    let Some(CssRule::Supports(typed)) = qualified.syntax().rules().last() else {
+        panic!("expected a final typed supports rule")
+    };
+    assert!(matches!(
+        typed.condition().kind(),
+        CssSupportsConditionKind::Selector(_)
+    ));
+
+    let general_enclosed = parse_sheet("@supports selector(.x || .y) {}");
+    assert!(
+        general_enclosed.is_clean(),
+        "balanced selector remainder: {:?}",
+        general_enclosed.diagnostics()
+    );
+    let [CssRule::Supports(general_enclosed)] = general_enclosed.syntax().rules() else {
+        panic!("expected general-enclosed supports rule")
+    };
+    assert!(matches!(
+        general_enclosed.condition().kind(),
+        CssSupportsConditionKind::GeneralEnclosed(value)
+            if value.authored() == "selector(.x || .y)"
+    ));
+
+    let assert_complete = |id: &str, kind: CssFeatureKind, source: &str, production: &str| {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing metadata for {id}"));
+        assert_eq!(metadata.id().as_str(), id, "{id} identity");
+        assert_eq!(metadata.kind(), kind, "{id} kind");
+        assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+        assert_eq!(metadata.production(), production, "{id} production");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+        assert_eq!(metadata.supported_subset(), None, "{id} subset");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+        assert_eq!(
+            metadata.recognized_unsupported_code(),
+            None,
+            "{id} recognized code"
+        );
+        assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+    };
+
+    assert_complete(
+        "official.selector.group",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#grouping",
+    );
+    assert_complete(
+        "official.selector.type",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#type-selectors",
+    );
+    assert_complete(
+        "official.selector.universal",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#universal-selector",
+    );
+    assert_complete(
+        "official.selector.attribute-presence-value",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#attribute-representation",
+    );
+    assert_complete(
+        "official.selector.attribute-substring",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#attribute-substrings",
+    );
+    assert_complete(
+        "official.selector.class",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#class-html",
+    );
+    assert_complete(
+        "official.selector.id",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#id-selectors",
+    );
+    assert_complete(
+        "official.selector.dynamic",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#dynamic-pseudos",
+    );
+    assert_complete(
+        "official.selector.target",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#target-pseudo",
+    );
+    assert_complete(
+        "official.selector.lang",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#lang-pseudo",
+    );
+    assert_complete(
+        "official.selector.ui-state",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#UIstates",
+    );
+    assert_complete(
+        "official.selector.structural",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#structural-pseudos",
+    );
+    assert_complete(
+        "official.selector.negation",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#negation",
+    );
+    assert_complete(
+        "official.selector.first-line",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#first-line",
+    );
+    assert_complete(
+        "official.selector.first-letter",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#first-letter",
+    );
+    assert_complete(
+        "official.selector.generated",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#gen-content",
+    );
+    assert_complete(
+        "official.selector.combinator.descendant",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#descendant-combinators",
+    );
+    assert_complete(
+        "official.selector.combinator.child",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#child-combinators",
+    );
+    assert_complete(
+        "official.selector.combinator.next-sibling",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#adjacent-sibling-combinators",
+    );
+    assert_complete(
+        "official.selector.combinator.subsequent-sibling",
+        CssFeatureKind::Selector,
+        "O-SELECTORS3",
+        "#general-sibling-combinators",
+    );
+    assert_complete(
+        "later.rule.namespace",
+        CssFeatureKind::Rule,
+        "O-NAMESPACES3",
+        "#declaration,#syntax",
+    );
+    assert_complete(
+        "official.selector.namespace-qualified-name",
+        CssFeatureKind::Selector,
+        "O-NAMESPACES3",
+        "#scope,#prefixes,#css-qnames",
+    );
+
+    let supports_selector =
+        feature_metadata("ext.supports.selector").expect("selector() extension metadata");
+    assert_eq!(supports_selector.id().as_str(), "ext.supports.selector");
+    assert_eq!(supports_selector.kind(), CssFeatureKind::Selector);
+    assert_eq!(supports_selector.source().id().as_str(), "R-CONDITIONAL4");
+    assert_eq!(supports_selector.production(), "#at-supports");
+    assert_eq!(supports_selector.status(), CssSupportStatus::Partial);
+    assert_eq!(
+        supports_selector.supported_subset(),
+        Some(SUPPORTS_SELECTOR_SUBSET)
+    );
+    assert_eq!(
+        supports_selector.unsupported_remainder(),
+        Some(SUPPORTS_SELECTOR_REMAINDER)
+    );
+    assert_eq!(supports_selector.recognized_unsupported_code(), None);
+    assert!(supports_selector.baseline_alias_targets().is_empty());
 }
 
 #[test]

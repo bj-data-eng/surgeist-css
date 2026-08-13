@@ -2,9 +2,9 @@ mod common;
 
 use common::CssParseReportTestExt;
 use surgeist_css::{
-    CssErrorCode, CssImportance, CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction,
-    CssRule, CssTransformFunctionValue, CssTransformValue, ErrorKind, parse_sheet,
-    parse_style_attribute,
+    CssEasingValue, CssErrorCode, CssImportance, CssKnownProperty, CssKnownPropertyValueRef,
+    CssRecoveryAction, CssRule, CssTransformFunctionValue, CssTransformValue, ErrorKind,
+    parse_sheet, parse_style_attribute,
 };
 
 macro_rules! assert_property_specific_css {
@@ -860,6 +860,61 @@ fn transform_wrapper_keeps_current_global_and_substitution_branches_distinct() {
     let substitution = report.syntax()[3]
         .known()
         .expect("substitution-dependent declaration");
+    assert!(substitution.property_value().is_none());
+    assert!(substitution.global().is_none());
+    assert!(substitution.substitution_dependent().is_some());
+}
+
+#[test]
+fn timing_function_wrappers_keep_current_i01_global_and_substitution_branches_distinct() {
+    let report = parse_style_attribute(concat!(
+        "transition-timing-function: cubic-bezier(0.1, -2, 0.9, 3); ",
+        "animation-timing-function: steps(2, jump-none); ",
+        "transition-timing-function: inherit; ",
+        "animation-timing-function: var(--timing)"
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let transition = report.syntax()[0]
+        .known()
+        .expect("ordinary transition timing");
+    let CssKnownPropertyValueRef::TransitionTimingFunction(value) = transition
+        .property_value()
+        .expect("ordinary transition timing value")
+    else {
+        panic!("expected transition timing wrapper");
+    };
+    assert!(matches!(
+        value.current().values(),
+        [CssEasingValue::CubicBezier(_)]
+    ));
+    assert!(value.i01_subset().is_some());
+
+    let animation = report.syntax()[1]
+        .known()
+        .expect("ordinary animation timing");
+    let CssKnownPropertyValueRef::AnimationTimingFunction(value) = animation
+        .property_value()
+        .expect("ordinary animation timing value")
+    else {
+        panic!("expected animation timing wrapper");
+    };
+    assert!(matches!(
+        value.current().values(),
+        [CssEasingValue::Steps(_)]
+    ));
+    assert!(value.i01_subset().is_some());
+
+    let global = report.syntax()[2]
+        .known()
+        .expect("global timing declaration");
+    assert!(global.property_value().is_none());
+    assert!(global.global().is_some());
+    assert!(global.substitution_dependent().is_none());
+
+    let substitution = report.syntax()[3]
+        .known()
+        .expect("substitution-dependent timing declaration");
     assert!(substitution.property_value().is_none());
     assert!(substitution.global().is_none());
     assert!(substitution.substitution_dependent().is_some());

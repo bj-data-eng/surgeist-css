@@ -2,9 +2,10 @@ use surgeist_css::{
     CssAnimationDirection, CssAnimationFillMode, CssAnimationIterationNumber,
     CssAnimationIterationValue, CssAnimationIterationValueList, CssAnimationName,
     CssAnimationPlayState, CssCalculationExpressionRef, CssCalculationType, CssDelay, CssDelayList,
-    CssDelayLiteral, CssDuration, CssDurationList, CssDurationLiteral, CssEasing, CssErrorCode,
-    CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction, CssSourcePosition, CssTimeUnit,
-    CssTokenKind, CssTransitionProperty, ErrorKind, parse_style_attribute,
+    CssDelayLiteral, CssDuration, CssDurationList, CssDurationLiteral, CssEasing, CssEasingValue,
+    CssErrorCode, CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction, CssSourcePosition,
+    CssStepPosition, CssTimeUnit, CssTokenKind, CssTransitionProperty, ErrorKind,
+    parse_style_attribute,
 };
 
 fn for_each_permutation(
@@ -401,6 +402,53 @@ fn animation_shorthand_exposes_all_eight_current_components() {
     assert_eq!(animation.fill_mode(), Some(CssAnimationFillMode::Both));
     assert_eq!(animation.play_state(), Some(CssAnimationPlayState::Paused));
     assert!(value.i01_subset().is_none());
+}
+
+#[test]
+fn timing_shorthands_propagate_typed_cubic_and_step_values() {
+    let report = parse_style_attribute(concat!(
+        "transition: opacity 1s cubic-bezier(0.1, -2, 0.9, 3), ",
+        "transform 2s steps(2, jump-none); ",
+        "animation: fade 1s steps(3, jump-both)"
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let CssKnownPropertyValueRef::Transition(transition) = report.syntax()[0]
+        .known()
+        .expect("known transition")
+        .property_value()
+        .expect("ordinary transition")
+    else {
+        panic!("expected transition wrapper");
+    };
+    assert!(matches!(
+        transition.transitions().values()[0].current_timing_function(),
+        Some(CssEasingValue::CubicBezier(_))
+    ));
+    assert!(matches!(
+        transition.transitions().values()[1].current_timing_function(),
+        Some(CssEasingValue::Steps(steps))
+            if steps.count().literal() == Some(2)
+                && steps.position() == Some(CssStepPosition::JumpNone)
+    ));
+
+    let CssKnownPropertyValueRef::Animation(animation) = report.syntax()[1]
+        .known()
+        .expect("known animation")
+        .property_value()
+        .expect("ordinary animation")
+    else {
+        panic!("expected animation wrapper");
+    };
+    assert!(matches!(
+        animation.animations().values()[0].current_timing_function(),
+        Some(CssEasingValue::Steps(steps))
+            if steps.count().literal() == Some(3)
+                && steps.position() == Some(CssStepPosition::JumpBoth)
+    ));
+
+    assert!(transition.i01_subset().is_some());
+    assert!(animation.i01_subset().is_some());
 }
 
 #[test]

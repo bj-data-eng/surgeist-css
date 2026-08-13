@@ -34,6 +34,77 @@ fn parsed_type(name: &str) -> CssMediaType {
 }
 
 #[test]
+fn defined_false_media_syntax_is_not_malformed_recovery() {
+    let report = parse_sheet(concat!(
+        "@media only future-screen and (unknown-feature: calc(1foo + 2px)), ",
+        "(width: calc(1px)), screen {}",
+    ));
+    assert!(
+        report.is_clean(),
+        "balanced unknown MQ3 syntax is valid defined-false authored syntax: {:?}",
+        report.diagnostics()
+    );
+    let [CssRule::Media(rule)] = report.syntax().rules() else {
+        panic!("expected the media rule to be retained")
+    };
+    assert_eq!(rule.query().queries().len(), 3);
+    assert!(
+        rule.query()
+            .queries()
+            .iter()
+            .all(|query| !matches!(query, CssMediaQuery::Never(_))),
+        "defined-false members are distinct from malformed recovery"
+    );
+
+    for malformed in ["layer", "not", "and", "only", "or", "???", ""] {
+        let source = format!("@media screen,{malformed},print {{}} ");
+        let report = parse_sheet(&source);
+        let [CssRule::Media(rule)] = report.syntax().rules() else {
+            panic!("{malformed:?}: expected the media rule to be retained")
+        };
+        assert!(
+            matches!(
+                rule.query().queries(),
+                [
+                    CssMediaQuery::Typed(_),
+                    CssMediaQuery::Never(_),
+                    CssMediaQuery::Typed(_)
+                ]
+            ),
+            "{malformed:?}: reserved, unexpected, and empty members stay malformed"
+        );
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{malformed:?}: expected exactly one malformed-member diagnostic")
+        };
+        assert_eq!(
+            diagnostic.action(),
+            CssRecoveryAction::ReplaceMediaQueryWithNever,
+            "{malformed:?}"
+        );
+    }
+
+    let scripting = parse_sheet("@media screen,(scripting: enabled),print {}");
+    let [CssRule::Media(rule)] = scripting.syntax().rules() else {
+        panic!("expected the scripting media rule to be retained")
+    };
+    assert!(matches!(
+        rule.query().queries(),
+        [
+            CssMediaQuery::Typed(_),
+            CssMediaQuery::Never(_),
+            CssMediaQuery::Typed(_)
+        ]
+    ));
+    let [diagnostic] = scripting.diagnostics() else {
+        panic!("recognized deferred scripting still diagnoses")
+    };
+    assert_eq!(
+        diagnostic.action(),
+        CssRecoveryAction::ReplaceMediaQueryWithNever
+    );
+}
+
+#[test]
 fn mq3_named_types_and_features_follow_exact_domains() {
     let report = parse_sheet(concat!(
         "@media speech { .speech { color: red; } } ",

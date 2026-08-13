@@ -4,7 +4,7 @@
 
 This is the JIT implementation contract for `P01-I02` in `surgeist-css`.
 It is subordinate to the reviewed P01 program at semantic SHA-256
-`881345cd7e08ca20f973205fdcb8b2791a0102a08062d07eaee456aaa06cfcc9`
+`7a8e26a1cd961d42e3a1275b49e278851e314d6b2df77128dcffc3654679114b`
 and incorporates its I02-entry and source-contradiction reconciliations. The
 initiative base is the published, fetchable I01 candidate
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; the P01 reconciliation commit
@@ -293,6 +293,37 @@ boundary, and every other fixture row remain byte-for-byte identical. Any
 additional frozen-oracle contradiction returns to P01 reconciliation before
 implementation.
 
+### 3.6 C10 Source-Backed Oracle Correction
+
+P01.13 reconciles five C01 rows that encode the incomplete Selectors 3 and
+Namespaces 3 behavior allocated to C10. C10 shall replace only the expected
+observables for these stable scenario IDs while preserving their entry point,
+feature mode, and authored input:
+
+- `catalog.non-property.baseline.selector.extension-state.boundary` retains
+  valid `:target`;
+- `catalog.non-property.baseline.selector.functional.boundary` retains valid
+  `:lang(en)`;
+- `catalog.non-property.baseline.selector.pseudo-class.boundary` retains valid
+  `:visited`;
+- `catalog.non-property.baseline.selector.pseudo-element.boundary` retains
+  valid `::first-line`; and
+- `catalog.non-property.later.rule.namespace.boundary` retains the valid
+  top-level namespace declaration.
+
+The four selector rows become clean and retain the style rule plus red color
+declaration. The namespace row becomes clean and retains
+`rule:later.rule.namespace`. The fixture SHA-256 before C10 is
+`95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`;
+the hand-authored replacement rows yield SHA-256
+`085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`.
+Task review verifies the exact five-row diff. No Rust test asserts either
+digest, derives expected values from production, masks a corrected case, or
+uses source/test owner sets or counts as completeness evidence. The distinct
+undeclared-prefix `svg|a` boundary and every other fixture row remain
+byte-for-byte identical. Any additional frozen-oracle contradiction returns to
+P01 reconciliation before implementation.
+
 ## 4. Conformance Profile And Catalog
 
 ### 4.1 Tiers, Sources, And Dispositions
@@ -466,8 +497,8 @@ At initiative completion:
 - preserved extensions are `Complete`, `Partial`, or
   `RecognizedUnsupported` truthfully, with exact subset/remainder or diagnostic
   identity; except for the exact section 3.3 seven-row, section 3.4 one-row,
-  and section 3.5 eight-row source corrections, no preserved I01 accepted
-  vector regresses;
+  section 3.5 eight-row, and section 3.6 five-row source corrections, no
+  preserved I01 accepted vector regresses;
 - unknown spellings remain distinct from recognized unsupported spellings;
 - exact I01 baseline tests become subset-preservation tests rather than replacing
   `219`, `179`, and `40` with ungrounded new totals.
@@ -482,9 +513,19 @@ unsupported with exact metadata.
 
 Replace the top-level `imports_allowed` boolean with a phase machine for initial
 layer statements, consecutive imports, consecutive namespaces, and body rules.
-Initial empty `@layer` statements do not close imports; an intervening layer
-statement after an import or namespace does. Namespace declarations are
-top-level only. Phase transitions occur only after successful rule parsing.
+Initial empty `@layer` statements do not close imports, but Namespaces 3 requires
+every namespace declaration to precede them. C10 therefore refines the C09
+machine into `Initial`, `InitialLayers`, `Imports`, `ImportsAfterInitialLayers`,
+`Namespaces`, and `Body`: `InitialLayers` still accepts imports but rejects
+namespaces; an import from it enters `ImportsAfterInitialLayers`, which also
+accepts imports and rejects namespaces. An import from `Initial` enters
+`Imports`, which accepts imports and namespaces. A namespace from `Initial` or
+`Imports` enters `Namespaces`; only another namespace is a valid prelude rule
+there. A successful layer after an import or namespace, or any successful body
+rule, enters `Body`. Namespace declarations are top-level only. Invalid or
+ignored rules do not transition the phase. `ext.stylesheet.prelude-order`
+continues to own only the Cascade 5 layer/import delta; O-NAMESPACES3 owns the
+stricter namespace-before-layer constraint.
 
 `@import` gains typed optional `layer`, `supports()`, and media clauses in the
 specification order. The official Cascade 4 `baseline.rule.import` row owns the
@@ -505,8 +546,21 @@ Conditional 3 owns declaration tests but not `selector()`. The selected
 `R-CONDITIONAL4#at-supports` delta owns a distinct `ext.supports.selector`
 atomic row. C09 parses that function through the established complex-selector
 parser and classifies the row Partial with the exact selector subset and
-remainder supported at its exit. C10 expands the same row when namespace and
-complete Selectors 3 syntax land; it does not claim complete Selectors 4.
+remainder supported at its exit. C10 keeps the row `Partial`. Its supported
+subset is complete Selectors 3 plus the already catalogued I01 Selectors 4
+extensions: attribute `i`/`s` modifiers; `:scope`, `:focus-visible`,
+`:focus-within`, `:required`, `:optional`, `:valid`, `:invalid`,
+`:placeholder-shown`, `:modal`, `:fullscreen`, `:popover-open`, `:default`,
+`:indeterminate`, `:read-only`, `:read-write`, `:in-range`, and
+`:out-of-range`; `:is()`,
+`:where()`, `:has()`, selector-list `:not()`, and nth-child `of`; and the exact
+selected marker/selection/backdrop pseudo-element rows and generated-marker
+sequence. Other Selectors 4 forms, including `||`, unselected pseudo-classes,
+pseudo-elements, and syntax outside those atomic extension rows, remain the
+unsupported remainder. Balanced `selector()` content outside the typed subset
+is retained as `CssSupportsConditionKind::GeneralEnclosed` without a recovery
+diagnostic. Direct public behavior and named metadata tests prove both typed and
+general-enclosed branches; no Complete Selectors 4 claim is made.
 
 Counter-style and page descriptors use source-order occurrence lists,
 effective-last lookup where defined, exact required/conflicting descriptor
@@ -528,16 +582,66 @@ and classes; all matchers; `:link`, `:visited`, `:target`, `:lang()`; the full
 structural/UI pseudo-class set; `::first-line` and `::first-letter` including
 allowed legacy single-colon spelling; and all four combinators.
 
-The namespace model preserves default, explicit-none, any, and named-prefix
-constraints. Named prefixes must have an earlier active declaration;
-attributes do not inherit the default namespace. URI resolution is out of
-scope. Namespace declaration order, null namespace, escapes, and undeclared
-prefix diagnostics receive exact vectors.
+Add `CssRule::Namespace(CssNamespaceRule)`. `CssNamespaceRule` has private
+optional `CssNamespacePrefix`, `CssNamespaceName`, and parser-produced position
+fields exposed by `prefix()`, `name()`, and `position()`. A checked
+`CssNamespacePrefix::try_new` contains one CSS identifier;
+`CssNamespacePrefix::as_str` remains case-sensitive after CSS escape decoding.
+`CssNamespaceName::new` and `as_str` preserve the literal string from a string
+or `url()` token; empty strings and strings that are not valid URIs remain valid
+and no URI normalization or loading occurs.
+
+Add a non-exhaustive `CssNamespaceConstraint` with `Default`, `ExplicitNone`,
+`Any`, and `Named(CssNamespacePrefix)` branches, plus a private-field
+`CssQualifiedSelectorName` whose local name is either a checked identifier or
+universal `*`. Its `namespace()`, `local_name() -> Option<&str>`, and
+`is_universal()` accessors expose that distinction.
+`CssCompoundSelector::type_selector()` exposes the current model. Existing
+`CssSelector::Tag`, `CssSelector::Key`,
+`CssCompoundSelector::tag()`, and `key()` remain source-compatible projections
+for their I01 shapes. `CssCompoundSelector::ids()` exposes every ID in authored
+order; `key()` continues to return the last ID for compatibility. An attribute
+selector keeps its local `name()` projection and adds a namespace-constraint
+accessor; its local name is never universal.
+
+The parser keeps a sheet-local active namespace environment and passes it to
+every selector consumer, including nested conditional/style/scope rules and
+`@supports selector()`. A syntactically valid declaration is retained in
+authored order; a later declaration for the same exact case-sensitive prefix
+or the default replaces the active binding for following selectors. Named
+constraints require an earlier active declaration. Unqualified type and
+universal selectors use `Default` when one is active and `Any` otherwise;
+unqualified attributes use `ExplicitNone`. `*|` is `Any`, `|` is
+`ExplicitNone`, and a declared identifier prefix is `Named`. URI resolution is
+out of scope.
+
+Namespace declarations are semicolon top-level rules. They follow encoding and
+imports, may repeat consecutively, and must precede every successful layer or
+body rule. An initial layer statement may still precede a later import under the
+Cascade 5 delta, but it makes every later namespace declaration misplaced even
+after that import. Only successful declarations advance the refined C10 phase
+machine; malformed or misplaced declarations recover as one dropped at-rule
+without changing active bindings or phase. Namespace declaration order, null
+namespace, escapes, block mutation, nested placement, and undeclared-prefix
+diagnostics receive exact public vectors.
+
+Add `Link`, `Visited`, `Target`, and `Lang(CssLanguageRange)` to
+`CssPseudoClass`; the checked private-field language range is one nonempty CSS
+identifier and exposes its decoded spelling through `try_new` and `as_str`.
+Add `FirstLine` and `FirstLetter` to `CssPseudoElement`. Single-colon `before`,
+`after`, `first-line`, and `first-letter` map to the same typed pseudo-elements
+as their
+double-colon spellings; later pseudo-elements remain double-colon-only. The
+existing Selectors 4 `:not()` extension remains broader than the Selectors 3
+simple-selector production under its existing separate extension ownership.
 
 `CssCompoundSelector` stores IDs as an ordered collection and never overwrites
 an occurrence. Existing Selectors 4/nesting/scope extensions retain their I01
 recovery distinctions: only `:is()` and `:where()` are forgiving; `:not()`,
 `:has()`, nth `of`, style-rule, scope, and nesting lists remain unforgiving.
+An undeclared namespace prefix invalidates its selector: forgiving consumers
+drop only that list member with `DropSelectorListItem`, while unforgiving rule
+and selector-list consumers preserve their existing smallest-unit recovery.
 
 ## 7. Media, Supports, And Conditional Syntax
 
@@ -670,8 +774,9 @@ inspection. They reiterate the excluded downstream semantics.
 I01 behavioral tests remain baseline-preservation evidence, subject only to the
 seven source-backed C07 corrections in section 3.3, the one source-backed C08
 correction in section 3.4, and the eight source-backed C09 corrections in
-section 3.5 with final fixture digest
-`95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`.
+section 3.5, plus the five source-backed C10 corrections in section 3.6, with
+the post-C10 fixture digest
+`085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`.
 At I02 completion,
 the coordinator and reviewers map every acceptance item to direct source
 inspection, compiler-visible API evidence, behavioral tests, or deterministic
@@ -699,9 +804,9 @@ source/code shape as completion evidence.
 | `2.17` | section 5: duplicate/empty keyframe structures |
 
 I02 also preserves all I01 finding evidence after the reviewed section 3.3,
-3.4, and 3.5 corrections. If closing a row would change another frozen section
-3.1 semantic, require unsafe, cross an ownership boundary, or require another
-breaking cycle, stop and reconcile P01.
+3.4, 3.5, and 3.6 corrections. If closing a row would change another frozen
+section 3.1 semantic, require unsafe, cross an ownership boundary, or require
+another breaking cycle, stop and reconcile P01.
 
 ## 12. Initiative Acceptance
 
@@ -717,9 +822,10 @@ I02 is complete only when all predicates hold:
    counts.
 3. The exact 219-row I01 feature baseline remains classified; the seven C07
    scenario IDs in section 3.3, the one C08 scenario ID in section 3.4, and the
-   eight C09 scenario IDs in section 3.5 carry their reviewed source-backed
-   replacement observables; the C09 fixture has exact SHA-256
-   `95518fbabb04cd5b96bc9505a4d96681d444042498d681f28b3db4f3d8a2f0d3`;
+   eight C09 scenario IDs in section 3.5 and five C10 scenario IDs in section
+   3.6 carry their reviewed source-backed replacement observables; the C10
+   fixture has exact SHA-256
+   `085265e665b5a4540b1db1cf0faab7d7bfbb15264f983ff8cacfd496c22ee45f`;
    every other accepted vector does not regress; extension status and
    provenance are truthful.
 4. All fourteen allocated findings in section 11 have implemented source and

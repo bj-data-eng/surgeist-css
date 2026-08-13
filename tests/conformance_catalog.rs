@@ -2222,6 +2222,201 @@ fn animation_metadata_matches_c03_shorthand_behavior_and_c05_remainder() {
 }
 
 #[test]
+fn media_conditional_and_import_metadata_are_truthful() {
+    for source in [
+        "@media speech and (device-width: 800px) and (resolution: 2dpcm) { .x { color: red; } }",
+        "@supports (display: grid) and future-layout(mode) { .x { color: red; } }",
+        "@supports selector(.card > .item:hover) { .x { color: red; } }",
+        "@layer reset; @import url(theme.css) layer(theme) supports(display: grid) print;",
+    ] {
+        let report = parse_sheet(source);
+        assert!(
+            report.is_clean(),
+            "paired grammar behavior must be clean for {source:?}: {:?}",
+            report.diagnostics()
+        );
+    }
+
+    let assert_complete = |id: &str, kind: CssFeatureKind, source_id: &str, production: &str| {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing metadata for {id}"));
+        assert_eq!(metadata.kind(), kind, "{id} kind");
+        assert_eq!(metadata.source().id().as_str(), source_id, "{id} source");
+        assert_eq!(metadata.production(), production, "{id} production");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+        assert_eq!(metadata.supported_subset(), None, "{id} subset");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+        assert_eq!(
+            metadata.recognized_unsupported_code(),
+            None,
+            "{id} recognized code"
+        );
+        assert!(metadata.baseline_alias_targets().is_empty(), "{id} alias");
+    };
+
+    assert_complete(
+        "official.media.query-list-core",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#syntax",
+    );
+    assert_complete(
+        "baseline.media.type",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#media1",
+    );
+    assert_complete(
+        "official.media.feature.width",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#width",
+    );
+    assert_complete(
+        "official.media.feature.height",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#height",
+    );
+    assert_complete(
+        "official.media.feature.device-width",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#device-width",
+    );
+    assert_complete(
+        "official.media.feature.device-height",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#device-height",
+    );
+    assert_complete(
+        "official.media.feature.orientation",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#orientation",
+    );
+    assert_complete(
+        "official.media.feature.aspect-ratio",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#aspect-ratio",
+    );
+    assert_complete(
+        "official.media.feature.device-aspect-ratio",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#device-aspect-ratio",
+    );
+    assert_complete(
+        "official.media.feature.color",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#color",
+    );
+    assert_complete(
+        "official.media.feature.color-index",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#color-index",
+    );
+    assert_complete(
+        "official.media.feature.monochrome",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#monochrome",
+    );
+    assert_complete(
+        "official.media.feature.resolution",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#resolution",
+    );
+    assert_complete(
+        "official.media.feature.scan",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#scan",
+    );
+    assert_complete(
+        "official.media.feature.grid",
+        CssFeatureKind::MediaQuery,
+        "O-MEDIA3",
+        "#grid",
+    );
+
+    assert_complete(
+        "baseline.rule.media",
+        CssFeatureKind::Rule,
+        "O-CONDITIONAL3",
+        "#at-media",
+    );
+    assert_complete(
+        "later.rule.supports",
+        CssFeatureKind::Rule,
+        "O-CONDITIONAL3",
+        "#at-supports",
+    );
+    assert_complete(
+        "official.rule.conditional-group-context",
+        CssFeatureKind::Rule,
+        "O-CONDITIONAL3",
+        "#contents,#placement",
+    );
+    assert_complete(
+        "baseline.rule.import",
+        CssFeatureKind::Rule,
+        "O-CASCADE4",
+        "#at-import",
+    );
+
+    assert_complete(
+        "ext.media.resolution.dppx",
+        CssFeatureKind::MediaQuery,
+        "R-MEDIA4",
+        "#resolution",
+    );
+    assert_complete(
+        "ext.supports.general-enclosed",
+        CssFeatureKind::MediaQuery,
+        "X-VALUES4",
+        "css-values-4/Overview.bs#general-enclosed",
+    );
+    assert_complete(
+        "ext.import.layer",
+        CssFeatureKind::Rule,
+        "R-CASCADE5",
+        "#at-import",
+    );
+    assert_complete(
+        "ext.stylesheet.prelude-order",
+        CssFeatureKind::Rule,
+        "R-CASCADE5",
+        "#at-import",
+    );
+
+    let selector =
+        feature_metadata("ext.supports.selector").expect("Conditional 4 selector-test metadata");
+    assert_eq!(selector.kind(), CssFeatureKind::MediaQuery);
+    assert_eq!(selector.source().id().as_str(), "R-CONDITIONAL4");
+    assert_eq!(selector.production(), "#at-supports");
+    assert_eq!(selector.status(), CssSupportStatus::Partial);
+    assert_eq!(
+        selector.supported_subset(),
+        Some(
+            "selector() accepts the current typed complex-selector subset and preserves other balanced selector content as general-enclosed authored syntax."
+        )
+    );
+    assert_eq!(
+        selector.unsupported_remainder(),
+        Some(
+            "Namespace-qualified selectors and the remaining Selectors 3 grammar await I02-C10; this row does not claim complete Selectors 4."
+        )
+    );
+    assert_eq!(selector.recognized_unsupported_code(), None);
+    assert!(selector.baseline_alias_targets().is_empty());
+}
+
+#[test]
 fn named_conformance_records_expose_declared_metadata() {
     for expected in EXPECTED {
         let actual = feature_metadata(expected.id).expect("expected catalog record");

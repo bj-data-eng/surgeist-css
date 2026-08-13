@@ -49,7 +49,10 @@ fn assert_invalid_easing_is_dropped(case: &InvalidEasingCase) {
         "{}",
         case.source,
     );
-    assert_eq!(diagnostic.error().position().byte_offset().value(), case.position);
+    assert_eq!(
+        diagnostic.error().position().byte_offset().value(),
+        case.position
+    );
     assert_eq!(diagnostic.span().start().byte_offset().value(), 0);
     assert_eq!(
         diagnostic.span().end().byte_offset().value(),
@@ -83,7 +86,12 @@ fn assert_invalid_easing_is_dropped(case: &InvalidEasingCase) {
     {
         let failure = surgeist_css::validate_style_attribute(case.source)
             .expect_err("strict validation must reject the recovered easing declaration");
-        assert_eq!(failure.diagnostics(), report.diagnostics(), "{}", case.source);
+        assert_eq!(
+            failure.diagnostics(),
+            report.diagnostics(),
+            "{}",
+            case.source
+        );
     }
 }
 

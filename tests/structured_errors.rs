@@ -519,6 +519,51 @@ fn typed_calculation_operator_and_divisor_errors_retain_later_siblings() {
 }
 
 #[test]
+fn easing_bound_error_has_exact_payload_span_action_and_sibling_recovery() {
+    let source = "transition-timing-function: cubic-bezier(1.1, 0, 0.5, 1); color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 1);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("out-of-range cubic-bezier x must recover once");
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    let responsible = source.find("1.1").expect("responsible x coordinate");
+    let declaration_end = source.find(';').expect("timing declaration end") + 1;
+    assert_eq!(
+        diagnostic.error().position().byte_offset().value(),
+        responsible
+    );
+    assert_eq!(diagnostic.span().start().byte_offset().value(), 0);
+    assert_eq!(
+        diagnostic.span().end().byte_offset().value(),
+        declaration_end
+    );
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected structured property-value error");
+    };
+    assert_eq!(
+        detail.property(),
+        CssKnownProperty::TransitionTimingFunction
+    );
+    let encountered = detail
+        .encountered()
+        .expect("responsible cubic-bezier x coordinate");
+    assert_eq!(encountered.kind(), CssTokenKind::Number);
+    assert_eq!(encountered.authored(), "1.1");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered easing input");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn timing_first_duration_failure_has_exact_payload_span_action_and_sibling_recovery() {
     let source = "transition: opacity -1s 2s; color: red";
     let report = parse_style_attribute(source);

@@ -304,6 +304,56 @@ fn filter_domain_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span()
     }
 }
 
+#[test]
+fn basic_shape_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
+    let source = "--😀: 1; clip-path: polygon(round -1px, 0 0); color: red";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid polygon rounding must recover once");
+    };
+    assert_eq!(
+        diagnostic.error().code(),
+        CssErrorCode::InvalidPropertyValue
+    );
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    let responsible = source.find("-1px").unwrap();
+    let declaration_start = source.find("clip-path").unwrap();
+    let declaration_end = declaration_start + source[declaration_start..].find(';').unwrap() + 1;
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(responsible - 2).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().start(),
+        declaration_start,
+        0,
+        u32::try_from(declaration_start - 2).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        declaration_end,
+        0,
+        u32::try_from(declaration_end - 2).unwrap(),
+    );
+    let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+        panic!("expected structured clip-path property error");
+    };
+    assert_eq!(detail.property(), CssKnownProperty::ClipPath);
+    let encountered = detail.encountered().expect("responsible polygon radius");
+    assert_eq!(encountered.kind(), CssTokenKind::Dimension);
+    assert_eq!(encountered.authored(), "-1px");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects recovered basic shape");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
 fn first_declaration_position(source: &str) -> CssSourcePosition {
     let sheet = parse_sheet(source).expect("valid stylesheet");
     let CssRule::Style(rule) = &sheet.rules()[0] else {

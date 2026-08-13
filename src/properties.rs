@@ -541,6 +541,57 @@ macro_rules! define_property_value {
         define_filter_property_value!($canonical, $wrapper, $representation);
     };
     (
+        ClipPath, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: Option<CssClipPathValue>,
+            i01_subset: Option<CssClipPath>,
+        }
+
+        /// A parser-produced authored ordinary `clip-path` value.
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) fn new(
+                authored: CssAuthoredDeclarationValue,
+                parsed: CssParsedClipPath,
+            ) -> Self {
+                let (current, i01_subset) = parsed.into_parts();
+                Self {
+                    authored,
+                    representation: $representation {
+                        current,
+                        i01_subset,
+                    },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            /// Returns the exact checked current authored clip-path subset, when representable.
+            #[must_use]
+            pub const fn current(&self) -> Option<&CssClipPathValue> {
+                self.representation.current.as_ref()
+            }
+
+            /// Returns the frozen authored-arguments compatibility projection.
+            #[must_use]
+            pub const fn i01_subset(&self) -> Option<&CssClipPath> {
+                self.representation.i01_subset.as_ref()
+            }
+        }
+    };
+    (
         Transform, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident
     ) => {

@@ -87,6 +87,329 @@ const CLIP_PATH_SUBSET: &str =
 const CLIP_PATH_REMAINDER: &str =
     "Reference-box combinations and path(), shape(), rect(), and xywh() remain unsupported.";
 
+const COLOR5_RELATIVE_SUBSET: &str = "The eight preserved relative-color families are supported: rgb()/rgba(), hsl()/hsla(), hwb(), lab(), lch(), oklab(), oklch(), and color() in a predefined RGB or XYZ space.";
+const COLOR5_RELATIVE_REMAINDER: &str = "alpha(), custom-profile parameters, and other unselected CSS Color 5 color functions remain unsupported.";
+const COLOR5_MIX_SUBSET: &str = "The preserved color-mix() subset requires an interpolation method, exactly two colors, optional trailing percentages, and a predefined or polar color space.";
+const COLOR5_MIX_REMAINDER: &str =
+    "Other valid forms of the dated CSS Color 5 color-mix() production remain unsupported.";
+
+fn assert_clean_color(authored: &str) {
+    let source = format!("color: {authored}");
+    let report = parse_style_attribute(&source);
+    assert!(report.is_clean(), "{source}: {:?}", report.diagnostics());
+    assert_eq!(report.syntax().len(), 1, "{source}");
+    assert_eq!(
+        report.syntax()[0].known().map(|known| known.property()),
+        Some(CssKnownProperty::Color),
+        "{source}",
+    );
+}
+
+fn assert_rejected_color(authored: &str) {
+    let source = format!("color: {authored}");
+    let report = parse_style_attribute(&source);
+    assert!(report.syntax().is_empty(), "{source}");
+    assert_eq!(report.diagnostics().len(), 1, "{source}");
+    assert_eq!(
+        report.diagnostics()[0].error().code(),
+        CssErrorCode::InvalidColorSyntax,
+        "{source}",
+    );
+}
+
+fn assert_complete_color4_value(id: &str, spelling: &str, production: &str, authored: &str) {
+    assert_clean_color(authored);
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing metadata for {id}"));
+    assert_eq!(metadata.kind(), CssFeatureKind::Value, "{id}");
+    assert_eq!(metadata.spelling(), spelling, "{id}");
+    assert_eq!(metadata.source().id().as_str(), "O-COLOR4", "{id}");
+    assert_eq!(metadata.production(), production, "{id}");
+    assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id}");
+    assert_eq!(metadata.supported_subset(), None, "{id}");
+    assert_eq!(metadata.unsupported_remainder(), None, "{id}");
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id}");
+    assert!(metadata.baseline_alias_targets().is_empty(), "{id}");
+}
+
+fn assert_complete_color5_value(
+    id: &str,
+    spelling: &str,
+    production: &str,
+    accepted: &str,
+    rejected: &str,
+) {
+    assert_clean_color(accepted);
+    assert_rejected_color(rejected);
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing metadata for {id}"));
+    assert_eq!(metadata.kind(), CssFeatureKind::Value, "{id}");
+    assert_eq!(metadata.spelling(), spelling, "{id}");
+    assert_eq!(metadata.source().id().as_str(), "I-COLOR5", "{id}");
+    assert_eq!(metadata.production(), production, "{id}");
+    assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id}");
+    assert_eq!(metadata.supported_subset(), None, "{id}");
+    assert_eq!(metadata.unsupported_remainder(), None, "{id}");
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id}");
+    assert!(metadata.baseline_alias_targets().is_empty(), "{id}");
+}
+
+fn assert_partial_color5_value(
+    id: &str,
+    spelling: &str,
+    production: &str,
+    subset: &str,
+    remainder: &str,
+    accepted: &str,
+    rejected: &str,
+) {
+    assert_clean_color(accepted);
+    assert_rejected_color(rejected);
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing metadata for {id}"));
+    assert_eq!(metadata.kind(), CssFeatureKind::Value, "{id}");
+    assert_eq!(metadata.spelling(), spelling, "{id}");
+    assert_eq!(metadata.source().id().as_str(), "I-COLOR5", "{id}");
+    assert_eq!(metadata.production(), production, "{id}");
+    assert_eq!(metadata.status(), CssSupportStatus::Partial, "{id}");
+    assert_eq!(metadata.supported_subset(), Some(subset), "{id}");
+    assert_eq!(metadata.unsupported_remainder(), Some(remainder), "{id}");
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id}");
+    assert!(metadata.baseline_alias_targets().is_empty(), "{id}");
+}
+
+#[test]
+fn color4_value_and_property_metadata_match_public_authored_behavior() {
+    assert_complete_color4_value("official.value.color", "<color>", "#color-type", "red");
+    assert_complete_color4_value(
+        "official.value.alpha",
+        "<alpha-value>",
+        "#alpha-syntax",
+        "rgb(0 0 0 / 150%)",
+    );
+    assert_complete_color4_value(
+        "official.value.hue",
+        "<hue>",
+        "#hue-syntax",
+        "hsl(calc(1turn - 90deg) 50% 50%)",
+    );
+    assert_complete_color4_value(
+        "official.value.rgb",
+        "rgb()/rgba()",
+        "#rgb-functions",
+        "rgb(calc(1 + 2) 20% none / 150%)",
+    );
+    assert_complete_color4_value(
+        "official.value.hex-color",
+        "<hex-color>",
+        "#hex-notation",
+        "#00ff88cc",
+    );
+    assert_complete_color4_value(
+        "official.value.named-color",
+        "<named-color>",
+        "#named-colors",
+        "rebeccapurple",
+    );
+    assert_complete_color4_value(
+        "official.value.system-color",
+        "<system-color>",
+        "#css-system-colors",
+        "CanvasText",
+    );
+    assert_complete_color4_value(
+        "official.value.deprecated-system-color",
+        "<deprecated-system-color>",
+        "#css-system-colors",
+        "ActiveBorder",
+    );
+    assert_complete_color4_value(
+        "official.value.transparent",
+        "transparent",
+        "#transparent-color",
+        "transparent",
+    );
+    assert_complete_color4_value(
+        "official.value.currentcolor",
+        "currentColor",
+        "#currentcolor-color",
+        "currentColor",
+    );
+    assert_complete_color4_value(
+        "official.value.hsl",
+        "hsl()/hsla()",
+        "#the-hsl-notation",
+        "hsl(30deg 120% -20% / none)",
+    );
+    assert_complete_color4_value(
+        "official.value.hwb",
+        "hwb()",
+        "#the-hwb-notation",
+        "hwb(none 20% 120% / -10%)",
+    );
+    assert_complete_color4_value(
+        "official.value.lab",
+        "lab()",
+        "#specifying-lab-lch",
+        "lab(50% 20 -30 / 120%)",
+    );
+    assert_complete_color4_value(
+        "official.value.lch",
+        "lch()",
+        "#specifying-lab-lch",
+        "lch(50% 20 30deg / none)",
+    );
+    assert_complete_color4_value(
+        "official.value.oklab",
+        "oklab()",
+        "#specifying-oklab-oklch",
+        "oklab(50% 0.1 -0.1)",
+    );
+    assert_complete_color4_value(
+        "official.value.oklch",
+        "oklch()",
+        "#specifying-oklab-oklch",
+        "oklch(50% 0.2 30deg)",
+    );
+    assert_complete_color4_value(
+        "official.value.predefined-color",
+        "color()",
+        "#color-function",
+        "color(display-p3 1 0 0 / 120%)",
+    );
+
+    let color = property_metadata("color").expect("color metadata");
+    assert_eq!(color.feature().status(), CssSupportStatus::Complete);
+    assert_eq!(color.feature().source().id().as_str(), "O-COLOR4");
+    assert_eq!(color.feature().production(), "#propdef-color");
+    assert_eq!(color.feature().supported_subset(), None);
+    assert_eq!(color.feature().unsupported_remainder(), None);
+
+    let opacity_report = parse_style_attribute("opacity: 150%");
+    assert!(
+        opacity_report.is_clean(),
+        "{:?}",
+        opacity_report.diagnostics()
+    );
+    let opacity = property_metadata("opacity").expect("opacity metadata");
+    assert_eq!(opacity.feature().status(), CssSupportStatus::Complete);
+    assert_eq!(opacity.feature().source().id().as_str(), "O-COLOR4");
+    assert_eq!(opacity.feature().production(), "#propdef-opacity");
+    assert_eq!(opacity.feature().supported_subset(), None);
+    assert_eq!(opacity.feature().unsupported_remainder(), None);
+}
+
+#[test]
+fn relative_color_selected_families_and_deferred_remainder_are_distinct() {
+    assert_partial_color5_value(
+        "ext.value.relative-color",
+        "relative color syntax",
+        "#relative-colors,#relative-syntax",
+        COLOR5_RELATIVE_SUBSET,
+        COLOR5_RELATIVE_REMAINDER,
+        "rgb(from red r g b / alpha)",
+        "alpha(from red r g b)",
+    );
+}
+
+#[test]
+fn relative_rgb_channels_reject_foreign_identifiers_and_dimensions() {
+    assert_complete_color5_value(
+        "ext.value.relative-color.rgb",
+        "relative rgb()/rgba()",
+        "#relative-RGB",
+        "rgb(from red r g b / alpha)",
+        "rgb(from red h g b)",
+    );
+}
+
+#[test]
+fn relative_hsl_channels_keep_hue_and_percentage_domains_distinct() {
+    assert_complete_color5_value(
+        "ext.value.relative-color.hsl",
+        "relative hsl()/hsla()",
+        "#relative-HSL",
+        "hsl(from red h s l / alpha)",
+        "hsl(from red 10% s l)",
+    );
+}
+
+#[test]
+fn relative_hwb_channels_use_only_hwb_environment() {
+    assert_complete_color5_value(
+        "ext.value.relative-color.hwb",
+        "relative hwb()",
+        "#relative-HWB",
+        "hwb(from red h w b / alpha)",
+        "hwb(from red h s b)",
+    );
+}
+
+#[test]
+fn relative_lab_channels_use_only_lab_environment() {
+    assert_complete_color5_value(
+        "ext.value.relative-color.lab",
+        "relative lab()",
+        "#relative-Lab",
+        "lab(from red l a b / alpha)",
+        "lab(from red l c b)",
+    );
+}
+
+#[test]
+fn relative_oklab_channels_use_only_oklab_environment() {
+    assert_complete_color5_value(
+        "ext.value.relative-color.oklab",
+        "relative oklab()",
+        "#relative-Oklab",
+        "oklab(from red l a b / alpha)",
+        "oklab(from red l c b)",
+    );
+}
+
+#[test]
+fn relative_lch_channels_keep_hue_domain_distinct() {
+    assert_complete_color5_value(
+        "ext.value.relative-color.lch",
+        "relative lch()",
+        "#relative-LCH",
+        "lch(from red l c h / alpha)",
+        "lch(from red l c calc(h + 10%))",
+    );
+}
+
+#[test]
+fn relative_oklch_channels_keep_hue_domain_distinct() {
+    assert_complete_color5_value(
+        "ext.value.relative-color.oklch",
+        "relative oklch()",
+        "#relative-OkLCh",
+        "oklch(from red l c h / alpha)",
+        "oklch(from red l c calc(h + 10%))",
+    );
+}
+
+#[test]
+fn relative_predefined_color_channels_follow_space_environment() {
+    assert_complete_color5_value(
+        "ext.value.relative-color.predefined",
+        "relative color()",
+        "#relative-color-function",
+        "color(from red display-p3 r g b / alpha)",
+        "color(from red srgb x g b)",
+    );
+}
+
+#[test]
+fn color_mix_preserved_subset_rejects_cross_space_hue_methods() {
+    assert_partial_color5_value(
+        "ext.value.color-mix",
+        "color-mix()",
+        "#funcdef-color-mix",
+        COLOR5_MIX_SUBSET,
+        COLOR5_MIX_REMAINDER,
+        "color-mix(in oklch longer hue, red 25%, blue 75%)",
+        "color-mix(in srgb longer hue, red, blue)",
+    );
+}
+
 const EXPECTED: &[ExpectedFeature] = &[
     ExpectedFeature {
         id: "baseline.rule.import",

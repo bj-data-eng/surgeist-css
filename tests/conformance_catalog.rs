@@ -1,12 +1,15 @@
 use surgeist_css::{
-    CssAngleCalculation, CssAngleUnit, CssCalculationType, CssDelayLiteral, CssErrorCode,
-    CssExclusionReason, CssFeatureKind, CssFrequencyCalculation, CssFrequencyUnit,
-    CssHorizontalPosition, CssIntegerCalculation, CssKnownProperty, CssKnownPropertyValueRef,
-    CssLength, CssLengthCalculation, CssLengthDimension, CssLengthUnit, CssNumberCalculation,
-    CssPercentageCalculation, CssRecoveryAction, CssResolution, CssResolutionUnit,
-    CssSpecificationTier, CssSupportStatus, CssTimeCalculation, CssTimeUnit, CssVerticalPosition,
-    ErrorKind, conformance_exclusion, conformance_exclusions, feature_metadata, parse_sheet,
-    parse_style_attribute, property_metadata, specification_source, specification_sources,
+    CssAngleCalculation, CssAngleUnit, CssBasicShapeValue, CssBoxShadow, CssCalculationType,
+    CssClipPathValue, CssDelayLiteral, CssEasingValue, CssErrorCode, CssExclusionReason,
+    CssFeatureKind, CssFilterFunctionValue, CssFilterValue, CssFrequencyCalculation,
+    CssFrequencyUnit, CssHorizontalPosition, CssIntegerCalculation, CssKnownProperty,
+    CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthDimension, CssLengthUnit,
+    CssNumberCalculation, CssPercentageCalculation, CssRecoveryAction, CssResolution,
+    CssResolutionUnit, CssSpecificationTier, CssSupportStatus, CssTimeCalculation, CssTimeUnit,
+    CssTransformFunctionValue, CssTransformPerspective, CssTransformScaleComponent,
+    CssTransformValue, CssVerticalPosition, ErrorKind, conformance_exclusion,
+    conformance_exclusions, feature_metadata, parse_sheet, parse_style_attribute,
+    property_metadata, specification_source, specification_sources,
 };
 
 #[derive(Clone, Copy)]
@@ -71,8 +74,18 @@ const FREQUENCY_PERCENTAGE_REMAINDER: &str =
     "Frequency-percentage property consumers remain for their owning later grammar cycles.";
 const CALC_SUBSET: &str = "Typed sum, product, division, negation, grouping, and nested calc() trees are supported for the C03 roots and integrated property consumers.";
 const CALC_REMAINDER: &str = "Angle, frequency, Media resolution, keyframe percentage, font-feature numeric, and C05 function-owned consumer integrations remain for their owning later cycles.";
-const TIMING_SUBSET: &str = "The I01 shorthand components plus C03 duration, signed delay, iteration, and typed calculation syntax are supported.";
-const TIMING_REMAINDER: &str = "C05 easing and function grammar closure remains unsupported.";
+const TIMING_SUBSET: &str = "The I01 shorthand components plus C03 duration, signed delay, iteration, and typed calculation syntax and C05 easing functions are supported.";
+const TIMING_REMAINDER: &str =
+    "Other valid forms of the cited shorthand production remain unsupported.";
+const BASIC_SHAPE_SUBSET: &str =
+    "Typed inset(), circle(), ellipse(), and polygon() functions are supported.";
+const BASIC_SHAPE_REMAINDER: &str = "path(), shape(), rect(), and xywh() remain unsupported.";
+const BACKDROP_FILTER_SUBSET: &str = "The exact I01 filter-function-list subset preserved at bc5394f:src/parser/effects.rs is supported with typed current values.";
+const BACKDROP_FILTER_REMAINDER: &str = "Every Filter Effects 2 behavior absent from that preserved baseline subset remains unsupported.";
+const CLIP_PATH_SUBSET: &str =
+    "none, URL, and typed inset(), circle(), ellipse(), and polygon() functions are supported.";
+const CLIP_PATH_REMAINDER: &str =
+    "Reference-box combinations and path(), shape(), rect(), and xywh() remain unsupported.";
 
 const EXPECTED: &[ExpectedFeature] = &[
     ExpectedFeature {
@@ -1868,6 +1881,852 @@ fn every_alias_atomic_target_has_declared_metadata_and_public_parser_evidence() 
     assert_eq!(
         diagnostic.span().end().byte_offset().value(),
         source.find('{').expect("end of media query list")
+    );
+}
+
+fn assert_complete_function_metadata(id: &str, spelling: &str, source: &str, production: &str) {
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+    assert_eq!(metadata.id().as_str(), id, "{id} identity");
+    assert_eq!(metadata.kind(), CssFeatureKind::Value, "{id} kind");
+    assert_eq!(metadata.spelling(), spelling, "{id} spelling");
+    assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+    assert_eq!(metadata.production(), production, "{id} production");
+    assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+    assert_eq!(metadata.supported_subset(), None, "{id} subset");
+    assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+    assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+}
+
+fn assert_partial_function_metadata(
+    id: &str,
+    spelling: &str,
+    source: &str,
+    production: &str,
+    subset: &str,
+    remainder: &str,
+) {
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+    assert_eq!(metadata.id().as_str(), id, "{id} identity");
+    assert_eq!(metadata.kind(), CssFeatureKind::Value, "{id} kind");
+    assert_eq!(metadata.spelling(), spelling, "{id} spelling");
+    assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+    assert_eq!(metadata.production(), production, "{id} production");
+    assert_eq!(metadata.status(), CssSupportStatus::Partial, "{id} status");
+    assert_eq!(metadata.supported_subset(), Some(subset), "{id} subset");
+    assert_eq!(
+        metadata.unsupported_remainder(),
+        Some(remainder),
+        "{id} remainder"
+    );
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+    assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+}
+
+fn assert_complete_function_property_metadata(
+    id: &str,
+    canonical_name: &str,
+    source: &str,
+    production: &str,
+) {
+    let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+    let property = property_metadata(canonical_name)
+        .unwrap_or_else(|| panic!("missing `{canonical_name}` property metadata"));
+    assert!(std::ptr::eq(metadata, property.feature()), "{id} owner");
+    assert_eq!(metadata.kind(), CssFeatureKind::Property, "{id} kind");
+    assert_eq!(metadata.spelling(), canonical_name, "{id} spelling");
+    assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+    assert_eq!(metadata.production(), production, "{id} production");
+    assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+    assert_eq!(metadata.supported_subset(), None, "{id} subset");
+    assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+    assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+    assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+}
+
+#[test]
+fn official_two_dimensional_transform_metadata_matches_typed_functions() {
+    let report = parse_style_attribute(concat!(
+        "transform: matrix(1, 0, 0, 1, 10, 20) translate(1px, 2%) ",
+        "translateX(3px) translateY(4%) scale(1.5, 2) scaleX(.5) scaleY(2) ",
+        "rotate(45deg) skew(10deg, 20deg) skewX(5deg) skewY(6deg)"
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Transform(transform) = report.syntax()[0]
+        .known()
+        .expect("known transform")
+        .property_value()
+        .expect("ordinary transform")
+    else {
+        panic!("expected transform value");
+    };
+    let CssTransformValue::Functions(functions) = transform.current() else {
+        panic!("expected typed transform functions");
+    };
+    assert!(matches!(
+        functions.functions(),
+        [
+            CssTransformFunctionValue::Matrix(_),
+            CssTransformFunctionValue::Translate(_),
+            CssTransformFunctionValue::TranslateX(_),
+            CssTransformFunctionValue::TranslateY(_),
+            CssTransformFunctionValue::Scale(_),
+            CssTransformFunctionValue::ScaleX(_),
+            CssTransformFunctionValue::ScaleY(_),
+            CssTransformFunctionValue::Rotate(_),
+            CssTransformFunctionValue::Skew(_),
+            CssTransformFunctionValue::SkewX(_),
+            CssTransformFunctionValue::SkewY(_),
+        ]
+    ));
+
+    assert_complete_function_metadata(
+        "official.value.transform-list",
+        "<transform-list>",
+        "O-TRANSFORMS1",
+        "#transform-function-lists",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform-function",
+        "<transform-function>",
+        "O-TRANSFORMS1",
+        "#transform-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform.matrix",
+        "matrix()",
+        "O-TRANSFORMS1",
+        "#two-d-transform-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform.translate",
+        "translate()",
+        "O-TRANSFORMS1",
+        "#two-d-transform-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform.translate-x",
+        "translateX()",
+        "O-TRANSFORMS1",
+        "#two-d-transform-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform.translate-y",
+        "translateY()",
+        "O-TRANSFORMS1",
+        "#two-d-transform-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform.scale",
+        "scale()",
+        "O-TRANSFORMS1",
+        "#two-d-transform-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform.scale-x",
+        "scaleX()",
+        "O-TRANSFORMS1",
+        "#two-d-transform-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform.scale-y",
+        "scaleY()",
+        "O-TRANSFORMS1",
+        "#two-d-transform-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform.rotate",
+        "rotate()",
+        "O-TRANSFORMS1",
+        "#two-d-transform-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform.skew",
+        "skew()",
+        "O-TRANSFORMS1",
+        "#two-d-transform-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform.skew-x",
+        "skewX()",
+        "O-TRANSFORMS1",
+        "#two-d-transform-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.transform.skew-y",
+        "skewY()",
+        "O-TRANSFORMS1",
+        "#two-d-transform-functions",
+    );
+}
+
+#[test]
+fn transform_matrix3d_exposes_sixteen_finite_components() {
+    let report = parse_style_attribute(
+        "transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 10, 20, 30, 1)",
+    );
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Transform(transform) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected transform");
+    };
+    let CssTransformValue::Functions(functions) = transform.current() else {
+        panic!("expected transform functions");
+    };
+    let CssTransformFunctionValue::Matrix3d(matrix) = &functions.functions()[0] else {
+        panic!("expected matrix3d");
+    };
+    assert_eq!(matrix.components().len(), 16);
+    assert_complete_function_metadata(
+        "ext.value.transform.matrix3d",
+        "matrix3d()",
+        "I-TRANSFORMS2",
+        "#funcdef-matrix3d",
+    );
+}
+
+#[test]
+fn transform_perspective_accepts_none_and_zero_and_rejects_invalid_dimensions() {
+    let report = parse_style_attribute("transform: perspective(none) perspective(0)");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Transform(transform) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected transform");
+    };
+    let CssTransformValue::Functions(functions) = transform.current() else {
+        panic!("expected transform functions");
+    };
+    assert!(matches!(
+        functions.functions()[0],
+        CssTransformFunctionValue::Perspective(CssTransformPerspective::None)
+    ));
+    assert!(matches!(
+        &functions.functions()[1],
+        CssTransformFunctionValue::Perspective(CssTransformPerspective::Length(length))
+            if matches!(length.value(), CssLength::Zero)
+    ));
+    assert!(!parse_style_attribute("transform: perspective(10%)").is_clean());
+    assert!(!parse_style_attribute("transform: perspective(-1px)").is_clean());
+    assert_complete_function_metadata(
+        "ext.value.transform.perspective",
+        "perspective()",
+        "I-TRANSFORMS2",
+        "#funcdef-perspective",
+    );
+}
+
+#[test]
+fn transform_three_dimensional_rotations_are_typed() {
+    let report = parse_style_attribute(
+        "transform: rotate3d(1, 0, -1, 45deg) rotateX(10deg) rotateY(20deg) rotateZ(30deg)",
+    );
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Transform(transform) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected transform");
+    };
+    let CssTransformValue::Functions(functions) = transform.current() else {
+        panic!("expected transform functions");
+    };
+    assert!(matches!(
+        functions.functions(),
+        [
+            CssTransformFunctionValue::Rotate3d(_),
+            CssTransformFunctionValue::RotateX(_),
+            CssTransformFunctionValue::RotateY(_),
+            CssTransformFunctionValue::RotateZ(_),
+        ]
+    ));
+    assert_complete_function_metadata(
+        "ext.value.transform.rotate3d",
+        "rotate3d()",
+        "I-TRANSFORMS2",
+        "#funcdef-rotate3d",
+    );
+    assert_complete_function_metadata(
+        "ext.value.transform.rotate-x",
+        "rotateX()",
+        "I-TRANSFORMS2",
+        "#funcdef-rotatex",
+    );
+    assert_complete_function_metadata(
+        "ext.value.transform.rotate-y",
+        "rotateY()",
+        "I-TRANSFORMS2",
+        "#funcdef-rotatey",
+    );
+    assert_complete_function_metadata(
+        "ext.value.transform.rotate-z",
+        "rotateZ()",
+        "I-TRANSFORMS2",
+        "#funcdef-rotatez",
+    );
+}
+
+#[test]
+fn transform_three_dimensional_scales_preserve_number_and_percentage_operands() {
+    let report = parse_style_attribute("transform: scale3d(1, 50%, 2) scaleZ(125%)");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Transform(transform) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected transform");
+    };
+    let CssTransformValue::Functions(functions) = transform.current() else {
+        panic!("expected transform functions");
+    };
+    let CssTransformFunctionValue::Scale3d(scale) = &functions.functions()[0] else {
+        panic!("expected scale3d");
+    };
+    assert!(matches!(scale.x(), CssTransformScaleComponent::Number(_)));
+    assert!(matches!(
+        scale.y(),
+        CssTransformScaleComponent::Percentage(_)
+    ));
+    assert!(matches!(
+        functions.functions()[1],
+        CssTransformFunctionValue::ScaleZ(CssTransformScaleComponent::Percentage(_))
+    ));
+    assert_complete_function_metadata(
+        "ext.value.transform.scale3d",
+        "scale3d()",
+        "I-TRANSFORMS2",
+        "#funcdef-scale3d",
+    );
+    assert_complete_function_metadata(
+        "ext.value.transform.scale-z",
+        "scaleZ()",
+        "I-TRANSFORMS2",
+        "#funcdef-scalez",
+    );
+}
+
+#[test]
+fn transform_three_dimensional_translations_keep_z_length_only() {
+    let report = parse_style_attribute("transform: translate3d(10%, 2px, 4em) translateZ(3px)");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Transform(transform) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected transform");
+    };
+    let CssTransformValue::Functions(functions) = transform.current() else {
+        panic!("expected transform functions");
+    };
+    assert!(matches!(
+        functions.functions(),
+        [
+            CssTransformFunctionValue::Translate3d(_),
+            CssTransformFunctionValue::TranslateZ(_),
+        ]
+    ));
+    assert!(!parse_style_attribute("transform: translate3d(1px, 2px, 3%)").is_clean());
+    assert_complete_function_metadata(
+        "ext.value.transform.translate3d",
+        "translate3d()",
+        "I-TRANSFORMS2",
+        "#funcdef-translate3d",
+    );
+    assert_complete_function_metadata(
+        "ext.value.transform.translate-z",
+        "translateZ()",
+        "I-TRANSFORMS2",
+        "#funcdef-translatez",
+    );
+}
+
+#[test]
+fn official_easing_metadata_matches_typed_functions() {
+    let report = parse_style_attribute(
+        "transition-timing-function: ease, cubic-bezier(.25, 0, .75, 1), steps(2, jump-none)",
+    );
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::TransitionTimingFunction(value) = report.syntax()[0]
+        .known()
+        .expect("known transition timing")
+        .property_value()
+        .expect("ordinary transition timing")
+    else {
+        panic!("expected transition timing value");
+    };
+    assert!(matches!(
+        value.current().values(),
+        [
+            CssEasingValue::Keyword(_),
+            CssEasingValue::CubicBezier(_),
+            CssEasingValue::Steps(_),
+        ]
+    ));
+    assert_complete_function_metadata(
+        "official.value.easing-function",
+        "<easing-function>",
+        "O-EASING1",
+        "#easing-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.cubic-bezier-easing",
+        "cubic-bezier()",
+        "O-EASING1",
+        "#cubic-bezier-easing-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.step-easing",
+        "steps()",
+        "O-EASING1",
+        "#step-easing-functions",
+    );
+    assert_complete_function_metadata(
+        "official.value.step-position",
+        "<step-position>",
+        "O-EASING1",
+        "#step-easing-functions",
+    );
+}
+
+#[test]
+fn official_shadow_metadata_matches_typed_box_shadow() {
+    let report = parse_style_attribute("box-shadow: red inset -1px 2px 3px -4px");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::BoxShadow(value) = report.syntax()[0]
+        .known()
+        .expect("known box shadow")
+        .property_value()
+        .expect("ordinary box shadow")
+    else {
+        panic!("expected box-shadow value");
+    };
+    let CssBoxShadow::Shadows(shadows) = value.current() else {
+        panic!("expected typed shadows");
+    };
+    assert!(shadows.shadows()[0].inset());
+    assert!(shadows.shadows()[0].color().is_some());
+    assert_complete_function_metadata(
+        "official.value.shadow",
+        "<shadow>",
+        "O-BACKGROUNDS3",
+        "#box-shadow",
+    );
+}
+
+#[test]
+fn filter_function_list_preserves_typed_authored_order() {
+    let report = parse_style_attribute(
+        "filter: url(\"filters.svg#rough\") blur(2px) drop-shadow(1px 2px red) opacity(50%)",
+    );
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Filter(value) = report.syntax()[0]
+        .known()
+        .expect("known filter")
+        .property_value()
+        .expect("ordinary filter")
+    else {
+        panic!("expected filter value");
+    };
+    let CssFilterValue::Functions(functions) = value.current() else {
+        panic!("expected typed filter functions");
+    };
+    assert!(matches!(
+        functions.functions(),
+        [
+            CssFilterFunctionValue::Url(_),
+            CssFilterFunctionValue::Blur(_),
+            CssFilterFunctionValue::DropShadow(_),
+            CssFilterFunctionValue::Opacity(_),
+        ]
+    ));
+    assert_complete_function_metadata(
+        "ext.value.filter-function-list",
+        "<filter-function-list>",
+        "I-FILTER1",
+        "#FilterProperty",
+    );
+}
+
+#[test]
+fn every_filter_amount_function_has_exact_typed_domain() {
+    let report = parse_style_attribute(concat!(
+        "filter: blur(2px) brightness() contrast(25%) grayscale(.5) ",
+        "hue-rotate(45deg) invert(10%) opacity(.75) saturate(2) sepia(30%)"
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Filter(value) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected filter value");
+    };
+    let CssFilterValue::Functions(functions) = value.current() else {
+        panic!("expected typed filter functions");
+    };
+    assert!(matches!(
+        functions.functions(),
+        [
+            CssFilterFunctionValue::Blur(_),
+            CssFilterFunctionValue::Brightness(_),
+            CssFilterFunctionValue::Contrast(_),
+            CssFilterFunctionValue::Grayscale(_),
+            CssFilterFunctionValue::HueRotate(_),
+            CssFilterFunctionValue::Invert(_),
+            CssFilterFunctionValue::Opacity(_),
+            CssFilterFunctionValue::Saturate(_),
+            CssFilterFunctionValue::Sepia(_),
+        ]
+    ));
+    assert_complete_function_metadata(
+        "ext.value.filter.blur",
+        "blur()",
+        "I-FILTER1",
+        "#funcdef-filter-blur",
+    );
+    assert_complete_function_metadata(
+        "ext.value.filter.brightness",
+        "brightness()",
+        "I-FILTER1",
+        "#funcdef-filter-brightness",
+    );
+    assert_complete_function_metadata(
+        "ext.value.filter.contrast",
+        "contrast()",
+        "I-FILTER1",
+        "#funcdef-filter-contrast",
+    );
+    assert_complete_function_metadata(
+        "ext.value.filter.grayscale",
+        "grayscale()",
+        "I-FILTER1",
+        "#funcdef-filter-grayscale",
+    );
+    assert_complete_function_metadata(
+        "ext.value.filter.hue-rotate",
+        "hue-rotate()",
+        "I-FILTER1",
+        "#funcdef-filter-hue-rotate",
+    );
+    assert_complete_function_metadata(
+        "ext.value.filter.invert",
+        "invert()",
+        "I-FILTER1",
+        "#funcdef-filter-invert",
+    );
+    assert_complete_function_metadata(
+        "ext.value.filter.opacity",
+        "opacity()",
+        "I-FILTER1",
+        "#funcdef-filter-opacity",
+    );
+    assert_complete_function_metadata(
+        "ext.value.filter.saturate",
+        "saturate()",
+        "I-FILTER1",
+        "#funcdef-filter-saturate",
+    );
+    assert_complete_function_metadata(
+        "ext.value.filter.sepia",
+        "sepia()",
+        "I-FILTER1",
+        "#funcdef-filter-sepia",
+    );
+}
+
+#[test]
+fn drop_shadow_rejects_box_shadow_only_components() {
+    let report = parse_style_attribute("filter: drop-shadow(red 1px 2px 3px)");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::Filter(value) = report.syntax()[0]
+        .known()
+        .unwrap()
+        .property_value()
+        .unwrap()
+    else {
+        panic!("expected filter value");
+    };
+    let CssFilterValue::Functions(functions) = value.current() else {
+        panic!("expected typed filter functions");
+    };
+    assert!(matches!(
+        functions.functions(),
+        [CssFilterFunctionValue::DropShadow(_)]
+    ));
+    assert!(!parse_style_attribute("filter: drop-shadow(inset 1px 2px)").is_clean());
+    assert!(!parse_style_attribute("filter: drop-shadow(1px 2px 3px 4px)").is_clean());
+    assert_complete_function_metadata(
+        "ext.value.filter.drop-shadow",
+        "drop-shadow()",
+        "I-FILTER1",
+        "#funcdef-filter-drop-shadow",
+    );
+}
+
+#[test]
+fn clip_path_distinguishes_selected_and_deferred_shape_functions() {
+    for value in [
+        "inset(1px)",
+        "circle(10px)",
+        "ellipse(10px 20%)",
+        "polygon(, 0 0, 100% 0)",
+    ] {
+        let report = parse_style_attribute(&format!("clip-path: {value}"));
+        assert!(report.is_clean(), "{value}: {:?}", report.diagnostics());
+    }
+    for value in [
+        "path('M 0 0 L 1 1')",
+        "shape(from 0 0, line to 1px 1px)",
+        "rect(0 1px 1px 0)",
+        "xywh(0 0 1px 1px)",
+    ] {
+        assert!(
+            !parse_style_attribute(&format!("clip-path: {value}")).is_clean(),
+            "deferred {value}"
+        );
+    }
+    assert_partial_function_metadata(
+        "ext.value.basic-shape",
+        "<basic-shape>",
+        "S-SHAPES1",
+        "#typedef-basic-shape",
+        BASIC_SHAPE_SUBSET,
+        BASIC_SHAPE_REMAINDER,
+    );
+}
+
+#[test]
+fn every_selected_basic_shape_has_typed_public_components() {
+    let report = parse_style_attribute(concat!(
+        "clip-path: inset(1px round 2px); ",
+        "clip-path: circle(10px at center); ",
+        "clip-path: ellipse(10px 20% at left top); ",
+        "clip-path: polygon(evenodd round 2px, 0 0, 100% 0)"
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let expected = ["inset", "circle", "ellipse", "polygon"];
+    for (declaration, expected) in report.syntax().iter().zip(expected) {
+        let CssKnownPropertyValueRef::ClipPath(value) = declaration
+            .known()
+            .expect("known clip path")
+            .property_value()
+            .expect("ordinary clip path")
+        else {
+            panic!("expected clip-path value");
+        };
+        let Some(CssClipPathValue::BasicShape(shape)) = value.current() else {
+            panic!("expected current {expected} shape");
+        };
+        assert!(
+            matches!(
+                (expected, shape),
+                ("inset", CssBasicShapeValue::Inset(_))
+                    | ("circle", CssBasicShapeValue::Circle(_))
+                    | ("ellipse", CssBasicShapeValue::Ellipse(_))
+                    | ("polygon", CssBasicShapeValue::Polygon(_))
+            ),
+            "expected {expected}"
+        );
+        if let CssBasicShapeValue::Polygon(polygon) = shape {
+            assert!(polygon.round().is_some(), "polygon round component");
+        }
+    }
+    assert_complete_function_metadata(
+        "ext.value.basic-shape.inset",
+        "inset()",
+        "S-SHAPES1",
+        "#funcdef-basic-shape-inset",
+    );
+    assert_complete_function_metadata(
+        "ext.value.basic-shape.circle",
+        "circle()",
+        "S-SHAPES1",
+        "#funcdef-basic-shape-circle",
+    );
+    assert_complete_function_metadata(
+        "ext.value.basic-shape.ellipse",
+        "ellipse()",
+        "S-SHAPES1",
+        "#funcdef-basic-shape-ellipse",
+    );
+    assert_complete_function_metadata(
+        "ext.value.basic-shape.polygon",
+        "polygon()",
+        "S-SHAPES1",
+        "#funcdef-basic-shape-polygon",
+    );
+}
+
+#[test]
+fn backdrop_filter_preserves_exact_typed_baseline_subset() {
+    let report = parse_style_attribute("backdrop-filter: blur(2px) opacity(50%)");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let CssKnownPropertyValueRef::BackdropFilter(value) = report.syntax()[0]
+        .known()
+        .expect("known backdrop filter")
+        .property_value()
+        .expect("ordinary backdrop filter")
+    else {
+        panic!("expected backdrop-filter value");
+    };
+    assert!(matches!(
+        value.current(),
+        CssFilterValue::Functions(functions)
+            if matches!(
+                functions.functions(),
+                [CssFilterFunctionValue::Blur(_), CssFilterFunctionValue::Opacity(_)]
+            )
+    ));
+    let metadata =
+        feature_metadata("baseline.property.backdrop-filter").expect("backdrop-filter metadata");
+    assert_eq!(metadata.kind(), CssFeatureKind::Property);
+    assert_eq!(metadata.spelling(), "backdrop-filter");
+    assert_eq!(metadata.source().id().as_str(), "X-FILTER2-BASE");
+    assert_eq!(metadata.production(), "#propdef-backdrop-filter");
+    assert_eq!(metadata.status(), CssSupportStatus::Partial);
+    assert_eq!(metadata.supported_subset(), Some(BACKDROP_FILTER_SUBSET));
+    assert_eq!(
+        metadata.unsupported_remainder(),
+        Some(BACKDROP_FILTER_REMAINDER)
+    );
+    assert!(metadata.baseline_alias_targets().is_empty());
+}
+
+#[test]
+fn clip_path_selected_subset_and_remainder_are_distinct() {
+    for value in [
+        "none",
+        "url(\"shapes.svg#clip\")",
+        "inset(1px)",
+        "circle(10px)",
+        "ellipse(10px 20%)",
+        "polygon(round 2px, 0 0, 100% 0)",
+    ] {
+        let report = parse_style_attribute(&format!("clip-path: {value}"));
+        assert!(report.is_clean(), "{value}: {:?}", report.diagnostics());
+    }
+    for value in [
+        "border-box circle(10px)",
+        "path('M 0 0 L 1 1')",
+        "shape(from 0 0, line to 1px 1px)",
+        "rect(0 1px 1px 0)",
+        "xywh(0 0 1px 1px)",
+    ] {
+        assert!(
+            !parse_style_attribute(&format!("clip-path: {value}")).is_clean(),
+            "unsupported {value}"
+        );
+    }
+    let metadata = feature_metadata("baseline.property.clip-path").expect("clip-path metadata");
+    assert_eq!(metadata.kind(), CssFeatureKind::Property);
+    assert_eq!(metadata.spelling(), "clip-path");
+    assert_eq!(metadata.source().id().as_str(), "S-MASKING1");
+    assert_eq!(metadata.production(), "#propdef-clip-path");
+    assert_eq!(metadata.status(), CssSupportStatus::Partial);
+    assert_eq!(metadata.supported_subset(), Some(CLIP_PATH_SUBSET));
+    assert_eq!(metadata.unsupported_remainder(), Some(CLIP_PATH_REMAINDER));
+    assert!(metadata.baseline_alias_targets().is_empty());
+}
+
+#[test]
+fn completed_function_property_metadata_matches_public_current_accessors() {
+    let report = parse_style_attribute(concat!(
+        "transform: translate(1px, 2%); ",
+        "box-shadow: 1px 2px 3px red; ",
+        "filter: blur(2px); ",
+        "transition-timing-function: cubic-bezier(.25, 0, .75, 1); ",
+        "animation-timing-function: steps(2, jump-none)"
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    assert!(matches!(
+        report.syntax()[0]
+            .known()
+            .unwrap()
+            .property_value()
+            .unwrap(),
+        CssKnownPropertyValueRef::Transform(value)
+            if matches!(value.current(), CssTransformValue::Functions(_))
+    ));
+    assert!(matches!(
+        report.syntax()[1]
+            .known()
+            .unwrap()
+            .property_value()
+            .unwrap(),
+        CssKnownPropertyValueRef::BoxShadow(value)
+            if matches!(value.current(), CssBoxShadow::Shadows(_))
+    ));
+    assert!(matches!(
+        report.syntax()[2]
+            .known()
+            .unwrap()
+            .property_value()
+            .unwrap(),
+        CssKnownPropertyValueRef::Filter(value)
+            if matches!(value.current(), CssFilterValue::Functions(_))
+    ));
+    assert!(matches!(
+        report.syntax()[3]
+            .known()
+            .unwrap()
+            .property_value()
+            .unwrap(),
+        CssKnownPropertyValueRef::TransitionTimingFunction(value)
+            if matches!(value.current().values(), [CssEasingValue::CubicBezier(_)])
+    ));
+    assert!(matches!(
+        report.syntax()[4]
+            .known()
+            .unwrap()
+            .property_value()
+            .unwrap(),
+        CssKnownPropertyValueRef::AnimationTimingFunction(value)
+            if matches!(value.current().values(), [CssEasingValue::Steps(_)])
+    ));
+
+    assert_complete_function_property_metadata(
+        "baseline.property.transform",
+        "transform",
+        "O-TRANSFORMS1",
+        "#propdef-transform",
+    );
+    assert_complete_function_property_metadata(
+        "baseline.property.box-shadow",
+        "box-shadow",
+        "O-BACKGROUNDS3",
+        "#propdef-box-shadow",
+    );
+    assert_complete_function_property_metadata(
+        "baseline.property.filter",
+        "filter",
+        "I-FILTER1",
+        "#propdef-filter",
+    );
+    assert_complete_function_property_metadata(
+        "baseline.property.transition-timing-function",
+        "transition-timing-function",
+        "I-TRANSITIONS1",
+        "#propdef-transition-timing-function",
+    );
+    assert_complete_function_property_metadata(
+        "baseline.property.animation-timing-function",
+        "animation-timing-function",
+        "I-ANIMATIONS1",
+        "#propdef-animation-timing-function",
     );
 }
 

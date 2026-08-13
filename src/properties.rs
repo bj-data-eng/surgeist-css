@@ -130,6 +130,7 @@ macro_rules! property_schema {
             BorderLeftColor, "border-left-color", [], "baseline.property.border-left-color", CssColor, CssBorderLeftColorPropertyValue, CssBorderLeftColorPropertyValueRepresentation, parse_color, { parse_color($input)? };
             BackgroundImage, "background-image", [], "baseline.property.background-image", CssImageLayerList, CssBackgroundImagePropertyValue, CssBackgroundImagePropertyValueRepresentation, parse_image_layer_list, { parse_image_layer_list($input)? };
             BackgroundPosition, "background-position", [], "baseline.property.background-position", CssBackgroundPositionList, CssBackgroundPositionPropertyValue, CssBackgroundPositionPropertyValueRepresentation, parse_background_position_list, { parse_background_position_list($input)? };
+            ObjectPosition, "object-position", [], "official.property.object-position", CssObjectPosition, CssObjectPositionPropertyValue, CssObjectPositionPropertyValueRepresentation, parse_object_position, { parse_object_position($input)? };
             BackgroundSize, "background-size", [], "baseline.property.background-size", CssBackgroundSizeList, CssBackgroundSizePropertyValue, CssBackgroundSizePropertyValueRepresentation, parse_background_size_list, { parse_background_size_list($input)? };
             BackgroundRepeat, "background-repeat", [], "baseline.property.background-repeat", CssBackgroundRepeatList, CssBackgroundRepeatPropertyValue, CssBackgroundRepeatPropertyValueRepresentation, parse_background_repeat_list, { parse_background_repeat_list($input)? };
             BackgroundOrigin, "background-origin", [], "baseline.property.background-origin", CssBackgroundBox, CssBackgroundOriginPropertyValue, CssBackgroundOriginPropertyValueRepresentation, parse_background_box, { parse_background_box($input)? };
@@ -163,7 +164,7 @@ macro_rules! property_schema {
             OutlineStyle, "outline-style", [], "baseline.property.outline-style", CssOutlineStyle, CssOutlineStylePropertyValue, CssOutlineStylePropertyValueRepresentation, parse_outline_style, { parse_outline_style($input)? };
             OutlineWidth, "outline-width", [], "baseline.property.outline-width", CssOutlineWidth, CssOutlineWidthPropertyValue, CssOutlineWidthPropertyValueRepresentation, parse_outline_width, { parse_outline_width($input)? };
             Transform, "transform", [], "baseline.property.transform", CssTransform, CssTransformPropertyValue, CssTransformPropertyValueRepresentation, parse_transform, { parse_transform($input)? };
-            TransformOrigin, "transform-origin", [], "baseline.property.transform-origin", CssPosition, CssTransformOriginPropertyValue, CssTransformOriginPropertyValueRepresentation, parse_css_position_deferred, { parse_css_position_deferred($input)? };
+            TransformOrigin, "transform-origin", [], "baseline.property.transform-origin", CssTransformOrigin, CssTransformOriginPropertyValue, CssTransformOriginPropertyValueRepresentation, parse_transform_origin, { parse_transform_origin($input)? };
             Translate, "translate", [], "baseline.property.translate", CssTranslate, CssTranslatePropertyValue, CssTranslatePropertyValueRepresentation, parse_translate, { parse_translate($input)? };
             Rotate, "rotate", [], "baseline.property.rotate", CssRotate, CssRotatePropertyValue, CssRotatePropertyValueRepresentation, parse_rotate, { parse_rotate($input)? };
             Scale, "scale", [], "baseline.property.scale", CssScale, CssScalePropertyValue, CssScalePropertyValueRepresentation, parse_scale, { parse_scale($input)? };
@@ -377,6 +378,10 @@ fn mask_position_list_i01_projection(value: &CssMaskPositionList) -> Option<CssP
     CssPositionList::try_new(positions)
 }
 
+fn transform_origin_i01_projection(value: &CssTransformOrigin) -> Option<CssPosition> {
+    value.legacy().cloned()
+}
+
 macro_rules! define_current_property_value {
     (
         $canonical:literal, $wrapper:ident, $representation:ident,
@@ -428,6 +433,46 @@ macro_rules! define_current_property_value {
 
 macro_rules! define_property_value {
     (
+        ObjectPosition, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: CssObjectPosition,
+        }
+
+        /// A parser-produced authored ordinary value for `object-position`.
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) const fn new(
+                authored: CssAuthoredDeclarationValue,
+                current: CssObjectPosition,
+            ) -> Self {
+                Self {
+                    authored,
+                    representation: $representation { current },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            /// Returns the exact authored object position.
+            #[must_use]
+            pub const fn position(&self) -> &CssObjectPosition {
+                &self.representation.current
+            }
+        }
+    };
+    (
         BackgroundPosition, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident
     ) => {
@@ -453,6 +498,20 @@ macro_rules! define_property_value {
             CssPositionList,
             positions,
             mask_position_list_i01_projection
+        );
+    };
+    (
+        TransformOrigin, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssTransformOrigin,
+            CssPosition,
+            origin,
+            transform_origin_i01_projection
         );
     };
     (

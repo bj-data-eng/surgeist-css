@@ -212,6 +212,10 @@ fn transform_origin_greedily_splits_two_dimensions_before_optional_z() {
         "50px 75%",
         "top 50px",
         "bottom 50px",
+        "top calc(1px * 2)",
+        "bottom calc(1px * 2)",
+        "left calc(1px * 2)",
+        "center calc(1px * 2)",
         "left top 50px",
         "top left 50px",
         "50px top calc(1px * 2)",
@@ -257,6 +261,17 @@ fn transform_origin_greedily_splits_two_dimensions_before_optional_z() {
         Some(CssLength::Calc(CssCalcLength::Typed(calculation)))
             if calculation.result_type() == surgeist_css::CssCalculationType::Length
     ));
+
+    for value in ["left calc(1px * 2)", "center calc(1px * 2)"] {
+        assert!(transform_origin(value).z().is_none(), "{value}");
+    }
+    for value in ["top calc(1px * 2)", "bottom calc(1px * 2)"] {
+        assert!(matches!(
+            transform_origin(value).z().map(CssTransformOriginZ::value),
+            Some(CssLength::Calc(CssCalcLength::Typed(calculation)))
+                if calculation.result_type() == surgeist_css::CssCalculationType::Length
+        ));
+    }
 }
 
 #[test]
@@ -295,6 +310,8 @@ fn object_and_transform_origins_reject_property_specific_invalid_forms() {
         ("transform-origin", "left top 50%"),
         ("transform-origin", "left top calc(10%)"),
         ("transform-origin", "left top calc(1px + 10%)"),
+        ("transform-origin", "top calc(10%)"),
+        ("transform-origin", "top calc(1px + 10%)"),
         ("transform-origin", "left top bottom"),
     ] {
         let source = format!("{property}: {value}; color: red");

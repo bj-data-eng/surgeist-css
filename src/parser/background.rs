@@ -93,6 +93,43 @@ pub(super) fn parse_background_position_list<'i, 't>(
         .ok_or_else(|| unsupported_value(input, None, "background-position list is empty"))
 }
 
+pub(super) fn parse_object_position<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssObjectPosition, ParseError<'i, Error>> {
+    parse_generic_position(input).map(|(position, _)| CssObjectPosition::new(position))
+}
+
+pub(super) fn parse_transform_origin<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransformOrigin, ParseError<'i, Error>> {
+    let (atoms, states) = parse_position_atoms(input)?;
+
+    if atoms.len() <= 2
+        && let Some((position, legacy)) = build_generic_position(&atoms)
+    {
+        let legacy = (!position_has_typed_calculation(&legacy)).then_some(legacy);
+        return Ok(CssTransformOrigin::new(position, None, legacy));
+    }
+
+    if (2..=3).contains(&atoms.len()) {
+        let z_index = atoms.len() - 1;
+        if let Some((position, _)) = build_generic_position(&atoms[..z_index]) {
+            let z = transform_origin_z(&atoms[z_index])
+                .ok_or_else(|| invalid_generic_position_atom(input, &states[z_index]))?;
+            let legacy = CssPosition::new(contextual_legacy_components(&atoms));
+            let legacy = (!position_has_typed_calculation(&legacy)).then_some(legacy);
+            return Ok(CssTransformOrigin::new(position, Some(z), legacy));
+        }
+    }
+
+    let invalid_index = if atoms.len() > 3 {
+        3
+    } else {
+        invalid_atom_index(&atoms)
+    };
+    Err(invalid_generic_position_atom(input, &states[invalid_index]))
+}
+
 pub(super) fn parse_css_position<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssPosition, ParseError<'i, Error>> {
@@ -103,12 +140,6 @@ pub(super) fn parse_css_position_legacy<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssPosition, ParseError<'i, Error>> {
     parse_css_position_legacy_components(input, false)
-}
-
-pub(super) fn parse_css_position_deferred<'i, 't>(
-    input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssPosition, ParseError<'i, Error>> {
-    parse_css_position_legacy_components(input, true)
 }
 
 fn parse_css_position_legacy_components<'i, 't>(
@@ -255,6 +286,13 @@ fn invalid_generic_position_atom<'i, 't>(
         Ok(token) => location.new_unexpected_token_error::<Error>(token.clone()),
         Err(error) => error.into(),
     }
+}
+
+fn transform_origin_z(atom: &GenericPositionAtom) -> Option<CssTransformOriginZ> {
+    let GenericPositionAtom::Offset(offset) = atom else {
+        return None;
+    };
+    CssTransformOriginZ::try_new(offset.value().clone())
 }
 
 fn invalid_atom_index(atoms: &[GenericPositionAtom]) -> usize {

@@ -139,6 +139,49 @@ fn color_component_error_after_non_bmp_text_has_exact_coordinates_and_span() {
 }
 
 #[test]
+fn legacy_rgb_mixed_domain_reports_the_later_component_and_retains_its_sibling() {
+    let source = "--😀: 1; color: rgb(1, 20%, 3); opacity: 0.5";
+    let report = parse_style_attribute(source);
+    assert_eq!(report.syntax().len(), 2);
+    assert_eq!(
+        report.syntax()[1]
+            .known()
+            .expect("retained opacity declaration")
+            .property(),
+        CssKnownProperty::Opacity,
+    );
+    let [diagnostic] = report.diagnostics() else {
+        panic!("mixed legacy RGB component domains must recover once");
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::InvalidColorSyntax);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
+    let responsible = source.find("20%").expect("responsible RGB component");
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(source[..responsible].encode_utf16().count()).expect("UTF-16 column"),
+    );
+    let ErrorKind::InvalidColorSyntax(detail) = diagnostic.error().kind() else {
+        panic!("expected structured color error");
+    };
+    assert_eq!(
+        detail.component().map(|value| value.as_str()),
+        Some("component")
+    );
+    let encountered = detail.encountered().expect("responsible percentage token");
+    assert_eq!(encountered.kind(), CssTokenKind::Percentage);
+    assert_eq!(encountered.authored(), "20%");
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects mixed legacy RGB component domains");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn easing_count_error_after_non_bmp_text_has_exact_utf16_coordinates_and_span() {
     let source = "--😀: 1; transition-timing-function: steps(1, jump-none); color: red";
     let report = parse_style_attribute(source);

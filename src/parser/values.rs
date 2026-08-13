@@ -1135,14 +1135,16 @@ fn parse_authored_rgb<'i, 't>(
             return Err(invalid_color(input.current_source_location(), Some("red")));
         }
         let domain = first.domain();
+        let second_location = input.current_source_location();
         let second = parse_authored_color_component(input, false)?;
+        if second.domain() != domain {
+            return Err(invalid_color(second_location, Some("component")));
+        }
         input.expect_comma().map_err(basic)?;
+        let third_location = input.current_source_location();
         let third = parse_authored_color_component(input, false)?;
-        if second.domain() != domain || third.domain() != domain {
-            return Err(invalid_color(
-                input.current_source_location(),
-                Some("component"),
-            ));
+        if third.domain() != domain {
+            return Err(invalid_color(third_location, Some("component")));
         }
         let alpha = if input.try_parse(Parser::expect_comma).is_ok() {
             Some(parse_authored_alpha(input, false)?)

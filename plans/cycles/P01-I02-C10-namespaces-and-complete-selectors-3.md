@@ -6,7 +6,7 @@
 | --- | --- |
 | Cycle ID | `P01-I02-C10` |
 | Owning repository | `surgeist-css` |
-| Status | `in_progress` |
+| Status | `reviewed` |
 | Cycle base | `019906900cab8295d8c33a28eb53a76b39cd85ee` |
 | Published prerequisite | C09 `019906900cab8295d8c33a28eb53a76b39cd85ee`, fetched and read back |
 | Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `db899aea31b168128b4d8bd5c4be58057a9860e0de4d0d4b00f049955b16eb22`, P01.13 |
@@ -175,7 +175,9 @@ Each exact task range receives a fresh independent
 
 - **Dependency:** this plan independently clean.
 - **Area:** namespace models in `src/syntax.rs`; at-rule parsing, active binding
-  state, and refined phases in `src/parser/mod.rs`; new
+  state, and refined phases in `src/parser/mod.rs`; the exact
+  `later.rule.namespace` metadata/inventory row in `src/conformance.rs` and its
+  named public-metadata expectations in `tests/conformance_catalog.rs`; new
   `tests/selector_namespace_grammars.rs`; exact fixture rows 1 and 6; focused updates
   to `conditional_ordering`, `stylesheet_recovery`, `structured_errors`,
   `source_coordinates`, `app_strict_parity`, `public_surface`, and
@@ -196,8 +198,10 @@ Each exact task range receives a fresh independent
   encoding/import/layer/body interactions; success-only transition and binding;
   block/nested/late/malformed recovery; exact action/payload/span/position,
   sibling retention, EOF/non-BMP, validators, strict parity; public variant and
-  private-field accessor evidence.
-- **Focused:** both modes for `selector_namespace_grammars conditional_ordering stylesheet_recovery structured_errors source_coordinates app_strict_parity public_surface i01_c01_observables`.
+  private-field accessor evidence; promote `later.rule.namespace` from
+  `RecognizedUnsupported` to `Complete` with exact O-NAMESPACES3 provenance,
+  positive vector, no unsupported boundary/code, and no aggregate alias drift.
+- **Focused:** both modes for `selector_namespace_grammars conditional_ordering stylesheet_recovery structured_errors source_coordinates app_strict_parity public_surface conformance_catalog i01_c01_observables`.
 - **Commits:** existing `test: specify namespace rule ordering`; then
   `test: specify namespace placement recovery`; then
   `feat: add namespace rule ordering`.
@@ -266,16 +270,18 @@ Each exact task range receives a fresh independent
 - **Focused:** both modes for `selector_namespace_grammars public_surface structured_errors source_coordinates specialized_list_recovery nested_structural_recovery app_strict_parity conformance_catalog i01_c01_observables`.
 - **Commits:** `test: specify complete Selectors 3 syntax`; `feat: complete Selectors 3 syntax`.
 
-### T5 Publish Selector And Namespace Metadata, Docs, And Handoff
+### T5 Publish Remaining Selector And Namespace Metadata, Docs, And Handoff
 
 - **Dependency:** T1-T4 independently clean.
 - **Area:** `src/conformance.rs`; selector/rule implementation inventories only;
   direct named metadata tests; README and crate rustdoc/doctests; SHA-free
   `plans/handoffs/P01-I02-C10-namespaces-and-complete-selectors-3.md`.
-- **RED:** paired grammar behavior passes while direct named official metadata
-  remains Reserved/RecognizedUnsupported. Exact command:
+- **RED:** paired grammar behavior passes while the remaining direct named
+  selector and namespace-qualified-name official metadata remains Reserved.
+  Exact command:
   `cargo test -p surgeist-css --offline --no-default-features --test conformance_catalog selectors3_and_namespace_metadata_are_truthful -- --exact`.
-- **Acceptance:** exactly 20 O-SELECTORS3 and 2 O-NAMESPACES3 rows Complete with
+- **Acceptance:** together with T1's already-Complete namespace-rule row,
+  exactly 20 O-SELECTORS3 and 2 O-NAMESPACES3 rows are Complete with
   exact source/fragments; aggregate aliases remain truthful; namespace no longer
   has unsupported code; `ext.supports.selector` remains Partial with section
   2.3's exact subset/remainder and typed/general-enclosed public evidence; no

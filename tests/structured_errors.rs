@@ -631,6 +631,20 @@ fn property_specific_origin_mutations_report_exact_payload_span_and_recovery() {
         (
             "transform-origin",
             CssKnownProperty::TransformOrigin,
+            "left top calc(10%)",
+            "calc(",
+            CssTokenKind::Function,
+        ),
+        (
+            "transform-origin",
+            CssKnownProperty::TransformOrigin,
+            "left top calc(1px + 10%)",
+            "calc(",
+            CssTokenKind::Function,
+        ),
+        (
+            "transform-origin",
+            CssKnownProperty::TransformOrigin,
             "top 10px 20px",
             "20px",
             CssTokenKind::Dimension,
@@ -638,9 +652,30 @@ fn property_specific_origin_mutations_report_exact_payload_span_and_recovery() {
         (
             "transform-origin",
             CssKnownProperty::TransformOrigin,
+            "top calc(10%)",
+            "calc(",
+            CssTokenKind::Function,
+        ),
+        (
+            "transform-origin",
+            CssKnownProperty::TransformOrigin,
+            "top calc(1px + 10%)",
+            "calc(",
+            CssTokenKind::Function,
+        ),
+        (
+            "transform-origin",
+            CssKnownProperty::TransformOrigin,
             "left top 10px 20px",
             "20px",
             CssTokenKind::Dimension,
+        ),
+        (
+            "transform-origin",
+            CssKnownProperty::TransformOrigin,
+            "left top bottom",
+            "bottom",
+            CssTokenKind::Ident,
         ),
     ] {
         let source = format!("{property}: {value}; color: red");
@@ -671,9 +706,18 @@ fn property_specific_origin_mutations_report_exact_payload_span_and_recovery() {
             0,
             "{source}"
         );
+        assert_eq!(diagnostic.span().start().line().value(), 0, "{source}");
+        assert_eq!(diagnostic.span().start().column().value(), 0, "{source}");
+        let declaration_end = source.find(';').expect("declaration semicolon") + 1;
         assert_eq!(
             diagnostic.span().end().byte_offset().value(),
-            source.find(';').expect("declaration semicolon") + 1,
+            declaration_end,
+            "{source}",
+        );
+        assert_eq!(diagnostic.span().end().line().value(), 0, "{source}");
+        assert_eq!(
+            diagnostic.span().end().column().value() as usize,
+            declaration_end,
             "{source}",
         );
         let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {

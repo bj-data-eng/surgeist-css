@@ -1,6 +1,7 @@
 use surgeist_css::{
-    CssCalcLength, CssErrorCode, CssKnownProperty, CssLength, CssLengthCalculation, CssLengthUnit,
-    CssPositionOffset, CssRecoveryAction, parse_style_attribute,
+    CssCalcLength, CssErrorCode, CssHorizontalPositionKeyword, CssKnownProperty,
+    CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthUnit, CssPositionComponent,
+    CssPositionOffset, CssRecoveryAction, CssVerticalPositionKeyword, parse_style_attribute,
 };
 
 fn assert_generic_position_accepted(value: &str) {
@@ -78,6 +79,59 @@ fn generic_position_rejects_axis_order_partial_pairs_and_duplicate_axes() {
     ] {
         assert_generic_position_rejected(value);
     }
+}
+
+#[test]
+fn deferred_background_position_preserves_three_component_legacy_projection() {
+    let report = parse_style_attribute("background-position: left 10px top");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let declaration = report.syntax()[0]
+        .known()
+        .expect("known background-position declaration");
+    let CssKnownPropertyValueRef::BackgroundPosition(value) = declaration
+        .property_value()
+        .expect("ordinary background-position value")
+    else {
+        panic!("expected background-position value");
+    };
+    let positions = value
+        .i01_subset()
+        .expect("deferred background-position retains its I01 projection")
+        .positions();
+    assert_eq!(positions.len(), 1);
+    assert!(matches!(
+        positions[0].components(),
+        [
+            CssPositionComponent::Horizontal(CssHorizontalPositionKeyword::Left),
+            CssPositionComponent::Length(CssLength::Px(length)),
+            CssPositionComponent::Vertical(CssVerticalPositionKeyword::Top),
+        ] if length.value() == 10.0
+    ));
+}
+
+#[test]
+fn deferred_transform_origin_preserves_vertical_length_legacy_projection() {
+    let report = parse_style_attribute("transform-origin: top 10px");
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let declaration = report.syntax()[0]
+        .known()
+        .expect("known transform-origin declaration");
+    let CssKnownPropertyValueRef::TransformOrigin(value) = declaration
+        .property_value()
+        .expect("ordinary transform-origin value")
+    else {
+        panic!("expected transform-origin value");
+    };
+    let position = value
+        .i01_subset()
+        .expect("deferred transform-origin retains its I01 projection");
+    assert!(matches!(
+        position.components(),
+        [
+            CssPositionComponent::Vertical(CssVerticalPositionKeyword::Top),
+            CssPositionComponent::Length(CssLength::Px(length)),
+        ] if length.value() == 10.0
+    ));
 }
 
 #[test]

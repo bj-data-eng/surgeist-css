@@ -433,6 +433,57 @@ macro_rules! define_current_property_value {
 
 macro_rules! define_property_value {
     (
+        Transform, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: CssTransformValue,
+            i01_subset: CssTransform,
+        }
+
+        /// A parser-produced authored ordinary value for `transform`.
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) fn new(
+                authored: CssAuthoredDeclarationValue,
+                parsed: CssParsedTransform,
+            ) -> Self {
+                let (current, i01_subset) = parsed.into_parts();
+                Self {
+                    authored,
+                    representation: $representation {
+                        current,
+                        i01_subset,
+                    },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            /// Returns the exact checked current authored transform value.
+            #[must_use]
+            pub const fn current(&self) -> &CssTransformValue {
+                &self.representation.current
+            }
+
+            /// Returns the frozen kind/authored-arguments compatibility projection.
+            #[must_use]
+            pub const fn i01_subset(&self) -> Option<&CssTransform> {
+                Some(&self.representation.i01_subset)
+            }
+        }
+    };
+    (
         ObjectPosition, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident
     ) => {

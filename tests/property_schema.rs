@@ -3,7 +3,8 @@ mod common;
 use common::CssParseReportTestExt;
 use surgeist_css::{
     CssErrorCode, CssImportance, CssKnownProperty, CssKnownPropertyValueRef, CssRecoveryAction,
-    CssRule, ErrorKind, parse_sheet, parse_style_attribute,
+    CssRule, CssTransformFunctionValue, CssTransformValue, ErrorKind, parse_sheet,
+    parse_style_attribute,
 };
 
 macro_rules! assert_property_specific_css {
@@ -784,6 +785,7 @@ fn typed_length_calculations_are_accepted_by_the_exact_current_consumer_set() {
         ("mask-size", "calc((-1px + 2%) * 3) auto"),
         ("transform-origin", "calc((1px + 2%) * 3) top"),
         ("translate", "calc((1px + 2%) * 3)"),
+        ("transform", "translate(calc((1px + 2%) * 3))"),
     ] {
         let source = format!("{property}: {value}");
         let report = parse_style_attribute(&source);
@@ -797,7 +799,6 @@ fn typed_length_calculations_are_accepted_by_the_exact_current_consumer_set() {
     }
 
     for source in [
-        "transform: translate(calc((1px + 2%) * 3))",
         "clip-path: polygon(calc((1px + 2%) * 3) 0px, 1px 1px)",
         "grid-template: calc((1px + 2%) * 3) / 1fr",
         "grid: calc((1px + 2%) * 3) / 1fr",
@@ -809,6 +810,59 @@ fn typed_length_calculations_are_accepted_by_the_exact_current_consumer_set() {
         );
         assert!(report.syntax().is_empty(), "{source}");
     }
+}
+
+#[test]
+fn transform_wrapper_keeps_current_global_and_substitution_branches_distinct() {
+    let report = parse_style_attribute(concat!(
+        "transform: translate(calc((1px + 2%) * 3), 4px) rotate(0); ",
+        "transform: none; transform: inherit; transform: var(--transform)",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+    let ordinary = report.syntax()[0]
+        .known()
+        .expect("ordinary transform declaration");
+    let CssKnownPropertyValueRef::Transform(value) = ordinary
+        .property_value()
+        .expect("ordinary transform property value")
+    else {
+        panic!("expected transform property value");
+    };
+    let CssTransformValue::Functions(functions) = value.current() else {
+        panic!("expected current transform function list");
+    };
+    assert!(matches!(
+        functions.functions()[0],
+        CssTransformFunctionValue::Translate(_)
+    ));
+    assert!(matches!(
+        functions.functions()[1],
+        CssTransformFunctionValue::Rotate(_)
+    ));
+    assert!(value.i01_subset().is_some());
+    assert!(ordinary.global().is_none());
+    assert!(ordinary.substitution_dependent().is_none());
+
+    let none = report.syntax()[1].known().expect("none declaration");
+    let CssKnownPropertyValueRef::Transform(value) =
+        none.property_value().expect("ordinary none value")
+    else {
+        panic!("expected transform none value");
+    };
+    assert!(matches!(value.current(), CssTransformValue::None));
+
+    let global = report.syntax()[2].known().expect("global declaration");
+    assert!(global.property_value().is_none());
+    assert!(global.global().is_some());
+    assert!(global.substitution_dependent().is_none());
+
+    let substitution = report.syntax()[3]
+        .known()
+        .expect("substitution-dependent declaration");
+    assert!(substitution.property_value().is_none());
+    assert!(substitution.global().is_none());
+    assert!(substitution.substitution_dependent().is_some());
 }
 
 #[test]

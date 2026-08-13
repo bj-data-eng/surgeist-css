@@ -7,6 +7,112 @@ use surgeist_css::{
 };
 
 #[test]
+fn transform_separator_and_domain_failures_report_exact_tokens_and_retain_siblings() {
+    for (value, responsible, token_kind) in [
+        ("matrix(1 0 0 1 10 20)", "0", CssTokenKind::Number),
+        ("perspective(10%)", "10%", CssTokenKind::Percentage),
+        ("translate3d(1px, 2px, 3%)", "3%", CssTokenKind::Percentage),
+    ] {
+        let source = format!("transform: {value}; color: red");
+        let report = parse_style_attribute(&source);
+        assert_eq!(report.syntax().len(), 1, "{source}");
+        let [diagnostic] = report.diagnostics() else {
+            panic!("{source}: expected one transform diagnostic");
+        };
+        assert_eq!(
+            diagnostic.error().code(),
+            CssErrorCode::InvalidPropertyValue,
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.action(),
+            CssRecoveryAction::DropDeclaration,
+            "{source}",
+        );
+        let responsible_offset = if value.starts_with("matrix") {
+            source.find(" 0").expect("first missing-comma operand") + 1
+        } else {
+            source.rfind(responsible).expect("responsible token")
+        };
+        assert_eq!(
+            diagnostic.error().position().byte_offset().value(),
+            responsible_offset,
+            "{source}",
+        );
+        assert_eq!(diagnostic.error().position().line().value(), 0, "{source}");
+        assert_eq!(
+            diagnostic.error().position().column().value() as usize,
+            responsible_offset,
+            "{source}",
+        );
+        assert_eq!(
+            diagnostic.span().start().byte_offset().value(),
+            0,
+            "{source}"
+        );
+        assert_eq!(
+            diagnostic.span().end().byte_offset().value(),
+            source.find(';').expect("declaration semicolon") + 1,
+            "{source}",
+        );
+        let ErrorKind::InvalidPropertyValue(detail) = diagnostic.error().kind() else {
+            panic!("{source}: expected property-value root");
+        };
+        assert_eq!(detail.property(), CssKnownProperty::Transform, "{source}");
+        let encountered = detail.encountered().expect("responsible transform token");
+        assert_eq!(encountered.kind(), token_kind, "{source}");
+        assert_eq!(encountered.authored(), responsible, "{source}");
+        assert_eq!(
+            report.syntax()[0]
+                .known()
+                .expect("retained color declaration")
+                .property(),
+            CssKnownProperty::Color,
+            "{source}",
+        );
+
+        #[cfg(feature = "app-strict")]
+        {
+            let failure = surgeist_css::validate_style_attribute(&source)
+                .expect_err("strict validation rejects recovered transform mutation");
+            assert_eq!(failure.diagnostics(), report.diagnostics(), "{source}");
+        }
+    }
+}
+
+#[test]
+fn repeated_transform_failures_make_progress_to_a_valid_sibling() {
+    let source = concat!(
+        "transform: matrix(1 0 0 1 0 0); ",
+        "transform: perspective(-1px); ",
+        "transform: translateZ(10%); color: red",
+    );
+    let report = parse_style_attribute(source);
+    assert_eq!(report.diagnostics().len(), 3);
+    assert_eq!(report.syntax().len(), 1);
+    assert_eq!(
+        report.syntax()[0]
+            .known()
+            .expect("retained color declaration")
+            .property(),
+        CssKnownProperty::Color,
+    );
+    assert!(
+        report
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.action() == CssRecoveryAction::DropDeclaration)
+    );
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_style_attribute(source)
+            .expect_err("strict validation rejects repeated recovered transforms");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn error_unknown_and_recognized_unsupported_at_rules_have_distinct_codes() {
     let unknown = parse_sheet("@not-a-css-rule;").expect_err("unknown at-rule must fail");
     assert_eq!(unknown.code(), CssErrorCode::UnknownAtRule);

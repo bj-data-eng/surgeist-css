@@ -6,43 +6,96 @@ use super::background::{
 };
 use super::box_model::parse_shadow;
 use super::values::{
-    LengthGrammar, next_is_comma, next_is_ident, parse_length_with_context,
-    parse_length_with_context_legacy, parse_number,
+    CalculationRoot, LengthGrammar, checked_percentage_value, next_is_comma, next_is_ident,
+    parse_length_with_context, parse_length_with_context_legacy, parse_number,
+    parse_typed_calculation,
 };
-use crate::error::{Error, basic, unsupported_value};
+use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
 
 pub(super) fn parse_transform<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssTransform, ParseError<'i, Error>> {
+) -> std::result::Result<CssParsedTransform, ParseError<'i, Error>> {
     if input
         .try_parse(|input| input.expect_ident_matching("none"))
         .is_ok()
     {
-        return Ok(CssTransform::None);
+        return Ok(CssParsedTransform::new(
+            CssTransformValue::None,
+            CssTransform::None,
+        ));
     }
-    let mut functions = Vec::new();
+    let mut current_functions = Vec::new();
+    let mut legacy_functions = Vec::new();
     while !input.is_exhausted() {
-        functions.push(parse_transform_function(input)?);
+        let (current, legacy) = parse_transform_function(input)?;
+        current_functions.push(current);
+        legacy_functions.push(legacy);
     }
-    CssTransformFunctionList::try_new(functions)
+    let current = CssTransformFunctionValueList::try_new(current_functions)
+        .map(CssTransformValue::Functions)
+        .ok_or_else(|| unsupported_value(input, None, "transform function list is empty"))?;
+    let legacy = CssTransformFunctionList::try_new(legacy_functions)
         .map(CssTransform::Functions)
-        .ok_or_else(|| unsupported_value(input, None, "transform function list is empty"))
+        .ok_or_else(|| unsupported_value(input, None, "transform function list is empty"))?;
+    Ok(CssParsedTransform::new(current, legacy))
 }
 
-pub(super) fn parse_transform_function<'i, 't>(
+fn parse_transform_function<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssTransformFunction, ParseError<'i, Error>> {
+) -> std::result::Result<(CssTransformFunctionValue, CssTransformFunction), ParseError<'i, Error>> {
     let location = input.current_source_location();
     let name = match input.next().map_err(basic)? {
         Token::Function(name) => name.clone(),
         token => return Err(location.new_unexpected_token_error::<Error>(token.clone())),
     };
     let kind = parse_transform_function_kind(input, name.as_ref())?;
-    let arguments =
-        input.parse_nested_block(|input| parse_transform_function_arguments(input, kind))?;
-    Ok(CssTransformFunction::new(kind, arguments))
+    let (current, arguments) = input.parse_nested_block(|input| {
+        let state = input.state();
+        let authored = collect_transform_authored_tokens(input)?;
+        input.reset(&state);
+        let current = parse_transform_function_value(input, kind)?;
+        Ok((
+            current,
+            CssTransformArguments::new(CssAuthoredFunctionArguments::new(authored)),
+        ))
+    })?;
+    Ok((current, CssTransformFunction::new(kind, arguments)))
+}
+
+fn collect_transform_authored_tokens<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<String, ParseError<'i, Error>> {
+    let mut value = String::new();
+    while !input.is_exhausted() {
+        let token = input.next().map_err(basic)?.clone();
+        let token_css = match token {
+            Token::Function(_) => {
+                let mut css = token.to_css_string();
+                css.push_str(&input.parse_nested_block(collect_transform_authored_tokens)?);
+                css.push(')');
+                css
+            }
+            Token::ParenthesisBlock => {
+                let nested = input.parse_nested_block(collect_transform_authored_tokens)?;
+                format!("({nested})")
+            }
+            _ => token.to_css_string(),
+        };
+        if matches!(token, Token::Comma) {
+            if value.ends_with(' ') {
+                value.pop();
+            }
+            value.push_str(", ");
+        } else {
+            if !value.is_empty() && !value.ends_with(' ') {
+                value.push(' ');
+            }
+            value.push_str(&token_css);
+        }
+    }
+    Ok(value.trim().to_owned())
 }
 
 pub(super) fn parse_transform_function_kind<'i, 't>(
@@ -79,39 +132,282 @@ pub(super) fn parse_transform_function_kind<'i, 't>(
     }
 }
 
-pub(super) fn parse_transform_function_arguments<'i, 't>(
+fn parse_transform_function_value<'i, 't>(
     input: &mut Parser<'i, 't>,
     kind: CssTransformFunctionKind,
-) -> std::result::Result<CssTransformArguments, ParseError<'i, Error>> {
-    parse_validated_function_arguments(input, "transform function", |input| match kind {
-        CssTransformFunctionKind::Translate => validate_length_sequence(input, 1, 2),
-        CssTransformFunctionKind::TranslateX
-        | CssTransformFunctionKind::TranslateY
-        | CssTransformFunctionKind::TranslateZ
-        | CssTransformFunctionKind::Perspective => validate_length_sequence(input, 1, 1),
-        CssTransformFunctionKind::Translate3d => validate_length_sequence(input, 3, 3),
-        CssTransformFunctionKind::Scale => validate_number_sequence(input, 1, 2),
-        CssTransformFunctionKind::ScaleX
-        | CssTransformFunctionKind::ScaleY
-        | CssTransformFunctionKind::ScaleZ => validate_number_sequence(input, 1, 1),
-        CssTransformFunctionKind::Scale3d => validate_number_sequence(input, 3, 3),
-        CssTransformFunctionKind::Rotate
-        | CssTransformFunctionKind::RotateX
-        | CssTransformFunctionKind::RotateY
-        | CssTransformFunctionKind::RotateZ
-        | CssTransformFunctionKind::SkewX
-        | CssTransformFunctionKind::SkewY => validate_angle_sequence(input, 1, 1),
-        CssTransformFunctionKind::Skew => validate_angle_sequence(input, 1, 2),
-        CssTransformFunctionKind::Rotate3d => {
-            validate_number_sequence_prefix(input, 3)
-                && consume_optional_comma(input)
-                && validate_angle(input)
-                && input.is_exhausted()
+) -> std::result::Result<CssTransformFunctionValue, ParseError<'i, Error>> {
+    let value = match kind {
+        CssTransformFunctionKind::Matrix => {
+            let components = parse_exact_comma_list(input, 6, parse_transform_number)?;
+            let components = components.try_into().map_err(|_| {
+                unsupported_value(input, None, "matrix() requires exactly six numbers")
+            })?;
+            CssTransformFunctionValue::Matrix(CssTransformMatrix::new(components))
         }
-        CssTransformFunctionKind::Matrix => validate_number_sequence(input, 6, 6),
-        CssTransformFunctionKind::Matrix3d => validate_number_sequence(input, 16, 16),
+        CssTransformFunctionKind::Matrix3d => {
+            let components = parse_exact_comma_list(input, 16, parse_transform_number)?;
+            let components = components.try_into().map_err(|_| {
+                unsupported_value(input, None, "matrix3d() requires exactly sixteen numbers")
+            })?;
+            CssTransformFunctionValue::Matrix3d(Box::new(CssTransformMatrix3d::new(components)))
+        }
+        CssTransformFunctionKind::Perspective => {
+            let perspective = if input
+                .try_parse(|input| input.expect_ident_matching("none"))
+                .is_ok()
+            {
+                CssTransformPerspective::None
+            } else {
+                let location = input.current_source_location();
+                let length = parse_transform_length(input)?;
+                let length = CssTransformNonNegativeLength::try_new(length.value().clone())
+                    .ok_or_else(|| {
+                        unsupported_value_at(
+                            location,
+                            None,
+                            "perspective() requires a non-negative length or none",
+                        )
+                    })?;
+                CssTransformPerspective::Length(length)
+            };
+            input.expect_exhausted().map_err(basic)?;
+            CssTransformFunctionValue::Perspective(perspective)
+        }
+        CssTransformFunctionKind::Rotate => {
+            CssTransformFunctionValue::Rotate(parse_one(input, parse_transform_angle)?)
+        }
+        CssTransformFunctionKind::Rotate3d => {
+            let x = parse_transform_number(input)?;
+            input.expect_comma().map_err(basic)?;
+            let y = parse_transform_number(input)?;
+            input.expect_comma().map_err(basic)?;
+            let z = parse_transform_number(input)?;
+            input.expect_comma().map_err(basic)?;
+            let angle = parse_transform_angle(input)?;
+            input.expect_exhausted().map_err(basic)?;
+            CssTransformFunctionValue::Rotate3d(CssTransformRotate3d::new(x, y, z, angle))
+        }
+        CssTransformFunctionKind::RotateX => {
+            CssTransformFunctionValue::RotateX(parse_one(input, parse_transform_angle)?)
+        }
+        CssTransformFunctionKind::RotateY => {
+            CssTransformFunctionValue::RotateY(parse_one(input, parse_transform_angle)?)
+        }
+        CssTransformFunctionKind::RotateZ => {
+            CssTransformFunctionValue::RotateZ(parse_one(input, parse_transform_angle)?)
+        }
+        CssTransformFunctionKind::Scale => {
+            let (x, y) = parse_one_or_two(input, parse_transform_number)?;
+            CssTransformFunctionValue::Scale(CssTransformScale::new(x, y))
+        }
+        CssTransformFunctionKind::Scale3d => {
+            let mut components = parse_exact_comma_list(input, 3, parse_transform_scale_component)?;
+            let z = components.pop().ok_or_else(|| {
+                unsupported_value(input, None, "scale3d() requires exactly three operands")
+            })?;
+            let y = components.pop().ok_or_else(|| {
+                unsupported_value(input, None, "scale3d() requires exactly three operands")
+            })?;
+            let x = components.pop().ok_or_else(|| {
+                unsupported_value(input, None, "scale3d() requires exactly three operands")
+            })?;
+            CssTransformFunctionValue::Scale3d(CssTransformScale3d::new(x, y, z))
+        }
+        CssTransformFunctionKind::ScaleX => {
+            CssTransformFunctionValue::ScaleX(parse_one(input, parse_transform_number)?)
+        }
+        CssTransformFunctionKind::ScaleY => {
+            CssTransformFunctionValue::ScaleY(parse_one(input, parse_transform_number)?)
+        }
+        CssTransformFunctionKind::ScaleZ => {
+            CssTransformFunctionValue::ScaleZ(parse_one(input, parse_transform_scale_component)?)
+        }
+        CssTransformFunctionKind::Skew => {
+            let (x, y) = parse_one_or_two(input, parse_transform_angle)?;
+            CssTransformFunctionValue::Skew(CssTransformSkew::new(x, y))
+        }
+        CssTransformFunctionKind::SkewX => {
+            CssTransformFunctionValue::SkewX(parse_one(input, parse_transform_angle)?)
+        }
+        CssTransformFunctionKind::SkewY => {
+            CssTransformFunctionValue::SkewY(parse_one(input, parse_transform_angle)?)
+        }
+        CssTransformFunctionKind::Translate => {
+            let (x, y) = parse_one_or_two(input, parse_transform_length_percentage)?;
+            CssTransformFunctionValue::Translate(CssTransformTranslate::new(x, y))
+        }
+        CssTransformFunctionKind::Translate3d => {
+            let x = parse_transform_length_percentage(input)?;
+            input.expect_comma().map_err(basic)?;
+            let y = parse_transform_length_percentage(input)?;
+            input.expect_comma().map_err(basic)?;
+            let z = parse_transform_length(input)?;
+            input.expect_exhausted().map_err(basic)?;
+            CssTransformFunctionValue::Translate3d(CssTransformTranslate3d::new(x, y, z))
+        }
+        CssTransformFunctionKind::TranslateX => CssTransformFunctionValue::TranslateX(parse_one(
+            input,
+            parse_transform_length_percentage,
+        )?),
+        CssTransformFunctionKind::TranslateY => CssTransformFunctionValue::TranslateY(parse_one(
+            input,
+            parse_transform_length_percentage,
+        )?),
+        CssTransformFunctionKind::TranslateZ => {
+            CssTransformFunctionValue::TranslateZ(parse_one(input, parse_transform_length)?)
+        }
+    };
+    Ok(value)
+}
+
+fn parse_exact_comma_list<'i, 't, T>(
+    input: &mut Parser<'i, 't>,
+    count: usize,
+    mut parse: impl FnMut(&mut Parser<'i, 't>) -> std::result::Result<T, ParseError<'i, Error>>,
+) -> std::result::Result<Vec<T>, ParseError<'i, Error>> {
+    let mut values = Vec::with_capacity(count);
+    for index in 0..count {
+        if index != 0 {
+            input.expect_comma().map_err(basic)?;
+        }
+        values.push(parse(input)?);
+    }
+    input.expect_exhausted().map_err(basic)?;
+    Ok(values)
+}
+
+fn parse_one<'i, 't, T>(
+    input: &mut Parser<'i, 't>,
+    mut parse: impl FnMut(&mut Parser<'i, 't>) -> std::result::Result<T, ParseError<'i, Error>>,
+) -> std::result::Result<T, ParseError<'i, Error>> {
+    let value = parse(input)?;
+    input.expect_exhausted().map_err(basic)?;
+    Ok(value)
+}
+
+fn parse_one_or_two<'i, 't, T>(
+    input: &mut Parser<'i, 't>,
+    mut parse: impl FnMut(&mut Parser<'i, 't>) -> std::result::Result<T, ParseError<'i, Error>>,
+) -> std::result::Result<(T, Option<T>), ParseError<'i, Error>> {
+    let first = parse(input)?;
+    let second = if input.is_exhausted() {
+        None
+    } else {
+        input.expect_comma().map_err(basic)?;
+        Some(parse(input)?)
+    };
+    input.expect_exhausted().map_err(basic)?;
+    Ok((first, second))
+}
+
+fn parse_transform_number<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransformNumber, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Number { value, .. } => CssFiniteNumber::try_new(*value)
+            .map(CssTransformNumber::Literal)
+            .ok_or_else(|| unsupported_value_at(location, None, "transform number must be finite")),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Number))
+            .map(CssNumberCalculation::from_expression)
+            .map(CssTransformNumber::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+fn parse_transform_percentage<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransformPercentage, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Percentage { unit_value, .. } => {
+            let value = checked_percentage_value(
+                location,
+                *unit_value,
+                "transform percentage must be finite",
+            )?;
+            CssFiniteNumber::try_new(value)
+                .map(CssTransformPercentage::Literal)
+                .ok_or_else(|| {
+                    unsupported_value_at(location, None, "transform percentage must be finite")
+                })
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Percentage))
+            .map(CssPercentageCalculation::from_expression)
+            .map(CssTransformPercentage::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+fn parse_transform_scale_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransformScaleComponent, ParseError<'i, Error>> {
+    let state = input.state();
+    if let Ok(number) = input.try_parse(parse_transform_number) {
+        return Ok(CssTransformScaleComponent::Number(number));
+    }
+    input.reset(&state);
+    parse_transform_percentage(input).map(CssTransformScaleComponent::Percentage)
+}
+
+fn parse_transform_angle<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransformAngle, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Number { value, .. } if *value == 0.0 => Ok(CssTransformAngle::Zero),
+        Token::Dimension { value, unit, .. } => {
+            let unit = match unit.to_ascii_lowercase().as_str() {
+                "deg" => CssAngleUnit::Degrees,
+                "grad" => CssAngleUnit::Gradians,
+                "rad" => CssAngleUnit::Radians,
+                "turn" => CssAngleUnit::Turns,
+                _ => {
+                    return Err(unsupported_value_at(
+                        location,
+                        None,
+                        format!("unsupported transform angle unit `{unit}`"),
+                    ));
+                }
+            };
+            CssAngleLiteral::try_new(*value, unit)
+                .map(CssTransformAngle::Literal)
+                .ok_or_else(|| {
+                    unsupported_value_at(location, None, "transform angle must be finite")
+                })
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Angle))
+            .map(CssAngleCalculation::from_expression)
+            .map(CssTransformAngle::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+fn parse_transform_length_percentage<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransformLengthPercentage, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let value = parse_length_with_context(input, LengthGrammar::Position, "translate")?;
+    CssTransformLengthPercentage::try_new(value).ok_or_else(|| {
+        unsupported_value_at(
+            location,
+            None,
+            "transform translation requires a length-percentage",
+        )
     })
-    .map(CssTransformArguments::new)
+}
+
+fn parse_transform_length<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransformLength, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let value = parse_length_with_context(input, LengthGrammar::Position, "translate")?;
+    CssTransformLength::try_new(value).ok_or_else(|| {
+        unsupported_value_at(location, None, "transform translation requires a length")
+    })
 }
 
 pub(super) fn parse_filter_function_arguments<'i, 't>(
@@ -245,39 +541,6 @@ pub(super) fn validate_non_negative_length<'i, 't>(input: &mut Parser<'i, 't>) -
         && input.is_exhausted()
 }
 
-pub(super) fn validate_number_sequence<'i, 't>(
-    input: &mut Parser<'i, 't>,
-    min: usize,
-    max: usize,
-) -> bool {
-    let mut count = 0;
-    while !input.is_exhausted() {
-        if count == max || input.expect_number().is_err() {
-            return false;
-        }
-        count += 1;
-        if !input.is_exhausted() {
-            consume_optional_comma(input);
-        }
-    }
-    count >= min
-}
-
-pub(super) fn validate_number_sequence_prefix<'i, 't>(
-    input: &mut Parser<'i, 't>,
-    count: usize,
-) -> bool {
-    for index in 0..count {
-        if input.expect_number().is_err() {
-            return false;
-        }
-        if index + 1 < count {
-            consume_optional_comma(input);
-        }
-    }
-    true
-}
-
 pub(super) fn validate_number_or_percent<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
     let parsed = match input.next() {
         Ok(Token::Number { .. } | Token::Percentage { .. }) => true,
@@ -285,24 +548,6 @@ pub(super) fn validate_number_or_percent<'i, 't>(input: &mut Parser<'i, 't>) -> 
         Err(_) => false,
     };
     parsed && input.is_exhausted()
-}
-
-pub(super) fn validate_angle_sequence<'i, 't>(
-    input: &mut Parser<'i, 't>,
-    min: usize,
-    max: usize,
-) -> bool {
-    let mut count = 0;
-    while !input.is_exhausted() {
-        if count == max || !validate_angle(input) {
-            return false;
-        }
-        count += 1;
-        if !input.is_exhausted() {
-            consume_optional_comma(input);
-        }
-    }
-    count >= min
 }
 
 pub(super) fn validate_angle<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
@@ -683,4 +928,47 @@ pub(super) fn parse_mask_layer<'i, 't>(
     }
     CssMaskLayer::try_new(image, position, size, repeat)
         .ok_or_else(|| unsupported_value(input, None, "mask layer is empty"))
+}
+
+#[cfg(test)]
+mod transform_tests {
+    use cssparser::{Parser, ParserInput};
+
+    use super::*;
+
+    fn parse(value: &str) -> Result<CssParsedTransform, ParseError<'_, Error>> {
+        let mut input = ParserInput::new(value);
+        Parser::new(&mut input).parse_entirely(parse_transform)
+    }
+
+    #[test]
+    fn transform_parser_requires_commas_at_the_function_boundary() {
+        assert!(parse("matrix(1 0 0 1 0 0)").is_err());
+        assert!(parse("rotate3d(1 0 0 45deg)").is_err());
+        assert!(parse("translate3d(1px 2px 3px)").is_err());
+    }
+
+    #[test]
+    fn transform_parser_builds_checked_percentage_scale_and_length_only_z_values() {
+        let parsed =
+            parse("scale3d(1, 50%, 2) translate3d(10%, 20%, 3px)").expect("valid typed transforms");
+        let (current, legacy) = parsed.into_parts();
+        let CssTransformValue::Functions(functions) = current else {
+            panic!("expected current transform functions");
+        };
+        assert!(matches!(
+            &functions.functions()[0],
+            CssTransformFunctionValue::Scale3d(scale)
+                if matches!(scale.y(), CssTransformScaleComponent::Percentage(_))
+        ));
+        assert!(matches!(
+            &functions.functions()[1],
+            CssTransformFunctionValue::Translate3d(translation)
+                if matches!(translation.z().value(), CssLength::Px(value) if value.value() == 3.0)
+        ));
+        let CssTransform::Functions(legacy) = legacy else {
+            panic!("expected legacy transform projection");
+        };
+        assert_eq!(legacy.functions()[0].arguments().as_css(), "1, 50%, 2");
+    }
 }

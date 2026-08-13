@@ -6716,6 +6716,435 @@ pub enum CssTransformFunctionKind {
     TranslateZ,
 }
 
+/// A finite authored transform `<number>`.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssTransformNumber {
+    Literal(CssFiniteNumber),
+    Calculation(CssNumberCalculation),
+}
+
+/// A finite authored transform `<percentage>`.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssTransformPercentage {
+    Literal(CssFiniteNumber),
+    Calculation(CssPercentageCalculation),
+}
+
+/// One authored operand in a transform scale function.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssTransformScaleComponent {
+    Number(CssTransformNumber),
+    Percentage(CssTransformPercentage),
+}
+
+/// An authored transform angle, including the unitless-zero branch.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssTransformAngle {
+    Zero,
+    Literal(CssAngleLiteral),
+    Calculation(CssAngleCalculation),
+}
+
+/// A checked authored transform `<length-percentage>`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformLengthPercentage {
+    value: CssLength,
+}
+
+impl CssTransformLengthPercentage {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        if matches!(
+            value,
+            CssLength::Px(_)
+                | CssLength::Dimension(_)
+                | CssLength::Percent(_)
+                | CssLength::Zero
+                | CssLength::Calc(_)
+        ) {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// A checked authored transform `<length>`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformLength {
+    value: CssLength,
+}
+
+impl CssTransformLength {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        let is_length = match &value {
+            CssLength::Px(_) | CssLength::Dimension(_) | CssLength::Zero => true,
+            CssLength::Calc(calculation) => !calculation.uses_percentage(),
+            CssLength::Percent(_)
+            | CssLength::Auto
+            | CssLength::MinContent
+            | CssLength::MaxContent
+            | CssLength::FitContent
+            | CssLength::Normal => false,
+        };
+        is_length.then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// A checked non-negative authored transform `<length>` literal or symbolic calculation.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformNonNegativeLength {
+    value: CssLength,
+}
+
+impl CssTransformNonNegativeLength {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        let is_non_negative_length = match &value {
+            CssLength::Px(value) => value.value() >= 0.0,
+            CssLength::Dimension(value) => value.value() >= 0.0,
+            CssLength::Zero => true,
+            CssLength::Calc(calculation) => !calculation.uses_percentage(),
+            CssLength::Percent(_)
+            | CssLength::Auto
+            | CssLength::MinContent
+            | CssLength::MaxContent
+            | CssLength::FitContent
+            | CssLength::Normal => false,
+        };
+        is_non_negative_length.then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformMatrix {
+    components: [CssTransformNumber; 6],
+}
+
+impl CssTransformMatrix {
+    pub(crate) const fn new(components: [CssTransformNumber; 6]) -> Self {
+        Self { components }
+    }
+
+    #[must_use]
+    pub const fn components(&self) -> &[CssTransformNumber; 6] {
+        &self.components
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformMatrix3d {
+    components: [CssTransformNumber; 16],
+}
+
+impl CssTransformMatrix3d {
+    pub(crate) const fn new(components: [CssTransformNumber; 16]) -> Self {
+        Self { components }
+    }
+
+    #[must_use]
+    pub const fn components(&self) -> &[CssTransformNumber; 16] {
+        &self.components
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssTransformPerspective {
+    None,
+    Length(CssTransformNonNegativeLength),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformRotate3d {
+    x: CssTransformNumber,
+    y: CssTransformNumber,
+    z: CssTransformNumber,
+    angle: CssTransformAngle,
+}
+
+impl CssTransformRotate3d {
+    pub(crate) const fn new(
+        x: CssTransformNumber,
+        y: CssTransformNumber,
+        z: CssTransformNumber,
+        angle: CssTransformAngle,
+    ) -> Self {
+        Self { x, y, z, angle }
+    }
+
+    #[must_use]
+    pub const fn x(&self) -> &CssTransformNumber {
+        &self.x
+    }
+
+    #[must_use]
+    pub const fn y(&self) -> &CssTransformNumber {
+        &self.y
+    }
+
+    #[must_use]
+    pub const fn z(&self) -> &CssTransformNumber {
+        &self.z
+    }
+
+    #[must_use]
+    pub const fn angle(&self) -> &CssTransformAngle {
+        &self.angle
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformScale {
+    x: CssTransformNumber,
+    y: Option<CssTransformNumber>,
+}
+
+impl CssTransformScale {
+    pub(crate) const fn new(x: CssTransformNumber, y: Option<CssTransformNumber>) -> Self {
+        Self { x, y }
+    }
+
+    #[must_use]
+    pub const fn x(&self) -> &CssTransformNumber {
+        &self.x
+    }
+
+    #[must_use]
+    pub const fn y(&self) -> Option<&CssTransformNumber> {
+        self.y.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformScale3d {
+    x: CssTransformScaleComponent,
+    y: CssTransformScaleComponent,
+    z: CssTransformScaleComponent,
+}
+
+impl CssTransformScale3d {
+    pub(crate) const fn new(
+        x: CssTransformScaleComponent,
+        y: CssTransformScaleComponent,
+        z: CssTransformScaleComponent,
+    ) -> Self {
+        Self { x, y, z }
+    }
+
+    #[must_use]
+    pub const fn x(&self) -> &CssTransformScaleComponent {
+        &self.x
+    }
+
+    #[must_use]
+    pub const fn y(&self) -> &CssTransformScaleComponent {
+        &self.y
+    }
+
+    #[must_use]
+    pub const fn z(&self) -> &CssTransformScaleComponent {
+        &self.z
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformSkew {
+    x: CssTransformAngle,
+    y: Option<CssTransformAngle>,
+}
+
+impl CssTransformSkew {
+    pub(crate) const fn new(x: CssTransformAngle, y: Option<CssTransformAngle>) -> Self {
+        Self { x, y }
+    }
+
+    #[must_use]
+    pub const fn x(&self) -> &CssTransformAngle {
+        &self.x
+    }
+
+    #[must_use]
+    pub const fn y(&self) -> Option<&CssTransformAngle> {
+        self.y.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformTranslate {
+    x: CssTransformLengthPercentage,
+    y: Option<CssTransformLengthPercentage>,
+}
+
+impl CssTransformTranslate {
+    pub(crate) const fn new(
+        x: CssTransformLengthPercentage,
+        y: Option<CssTransformLengthPercentage>,
+    ) -> Self {
+        Self { x, y }
+    }
+
+    #[must_use]
+    pub const fn x(&self) -> &CssTransformLengthPercentage {
+        &self.x
+    }
+
+    #[must_use]
+    pub const fn y(&self) -> Option<&CssTransformLengthPercentage> {
+        self.y.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformTranslate3d {
+    x: CssTransformLengthPercentage,
+    y: CssTransformLengthPercentage,
+    z: CssTransformLength,
+}
+
+impl CssTransformTranslate3d {
+    pub(crate) const fn new(
+        x: CssTransformLengthPercentage,
+        y: CssTransformLengthPercentage,
+        z: CssTransformLength,
+    ) -> Self {
+        Self { x, y, z }
+    }
+
+    #[must_use]
+    pub const fn x(&self) -> &CssTransformLengthPercentage {
+        &self.x
+    }
+
+    #[must_use]
+    pub const fn y(&self) -> &CssTransformLengthPercentage {
+        &self.y
+    }
+
+    #[must_use]
+    pub const fn z(&self) -> &CssTransformLength {
+        &self.z
+    }
+}
+
+/// A parser-produced authored transform function with an exact typed payload.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssTransformFunctionValue {
+    Matrix(CssTransformMatrix),
+    Matrix3d(Box<CssTransformMatrix3d>),
+    Perspective(CssTransformPerspective),
+    Rotate(CssTransformAngle),
+    Rotate3d(CssTransformRotate3d),
+    RotateX(CssTransformAngle),
+    RotateY(CssTransformAngle),
+    RotateZ(CssTransformAngle),
+    Scale(CssTransformScale),
+    Scale3d(CssTransformScale3d),
+    ScaleX(CssTransformNumber),
+    ScaleY(CssTransformNumber),
+    ScaleZ(CssTransformScaleComponent),
+    Skew(CssTransformSkew),
+    SkewX(CssTransformAngle),
+    SkewY(CssTransformAngle),
+    Translate(CssTransformTranslate),
+    Translate3d(CssTransformTranslate3d),
+    TranslateX(CssTransformLengthPercentage),
+    TranslateY(CssTransformLengthPercentage),
+    TranslateZ(CssTransformLength),
+}
+
+impl CssTransformFunctionValue {
+    #[must_use]
+    pub const fn kind(&self) -> CssTransformFunctionKind {
+        match self {
+            Self::Matrix(_) => CssTransformFunctionKind::Matrix,
+            Self::Matrix3d(_) => CssTransformFunctionKind::Matrix3d,
+            Self::Perspective(_) => CssTransformFunctionKind::Perspective,
+            Self::Rotate(_) => CssTransformFunctionKind::Rotate,
+            Self::Rotate3d(_) => CssTransformFunctionKind::Rotate3d,
+            Self::RotateX(_) => CssTransformFunctionKind::RotateX,
+            Self::RotateY(_) => CssTransformFunctionKind::RotateY,
+            Self::RotateZ(_) => CssTransformFunctionKind::RotateZ,
+            Self::Scale(_) => CssTransformFunctionKind::Scale,
+            Self::Scale3d(_) => CssTransformFunctionKind::Scale3d,
+            Self::ScaleX(_) => CssTransformFunctionKind::ScaleX,
+            Self::ScaleY(_) => CssTransformFunctionKind::ScaleY,
+            Self::ScaleZ(_) => CssTransformFunctionKind::ScaleZ,
+            Self::Skew(_) => CssTransformFunctionKind::Skew,
+            Self::SkewX(_) => CssTransformFunctionKind::SkewX,
+            Self::SkewY(_) => CssTransformFunctionKind::SkewY,
+            Self::Translate(_) => CssTransformFunctionKind::Translate,
+            Self::Translate3d(_) => CssTransformFunctionKind::Translate3d,
+            Self::TranslateX(_) => CssTransformFunctionKind::TranslateX,
+            Self::TranslateY(_) => CssTransformFunctionKind::TranslateY,
+            Self::TranslateZ(_) => CssTransformFunctionKind::TranslateZ,
+        }
+    }
+}
+
+/// A non-empty ordered list of current authored transform functions.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssTransformFunctionValueList {
+    functions: Vec<CssTransformFunctionValue>,
+}
+
+impl CssTransformFunctionValueList {
+    #[must_use]
+    pub fn try_new(functions: Vec<CssTransformFunctionValue>) -> Option<Self> {
+        (!functions.is_empty()).then_some(Self { functions })
+    }
+
+    #[must_use]
+    pub fn functions(&self) -> &[CssTransformFunctionValue] {
+        &self.functions
+    }
+}
+
+/// The current authored value of the `transform` property.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssTransformValue {
+    None,
+    Functions(CssTransformFunctionValueList),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CssParsedTransform {
+    current: CssTransformValue,
+    legacy: CssTransform,
+}
+
+impl CssParsedTransform {
+    pub(crate) const fn new(current: CssTransformValue, legacy: CssTransform) -> Self {
+        Self { current, legacy }
+    }
+
+    pub(crate) fn into_parts(self) -> (CssTransformValue, CssTransform) {
+        (self.current, self.legacy)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CssTransformFunction {
     kind: CssTransformFunctionKind,

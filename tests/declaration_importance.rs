@@ -116,7 +116,15 @@ fn declaration_importance_keyframes_use_distinct_unimportant_declarations() {
     ));
 
     let source = "@keyframes fade { from { opacity: 0 !important; } }";
-    let error = parse_sheet(source).expect_err("importance in keyframes must fail");
+    let report = parse_sheet(source);
+    let [CssRule::Keyframes(keyframes)] = report.syntax().rules() else {
+        panic!("invalid importance must leave the authored keyframes structure");
+    };
+    assert!(keyframes.blocks()[0].declarations().is_empty());
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid importance must produce one diagnostic");
+    };
+    let error = diagnostic.error();
     assert_eq!(error.code(), CssErrorCode::InvalidDeclarationAnnotation);
     assert_eq!(
         error.position().byte_offset().value(),
@@ -131,7 +139,15 @@ fn declaration_importance_keyframes_use_distinct_unimportant_declarations() {
     ));
 
     let custom_source = "@keyframes fade { from { --phase: ready !important; } }";
-    let error = parse_sheet(custom_source).expect_err("custom keyframe importance must fail");
+    let report = parse_sheet(custom_source);
+    let [CssRule::Keyframes(keyframes)] = report.syntax().rules() else {
+        panic!("invalid custom importance must leave the authored keyframes structure");
+    };
+    assert!(keyframes.blocks()[0].declarations().is_empty());
+    let [diagnostic] = report.diagnostics() else {
+        panic!("invalid custom importance must produce one diagnostic");
+    };
+    let error = diagnostic.error();
     let ErrorKind::InvalidDeclarationAnnotation(detail) = error.kind() else {
         panic!("expected custom keyframe annotation detail");
     };

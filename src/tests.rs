@@ -379,13 +379,12 @@ fn keyframes_rule_accessors_expose_authored_structure() {
     let selector = CssKeyframeSelectorList::try_new(vec![CssKeyframeSelector::From]).unwrap();
     let keyframes = parse_sheet("@keyframes fade { from { opacity: 0; } }").unwrap();
     let declaration = keyframes_rule(&keyframes.rules()[0]).blocks()[0].declarations()[0].clone();
-    let block = CssKeyframeBlock::try_new(
+    let block = CssKeyframeBlock::new(
         selector,
         CssKeyframeDeclarationList::new(vec![declaration.clone()]),
         source_position(2, 3),
-    )
-    .unwrap();
-    let rule = CssKeyframesRule::try_new(name, vec![block], source_position(1, 1)).unwrap();
+    );
+    let rule = CssKeyframesRule::new(name, vec![block], source_position(1, 1));
 
     assert_eq!(
         rule.name(),
@@ -515,21 +514,15 @@ fn keyframes_rule_parser_accepts_keyframes_inside_conditional_groups() {
 }
 
 #[test]
-fn keyframes_rule_parser_rejects_invalid_blocks() {
+fn keyframes_rule_parser_rejects_invalid_names_selectors_and_placements() {
     for css in [
         "@keyframes fade;",
         "@keyframes { from { opacity: 0; } }",
         "@keyframes none { from { opacity: 0; } }",
         r#"@keyframes "" { from { opacity: 0; } }"#,
-        "@keyframes fade { }",
         "@keyframes fade { 0 { opacity: 0; } }",
         "@keyframes fade { -1% { opacity: 0; } }",
         "@keyframes fade { 101% { opacity: 0; } }",
-        "@keyframes fade { from, 0% { opacity: 0; } }",
-        "@keyframes fade { from { opacity: 0; } 0% { opacity: 1; } }",
-        "@keyframes fade { from { } }",
-        "@keyframes fade { from { made-up: value; } }",
-        "@keyframes fade { from { opacity: 0 !important; } }",
         "@keyframes fade { from { .nested { opacity: 0; } } }",
         "@keyframes fade { from { @media screen { opacity: 0; } } }",
         ".panel { @keyframes fade { from { opacity: 0; } } }",
@@ -541,11 +534,9 @@ fn keyframes_rule_parser_rejects_invalid_blocks() {
 }
 
 #[test]
-fn keyframes_constructors_reject_invalid_states() {
+fn keyframes_constructors_preserve_authored_empty_and_duplicate_states() {
     let location = source_position(1, 1);
     let name = CssKeyframesName::Ident(CssCustomIdent::new("fade"));
-    let parsed = parse_sheet("@keyframes fade { from { opacity: 1; } }").unwrap();
-    let declaration = keyframes_rule(&parsed.rules()[0]).blocks()[0].declarations()[0].clone();
     let from = CssKeyframeSelectorList::try_new(vec![CssKeyframeSelector::From]).unwrap();
 
     assert_eq!(CssKeyframesString::try_new(""), None);
@@ -554,42 +545,34 @@ fn keyframes_constructors_reject_invalid_states() {
     assert_eq!(CssKeyframePercent::try_new(100.1), None);
     assert_eq!(CssKeyframePercent::try_new(f32::NAN), None);
     assert_eq!(CssKeyframeSelectorList::try_new(Vec::new()), None);
-    assert_eq!(
-        CssKeyframeSelectorList::try_new(vec![
-            CssKeyframeSelector::From,
-            CssKeyframeSelector::Percent(CssKeyframePercent::new(0.0)),
-        ]),
-        None
+    let duplicate_selectors = CssKeyframeSelectorList::try_new(vec![
+        CssKeyframeSelector::From,
+        CssKeyframeSelector::Percent(CssKeyframePercent::new(0.0)),
+    ])
+    .unwrap();
+    assert_eq!(duplicate_selectors.selectors().len(), 2);
+
+    let duplicate_a = CssKeyframeBlock::new(
+        from.clone(),
+        CssKeyframeDeclarationList::new(Vec::new()),
+        location,
     );
-    assert_eq!(
-        CssKeyframeBlock::try_new(
-            from.clone(),
-            CssKeyframeDeclarationList::new(Vec::new()),
-            location,
-        ),
-        None
-    );
-    assert_eq!(
-        CssKeyframesRule::try_new(name.clone(), Vec::new(), location),
-        None
+    let duplicate_b =
+        CssKeyframeBlock::new(from, CssKeyframeDeclarationList::new(Vec::new()), location);
+    let rule = CssKeyframesRule::new(name, vec![duplicate_a, duplicate_b], location);
+    assert_eq!(rule.blocks().len(), 2);
+    assert!(
+        rule.blocks()
+            .iter()
+            .all(|block| block.declarations().is_empty())
     );
 
-    let duplicate_a = CssKeyframeBlock::try_new(
-        from.clone(),
-        CssKeyframeDeclarationList::new(vec![declaration.clone()]),
+    let empty = CssKeyframesRule::new(
+        CssKeyframesName::Ident(CssCustomIdent::new("empty")),
+        Vec::new(),
         location,
-    )
-    .unwrap();
-    let duplicate_b = CssKeyframeBlock::try_new(
-        from,
-        CssKeyframeDeclarationList::new(vec![declaration]),
-        location,
-    )
-    .unwrap();
-    assert_eq!(
-        CssKeyframesRule::try_new(name, vec![duplicate_a, duplicate_b], location),
-        None
     );
+    assert!(empty.blocks().is_empty());
 }
 
 #[test]
@@ -3493,7 +3476,6 @@ fn keyframes_and_nesting_reject_browser_recovery_forms() {
     let rejected = [
         "@-webkit-keyframes fade { from { opacity: 0; } }",
         "@keyframes fade { 0 { opacity: 0; } }",
-        "@keyframes fade { 50% { opacity: 0; } 50% { opacity: 1; } }",
         "@keyframes fade { from { @media screen { opacity: 0; } } }",
         "@keyframes fade { from { .nested { opacity: 0; } } }",
         ".card { & & { color: black; } }",
@@ -3516,6 +3498,7 @@ fn keyframes_and_nesting_accept_practical_surface_matrix() {
     let accepted = [
         r#"@keyframes fade { from { opacity: 0; } to { opacity: 1; } }"#,
         r#"@keyframes "fade in" { 0%, 100% { opacity: 1; } }"#,
+        r#"@keyframes duplicate { from, 0% { } from { opacity: 1; } }"#,
         ".card { color: black; .title { color: white; } }",
         ".card { &:hover { opacity: 0.9; } }",
         ".card { > .title[aria-current=true] { color: white; } }",

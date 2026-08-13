@@ -284,17 +284,21 @@ fn nested_structural_keyframes_recover_blocks_and_declarations_in_authored_order
 }
 
 #[test]
-fn nested_structural_keyframe_child_loss_drops_smallest_unrepresentable_parents_in_order() {
+fn nested_structural_keyframe_declaration_loss_retains_empty_authored_parents() {
     let invalid_declaration = "mystery: 1;";
     let empty_block = format!("from {{ {invalid_declaration} }}");
     let source = format!("@keyframes fade {{ {empty_block} }} .after {{ color: blue; }}");
 
     let report = parse_sheet(&source);
-    let [CssRule::Style(after)] = report.syntax().rules() else {
-        panic!("unrepresentable keyframes must not leak a partial node");
+    let [CssRule::Keyframes(keyframes), CssRule::Style(after)] = report.syntax().rules() else {
+        panic!("expected the empty keyframe parent and later style rule");
     };
+    let [block] = keyframes.blocks() else {
+        panic!("expected the authored keyframe block");
+    };
+    assert!(block.declarations().is_empty());
     assert_eq!(style_name(&CssRule::Style(after.clone())), "after");
-    assert_eq!(report.diagnostics().len(), 3);
+    assert_eq!(report.diagnostics().len(), 1);
     assert_drop(
         &source,
         &report.diagnostics()[0],
@@ -303,47 +307,6 @@ fn nested_structural_keyframe_child_loss_drops_smallest_unrepresentable_parents_
         CssErrorCode::UnknownProperty,
         CssRecoveryAction::DropDeclaration,
         source.find(invalid_declaration).unwrap(),
-    );
-    let block_start = source.find(&empty_block).unwrap();
-    assert_eq!(
-        report.diagnostics()[1].error().code(),
-        CssErrorCode::InvalidQualifiedRule
-    );
-    assert_eq!(
-        report.diagnostics()[1].action(),
-        CssRecoveryAction::DropKeyframeBlock
-    );
-    assert_eq!(
-        report.diagnostics()[1].span().start().byte_offset().value(),
-        block_start
-    );
-    assert_eq!(
-        report.diagnostics()[1].span().end().byte_offset().value(),
-        block_start + empty_block.len()
-    );
-    assert_eq!(
-        report.diagnostics()[2].error().code(),
-        CssErrorCode::InvalidAtRuleBody
-    );
-    assert_eq!(
-        report.diagnostics()[2].action(),
-        CssRecoveryAction::DropAtRule
-    );
-    assert_eq!(
-        report.diagnostics()[2].span().start().byte_offset().value(),
-        0
-    );
-    assert_eq!(
-        report.diagnostics()[2].span().end().byte_offset().value(),
-        source.find(" .after").unwrap()
-    );
-    assert!(
-        report.diagnostics()[0].error().position().byte_offset()
-            <= report.diagnostics()[1].error().position().byte_offset()
-    );
-    assert!(
-        report.diagnostics()[1].error().position().byte_offset()
-            <= report.diagnostics()[2].error().position().byte_offset()
     );
 }
 

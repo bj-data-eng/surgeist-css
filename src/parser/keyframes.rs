@@ -11,8 +11,7 @@ use super::{
     structural_rule_diagnostic,
 };
 use crate::error::{
-    CssFeatureId, Error, basic, invalid_at_rule_body, invalid_at_rule_placement,
-    invalid_qualified_rule, unsupported_value, unsupported_value_at,
+    CssFeatureId, Error, basic, invalid_at_rule_placement, unsupported_value, unsupported_value_at,
 };
 use crate::syntax::*;
 
@@ -100,19 +99,11 @@ pub(super) fn parse_keyframes_rule<'i, 't>(
     }
     diagnostics.append(&mut parser.diagnostics);
 
-    CssKeyframesRule::try_new(
+    Ok(CssKeyframesRule::new(
         name,
         blocks,
         crate::source::CssSourcePosition::from_cssparser(start.position(), start.source_location()),
-    )
-    .ok_or_else(|| {
-        invalid_at_rule_body(
-            input,
-            "keyframes",
-            "baseline.rule.keyframes",
-            "one or more valid keyframe blocks",
-        )
-    })
+    ))
 }
 
 struct KeyframeBlockParser<'s> {
@@ -188,25 +179,16 @@ impl<'i> QualifiedRuleParser<'i> for KeyframeBlockParser<'i> {
             }
         }
 
-        let result = CssKeyframeBlock::try_new(
+        let result = CssKeyframeBlock::new(
             selectors,
             CssKeyframeDeclarationList::new(declarations),
             crate::source::CssSourcePosition::from_cssparser(
                 start.position(),
                 start.source_location(),
             ),
-        )
-        .ok_or_else(|| {
-            invalid_qualified_rule(
-                input.current_source_location(),
-                "baseline.keyframes.block",
-                "a non-empty keyframe block",
-            )
-        });
-        if result.is_ok() {
-            depth.retain();
-        }
-        result
+        );
+        depth.retain();
+        Ok(result)
     }
 }
 

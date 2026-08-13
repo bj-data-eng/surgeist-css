@@ -1321,21 +1321,6 @@ pub(crate) fn invalid_root_syntax(source: &str, byte_offset: usize, token: &Toke
     }
 }
 
-pub(crate) fn invalid_qualified_rule<'i>(
-    location: cssparser::SourceLocation,
-    production: &'static str,
-    expectation: &'static str,
-) -> ParseError<'i, Error> {
-    error_at(
-        location,
-        ErrorKind::InvalidQualifiedRule(CssQualifiedRuleError {
-            production: CssProductionId::new(production),
-            expectation: CssGrammarExpectation::new(expectation),
-            encountered: None,
-        }),
-    )
-}
-
 pub(crate) fn invalid_at_rule_placement<'i>(
     location: cssparser::SourceLocation,
     name: &str,

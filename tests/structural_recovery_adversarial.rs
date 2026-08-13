@@ -690,27 +690,25 @@ fn structural_preflight_drops_only_style_level_257_with_exact_parent_order() {
 }
 
 #[test]
-fn structural_recovery_finalizes_diagnostics_by_responsible_offset_with_stable_ties() {
+fn structural_recovery_retains_empty_keyframe_parents_after_declaration_loss() {
     let source = "@keyframes fade { from { mystery: 1; } } .after { color: red; }";
     let report = parse_sheet(source);
-    assert_eq!(report.diagnostics().len(), 3);
-    let offsets: Vec<_> = report
-        .diagnostics()
-        .iter()
-        .map(|diagnostic| diagnostic.error().position().byte_offset().value())
-        .collect();
-    assert!(offsets.windows(2).all(|pair| pair[0] <= pair[1]));
+    let [CssRule::Keyframes(keyframes), CssRule::Style(after)] = report.syntax().rules() else {
+        panic!("expected retained empty keyframe structure and later style sibling");
+    };
+    let [block] = keyframes.blocks() else {
+        panic!("expected authored keyframe block");
+    };
+    assert!(block.declarations().is_empty());
+    assert_eq!(after.declarations().len(), 1);
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected one declaration recovery diagnostic");
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::UnknownProperty);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropDeclaration);
     assert_eq!(
-        report.diagnostics()[0].action(),
-        CssRecoveryAction::DropDeclaration
-    );
-    assert_eq!(
-        report.diagnostics()[1].action(),
-        CssRecoveryAction::DropKeyframeBlock
-    );
-    assert_eq!(
-        report.diagnostics()[2].action(),
-        CssRecoveryAction::DropAtRule
+        diagnostic.error().position().byte_offset().value(),
+        source.find("mystery").unwrap(),
     );
 }
 

@@ -277,26 +277,11 @@ pub struct CssKeyframesRule {
 
 impl CssKeyframesRule {
     #[must_use]
-    pub(crate) fn try_new(
-        name: CssKeyframesName,
-        blocks: Vec<CssKeyframeBlock>,
-        position: CssSourcePosition,
-    ) -> Option<Self> {
-        if blocks.is_empty() || keyframe_blocks_have_duplicate_offsets(&blocks) {
-            None
-        } else {
-            Some(Self::new(name, blocks, position))
-        }
-    }
-
-    #[must_use]
     pub(crate) fn new(
         name: CssKeyframesName,
         blocks: Vec<CssKeyframeBlock>,
         position: CssSourcePosition,
     ) -> Self {
-        debug_assert!(!blocks.is_empty());
-        debug_assert!(!keyframe_blocks_have_duplicate_offsets(&blocks));
         Self {
             name,
             blocks,
@@ -369,25 +354,11 @@ pub struct CssKeyframeBlock {
 
 impl CssKeyframeBlock {
     #[must_use]
-    pub(crate) fn try_new(
-        selectors: CssKeyframeSelectorList,
-        declarations: CssKeyframeDeclarationList,
-        position: CssSourcePosition,
-    ) -> Option<Self> {
-        if declarations.is_empty() {
-            None
-        } else {
-            Some(Self::new(selectors, declarations, position))
-        }
-    }
-
-    #[must_use]
     pub(crate) fn new(
         selectors: CssKeyframeSelectorList,
         declarations: CssKeyframeDeclarationList,
         position: CssSourcePosition,
     ) -> Self {
-        debug_assert!(!declarations.is_empty());
         Self {
             selectors,
             declarations,
@@ -419,7 +390,7 @@ pub struct CssKeyframeSelectorList {
 impl CssKeyframeSelectorList {
     #[must_use]
     pub fn try_new(selectors: Vec<CssKeyframeSelector>) -> Option<Self> {
-        if selectors.is_empty() || keyframe_selectors_have_duplicate_offsets(&selectors) {
+        if selectors.is_empty() {
             None
         } else {
             Some(Self::new(selectors))
@@ -429,7 +400,6 @@ impl CssKeyframeSelectorList {
     #[must_use]
     pub(crate) fn new(selectors: Vec<CssKeyframeSelector>) -> Self {
         debug_assert!(!selectors.is_empty());
-        debug_assert!(!keyframe_selectors_have_duplicate_offsets(&selectors));
         Self { selectors }
     }
 
@@ -486,32 +456,6 @@ impl CssKeyframePercent {
     pub const fn value(self) -> CssFiniteNumber {
         self.value
     }
-}
-
-fn keyframe_blocks_have_duplicate_offsets(blocks: &[CssKeyframeBlock]) -> bool {
-    let mut offsets = Vec::new();
-    for block in blocks {
-        for selector in block.selectors().selectors() {
-            let offset = selector.offset().value().value();
-            if offsets.contains(&offset) {
-                return true;
-            }
-            offsets.push(offset);
-        }
-    }
-    false
-}
-
-fn keyframe_selectors_have_duplicate_offsets(selectors: &[CssKeyframeSelector]) -> bool {
-    let mut offsets = Vec::new();
-    for selector in selectors {
-        let offset = selector.offset().value().value();
-        if offsets.contains(&offset) {
-            return true;
-        }
-        offsets.push(offset);
-    }
-    false
 }
 
 /// The validated semantic aggregate of authored `@font-face` descriptor occurrences.

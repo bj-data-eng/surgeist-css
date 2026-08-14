@@ -887,6 +887,46 @@ let _ = validate_style_attribute("color: red");
 //! are Complete as well. These metadata transitions do not add official ledger
 //! units.
 //!
+//! # Flexbox, multicolumn, and official grammar closure
+//!
+//! Flexbox 1 `flex-flow` and all nine Multicolumn 1 properties expose typed
+//! authored values without performing layout, pagination, or painting. The
+//! generic Syntax 3 authored shells and the remaining selected Values 3 records
+//! are public Complete atomic metadata.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssColumnCount, CssFlexDirection, CssKnownPropertyValueRef, CssSupportStatus,
+//!     feature_metadata, parse_style_attribute,
+//! };
+//!
+//! let report = parse_style_attribute("flex-flow: column wrap; columns: 3 12em");
+//! assert!(report.is_clean(), "{:?}", report.diagnostics());
+//!
+//! let CssKnownPropertyValueRef::FlexFlow(flow) = report.syntax()[0]
+//!     .known().expect("known flex-flow")
+//!     .property_value().expect("ordinary flex-flow")
+//! else { panic!("expected flex-flow") };
+//! assert_eq!(flow.flow().direction(), CssFlexDirection::Column);
+//!
+//! let CssKnownPropertyValueRef::Columns(columns) = report.syntax()[1]
+//!     .known().expect("known columns")
+//!     .property_value().expect("ordinary columns")
+//! else { panic!("expected columns") };
+//! assert!(matches!(columns.columns().count(), CssColumnCount::Count(_)));
+//!
+//! let metadata = feature_metadata("official.property.flex-flow")
+//!     .expect("public Flexbox metadata");
+//! assert_eq!(metadata.source().id().as_str(), "O-FLEXBOX1");
+//! assert_eq!(metadata.status(), CssSupportStatus::Complete);
+//! ```
+//!
+//! C14 activates ten property and seven non-property records and promotes seven
+//! existing Values 3 records without adding an official ledger unit. The
+//! immutable official inventory remains 162 property units, one normative
+//! legacy shorthand, and 167 non-property units. The exact 219-record I01
+//! baseline and 131-row exclusion registry remain unchanged.
+//!
 //! # Support metadata and application policy
 //!
 //! [`feature_catalog`] describes each declared conformance production as

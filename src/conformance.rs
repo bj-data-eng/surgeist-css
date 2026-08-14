@@ -1952,102 +1952,22 @@ static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("official.property.text-orientation"),
     active_coverage!("official.property.unicode-bidi"),
     active_coverage!("baseline.property.writing-mode"),
-    reserved_coverage!(
-        "official.property.column-count",
-        Property,
-        O_MULTICOL1,
-        "#propdef-column-count",
-        "crate::parser::layout",
-        "I02-C14",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.column-fill",
-        Property,
-        O_MULTICOL1,
-        "#propdef-column-fill",
-        "crate::parser::layout",
-        "I02-C14",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.column-rule",
-        Property,
-        O_MULTICOL1,
-        "#propdef-column-rule",
-        "crate::parser::layout",
-        "I02-C14",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.column-rule-color",
-        Property,
-        O_MULTICOL1,
-        "#propdef-column-rule-color",
-        "crate::parser::layout",
-        "I02-C14",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.column-rule-style",
-        Property,
-        O_MULTICOL1,
-        "#propdef-column-rule-style",
-        "crate::parser::layout",
-        "I02-C14",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.column-rule-width",
-        Property,
-        O_MULTICOL1,
-        "#propdef-column-rule-width",
-        "crate::parser::layout",
-        "I02-C14",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.column-span",
-        Property,
-        O_MULTICOL1,
-        "#propdef-column-span",
-        "crate::parser::layout",
-        "I02-C14",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.column-width",
-        Property,
-        O_MULTICOL1,
-        "#propdef-column-width",
-        "crate::parser::layout",
-        "I02-C14",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.columns",
-        Property,
-        O_MULTICOL1,
-        "#propdef-columns",
-        "crate::parser::layout",
-        "I02-C14",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.column-count"),
+    active_coverage!("official.property.column-fill"),
+    active_coverage!("official.property.column-rule"),
+    active_coverage!("official.property.column-rule-color"),
+    active_coverage!("official.property.column-rule-style"),
+    active_coverage!("official.property.column-rule-width"),
+    active_coverage!("official.property.column-span"),
+    active_coverage!("official.property.column-width"),
+    active_coverage!("official.property.columns"),
     active_coverage!("baseline.property.align-content"),
     active_coverage!("baseline.property.align-items"),
     active_coverage!("baseline.property.align-self"),
     active_coverage!("baseline.property.flex"),
     active_coverage!("baseline.property.flex-basis"),
     active_coverage!("baseline.property.flex-direction"),
-    reserved_coverage!(
-        "official.property.flex-flow",
-        Property,
-        O_FLEXBOX1,
-        "#propdef-flex-flow",
-        "crate::parser::layout",
-        "I02-C14",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.flex-flow"),
     active_coverage!("baseline.property.flex-grow"),
     active_coverage!("baseline.property.flex-shrink"),
     active_coverage!("baseline.property.flex-wrap"),
@@ -2076,33 +1996,9 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("official.selector.page-pseudo"),
     active_coverage!("foundation.encoding.charset"),
     active_coverage!("baseline.rule.style"),
-    reserved_coverage!(
-        "official.rule.at-rule",
-        Rule,
-        O_SYNTAX3,
-        "#at-rules,#consume-at-rule",
-        "crate::parser::recovery",
-        "I02-C14",
-        RulePlacementAstAndRecovery
-    ),
-    reserved_coverage!(
-        "official.qualified-rule.generic",
-        QualifiedRule,
-        O_SYNTAX3,
-        "#consume-qualified-rule",
-        "crate::parser::recovery",
-        "I02-C14",
-        QualifiedRuleAstAndRecovery
-    ),
-    reserved_coverage!(
-        "official.declaration.generic",
-        Declaration,
-        O_SYNTAX3,
-        "#consume-declaration",
-        "crate::parser::mod",
-        "I02-C14",
-        DeclarationValueAndRecovery
-    ),
+    active_coverage!("official.rule.at-rule"),
+    active_coverage!("official.qualified-rule.generic"),
+    active_coverage!("official.declaration.generic"),
     reserved_coverage!(
         "official.value.syntax-token-stream",
         Value,
@@ -2139,42 +2035,10 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
         "I02-C03",
         SharedValueTypedPositiveAndMutation
     ),
-    reserved_coverage!(
-        "official.value.stylesheet",
-        Value,
-        O_SYNTAX3,
-        "#parser-entry-points",
-        "crate::parser::mod",
-        "I02-C14",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.rule-list",
-        Value,
-        O_SYNTAX3,
-        "#declaration-rule-list",
-        "crate::parser::recovery",
-        "I02-C14",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.declaration-list",
-        Value,
-        O_SYNTAX3,
-        "#declaration-rule-list",
-        "crate::parser::mod",
-        "I02-C14",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.style-block",
-        Value,
-        O_SYNTAX3,
-        "#declaration-rule-list",
-        "crate::parser::recovery",
-        "I02-C14",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.stylesheet"),
+    active_coverage!("official.value.rule-list"),
+    active_coverage!("official.value.declaration-list"),
+    active_coverage!("official.value.style-block"),
     reserved_coverage!(
         "official.value.declaration-value",
         Value,
@@ -2925,7 +2789,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 463] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 473] = [
     CssFeatureMetadata::complete(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -4305,6 +4169,11 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 463] = [
         "flex-direction",
         "baseline.property.flex-direction"
     ),
+    complete_property_feature!(
+        CssKnownProperty::FlexFlow,
+        "flex-flow",
+        "official.property.flex-flow"
+    ),
     property_feature!(
         CssKnownProperty::FlexWrap,
         "flex-wrap",
@@ -4448,6 +4317,51 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 463] = [
         CssKnownProperty::ColumnGap,
         "column-gap",
         "baseline.property.column-gap"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::ColumnCount,
+        "column-count",
+        "official.property.column-count"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::ColumnFill,
+        "column-fill",
+        "official.property.column-fill"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::ColumnRule,
+        "column-rule",
+        "official.property.column-rule"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::ColumnRuleColor,
+        "column-rule-color",
+        "official.property.column-rule-color"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::ColumnRuleStyle,
+        "column-rule-style",
+        "official.property.column-rule-style"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::ColumnRuleWidth,
+        "column-rule-width",
+        "official.property.column-rule-width"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::ColumnSpan,
+        "column-span",
+        "official.property.column-span"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::ColumnWidth,
+        "column-width",
+        "official.property.column-width"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::Columns,
+        "columns",
+        "official.property.columns"
     ),
     property_feature!(
         CssKnownProperty::GridFlowTolerance,

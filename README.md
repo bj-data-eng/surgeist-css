@@ -754,6 +754,59 @@ These models do not fetch or decode images, resolve URLs, apply cascade or
 substitution, compute background or border geometry, paint, serialize CSSOM, or
 lower values into another Surgeist crate.
 
+## Flexbox, multicolumn, and official grammar closure
+
+Flexbox 1 `flex-flow` and all nine Multicolumn 1 properties now expose complete
+authored grammars and typed current values. `flex-flow` preserves the authored
+direction/wrap combination; `columns` preserves its independently optional
+width and count; and `column-rule` preserves width, style, and color without
+performing layout, pagination, or painting.
+
+```rust
+use surgeist_css::{
+    CssColumnCount, CssFlexDirection, CssKnownPropertyValueRef, CssSupportStatus,
+    feature_metadata, parse_style_attribute,
+};
+
+let report = parse_style_attribute("flex-flow: column wrap; columns: 3 12em");
+assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+let CssKnownPropertyValueRef::FlexFlow(flow) = report.syntax()[0]
+    .known().expect("known flex-flow")
+    .property_value().expect("ordinary flex-flow")
+else { panic!("expected flex-flow") };
+assert_eq!(flow.flow().direction(), CssFlexDirection::Column);
+
+let CssKnownPropertyValueRef::Columns(columns) = report.syntax()[1]
+    .known().expect("known columns")
+    .property_value().expect("ordinary columns")
+else { panic!("expected columns") };
+assert!(matches!(columns.columns().count(), CssColumnCount::Count(_)));
+
+let metadata = feature_metadata("official.property.flex-flow")
+    .expect("public Flexbox metadata");
+assert_eq!(metadata.source().id().as_str(), "O-FLEXBOX1");
+assert_eq!(metadata.status(), CssSupportStatus::Complete);
+```
+
+The generic Syntax 3 at-rule, qualified-rule, declaration, stylesheet,
+rule-list, declaration-list, and style-block records are public `Complete`
+atomic metadata. The seven Values 3 records for dimension, angle,
+angle-percentage, time-percentage, frequency, frequency-percentage, and
+`calc()` are likewise `Complete`; preserved extension subsets remain truthful,
+and `@font-feature-values` remains recognized unsupported.
+
+C14 activates ten property and seven non-property records and promotes the
+seven existing Values 3 records without adding an official ledger unit. The
+public support catalog contains 473 records. The immutable official inventory
+remains 162 property units (161 canonical properties plus the custom-property
+family), one normative legacy shorthand, and 167 non-property units. The exact
+219-record I01 baseline and the 131-row exclusion registry are unchanged.
+
+The crate still stops at strict authored syntax. Cascade, substitution,
+selector matching, query evaluation, resource loading, layout, pagination,
+painting, serialization, and cross-crate lowering remain downstream concerns.
+
 ## Media, supports, and import preludes
 
 Media Queries 3 types and features are retained as authored query syntax. A

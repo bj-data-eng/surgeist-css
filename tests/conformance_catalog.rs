@@ -1821,12 +1821,147 @@ fn c14_closure_metadata_and_docs_are_truthful() {
             "O-SYNTAX3",
             "#declaration-rule-list",
         ),
+        (
+            "official.value.syntax-token-stream",
+            CssFeatureKind::Value,
+            "syntax token stream",
+            "O-SYNTAX3",
+            "#tokenization",
+        ),
+        (
+            "official.value.component-value",
+            CssFeatureKind::Value,
+            "<component-value>",
+            "O-SYNTAX3",
+            "#consume-component-value",
+        ),
+        (
+            "official.value.simple-block",
+            CssFeatureKind::Value,
+            "simple block",
+            "O-SYNTAX3",
+            "#consume-simple-block",
+        ),
+        (
+            "official.value.function",
+            CssFeatureKind::Value,
+            "function",
+            "O-SYNTAX3",
+            "#consume-function",
+        ),
+        (
+            "official.value.declaration-value",
+            CssFeatureKind::Value,
+            "<declaration-value>",
+            "O-SYNTAX3",
+            "#any-value",
+        ),
+        (
+            "official.value.any-value",
+            CssFeatureKind::Value,
+            "<any-value>",
+            "O-SYNTAX3",
+            "#any-value",
+        ),
+        (
+            "official.value.an-plus-b",
+            CssFeatureKind::Value,
+            "<an+b>",
+            "O-SYNTAX3",
+            "#the-anb-type",
+        ),
+        (
+            "official.value.unicode-range",
+            CssFeatureKind::Value,
+            "<urange>",
+            "O-SYNTAX3",
+            "#urange-syntax",
+        ),
+        (
+            "official.value.css-wide-keyword",
+            CssFeatureKind::Value,
+            "CSS-wide keyword",
+            "O-CASCADE4",
+            "#defaulting-keywords",
+        ),
+        (
+            "official.value.custom-ident",
+            CssFeatureKind::Value,
+            "<custom-ident>",
+            "O-VALUES3",
+            "#custom-idents",
+        ),
+        (
+            "official.value.ident",
+            CssFeatureKind::Value,
+            "<ident>",
+            "O-VALUES3",
+            "#custom-idents",
+        ),
+        (
+            "official.value.string",
+            CssFeatureKind::Value,
+            "<string>",
+            "O-VALUES3",
+            "#strings",
+        ),
+        (
+            "official.value.url",
+            CssFeatureKind::Value,
+            "<url>",
+            "O-VALUES3",
+            "#urls",
+        ),
+        (
+            "official.value.url-modifier",
+            CssFeatureKind::Value,
+            "<url-modifier>",
+            "O-VALUES3",
+            "#url-modifiers",
+        ),
     ] {
         let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
         assert_eq!(metadata.id().as_str(), id, "{id} identity");
         assert_eq!(metadata.kind(), kind, "{id} kind");
         assert_eq!(metadata.spelling(), spelling, "{id} spelling");
         assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+        assert_eq!(metadata.production(), production, "{id} production");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+        assert_eq!(metadata.supported_subset(), None, "{id} subset");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+        assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+        assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+    }
+
+    for (id, spelling, production) in [
+        ("official.value.dimension", "<dimension>", "#dimensions"),
+        ("official.value.angle", "<angle>", "#angles"),
+        (
+            "official.value.angle-percentage",
+            "<angle-percentage>",
+            "#mixed-percentages",
+        ),
+        (
+            "official.value.time-percentage",
+            "<time-percentage>",
+            "#mixed-percentages",
+        ),
+        ("official.value.frequency", "<frequency>", "#frequency"),
+        (
+            "official.value.frequency-percentage",
+            "<frequency-percentage>",
+            "#mixed-percentages",
+        ),
+        (
+            "official.value.calc",
+            "calc()",
+            "#calc-notation,#calc-syntax,#calc-type-checking",
+        ),
+    ] {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+        assert_eq!(metadata.kind(), CssFeatureKind::Value, "{id} kind");
+        assert_eq!(metadata.spelling(), spelling, "{id} spelling");
+        assert_eq!(metadata.source().id().as_str(), "O-VALUES3", "{id} source");
         assert_eq!(metadata.production(), production, "{id} production");
         assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
         assert_eq!(metadata.supported_subset(), None, "{id} subset");

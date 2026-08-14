@@ -495,6 +495,94 @@ Pseudo-classes for UI interaction, form state, structure, selector-list filterin
 
 Selector-list pseudo-class arguments are parsed as authored selector syntax with bounded recovery. In recognized `:is()` and `:where()` lists, an invalid member is dropped with `DropSelectorListItem` while the other members remain in authored order. Other selector lists are unforgiving: `:not()` preserves supported complex selector lists, `:has()` preserves supported relative selector lists including leading child and sibling combinators, and `:nth-child()` / `:nth-last-child()` preserve optional `of` selector filters, but an invalid member causes the containing qualified rule to be dropped with `DropQualifiedRule`. Later sibling rules remain eligible for parsing.
 
+## Namespaces and complete Selectors 3 syntax
+
+`CssRule::Namespace` retains a top-level `@namespace` declaration with its
+optional decoded, case-sensitive `CssNamespacePrefix`, literal
+`CssNamespaceName`, and parser-produced position. Namespace names preserve the
+authored string or `url()` token value, including empty strings and strings that
+are not valid URIs. The crate does not normalize, resolve, or load the value.
+
+Selector type, universal, and attribute names expose
+`CssNamespaceConstraint`. `Named` contains an earlier active prefix;
+`ExplicitNone` represents `|`; `Any` represents `*|`; and `Default` represents
+an unqualified type or universal selector while a default declaration is
+active. Without an active default, an unqualified type or universal selector is
+`Any`. Unqualified attributes are always `ExplicitNone`. A
+`CssQualifiedSelectorName` distinguishes an identifier returned by
+`local_name()` from universal `*` reported by `is_universal()`.
+
+```rust
+use surgeist_css::{
+    CssNamespaceConstraint, CssPseudoElement, CssRule, CssSelector, parse_sheet,
+};
+
+let report = parse_sheet(concat!(
+    "@namespace svg \"urn:svg\";",
+    "svg|a#first#second[|lang]::first-line { color: red; }",
+));
+assert!(report.is_clean());
+let [CssRule::Namespace(namespace), CssRule::Style(style)] =
+    report.syntax().rules()
+else {
+    panic!("expected namespace and style rules");
+};
+assert_eq!(namespace.prefix().expect("named prefix").as_str(), "svg");
+assert_eq!(namespace.name().as_str(), "urn:svg");
+
+let CssSelector::Compound(selector) = style.selector() else {
+    panic!("expected compound selector");
+};
+let qualified = selector.type_selector().expect("qualified type selector");
+assert!(matches!(
+    qualified.namespace(),
+    CssNamespaceConstraint::Named(prefix) if prefix.as_str() == "svg"
+));
+assert_eq!(qualified.local_name(), Some("a"));
+assert_eq!(selector.ids(), ["first", "second"]);
+assert_eq!(selector.key().map(String::as_str), Some("second"));
+let [attribute] = selector.attributes() else {
+    panic!("expected one attribute selector");
+};
+assert_eq!(attribute.namespace(), &CssNamespaceConstraint::ExplicitNone);
+assert!(matches!(
+    selector
+        .pseudo_elements()
+        .expect("pseudo-element sequence")
+        .pseudo_elements(),
+    [CssPseudoElement::FirstLine]
+));
+```
+
+The top-level parser distinguishes six authored phases. `Initial` admits imports
+and namespaces. An initial layer statement enters `InitialLayers`, which still
+admits imports but permanently prohibits namespaces. An import enters `Imports`
+from `Initial` or `ImportsAfterInitialLayers` from `InitialLayers`; only the
+former admits namespaces. A namespace enters `Namespaces`, where only further
+namespaces remain valid before a layer or body transition. A successful layer
+after an import or namespace, or any successful body rule, enters `Body`.
+Malformed, ignored, nested, or misplaced rules never change the phase or active
+bindings.
+
+Declarations and active bindings remain in authored order; the last declaration
+for an exact named prefix or the default affects following selectors. An
+undeclared named prefix invalidates its selector. Forgiving `:is()` and
+`:where()` lists drop only that member with `DropSelectorListItem`; unforgiving
+style, scope, nesting, `:not()`, `:has()`, and nth `of` consumers drop their
+established containing unit. Malformed, block-form, nested, or late namespace
+rules recover as one `DropAtRule` and leave later siblings eligible.
+
+The authored selector model covers complete Selectors 3, including universal
+and type selectors, all attribute matchers, repeated IDs and classes in order,
+the structural/UI/dynamic pseudo-class families, `:lang()`, all four
+combinators, and `::first-line`/`::first-letter`. The legacy single-colon
+spellings for `before`, `after`, `first-line`, and `first-letter` map to the same
+typed pseudo-elements. Selected extensions remain separately owned: attribute
+`i`/`s`, the existing extension-state and functional pseudo-classes, nesting and
+scope, and the marker/selection/backdrop pseudo-element rows. Matching,
+specificity, cascade, namespace URI resolution, CSSOM serialization, and
+cross-crate lowering remain downstream exclusions.
+
 ## Media, supports, and import preludes
 
 Media Queries 3 types and features are retained as authored query syntax. A
@@ -528,9 +616,12 @@ assert_eq!(
 );
 ```
 
-`@supports` conditions expose declaration tests, `not`/`and`/`or` grouping, the
-current typed `selector()` subset, and exact balanced general-enclosed fallback
-syntax. Declaration tests preserve authored property/value text and importance;
+`@supports` conditions expose declaration tests, `not`/`and`/`or` grouping,
+complete Selectors 3 plus the selected existing selector extensions as the typed
+`selector()` subset, and exact balanced general-enclosed fallback syntax. The
+typed subset does not include `||`, unselected Selectors 4 pseudo-classes or
+pseudo-elements, or syntax outside the named extension rows. Declaration tests
+preserve authored property/value text and importance;
 their optional known-declaration view is inspection data, not a declaration
 inserted into a style block. Invalid children recover within a valid conditional
 parent, while a malformed supports prelude drops that parent and leaves later
@@ -590,7 +681,7 @@ Cascade layers are parsed as authored `@layer` statements and blocks, including 
 
 Scoped styles are parsed as authored `@scope` rules with optional roots, limits, scoped style selectors, and scoped nested group rules. Relative scoped selectors remain structurally distinct from ordinary selectors. `surgeist-css` does not perform scope matching, selector matching, or scoping proximity calculations.
 
-Pseudo-elements are parsed as terminal authored selector syntax for the supported `::before`, `::after`, `::marker`, `::selection`, and `::backdrop` forms. The parser records them on selector compounds, but does not filter declarations by pseudo-element or perform generated box/layout behavior.
+Pseudo-elements are parsed as terminal authored selector syntax for the supported `::before`, `::after`, `::first-line`, `::first-letter`, `::marker`, `::selection`, and `::backdrop` forms. The Selectors 3 legacy single-colon spellings map to the same typed before, after, first-line, and first-letter values. The parser records pseudo-elements on selector compounds, but does not filter declarations by pseudo-element or perform generated box/layout behavior.
 
 Generated content, list markers, and counters are parsed as typed authored property values for `content`, list-style longhands and shorthand, and counter change properties. Strings, URLs, attribute references, quote keywords, counter functions, list-style slots, and counter change lists remain symbolic. `surgeist-css` does not lay out generated content or list markers, resolve marker images, or evaluate/reset/increment counters.
 

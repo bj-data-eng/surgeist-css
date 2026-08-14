@@ -2500,188 +2500,28 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("baseline.rule.media"),
     active_coverage!("later.rule.supports"),
     active_coverage!("official.rule.conditional-group-context"),
-    reserved_coverage!(
-        "official.selector.group",
-        Selector,
-        O_SELECTORS3,
-        "#grouping",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.type",
-        Selector,
-        O_SELECTORS3,
-        "#type-selectors",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.universal",
-        Selector,
-        O_SELECTORS3,
-        "#universal-selector",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.attribute-presence-value",
-        Selector,
-        O_SELECTORS3,
-        "#attribute-representation",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.attribute-substring",
-        Selector,
-        O_SELECTORS3,
-        "#attribute-substrings",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.class",
-        Selector,
-        O_SELECTORS3,
-        "#class-html",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.id",
-        Selector,
-        O_SELECTORS3,
-        "#id-selectors",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.dynamic",
-        Selector,
-        O_SELECTORS3,
-        "#dynamic-pseudos",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.target",
-        Selector,
-        O_SELECTORS3,
-        "#target-pseudo",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.lang",
-        Selector,
-        O_SELECTORS3,
-        "#lang-pseudo",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.ui-state",
-        Selector,
-        O_SELECTORS3,
-        "#UIstates",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.structural",
-        Selector,
-        O_SELECTORS3,
-        "#structural-pseudos",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.negation",
-        Selector,
-        O_SELECTORS3,
-        "#negation",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.first-line",
-        Selector,
-        O_SELECTORS3,
-        "#first-line",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.first-letter",
-        Selector,
-        O_SELECTORS3,
-        "#first-letter",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
+    active_coverage!("official.selector.group"),
+    active_coverage!("official.selector.type"),
+    active_coverage!("official.selector.universal"),
+    active_coverage!("official.selector.attribute-presence-value"),
+    active_coverage!("official.selector.attribute-substring"),
+    active_coverage!("official.selector.class"),
+    active_coverage!("official.selector.id"),
+    active_coverage!("official.selector.dynamic"),
+    active_coverage!("official.selector.target"),
+    active_coverage!("official.selector.lang"),
+    active_coverage!("official.selector.ui-state"),
+    active_coverage!("official.selector.structural"),
+    active_coverage!("official.selector.negation"),
+    active_coverage!("official.selector.first-line"),
+    active_coverage!("official.selector.first-letter"),
     active_coverage!("official.selector.generated"),
-    reserved_coverage!(
-        "official.selector.combinator.descendant",
-        Selector,
-        O_SELECTORS3,
-        "#descendant-combinators",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.combinator.child",
-        Selector,
-        O_SELECTORS3,
-        "#child-combinators",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.combinator.next-sibling",
-        Selector,
-        O_SELECTORS3,
-        "#adjacent-sibling-combinators",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
-    reserved_coverage!(
-        "official.selector.combinator.subsequent-sibling",
-        Selector,
-        O_SELECTORS3,
-        "#general-sibling-combinators",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
+    active_coverage!("official.selector.combinator.descendant"),
+    active_coverage!("official.selector.combinator.child"),
+    active_coverage!("official.selector.combinator.next-sibling"),
+    active_coverage!("official.selector.combinator.subsequent-sibling"),
     active_coverage!("later.rule.namespace"),
-    reserved_coverage!(
-        "official.selector.namespace-qualified-name",
-        Selector,
-        O_NAMESPACES3,
-        "#scope,#prefixes,#css-qnames",
-        "crate::parser::selectors",
-        "I02-C10",
-        SelectorAstMutationAndRecovery
-    ),
+    active_coverage!("official.selector.namespace-qualified-name"),
     active_coverage!("baseline.rule.import"),
     active_coverage!("foundation.declaration.importance"),
     reserved_coverage!(
@@ -3187,6 +3027,8 @@ const BASELINE_RULE_REMAINDER: &str =
     "Other valid forms of the cited rule production are outside the I01 subset.";
 const SELECTOR_REMAINDER: &str =
     "Other valid forms of the cited Selectors production are outside the I01 subset.";
+const SUPPORTS_SELECTOR_SUBSET: &str = "selector() accepts complete Selectors 3 plus the selected I01 extensions: i and s attribute modifiers; :scope, :focus-visible, :focus-within, :required, :optional, :valid, :invalid, :placeholder-shown, :modal, :fullscreen, :popover-open, :default, :indeterminate, :read-only, :read-write, :in-range, and :out-of-range; :is(), :where(), :has(), selector-list :not(), and nth-child of lists; and ::marker, ::selection, ::backdrop, and generated-marker sequences.";
+const SUPPORTS_SELECTOR_REMAINDER: &str = "The || combinator, unselected Selectors 4 pseudo-classes and pseudo-elements, and syntax outside those atomic extension rows remain outside the typed subset; balanced content is preserved as general-enclosed authored syntax.";
 const QUERY_REMAINDER: &str =
     "Other valid forms of the cited query production are outside the I01 subset.";
 const PROPERTY_SUBSET: &str = "The property-specific parser behavior at 4b288d6:src/parser/mod.rs, plus whole-value CSS-wide keywords and syntactically admissible substitution-dependent authored values, is supported.";
@@ -3581,7 +3423,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 366] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 386] = [
     CssFeatureMetadata::complete(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -5637,11 +5479,151 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 366] = [
         TIMING_REMAINDER,
     ),
     CssFeatureMetadata::complete(
+        "official.selector.group",
+        CssFeatureKind::Selector,
+        "comma-separated selector groups",
+        O_SELECTORS3,
+        "#grouping",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.type",
+        CssFeatureKind::Selector,
+        "type selectors",
+        O_SELECTORS3,
+        "#type-selectors",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.universal",
+        CssFeatureKind::Selector,
+        "universal selector *",
+        O_SELECTORS3,
+        "#universal-selector",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.attribute-presence-value",
+        CssFeatureKind::Selector,
+        "[attr], [attr=value], [attr~=value], [attr|=value]",
+        O_SELECTORS3,
+        "#attribute-representation",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.attribute-substring",
+        CssFeatureKind::Selector,
+        "[attr^=value], [attr$=value], [attr*=value]",
+        O_SELECTORS3,
+        "#attribute-substrings",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.class",
+        CssFeatureKind::Selector,
+        ".class",
+        O_SELECTORS3,
+        "#class-html",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.id",
+        CssFeatureKind::Selector,
+        "#id",
+        O_SELECTORS3,
+        "#id-selectors",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.dynamic",
+        CssFeatureKind::Selector,
+        ":link, :visited, :hover, :active, :focus",
+        O_SELECTORS3,
+        "#dynamic-pseudos",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.target",
+        CssFeatureKind::Selector,
+        ":target",
+        O_SELECTORS3,
+        "#target-pseudo",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.lang",
+        CssFeatureKind::Selector,
+        ":lang()",
+        O_SELECTORS3,
+        "#lang-pseudo",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.ui-state",
+        CssFeatureKind::Selector,
+        ":enabled, :disabled, :checked, :indeterminate",
+        O_SELECTORS3,
+        "#UIstates",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.structural",
+        CssFeatureKind::Selector,
+        "Selectors 3 structural pseudo-classes",
+        O_SELECTORS3,
+        "#structural-pseudos",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.negation",
+        CssFeatureKind::Selector,
+        ":not()",
+        O_SELECTORS3,
+        "#negation",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.first-line",
+        CssFeatureKind::Selector,
+        ":first-line, ::first-line",
+        O_SELECTORS3,
+        "#first-line",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.first-letter",
+        CssFeatureKind::Selector,
+        ":first-letter, ::first-letter",
+        O_SELECTORS3,
+        "#first-letter",
+    ),
+    CssFeatureMetadata::complete(
         "official.selector.generated",
         CssFeatureKind::Selector,
         "::before, ::after",
         O_SELECTORS3,
         "#gen-content",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.combinator.descendant",
+        CssFeatureKind::Selector,
+        "descendant combinator",
+        O_SELECTORS3,
+        "#descendant-combinators",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.combinator.child",
+        CssFeatureKind::Selector,
+        "child combinator >",
+        O_SELECTORS3,
+        "#child-combinators",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.combinator.next-sibling",
+        CssFeatureKind::Selector,
+        "next-sibling combinator +",
+        O_SELECTORS3,
+        "#adjacent-sibling-combinators",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.combinator.subsequent-sibling",
+        CssFeatureKind::Selector,
+        "subsequent-sibling combinator ~",
+        O_SELECTORS3,
+        "#general-sibling-combinators",
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.namespace-qualified-name",
+        CssFeatureKind::Selector,
+        "default, explicit-none, any, and named selector namespace constraints",
+        O_NAMESPACES3,
+        "#scope,#prefixes,#css-qnames",
     ),
     CssFeatureMetadata::complete(
         "ext.pseudo-element.marker",
@@ -5796,8 +5778,8 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 366] = [
         "selector() supports test",
         R_CONDITIONAL4,
         "#at-supports",
-        "selector() accepts the current typed complex-selector subset and preserves other balanced selector content as general-enclosed authored syntax.",
-        "Namespace-qualified selectors and the remaining Selectors 3 grammar await I02-C10; this row does not claim complete Selectors 4.",
+        SUPPORTS_SELECTOR_SUBSET,
+        SUPPORTS_SELECTOR_REMAINDER,
     ),
     CssFeatureMetadata::partial(
         "ext.media.range.width",

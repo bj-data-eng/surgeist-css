@@ -514,6 +514,73 @@ let _ = validate_style_attribute("color: red");
 //! cannot represent it. This crate owns authored timing syntax only; timeline evaluation and
 //! cross-crate lowering remain downstream responsibilities.
 //!
+//! # Namespaces and complete Selectors 3 syntax
+//!
+//! [`CssRule::Namespace`] retains an optional decoded, case-sensitive
+//! [`CssNamespacePrefix`], a literal [`CssNamespaceName`], and its parser-produced position.
+//! Empty and non-URI names remain valid authored values; this crate does not normalize, resolve,
+//! or load them. Selector type, universal, and attribute names expose
+//! [`CssNamespaceConstraint`] and [`CssQualifiedSelectorName`]. `Named` requires an earlier active
+//! prefix, `ExplicitNone` represents `|`, `Any` represents `*|`, and `Default` represents an
+//! unqualified type or universal selector while a default declaration is active. Unqualified
+//! attributes are always `ExplicitNone`.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssNamespaceConstraint, CssPseudoElement, CssRule, CssSelector, parse_sheet,
+//! };
+//!
+//! let report = parse_sheet(concat!(
+//!     "@namespace svg \"urn:svg\";",
+//!     "svg|a#first#second[|lang]::first-line { color: red; }",
+//! ));
+//! assert!(report.is_clean());
+//! let [CssRule::Namespace(namespace), CssRule::Style(style)] = report.syntax().rules() else {
+//!     panic!("expected namespace and style rules");
+//! };
+//! assert_eq!(namespace.prefix().expect("named prefix").as_str(), "svg");
+//! assert_eq!(namespace.name().as_str(), "urn:svg");
+//!
+//! let CssSelector::Compound(selector) = style.selector() else {
+//!     panic!("expected compound selector");
+//! };
+//! let qualified = selector.type_selector().expect("qualified type selector");
+//! assert!(matches!(
+//!     qualified.namespace(),
+//!     CssNamespaceConstraint::Named(prefix) if prefix.as_str() == "svg"
+//! ));
+//! assert_eq!(qualified.local_name(), Some("a"));
+//! assert_eq!(selector.ids(), ["first", "second"]);
+//! assert_eq!(selector.key().map(String::as_str), Some("second"));
+//! let [attribute] = selector.attributes() else {
+//!     panic!("expected one attribute selector");
+//! };
+//! assert_eq!(attribute.namespace(), &CssNamespaceConstraint::ExplicitNone);
+//! assert!(matches!(
+//!     selector
+//!         .pseudo_elements()
+//!         .expect("pseudo-element sequence")
+//!         .pseudo_elements(),
+//!     [CssPseudoElement::FirstLine]
+//! ));
+//! ```
+//!
+//! The top-level phase machine is `Initial`, `InitialLayers`, `Imports`,
+//! `ImportsAfterInitialLayers`, `Namespaces`, and `Body`. Initial layers still admit imports but
+//! permanently prohibit namespaces. Only `Initial` and `Imports` admit a namespace; after that,
+//! only consecutive namespaces remain valid until a layer or body transition. Invalid or ignored
+//! rules do not change the phase or active bindings. Malformed, block-form, nested, or late
+//! namespaces recover as one [`CssRecoveryAction::DropAtRule`].
+//!
+//! Complete Selectors 3 syntax includes all attribute matchers and four combinators, ordered
+//! repeated IDs and classes, the structural/UI/dynamic pseudo-class families, `:lang()`, and
+//! first-line/first-letter pseudo-elements. Legacy single-colon `before`, `after`, `first-line`,
+//! and `first-letter` map to the same typed pseudo-elements. Undeclared namespace prefixes follow
+//! the existing consumer recovery contract: `:is()` and `:where()` drop only the invalid member,
+//! while unforgiving style, scope, nesting, `:not()`, `:has()`, and nth `of` consumers drop their
+//! established containing unit. Matching, specificity, cascade, namespace URI resolution,
+//! CSSOM serialization, and cross-crate lowering remain downstream.
+//!
 //! # Media, supports, imports, and prelude recovery
 //!
 //! Media Queries 3 syntax preserves defined-false authored input without confusing it with
@@ -546,9 +613,11 @@ let _ = validate_style_attribute("color: red");
 //! ));
 //! ```
 //!
-//! Supports rules retain declaration tests, boolean grouping, the current typed `selector()`
-//! subset, and balanced general-enclosed fallback syntax. These nodes describe authored tests;
-//! the crate never evaluates whether a condition matches.
+//! Supports rules retain declaration tests, boolean grouping, complete Selectors 3 plus the
+//! selected existing selector extensions as the typed `selector()` subset, and balanced
+//! general-enclosed fallback syntax. `||`, unselected Selectors 4 pseudo-classes and
+//! pseudo-elements, and syntax outside the named extension rows remain outside the typed subset.
+//! These nodes describe authored tests; the crate never evaluates whether a condition matches.
 //!
 //! ```
 //! use surgeist_css::{CssRule, CssSupportsConditionKind, parse_sheet};

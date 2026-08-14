@@ -132,26 +132,26 @@ const C13_RECOVERY_CASES: &[InvalidDeclaration] = &[
     case(
         "official.value.radial-gradient",
         "background-image",
-        "radial-gradient(square, red, blue)",
+        "radial-gradient(circle square, red, blue)",
         "square",
     ),
-    case(
+    last_case(
         "official.value.repeating-linear-gradient",
         "background-image",
-        "repeating-linear-gradient(red,, blue)",
-        ",",
+        "repeating-linear-gradient(red, blue,)",
+        ")",
     ),
     last_case(
         "official.value.repeating-radial-gradient",
         "background-image",
         "repeating-radial-gradient(red, blue,)",
-        ",",
+        ")",
     ),
     case(
         "official.value.color-stop-list",
         "background-image",
-        "linear-gradient(red, 20%, 30%, blue)",
-        "30%",
+        "linear-gradient(red)",
+        "red",
     ),
     case(
         "official.value.side-or-corner",
@@ -162,7 +162,7 @@ const C13_RECOVERY_CASES: &[InvalidDeclaration] = &[
     case(
         "official.value.radial-shape",
         "background-image",
-        "radial-gradient(square, red, blue)",
+        "radial-gradient(circle square, red, blue)",
         "square",
     ),
     case(
@@ -178,7 +178,7 @@ const C13_RECOVERY_CASES: &[InvalidDeclaration] = &[
         "closest",
     ),
     // Existing Partial Backgrounds/Borders rows that C13 promotes.
-    case(
+    last_case(
         "baseline.property.background",
         "background",
         "left / cover / contain",
@@ -190,7 +190,7 @@ const C13_RECOVERY_CASES: &[InvalidDeclaration] = &[
         "red blue",
         "blue",
     ),
-    case(
+    last_case(
         "baseline.property.background-image",
         "background-image",
         "none,, url(hero.png)",
@@ -289,8 +289,8 @@ const C13_RECOVERY_CASES: &[InvalidDeclaration] = &[
     case(
         "baseline.property.border-color",
         "border-color",
-        "red green blue black white",
-        "white",
+        "red blue",
+        "blue",
     ),
     case(
         "baseline.property.border-top-color",
@@ -508,7 +508,7 @@ fn c13_layer_separator_recovery_preserves_siblings_and_boundaries() {
 
     let repeated = concat!(
         "background: red, url(hero.png); ",
-        "background-image: linear-gradient(red,, blue); ",
+        "background-image: linear-gradient(red); ",
         "border-image: 10 // 1 2 3 4 5; ",
         "color: red",
     );

@@ -815,15 +815,27 @@ fn parse_gradient<'i, 't>(
 fn parse_linear_gradient<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssLinearGradient, ParseError<'i, Error>> {
-    let direction = input
-        .try_parse(|input| -> std::result::Result<_, ParseError<'i, Error>> {
-            let direction = parse_linear_gradient_direction(input)?;
-            input.expect_comma().map_err(basic)?;
-            Ok(direction)
-        })
-        .ok();
+    let direction = if next_starts_linear_gradient_direction(input) {
+        let direction = parse_linear_gradient_direction(input)?;
+        input.expect_comma().map_err(basic)?;
+        Some(direction)
+    } else {
+        None
+    };
     let stops = parse_color_stop_list(input)?;
     Ok(CssLinearGradient::new(direction, stops))
+}
+
+fn next_starts_linear_gradient_direction<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let starts = match input.next() {
+        Ok(Token::Ident(value)) => value.eq_ignore_ascii_case("to"),
+        Ok(Token::Number { .. } | Token::Dimension { .. }) => true,
+        Ok(Token::Function(name)) => name.eq_ignore_ascii_case("calc"),
+        Ok(_) | Err(_) => false,
+    };
+    input.reset(&state);
+    starts
 }
 
 fn parse_linear_gradient_direction<'i, 't>(
@@ -886,10 +898,11 @@ fn parse_gradient_angle<'i, 't>(
 fn parse_side_or_corner<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssSideOrCorner, ParseError<'i, Error>> {
-    let location = input.current_source_location();
+    let start = input.current_source_location();
     let mut horizontal = None;
     let mut vertical = None;
     for _ in 0..2 {
+        let location = input.current_source_location();
         let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) else {
             break;
         };
@@ -914,7 +927,7 @@ fn parse_side_or_corner<'i, 't>(
         }
     }
     CssSideOrCorner::try_new(horizontal, vertical)
-        .ok_or_else(|| unsupported_value_at(location, None, "gradient direction is empty"))
+        .ok_or_else(|| unsupported_value_at(start, None, "gradient direction is empty"))
 }
 
 fn parse_color_stop_list<'i, 't>(

@@ -2813,141 +2813,21 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("official.value.step-easing"),
     active_coverage!("official.value.step-position"),
     active_coverage!("later.rule.counter-style"),
-    reserved_coverage!(
-        "official.descriptor.counter-style.system",
-        Descriptor,
-        O_COUNTERSTYLES3,
-        "#counter-style-system",
-        "crate::parser::generated_content",
-        "I02-C11",
-        DescriptorValueOrderingAndRecovery
-    ),
-    reserved_coverage!(
-        "official.descriptor.counter-style.negative",
-        Descriptor,
-        O_COUNTERSTYLES3,
-        "#counter-style-negative",
-        "crate::parser::generated_content",
-        "I02-C11",
-        DescriptorValueOrderingAndRecovery
-    ),
-    reserved_coverage!(
-        "official.descriptor.counter-style.prefix",
-        Descriptor,
-        O_COUNTERSTYLES3,
-        "#counter-style-prefix",
-        "crate::parser::generated_content",
-        "I02-C11",
-        DescriptorValueOrderingAndRecovery
-    ),
-    reserved_coverage!(
-        "official.descriptor.counter-style.suffix",
-        Descriptor,
-        O_COUNTERSTYLES3,
-        "#counter-style-suffix",
-        "crate::parser::generated_content",
-        "I02-C11",
-        DescriptorValueOrderingAndRecovery
-    ),
-    reserved_coverage!(
-        "official.descriptor.counter-style.range",
-        Descriptor,
-        O_COUNTERSTYLES3,
-        "#counter-style-range",
-        "crate::parser::generated_content",
-        "I02-C11",
-        DescriptorValueOrderingAndRecovery
-    ),
-    reserved_coverage!(
-        "official.descriptor.counter-style.pad",
-        Descriptor,
-        O_COUNTERSTYLES3,
-        "#counter-style-pad",
-        "crate::parser::generated_content",
-        "I02-C11",
-        DescriptorValueOrderingAndRecovery
-    ),
-    reserved_coverage!(
-        "official.descriptor.counter-style.fallback",
-        Descriptor,
-        O_COUNTERSTYLES3,
-        "#counter-style-fallback",
-        "crate::parser::generated_content",
-        "I02-C11",
-        DescriptorValueOrderingAndRecovery
-    ),
-    reserved_coverage!(
-        "official.descriptor.counter-style.symbols",
-        Descriptor,
-        O_COUNTERSTYLES3,
-        "#counter-style-symbols",
-        "crate::parser::generated_content",
-        "I02-C11",
-        DescriptorValueOrderingAndRecovery
-    ),
-    reserved_coverage!(
-        "official.descriptor.counter-style.additive-symbols",
-        Descriptor,
-        O_COUNTERSTYLES3,
-        "#counter-style-symbols",
-        "crate::parser::generated_content",
-        "I02-C11",
-        DescriptorValueOrderingAndRecovery
-    ),
-    reserved_coverage!(
-        "official.descriptor.counter-style.speak-as",
-        Descriptor,
-        O_COUNTERSTYLES3,
-        "#counter-style-speak-as",
-        "crate::parser::generated_content",
-        "I02-C11",
-        DescriptorValueOrderingAndRecovery
-    ),
-    reserved_coverage!(
-        "official.value.counter-style",
-        Value,
-        O_COUNTERSTYLES3,
-        "#the-counter-style-rule",
-        "crate::parser::generated_content",
-        "I02-C11",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.counter-style-name",
-        Value,
-        O_COUNTERSTYLES3,
-        "#the-counter-style-rule",
-        "crate::parser::generated_content",
-        "I02-C11",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.symbol",
-        Value,
-        O_COUNTERSTYLES3,
-        "#counter-style-symbols",
-        "crate::parser::generated_content",
-        "I02-C11",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.symbols-function",
-        Value,
-        O_COUNTERSTYLES3,
-        "#symbols-function",
-        "crate::parser::generated_content",
-        "I02-C11",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.symbols-type",
-        Value,
-        O_COUNTERSTYLES3,
-        "#symbols-function",
-        "crate::parser::generated_content",
-        "I02-C11",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.descriptor.counter-style.system"),
+    active_coverage!("official.descriptor.counter-style.negative"),
+    active_coverage!("official.descriptor.counter-style.prefix"),
+    active_coverage!("official.descriptor.counter-style.suffix"),
+    active_coverage!("official.descriptor.counter-style.range"),
+    active_coverage!("official.descriptor.counter-style.pad"),
+    active_coverage!("official.descriptor.counter-style.fallback"),
+    active_coverage!("official.descriptor.counter-style.symbols"),
+    active_coverage!("official.descriptor.counter-style.additive-symbols"),
+    active_coverage!("official.descriptor.counter-style.speak-as"),
+    active_coverage!("official.value.counter-style"),
+    active_coverage!("official.value.counter-style-name"),
+    active_coverage!("official.value.symbol"),
+    active_coverage!("official.value.symbols-function"),
+    active_coverage!("official.value.symbols-type"),
 ];
 
 #[expect(
@@ -3415,7 +3295,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 387] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 402] = [
     CssFeatureMetadata::complete(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -4209,6 +4089,111 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 387] = [
         "@counter-style",
         O_COUNTERSTYLES3,
         "#the-counter-style-rule",
+    ),
+    CssFeatureMetadata::complete(
+        "official.descriptor.counter-style.system",
+        CssFeatureKind::Descriptor,
+        "system in @counter-style",
+        O_COUNTERSTYLES3,
+        "#counter-style-system",
+    ),
+    CssFeatureMetadata::complete(
+        "official.descriptor.counter-style.negative",
+        CssFeatureKind::Descriptor,
+        "negative in @counter-style",
+        O_COUNTERSTYLES3,
+        "#counter-style-negative",
+    ),
+    CssFeatureMetadata::complete(
+        "official.descriptor.counter-style.prefix",
+        CssFeatureKind::Descriptor,
+        "prefix in @counter-style",
+        O_COUNTERSTYLES3,
+        "#counter-style-prefix",
+    ),
+    CssFeatureMetadata::complete(
+        "official.descriptor.counter-style.suffix",
+        CssFeatureKind::Descriptor,
+        "suffix in @counter-style",
+        O_COUNTERSTYLES3,
+        "#counter-style-suffix",
+    ),
+    CssFeatureMetadata::complete(
+        "official.descriptor.counter-style.range",
+        CssFeatureKind::Descriptor,
+        "range in @counter-style",
+        O_COUNTERSTYLES3,
+        "#counter-style-range",
+    ),
+    CssFeatureMetadata::complete(
+        "official.descriptor.counter-style.pad",
+        CssFeatureKind::Descriptor,
+        "pad in @counter-style",
+        O_COUNTERSTYLES3,
+        "#counter-style-pad",
+    ),
+    CssFeatureMetadata::complete(
+        "official.descriptor.counter-style.fallback",
+        CssFeatureKind::Descriptor,
+        "fallback in @counter-style",
+        O_COUNTERSTYLES3,
+        "#counter-style-fallback",
+    ),
+    CssFeatureMetadata::complete(
+        "official.descriptor.counter-style.symbols",
+        CssFeatureKind::Descriptor,
+        "symbols in @counter-style",
+        O_COUNTERSTYLES3,
+        "#counter-style-symbols",
+    ),
+    CssFeatureMetadata::complete(
+        "official.descriptor.counter-style.additive-symbols",
+        CssFeatureKind::Descriptor,
+        "additive-symbols in @counter-style",
+        O_COUNTERSTYLES3,
+        "#counter-style-symbols",
+    ),
+    CssFeatureMetadata::complete(
+        "official.descriptor.counter-style.speak-as",
+        CssFeatureKind::Descriptor,
+        "speak-as in @counter-style",
+        O_COUNTERSTYLES3,
+        "#counter-style-speak-as",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.counter-style",
+        CssFeatureKind::Value,
+        "<counter-style>",
+        O_COUNTERSTYLES3,
+        "#the-counter-style-rule",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.counter-style-name",
+        CssFeatureKind::Value,
+        "<counter-style-name>",
+        O_COUNTERSTYLES3,
+        "#the-counter-style-rule",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.symbol",
+        CssFeatureKind::Value,
+        "<symbol>",
+        O_COUNTERSTYLES3,
+        "#counter-style-symbols",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.symbols-function",
+        CssFeatureKind::Value,
+        "symbols()",
+        O_COUNTERSTYLES3,
+        "#symbols-function",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.symbols-type",
+        CssFeatureKind::Value,
+        "cyclic|numeric|alphabetic|symbolic|fixed",
+        O_COUNTERSTYLES3,
+        "#symbols-function",
     ),
     CssFeatureMetadata::complete(
         "later.rule.page",

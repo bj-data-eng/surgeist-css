@@ -583,6 +583,62 @@ scope, and the marker/selection/backdrop pseudo-element rows. Matching,
 specificity, cascade, namespace URI resolution, CSSOM serialization, and
 cross-crate lowering remain downstream exclusions.
 
+## Counter Styles 3 and CSS2 page rules
+
+`CssRule::CounterStyle` retains a checked, case-sensitive
+`CssCounterStyleName`, the parser-produced rule position, and typed
+`CssCounterStyleDescriptors`. Every valid descriptor occurrence remains in
+authored order; the named `system`, `negative`, `prefix`, `suffix`, `range`,
+`pad`, `fallback`, `symbols`, `additive_symbols`, and `speak_as` accessors select
+the effective last valid occurrence. The model preserves symbolic
+`extends` names, infinite range bounds, nonempty symbol lists, and strictly
+descending additive weights without registering, resolving, inheriting, or
+evaluating a counter style.
+
+An invalid or unknown counter-style descriptor is dropped individually with a
+typed `DropDescriptor` diagnostic, preserving valid neighboring descriptors.
+An invalid effective combination, such as `system: extends` with an authored
+`symbols` definition, drops the complete at-rule. Counter-style rules are
+top-level block rules; malformed preludes, statement forms, and nested placement
+drop the smallest established at-rule unit and leave later siblings eligible.
+
+`CssRule::Page` retains the default page form or one of the finite
+`CssPageSelector::{Left, Right, First}` choices, valid declarations in authored
+order, and the parser-produced position. Page bodies accept only `margin` and
+the four margin longhands with CSS2 lengths other than `em` and `ex`,
+percentages, `auto`, zero, and negative values. Known non-margin, unknown, and
+invalid margin declarations receive their existing typed declaration
+diagnostics and are dropped individually. Page rules are likewise top-level and
+block-form only; margin-box nested at-rules remain unsupported.
+
+```rust
+use surgeist_css::{CssCounterStyleSystem, CssPageSelector, CssRule, parse_sheet};
+
+let report = parse_sheet(concat!(
+    "@counter-style digits { system: numeric; symbols: \"0\" \"1\"; suffix: \".\"; } ",
+    "@page :left { margin-left: -12mm; margin-right: 10%; }",
+));
+assert!(report.is_clean());
+let [CssRule::CounterStyle(counter), CssRule::Page(page)] = report.syntax().rules() else {
+    panic!("expected counter-style and page rules");
+};
+assert_eq!(counter.name().as_str(), "digits");
+assert!(matches!(
+    counter.descriptors().system().map(|value| value.value()),
+    Some(CssCounterStyleSystem::Numeric)
+));
+assert_eq!(counter.descriptors().occurrences().count(), 3);
+assert_eq!(page.selector(), Some(CssPageSelector::Left));
+assert_eq!(page.declarations().len(), 2);
+```
+
+All sixteen Counter Styles 3 non-property rows and the two CSS2 page rows are
+public `Complete` atomic metadata with their dated official source fragments.
+They have no partial remainder, recognized-unsupported code, or aggregate-alias
+targets. The crate does not paginate, match page selectors, apply page cascade,
+render generated markers, resolve counter inheritance, expose CSSOM, or lower
+these authored models into another Surgeist crate.
+
 ## Media, supports, and import preludes
 
 Media Queries 3 types and features are retained as authored query syntax. A

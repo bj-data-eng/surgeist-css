@@ -581,6 +581,44 @@ let _ = validate_style_attribute("color: red");
 //! established containing unit. Matching, specificity, cascade, namespace URI resolution,
 //! CSSOM serialization, and cross-crate lowering remain downstream.
 //!
+//! # Counter styles and page rules
+//!
+//! [`CssRule::CounterStyle`] retains a checked, case-sensitive [`CssCounterStyleName`], every
+//! valid descriptor occurrence in authored order, the effective last valid occurrence of each
+//! descriptor, and the rule position. The typed descriptor values cover Counter Styles 3
+//! `system`, `negative`, `prefix`, `suffix`, `range`, `pad`, `fallback`, `symbols`,
+//! `additive-symbols`, and `speak-as`. Definitions with an invalid effective descriptor
+//! combination are dropped as one at-rule; an invalid or unknown individual descriptor is
+//! dropped while valid descriptor and rule siblings remain eligible.
+//!
+//! [`CssRule::Page`] retains the CSS2 default page form or one [`CssPageSelector`] plus valid
+//! page-context margin declarations in authored order. The page body accepts only `margin` and
+//! its four longhands with the CSS2 length, percentage, `auto`, and negative-value domains.
+//! Invalid or unknown declarations are dropped individually. Both rule families are top-level,
+//! block-form authored syntax; pagination, page matching, cascade, counter registration,
+//! inheritance resolution, generated-marker rendering, and margin-box rules are excluded.
+//!
+//! ```
+//! use surgeist_css::{CssCounterStyleSystem, CssPageSelector, CssRule, parse_sheet};
+//!
+//! let report = parse_sheet(concat!(
+//!     "@counter-style digits { system: numeric; symbols: \"0\" \"1\"; suffix: \".\"; } ",
+//!     "@page :left { margin-left: -12mm; margin-right: 10%; }",
+//! ));
+//! assert!(report.is_clean());
+//! let [CssRule::CounterStyle(counter), CssRule::Page(page)] = report.syntax().rules() else {
+//!     panic!("expected counter-style and page rules");
+//! };
+//! assert_eq!(counter.name().as_str(), "digits");
+//! assert!(matches!(
+//!     counter.descriptors().system().map(|value| value.value()),
+//!     Some(CssCounterStyleSystem::Numeric)
+//! ));
+//! assert_eq!(counter.descriptors().occurrences().count(), 3);
+//! assert_eq!(page.selector(), Some(CssPageSelector::Left));
+//! assert_eq!(page.declarations().len(), 2);
+//! ```
+//!
 //! # Media, supports, imports, and prelude recovery
 //!
 //! Media Queries 3 syntax preserves defined-false authored input without confusing it with

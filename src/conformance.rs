@@ -2477,31 +2477,6 @@ const QUERY_REMAINDER: &str =
 const PROPERTY_SUBSET: &str = "The property-specific parser behavior at 4b288d6:src/parser/mod.rs, plus whole-value CSS-wide keywords and syntactically admissible substitution-dependent authored values, is supported.";
 const PROPERTY_REMAINDER: &str =
     "Other valid forms of the cited property production are outside the I01 subset.";
-const DIMENSION_SUBSET: &str =
-    "Selected typed length, angle, time, frequency, and resolution dimensions are supported.";
-const DIMENSION_REMAINDER: &str =
-    "Other valid CSS dimension families remain for their owning later grammar cycles.";
-const ANGLE_SUBSET: &str = "The public typed angle model and calculation root are supported.";
-const ANGLE_REMAINDER: &str =
-    "Angle property consumers remain for their owning later grammar cycles.";
-const ANGLE_PERCENTAGE_SUBSET: &str =
-    "The public typed angle and percentage calculation models are supported.";
-const ANGLE_PERCENTAGE_REMAINDER: &str =
-    "Angle-percentage property consumers remain for their owning later grammar cycles.";
-const TIME_PERCENTAGE_SUBSET: &str =
-    "The public typed time and percentage calculation models are supported.";
-const TIME_PERCENTAGE_REMAINDER: &str =
-    "Time-percentage property consumers remain for their owning later grammar cycles.";
-const FREQUENCY_SUBSET: &str =
-    "The public typed frequency model and calculation root are supported.";
-const FREQUENCY_REMAINDER: &str =
-    "Frequency property consumers remain for their owning later grammar cycles.";
-const FREQUENCY_PERCENTAGE_SUBSET: &str =
-    "The public typed frequency and percentage calculation models are supported.";
-const FREQUENCY_PERCENTAGE_REMAINDER: &str =
-    "Frequency-percentage property consumers remain for their owning later grammar cycles.";
-const CALC_SUBSET: &str = "Typed sum, product, division, negation, grouping, and nested calc() trees are supported for the C03 roots and integrated property consumers.";
-const CALC_REMAINDER: &str = "Angle, frequency, Media resolution, keyframe percentage, font-feature numeric, and C05 function-owned consumer integrations remain for their owning later cycles.";
 const TIMING_SUBSET: &str = "The I01 shorthand components plus C03 duration, signed delay, iteration, and typed calculation syntax and C05 easing functions are supported.";
 const TIMING_REMAINDER: &str =
     "Other valid forms of the cited shorthand production remain unsupported.";
@@ -3149,14 +3124,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 463] = [
         O_VALUES3,
         "#numbers",
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "official.value.dimension",
         CssFeatureKind::Value,
         "<dimension>",
         O_VALUES3,
         "#dimensions",
-        DIMENSION_SUBSET,
-        DIMENSION_REMAINDER,
     ),
     CssFeatureMetadata::complete(
         "official.value.percentage",
@@ -3179,23 +3152,19 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 463] = [
         O_VALUES3,
         "#mixed-percentages",
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "official.value.angle",
         CssFeatureKind::Value,
         "<angle>",
         O_VALUES3,
         "#angles",
-        ANGLE_SUBSET,
-        ANGLE_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "official.value.angle-percentage",
         CssFeatureKind::Value,
         "<angle-percentage>",
         O_VALUES3,
         "#mixed-percentages",
-        ANGLE_PERCENTAGE_SUBSET,
-        ANGLE_PERCENTAGE_REMAINDER,
     ),
     CssFeatureMetadata::complete(
         "official.value.time",
@@ -3204,32 +3173,26 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 463] = [
         O_VALUES3,
         "#time",
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "official.value.time-percentage",
         CssFeatureKind::Value,
         "<time-percentage>",
         O_VALUES3,
         "#mixed-percentages",
-        TIME_PERCENTAGE_SUBSET,
-        TIME_PERCENTAGE_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "official.value.frequency",
         CssFeatureKind::Value,
         "<frequency>",
         O_VALUES3,
         "#frequency",
-        FREQUENCY_SUBSET,
-        FREQUENCY_REMAINDER,
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "official.value.frequency-percentage",
         CssFeatureKind::Value,
         "<frequency-percentage>",
         O_VALUES3,
         "#mixed-percentages",
-        FREQUENCY_PERCENTAGE_SUBSET,
-        FREQUENCY_PERCENTAGE_REMAINDER,
     ),
     CssFeatureMetadata::complete(
         "official.value.resolution",
@@ -3904,14 +3867,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 463] = [
         S_SHAPES1,
         "#funcdef-basic-shape-polygon",
     ),
-    CssFeatureMetadata::partial(
+    CssFeatureMetadata::complete(
         "official.value.calc",
         CssFeatureKind::Value,
         "calc()",
         O_VALUES3,
         "#calc-notation,#calc-syntax,#calc-type-checking",
-        CALC_SUBSET,
-        CALC_REMAINDER,
     ),
     CssFeatureMetadata::complete(
         "later.rule.namespace",

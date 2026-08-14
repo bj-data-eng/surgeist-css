@@ -48,31 +48,6 @@ const SUPPORTS_SELECTOR_SUBSET: &str = "selector() accepts complete Selectors 3 
 const SUPPORTS_SELECTOR_REMAINDER: &str = "The || combinator, unselected Selectors 4 pseudo-classes and pseudo-elements, and syntax outside those atomic extension rows remain outside the typed subset; balanced content is preserved as general-enclosed authored syntax.";
 const QUERY_REMAINDER: &str =
     "Other valid forms of the cited query production are outside the I01 subset.";
-const DIMENSION_SUBSET: &str =
-    "Selected typed length, angle, time, frequency, and resolution dimensions are supported.";
-const DIMENSION_REMAINDER: &str =
-    "Other valid CSS dimension families remain for their owning later grammar cycles.";
-const ANGLE_SUBSET: &str = "The public typed angle model and calculation root are supported.";
-const ANGLE_REMAINDER: &str =
-    "Angle property consumers remain for their owning later grammar cycles.";
-const ANGLE_PERCENTAGE_SUBSET: &str =
-    "The public typed angle and percentage calculation models are supported.";
-const ANGLE_PERCENTAGE_REMAINDER: &str =
-    "Angle-percentage property consumers remain for their owning later grammar cycles.";
-const TIME_PERCENTAGE_SUBSET: &str =
-    "The public typed time and percentage calculation models are supported.";
-const TIME_PERCENTAGE_REMAINDER: &str =
-    "Time-percentage property consumers remain for their owning later grammar cycles.";
-const FREQUENCY_SUBSET: &str =
-    "The public typed frequency model and calculation root are supported.";
-const FREQUENCY_REMAINDER: &str =
-    "Frequency property consumers remain for their owning later grammar cycles.";
-const FREQUENCY_PERCENTAGE_SUBSET: &str =
-    "The public typed frequency and percentage calculation models are supported.";
-const FREQUENCY_PERCENTAGE_REMAINDER: &str =
-    "Frequency-percentage property consumers remain for their owning later grammar cycles.";
-const CALC_SUBSET: &str = "Typed sum, product, division, negation, grouping, and nested calc() trees are supported for the C03 roots and integrated property consumers.";
-const CALC_REMAINDER: &str = "Angle, frequency, Media resolution, keyframe percentage, font-feature numeric, and C05 function-owned consumer integrations remain for their owning later cycles.";
 const TIMING_SUBSET: &str = "The I01 shorthand components plus C03 duration, signed delay, iteration, and typed calculation syntax and C05 easing functions are supported.";
 const TIMING_REMAINDER: &str =
     "Other valid forms of the cited shorthand production remain unsupported.";
@@ -2183,9 +2158,9 @@ fn official_dimension_metadata_matches_checked_dimension_behavior() {
         "official.value.dimension",
         "<dimension>",
         "#dimensions",
-        CssSupportStatus::Partial,
-        Some(DIMENSION_SUBSET),
-        Some(DIMENSION_REMAINDER),
+        CssSupportStatus::Complete,
+        None,
+        None,
     );
 }
 
@@ -2244,9 +2219,9 @@ fn official_angle_metadata_matches_checked_angle_behavior() {
         "official.value.angle",
         "<angle>",
         "#angles",
-        CssSupportStatus::Partial,
-        Some(ANGLE_SUBSET),
-        Some(ANGLE_REMAINDER),
+        CssSupportStatus::Complete,
+        None,
+        None,
     );
 }
 
@@ -2261,9 +2236,9 @@ fn official_angle_percentage_metadata_matches_checked_mixed_models() {
         "official.value.angle-percentage",
         "<angle-percentage>",
         "#mixed-percentages",
-        CssSupportStatus::Partial,
-        Some(ANGLE_PERCENTAGE_SUBSET),
-        Some(ANGLE_PERCENTAGE_REMAINDER),
+        CssSupportStatus::Complete,
+        None,
+        None,
     );
 }
 
@@ -2293,9 +2268,9 @@ fn official_time_percentage_metadata_matches_checked_mixed_models() {
         "official.value.time-percentage",
         "<time-percentage>",
         "#mixed-percentages",
-        CssSupportStatus::Partial,
-        Some(TIME_PERCENTAGE_SUBSET),
-        Some(TIME_PERCENTAGE_REMAINDER),
+        CssSupportStatus::Complete,
+        None,
+        None,
     );
 }
 
@@ -2308,9 +2283,9 @@ fn official_frequency_metadata_matches_checked_frequency_behavior() {
         "official.value.frequency",
         "<frequency>",
         "#frequency",
-        CssSupportStatus::Partial,
-        Some(FREQUENCY_SUBSET),
-        Some(FREQUENCY_REMAINDER),
+        CssSupportStatus::Complete,
+        None,
+        None,
     );
 }
 
@@ -2325,9 +2300,9 @@ fn official_frequency_percentage_metadata_matches_checked_mixed_models() {
         "official.value.frequency-percentage",
         "<frequency-percentage>",
         "#mixed-percentages",
-        CssSupportStatus::Partial,
-        Some(FREQUENCY_PERCENTAGE_SUBSET),
-        Some(FREQUENCY_PERCENTAGE_REMAINDER),
+        CssSupportStatus::Complete,
+        None,
+        None,
     );
 }
 
@@ -2358,9 +2333,9 @@ fn official_calc_metadata_matches_typed_calculation_parser_behavior() {
         "official.value.calc",
         "calc()",
         "#calc-notation,#calc-syntax,#calc-type-checking",
-        CssSupportStatus::Partial,
-        Some(CALC_SUBSET),
-        Some(CALC_REMAINDER),
+        CssSupportStatus::Complete,
+        None,
+        None,
     );
 }
 

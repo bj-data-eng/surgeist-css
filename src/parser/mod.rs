@@ -9,6 +9,7 @@
 
 mod background;
 mod box_model;
+mod counter_style;
 mod effects;
 mod font_face;
 mod generated_content;
@@ -33,6 +34,7 @@ use cssparser::{
 
 use background::*;
 use box_model::*;
+use counter_style::{parse_counter_style_name, parse_counter_style_rule};
 use effects::*;
 use font_face::parse_font_face_rule;
 use generated_content::*;
@@ -66,7 +68,7 @@ use variables::{
 
 use crate::error::{
     CssFeatureId, Error, basic, from_parse_error, from_rule_parse_error, invalid_at_rule_block,
-    invalid_at_rule_placement, invalid_custom_declaration_annotation,
+    invalid_at_rule_body, invalid_at_rule_placement, invalid_custom_declaration_annotation,
     invalid_descriptor_annotation, invalid_encoding_declaration,
     invalid_known_declaration_annotation, invalid_root_syntax, invalid_syntax,
     normalize_encoding_error, property_name_error, unsupported_value, with_at_rule_prelude_context,
@@ -945,6 +947,7 @@ fn into_scoped_rule(rule: CssRule) -> Option<CssScopedRule> {
         CssRule::Scope(rule) => Some(CssScopedRule::Scope(rule)),
         CssRule::Import(_)
         | CssRule::Namespace(_)
+        | CssRule::CounterStyle(_)
         | CssRule::FontFace(_)
         | CssRule::Keyframes(_) => None,
     }
@@ -1010,6 +1013,7 @@ fn rule_start(rule: &CssRule) -> usize {
     match rule {
         CssRule::Import(rule) => rule.position(),
         CssRule::Namespace(rule) => rule.position(),
+        CssRule::CounterStyle(rule) => rule.position(),
         CssRule::LayerStatement(rule) => rule.position(),
         CssRule::LayerBlock(rule) => rule.position(),
         CssRule::FontFace(rule) => rule.position(),
@@ -1514,6 +1518,7 @@ enum StrictAtRulePrelude {
     Encoding(String),
     Import(CssImportPrelude),
     Namespace(CssNamespacePrelude),
+    CounterStyle(CssCounterStyleName),
     Layer(Vec<CssLayerName>),
     FontFace,
     Keyframes(CssKeyframesName),
@@ -1529,6 +1534,7 @@ impl StrictAtRulePrelude {
             Self::Encoding(_) => "css.encoding-declaration",
             Self::Import(_) => "baseline.rule.import",
             Self::Namespace(_) => "later.rule.namespace",
+            Self::CounterStyle(_) => "later.rule.counter-style",
             Self::Layer(_) => "baseline.rule.layer-block",
             Self::FontFace => "baseline.rule.font-face",
             Self::Keyframes(_) => "baseline.rule.keyframes",
@@ -1663,6 +1669,37 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                     )
                 })?;
                 Ok(StrictAtRulePrelude::Namespace(prelude))
+            },
+            "counter-style" => {
+                if self.top_level_phase.is_none() {
+                    return Err(invalid_at_rule_placement(
+                        input.current_source_location(),
+                        "counter-style",
+                        "the stylesheet top level",
+                    ));
+                }
+                let name = parse_counter_style_name(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "counter-style",
+                        "later.rule.counter-style",
+                        "one non-reserved counter-style name",
+                    )
+                })?;
+                let following = self
+                    .source
+                    .get(input.position().byte_index()..)
+                    .unwrap_or_default()
+                    .trim_start();
+                if following.is_empty() || following.starts_with(';') {
+                    return Err(invalid_at_rule_body(
+                        input,
+                        "counter-style",
+                        "later.rule.counter-style",
+                        "a block-form counter-style rule",
+                    ));
+                }
+                Ok(StrictAtRulePrelude::CounterStyle(name))
             },
             "font-face" => {
                 if !input.is_exhausted() {
@@ -1819,6 +1856,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 }
                 Ok(vec![CssRule::Namespace(rule)])
             }
+            StrictAtRulePrelude::CounterStyle(_) => Err(()),
             StrictAtRulePrelude::Layer(names) => {
                 let names = CssLayerNameList::try_new(names).ok_or(())?;
                 self.mark_successful_layer_statement();
@@ -1864,6 +1902,18 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 "later.rule.namespace",
                 "a semicolon-terminated @namespace rule",
             )),
+            StrictAtRulePrelude::CounterStyle(name) => {
+                let rule = parse_counter_style_rule(
+                    self.source,
+                    name,
+                    input,
+                    start,
+                    &mut self.diagnostics,
+                    self.recovery.clone(),
+                )?;
+                self.mark_successful_body_rule();
+                Ok(vec![CssRule::CounterStyle(rule)])
+            }
             StrictAtRulePrelude::Layer(names) => {
                 if names.len() > 1 {
                     return Err(invalid_at_rule_block(

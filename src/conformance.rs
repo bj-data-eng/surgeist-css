@@ -4211,13 +4211,12 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 386] = [
         O_CONDITIONAL3,
         "#at-supports",
     ),
-    CssFeatureMetadata::recognized_unsupported(
+    CssFeatureMetadata::complete(
         "later.rule.counter-style",
         CssFeatureKind::Rule,
         "@counter-style",
         O_COUNTERSTYLES3,
         "#the-counter-style-rule",
-        CssErrorCode::UnsupportedAtRule,
     ),
     CssFeatureMetadata::recognized_unsupported(
         "later.rule.page",

@@ -143,7 +143,10 @@ fn sequence_members<'a>(
 fn validate_retained_field(field: &str, case_id: &str) -> Result<(), String> {
     for item in sequence_members(field, "retained", case_id)? {
         if let Some(id) = item.strip_prefix("rule:") {
-            if !is_prefixed_stable_id(id, "baseline.rule.") && id != "later.rule.namespace" {
+            if !is_prefixed_stable_id(id, "baseline.rule.")
+                && id != "later.rule.namespace"
+                && id != "later.rule.counter-style"
+            {
                 return Err(format!(
                     "{case_id}: malformed retained rule identity `{id}`"
                 ));
@@ -1145,6 +1148,7 @@ fn rule_observables(
     match rule {
         CssRule::Import(_) => retained.push("rule:baseline.rule.import".to_owned()),
         CssRule::Namespace(_) => retained.push("rule:later.rule.namespace".to_owned()),
+        CssRule::CounterStyle(_) => retained.push("rule:later.rule.counter-style".to_owned()),
         CssRule::LayerStatement(_) => {
             retained.push("rule:baseline.rule.layer-statement".to_owned())
         }

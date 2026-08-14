@@ -113,6 +113,7 @@ impl CssEncodingDeclaration {
 pub enum CssRule {
     Import(CssImportRule),
     Namespace(CssNamespaceRule),
+    CounterStyle(CssCounterStyleRule),
     LayerStatement(CssLayerStatementRule),
     LayerBlock(CssLayerBlockRule),
     FontFace(CssFontFaceRule),
@@ -122,6 +123,348 @@ pub enum CssRule {
     Supports(CssSupportsRule),
     Container(CssContainerRule),
     Scope(CssScopeRule),
+}
+
+/// One valid parser-produced Counter Styles 3 definition.
+///
+/// The private fields couple a checked name, a valid effective descriptor
+/// combination, and the authored at-keyword position. This authored model does
+/// not register, resolve, inherit, or evaluate a counter style.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssCounterStyleRule {
+    name: CssCounterStyleName,
+    descriptors: CssCounterStyleDescriptors,
+    position: CssSourcePosition,
+}
+
+impl CssCounterStyleRule {
+    #[must_use]
+    pub(crate) const fn new(
+        name: CssCounterStyleName,
+        descriptors: CssCounterStyleDescriptors,
+        position: CssSourcePosition,
+    ) -> Self {
+        Self {
+            name,
+            descriptors,
+            position,
+        }
+    }
+
+    /// Returns the checked, case-sensitive authored counter-style name.
+    #[must_use]
+    pub const fn name(&self) -> &CssCounterStyleName {
+        &self.name
+    }
+
+    /// Returns the valid authored descriptor collection.
+    #[must_use]
+    pub const fn descriptors(&self) -> &CssCounterStyleDescriptors {
+        &self.descriptors
+    }
+
+    /// Returns the semantic source position of the rule's at-keyword.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+}
+
+/// The valid effective core descriptors of an authored counter-style rule.
+///
+/// Every valid occurrence remains available in source order. Named accessors
+/// select the last valid occurrence. An omitted `system` has the authored CSS
+/// default `symbolic`; this default is documented rather than represented by a
+/// forged source occurrence.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssCounterStyleDescriptors {
+    system: Option<CssDescriptorOccurrence<CssCounterStyleSystem>>,
+    symbols: Option<CssDescriptorOccurrence<CssCounterSymbols>>,
+    prefix: Option<CssDescriptorOccurrence<CssCounterSymbol>>,
+    suffix: Option<CssDescriptorOccurrence<CssCounterSymbol>>,
+    occurrences: Vec<CssCounterStyleDescriptor>,
+}
+
+impl CssCounterStyleDescriptors {
+    pub(crate) fn from_occurrences(
+        occurrences: Vec<CssCounterStyleDescriptor>,
+    ) -> Result<Self, CssCounterStyleCombinationIssue> {
+        let mut system = None;
+        let mut symbols = None;
+        let mut prefix = None;
+        let mut suffix = None;
+
+        for descriptor in &occurrences {
+            match descriptor {
+                CssCounterStyleDescriptor::System(value) => system = Some(value.clone()),
+                CssCounterStyleDescriptor::Symbols(value) => symbols = Some(value.clone()),
+                CssCounterStyleDescriptor::Prefix(value) => prefix = Some(value.clone()),
+                CssCounterStyleDescriptor::Suffix(value) => suffix = Some(value.clone()),
+            }
+        }
+
+        let effective_system = system
+            .as_ref()
+            .map(CssDescriptorOccurrence::value)
+            .unwrap_or(&CssCounterStyleSystem::Symbolic);
+        match effective_system {
+            CssCounterStyleSystem::Extends(_) if symbols.is_some() => {
+                return Err(CssCounterStyleCombinationIssue::new(
+                    system.as_ref().expect("extends is authored").position(),
+                    "system",
+                    vec!["symbols"],
+                ));
+            }
+            CssCounterStyleSystem::Extends(_) => {}
+            CssCounterStyleSystem::Additive => {
+                return Err(CssCounterStyleCombinationIssue::new(
+                    system.as_ref().expect("additive is authored").position(),
+                    "system",
+                    vec!["additive-symbols"],
+                ));
+            }
+            CssCounterStyleSystem::Numeric | CssCounterStyleSystem::Alphabetic => {
+                let Some(symbols) = symbols.as_ref() else {
+                    return Err(CssCounterStyleCombinationIssue::new(
+                        system.as_ref().expect("system is authored").position(),
+                        "system",
+                        vec!["symbols"],
+                    ));
+                };
+                if symbols.value().symbols().len() < 2 {
+                    return Err(CssCounterStyleCombinationIssue::new(
+                        symbols.position(),
+                        "symbols",
+                        vec!["system"],
+                    ));
+                }
+            }
+            CssCounterStyleSystem::Cyclic
+            | CssCounterStyleSystem::Symbolic
+            | CssCounterStyleSystem::Fixed(_) => {
+                if symbols.is_none() {
+                    let (position, responsible) = system.as_ref().map_or_else(
+                        || {
+                            occurrences.first().map_or((None, "symbols"), |descriptor| {
+                                (Some(descriptor.position()), "symbols")
+                            })
+                        },
+                        |system| (Some(system.position()), "system"),
+                    );
+                    return Err(CssCounterStyleCombinationIssue::new_optional(
+                        position,
+                        responsible,
+                        vec!["symbols"],
+                    ));
+                }
+            }
+        }
+
+        Ok(Self {
+            system,
+            symbols,
+            prefix,
+            suffix,
+            occurrences,
+        })
+    }
+
+    /// Returns the effective last valid authored `system` occurrence.
+    #[must_use]
+    pub const fn system(&self) -> Option<&CssDescriptorOccurrence<CssCounterStyleSystem>> {
+        self.system.as_ref()
+    }
+
+    /// Returns the effective last valid authored `symbols` occurrence.
+    #[must_use]
+    pub const fn symbols(&self) -> Option<&CssDescriptorOccurrence<CssCounterSymbols>> {
+        self.symbols.as_ref()
+    }
+
+    /// Returns the effective last valid authored `prefix` occurrence.
+    #[must_use]
+    pub const fn prefix(&self) -> Option<&CssDescriptorOccurrence<CssCounterSymbol>> {
+        self.prefix.as_ref()
+    }
+
+    /// Returns the effective last valid authored `suffix` occurrence.
+    #[must_use]
+    pub const fn suffix(&self) -> Option<&CssDescriptorOccurrence<CssCounterSymbol>> {
+        self.suffix.as_ref()
+    }
+
+    /// Returns every valid authored core descriptor occurrence in source order.
+    pub fn occurrences(&self) -> impl ExactSizeIterator<Item = CssCounterStyleDescriptorRef<'_>> {
+        self.occurrences
+            .iter()
+            .map(CssCounterStyleDescriptor::as_ref)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum CssCounterStyleDescriptor {
+    System(CssDescriptorOccurrence<CssCounterStyleSystem>),
+    Symbols(CssDescriptorOccurrence<CssCounterSymbols>),
+    Prefix(CssDescriptorOccurrence<CssCounterSymbol>),
+    Suffix(CssDescriptorOccurrence<CssCounterSymbol>),
+}
+
+impl CssCounterStyleDescriptor {
+    fn as_ref(&self) -> CssCounterStyleDescriptorRef<'_> {
+        match self {
+            Self::System(value) => CssCounterStyleDescriptorRef::System(value),
+            Self::Symbols(value) => CssCounterStyleDescriptorRef::Symbols(value),
+            Self::Prefix(value) => CssCounterStyleDescriptorRef::Prefix(value),
+            Self::Suffix(value) => CssCounterStyleDescriptorRef::Suffix(value),
+        }
+    }
+
+    const fn position(&self) -> CssSourcePosition {
+        match self {
+            Self::System(value) => value.position(),
+            Self::Symbols(value) => value.position(),
+            Self::Prefix(value) => value.position(),
+            Self::Suffix(value) => value.position(),
+        }
+    }
+}
+
+/// A borrowed valid authored core counter-style descriptor occurrence.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssCounterStyleDescriptorRef<'a> {
+    System(&'a CssDescriptorOccurrence<CssCounterStyleSystem>),
+    Symbols(&'a CssDescriptorOccurrence<CssCounterSymbols>),
+    Prefix(&'a CssDescriptorOccurrence<CssCounterSymbol>),
+    Suffix(&'a CssDescriptorOccurrence<CssCounterSymbol>),
+}
+
+/// One authored Counter Styles 3 system choice.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssCounterStyleSystem {
+    Cyclic,
+    Numeric,
+    Alphabetic,
+    Symbolic,
+    Additive,
+    Fixed(CssCounterStyleFixedSystem),
+    Extends(CssCounterStyleName),
+}
+
+/// The optional starting integer of an authored `fixed` system.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssCounterStyleFixedSystem {
+    first_symbol_value: Option<i32>,
+}
+
+impl CssCounterStyleFixedSystem {
+    #[must_use]
+    pub(crate) const fn new(first_symbol_value: Option<i32>) -> Self {
+        Self { first_symbol_value }
+    }
+
+    #[must_use]
+    pub const fn first_symbol_value(self) -> Option<i32> {
+        self.first_symbol_value
+    }
+}
+
+/// A nonempty authored `symbols` descriptor value.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCounterSymbols {
+    symbols: Vec<CssCounterSymbol>,
+}
+
+impl CssCounterSymbols {
+    #[must_use]
+    pub(crate) fn new(symbols: Vec<CssCounterSymbol>) -> Self {
+        debug_assert!(!symbols.is_empty());
+        Self { symbols }
+    }
+
+    #[must_use]
+    pub fn symbols(&self) -> &[CssCounterSymbol] {
+        &self.symbols
+    }
+}
+
+/// One typed authored counter symbol.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssCounterSymbol {
+    String(CssContentString),
+    Ident(CssCounterSymbolIdent),
+    Url(CssUrl),
+}
+
+/// One checked `<custom-ident>` used as an authored counter symbol.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCounterSymbolIdent {
+    value: String,
+}
+
+impl CssCounterSymbolIdent {
+    /// Constructs a counter symbol from one exact decoded CSS custom identifier.
+    #[must_use]
+    pub fn try_new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        if is_exact_css_identifier(&value)
+            && !is_css_wide_keyword(&value)
+            && !value.eq_ignore_ascii_case("default")
+        {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    /// Returns the exact, case-sensitive decoded identifier.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct CssCounterStyleCombinationIssue {
+    position: Option<CssSourcePosition>,
+    responsible: &'static str,
+    conflicting: Vec<&'static str>,
+}
+
+impl CssCounterStyleCombinationIssue {
+    fn new(
+        position: CssSourcePosition,
+        responsible: &'static str,
+        conflicting: Vec<&'static str>,
+    ) -> Self {
+        Self::new_optional(Some(position), responsible, conflicting)
+    }
+
+    fn new_optional(
+        position: Option<CssSourcePosition>,
+        responsible: &'static str,
+        conflicting: Vec<&'static str>,
+    ) -> Self {
+        Self {
+            position,
+            responsible,
+            conflicting,
+        }
+    }
+
+    pub(crate) const fn position(&self) -> Option<CssSourcePosition> {
+        self.position
+    }
+
+    pub(crate) const fn responsible(&self) -> &'static str {
+        self.responsible
+    }
+
+    pub(crate) fn conflicting(&self) -> &[&'static str] {
+        &self.conflicting
+    }
 }
 
 /// One valid authored Namespaces 3 declaration.
@@ -4354,7 +4697,10 @@ fn is_valid_counter_name(name: &str) -> bool {
 }
 
 fn is_valid_counter_style_name(name: &str) -> bool {
-    is_css_ident(name) && !is_css_wide_keyword(name) && !name.eq_ignore_ascii_case("none")
+    is_css_ident(name)
+        && !is_css_wide_keyword(name)
+        && !name.eq_ignore_ascii_case("default")
+        && !name.eq_ignore_ascii_case("none")
 }
 
 fn is_css_ident(value: &str) -> bool {

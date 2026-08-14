@@ -1207,15 +1207,14 @@ const EXPECTED: &[ExpectedFeature] = &[
         spelling: "@counter-style",
         source: ExpectedSource::Id("O-COUNTERSTYLES3"),
         production: "#the-counter-style-rule",
-        status: CssSupportStatus::RecognizedUnsupported,
+        status: CssSupportStatus::Complete,
         supported_subset: None,
         unsupported_remainder: None,
-        recognized_code: Some(CssErrorCode::UnsupportedAtRule),
-        positive: None,
-        negative: Some((
-            Input::Sheet("@counter-style thumbs { system: cyclic; symbols: 👍; suffix: \" \"; }"),
-            CssErrorCode::UnsupportedAtRule,
+        recognized_code: None,
+        positive: Some(Input::Sheet(
+            "@counter-style thumbs { system: cyclic; symbols: 👍; suffix: \" \"; }",
         )),
+        negative: None,
     },
     ExpectedFeature {
         id: "later.rule.page",

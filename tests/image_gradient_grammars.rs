@@ -1,6 +1,6 @@
 use surgeist_css::{
     CssColorStopListItem, CssErrorCode, CssGlobalKeyword, CssGradient, CssHorizontalGradientSide,
-    CssImageValue, CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef,
+    CssImageValue, CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLength,
     CssLinearGradientDirection, CssRadialExtent, CssRadialShape, CssRadialSize, CssRecoveryAction,
     CssVerticalGradientSide, ErrorKind, parse_style_attribute,
 };
@@ -47,7 +47,7 @@ fn c13_images_and_gradients_retain_typed_structure() {
             CssColorStopListItem::Hint(hint),
             CssColorStopListItem::Stop(last),
         ] if first.position().is_some()
-            && hint.position().value().value() == 25.0
+            && matches!(hint.value(), CssLength::Percent(value) if value.value() == 25.0)
             && last.position().is_none()
     ));
 

@@ -387,6 +387,8 @@ fn typed_length_calculation_is_current_consumer(context: &str) -> bool {
             | "position"
             | "outline-width"
             | "translate"
+            | "gradient stop"
+            | "radial-gradient size"
     )
 }
 

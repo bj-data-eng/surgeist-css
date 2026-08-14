@@ -9733,6 +9733,372 @@ impl CssImageLayerList {
     }
 }
 
+/// A current authored image value accepted by Images 3 consumers.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssImageValue {
+    None,
+    Url(CssUrl),
+    Gradient(CssGradient),
+}
+
+/// A nonempty authored comma-separated image list.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssImageValueList {
+    images: Vec<CssImageValue>,
+}
+
+impl CssImageValueList {
+    #[must_use]
+    pub fn try_new(images: Vec<CssImageValue>) -> Option<Self> {
+        (!images.is_empty()).then_some(Self { images })
+    }
+
+    #[must_use]
+    pub fn images(&self) -> &[CssImageValue] {
+        &self.images
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CssParsedImageValueList {
+    current: CssImageValueList,
+    i01_subset: Option<CssImageLayerList>,
+}
+
+impl CssParsedImageValueList {
+    pub(crate) const fn new(
+        current: CssImageValueList,
+        i01_subset: Option<CssImageLayerList>,
+    ) -> Self {
+        Self {
+            current,
+            i01_subset,
+        }
+    }
+
+    pub(crate) fn into_parts(self) -> (CssImageValueList, Option<CssImageLayerList>) {
+        (self.current, self.i01_subset)
+    }
+}
+
+/// One of the four authored Images 3 gradient functions.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssGradient {
+    Linear(CssLinearGradient),
+    Radial(CssRadialGradient),
+    RepeatingLinear(CssLinearGradient),
+    RepeatingRadial(CssRadialGradient),
+}
+
+/// A finite authored gradient angle, including the Images 3 unitless-zero branch.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssGradientAngle {
+    Zero,
+    Literal(CssAngleLiteral),
+    Calculation(CssAngleCalculation),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssHorizontalGradientSide {
+    Left,
+    Right,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssVerticalGradientSide {
+    Top,
+    Bottom,
+}
+
+/// A checked authored linear-gradient side or corner.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssSideOrCorner {
+    horizontal: Option<CssHorizontalGradientSide>,
+    vertical: Option<CssVerticalGradientSide>,
+}
+
+impl CssSideOrCorner {
+    #[must_use]
+    pub const fn try_new(
+        horizontal: Option<CssHorizontalGradientSide>,
+        vertical: Option<CssVerticalGradientSide>,
+    ) -> Option<Self> {
+        if horizontal.is_none() && vertical.is_none() {
+            None
+        } else {
+            Some(Self {
+                horizontal,
+                vertical,
+            })
+        }
+    }
+
+    #[must_use]
+    pub const fn horizontal(self) -> Option<CssHorizontalGradientSide> {
+        self.horizontal
+    }
+
+    #[must_use]
+    pub const fn vertical(self) -> Option<CssVerticalGradientSide> {
+        self.vertical
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssLinearGradientDirection {
+    Angle(CssGradientAngle),
+    SideOrCorner(CssSideOrCorner),
+}
+
+/// An authored length-percentage position on a gradient line.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssGradientLinePosition {
+    value: CssLength,
+}
+
+impl CssGradientLinePosition {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        matches!(
+            value,
+            CssLength::Px(_)
+                | CssLength::Dimension(_)
+                | CssLength::Percent(_)
+                | CssLength::Zero
+                | CssLength::Calc(_)
+        )
+        .then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// One authored color stop in a gradient color-stop list.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssGradientColorStop {
+    color: CssParsedColor,
+    position: Option<CssGradientLinePosition>,
+}
+
+impl CssGradientColorStop {
+    pub(crate) const fn new(
+        color: CssParsedColor,
+        position: Option<CssGradientLinePosition>,
+    ) -> Self {
+        Self { color, position }
+    }
+
+    #[must_use]
+    pub const fn color(&self) -> &CssAuthoredColor {
+        self.color.current()
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> Option<&CssGradientLinePosition> {
+        self.position.as_ref()
+    }
+}
+
+/// One authored item in a color-stop list, preserving stop and hint order.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssColorStopListItem {
+    Stop(Box<CssGradientColorStop>),
+    Hint(CssGradientLinePosition),
+}
+
+/// A checked authored color-stop list with two or more stops and interleaved hints.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssColorStopList {
+    items: Vec<CssColorStopListItem>,
+}
+
+impl CssColorStopList {
+    #[must_use]
+    pub fn try_new(items: Vec<CssColorStopListItem>) -> Option<Self> {
+        let stop_count = items
+            .iter()
+            .filter(|item| matches!(item, CssColorStopListItem::Stop(_)))
+            .count();
+        let ordered = matches!(items.first(), Some(CssColorStopListItem::Stop(_)))
+            && matches!(items.last(), Some(CssColorStopListItem::Stop(_)))
+            && items.windows(2).all(|pair| {
+                !matches!(
+                    pair,
+                    [CssColorStopListItem::Hint(_), CssColorStopListItem::Hint(_)]
+                )
+            });
+        (stop_count >= 2 && ordered).then_some(Self { items })
+    }
+
+    #[must_use]
+    pub fn items(&self) -> &[CssColorStopListItem] {
+        &self.items
+    }
+}
+
+/// A current authored linear or repeating-linear gradient payload.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssLinearGradient {
+    direction: Option<CssLinearGradientDirection>,
+    stops: CssColorStopList,
+}
+
+impl CssLinearGradient {
+    pub(crate) const fn new(
+        direction: Option<CssLinearGradientDirection>,
+        stops: CssColorStopList,
+    ) -> Self {
+        Self { direction, stops }
+    }
+
+    #[must_use]
+    pub const fn direction(&self) -> Option<&CssLinearGradientDirection> {
+        self.direction.as_ref()
+    }
+
+    #[must_use]
+    pub const fn stops(&self) -> &CssColorStopList {
+        &self.stops
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssRadialShape {
+    Circle,
+    Ellipse,
+}
+
+/// A checked non-negative explicit circle radius for a radial gradient.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssRadialCircleSize {
+    radius: CssLength,
+}
+
+impl CssRadialCircleSize {
+    #[must_use]
+    pub fn try_new(radius: CssLength) -> Option<Self> {
+        let valid = match &radius {
+            CssLength::Px(value) => value.value() >= 0.0,
+            CssLength::Dimension(value) => value.value() >= 0.0,
+            CssLength::Zero => true,
+            CssLength::Calc(calculation) => !calculation.uses_percentage(),
+            CssLength::Percent(_)
+            | CssLength::Auto
+            | CssLength::MinContent
+            | CssLength::MaxContent
+            | CssLength::FitContent
+            | CssLength::Normal => false,
+        };
+        valid.then_some(Self { radius })
+    }
+
+    #[must_use]
+    pub const fn radius(&self) -> &CssLength {
+        &self.radius
+    }
+}
+
+/// A checked pair of non-negative radial-gradient ellipse radii.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssRadialEllipseSize {
+    horizontal: CssLength,
+    vertical: CssLength,
+}
+
+impl CssRadialEllipseSize {
+    #[must_use]
+    pub fn try_new(horizontal: CssLength, vertical: CssLength) -> Option<Self> {
+        let valid = |value: &CssLength| match value {
+            CssLength::Px(value) | CssLength::Percent(value) => value.value() >= 0.0,
+            CssLength::Dimension(value) => value.value() >= 0.0,
+            CssLength::Zero | CssLength::Calc(_) => true,
+            CssLength::Auto
+            | CssLength::MinContent
+            | CssLength::MaxContent
+            | CssLength::FitContent
+            | CssLength::Normal => false,
+        };
+        (valid(&horizontal) && valid(&vertical)).then_some(Self {
+            horizontal,
+            vertical,
+        })
+    }
+
+    #[must_use]
+    pub const fn horizontal(&self) -> &CssLength {
+        &self.horizontal
+    }
+
+    #[must_use]
+    pub const fn vertical(&self) -> &CssLength {
+        &self.vertical
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssRadialSize {
+    Extent(CssRadialExtent),
+    Circle(CssRadialCircleSize),
+    Ellipse(CssRadialEllipseSize),
+}
+
+/// A current authored radial or repeating-radial gradient payload.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssRadialGradient {
+    shape: Option<CssRadialShape>,
+    size: Option<CssRadialSize>,
+    position: Option<CssPositionValue>,
+    stops: CssColorStopList,
+}
+
+impl CssRadialGradient {
+    pub(crate) const fn new(
+        shape: Option<CssRadialShape>,
+        size: Option<CssRadialSize>,
+        position: Option<CssPositionValue>,
+        stops: CssColorStopList,
+    ) -> Self {
+        Self {
+            shape,
+            size,
+            position,
+            stops,
+        }
+    }
+
+    #[must_use]
+    pub const fn shape(&self) -> Option<CssRadialShape> {
+        self.shape
+    }
+
+    #[must_use]
+    pub const fn size(&self) -> Option<&CssRadialSize> {
+        self.size.as_ref()
+    }
+
+    #[must_use]
+    pub const fn position(&self) -> Option<&CssPositionValue> {
+        self.position.as_ref()
+    }
+
+    #[must_use]
+    pub const fn stops(&self) -> &CssColorStopList {
+        &self.stops
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CssHorizontalPositionKeyword {

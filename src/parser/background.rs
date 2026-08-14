@@ -1,11 +1,11 @@
-use cssparser::{ParseError, Parser, ParserState, match_ignore_ascii_case};
+use cssparser::{ParseError, Parser, ParserState, Token, match_ignore_ascii_case};
 
 use super::box_model::parse_border_style;
 use super::values::{
-    LengthGrammar, next_is_comma, next_is_delim, parse_color, parse_length_with,
-    parse_length_with_context, parse_length_with_context_legacy,
+    CalculationRoot, LengthGrammar, next_is_comma, next_is_delim, parse_color, parse_length_with,
+    parse_length_with_context, parse_length_with_context_legacy, parse_typed_calculation,
 };
-use crate::error::{CssFeatureId, Error, basic, unsupported_value};
+use crate::error::{CssFeatureId, Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
 
@@ -16,10 +16,20 @@ pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] = &[
 
 pub(super) fn parse_image_layer_list<'i, 't>(
     input: &mut Parser<'i, 't>,
-) -> std::result::Result<CssImageLayerList, ParseError<'i, Error>> {
-    let mut layers = Vec::new();
+) -> std::result::Result<CssParsedImageValueList, ParseError<'i, Error>> {
+    let mut images = Vec::new();
+    let mut i01_layers = Some(Vec::new());
     loop {
-        layers.push(parse_image_layer(input)?);
+        let image = parse_image_value(input)?;
+        match (&image, i01_layers.as_mut()) {
+            (CssImageValue::None, Some(layers)) => layers.push(CssImageLayer::None),
+            (CssImageValue::Url(url), Some(layers)) => {
+                layers.push(CssImageLayer::Url(url.clone()));
+            }
+            (CssImageValue::Gradient(_), _) => i01_layers = None,
+            (CssImageValue::None | CssImageValue::Url(_), None) => {}
+        }
+        images.push(image);
         if input.try_parse(Parser::expect_comma).is_err() {
             break;
         }
@@ -31,8 +41,426 @@ pub(super) fn parse_image_layer_list<'i, 't>(
             ));
         }
     }
-    CssImageLayerList::try_new(layers)
-        .ok_or_else(|| unsupported_value(input, None, "image layer list is empty"))
+    let current = CssImageValueList::try_new(images)
+        .ok_or_else(|| unsupported_value(input, None, "image list is empty"))?;
+    let i01_subset = i01_layers.and_then(CssImageLayerList::try_new);
+    Ok(CssParsedImageValueList::new(current, i01_subset))
+}
+
+fn parse_image_value<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssImageValue, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("none"))
+        .is_ok()
+    {
+        return Ok(CssImageValue::None);
+    }
+    if next_is_gradient(input) {
+        return parse_gradient(input).map(CssImageValue::Gradient);
+    }
+    parse_url(input).map(CssImageValue::Url)
+}
+
+fn next_is_gradient<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let is_gradient = matches!(
+        input.next(),
+        Ok(Token::Function(name))
+            if matches!(
+                name.to_ascii_lowercase().as_str(),
+                "linear-gradient"
+                    | "repeating-linear-gradient"
+                    | "radial-gradient"
+                    | "repeating-radial-gradient"
+            )
+    );
+    input.reset(&state);
+    is_gradient
+}
+
+fn parse_gradient<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssGradient, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let name = input.expect_function().map_err(basic)?.to_ascii_lowercase();
+    match name.as_str() {
+        "linear-gradient" => input
+            .parse_nested_block(parse_linear_gradient)
+            .map(CssGradient::Linear),
+        "repeating-linear-gradient" => input
+            .parse_nested_block(parse_linear_gradient)
+            .map(CssGradient::RepeatingLinear),
+        "radial-gradient" => input
+            .parse_nested_block(parse_radial_gradient)
+            .map(CssGradient::Radial),
+        "repeating-radial-gradient" => input
+            .parse_nested_block(parse_radial_gradient)
+            .map(CssGradient::RepeatingRadial),
+        _ => Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported image function `{name}`"),
+        )),
+    }
+}
+
+fn parse_linear_gradient<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssLinearGradient, ParseError<'i, Error>> {
+    let direction = input
+        .try_parse(|input| -> std::result::Result<_, ParseError<'i, Error>> {
+            let direction = parse_linear_gradient_direction(input)?;
+            input.expect_comma().map_err(basic)?;
+            Ok(direction)
+        })
+        .ok();
+    let stops = parse_color_stop_list(input)?;
+    Ok(CssLinearGradient::new(direction, stops))
+}
+
+fn parse_linear_gradient_direction<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssLinearGradientDirection, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("to"))
+        .is_ok()
+    {
+        return parse_side_or_corner(input).map(CssLinearGradientDirection::SideOrCorner);
+    }
+    parse_gradient_angle(input).map(CssLinearGradientDirection::Angle)
+}
+
+fn parse_gradient_angle<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssGradientAngle, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Number { value, .. } if *value == 0.0 => Ok(CssGradientAngle::Zero),
+        Token::Dimension { value, unit, .. } => {
+            let unit = match unit.to_ascii_lowercase().as_str() {
+                "deg" => CssAngleUnit::Degrees,
+                "grad" => CssAngleUnit::Gradians,
+                "rad" => CssAngleUnit::Radians,
+                "turn" => CssAngleUnit::Turns,
+                _ => {
+                    return Err(unsupported_value_at(
+                        location,
+                        None,
+                        format!("unsupported gradient angle unit `{unit}`"),
+                    ));
+                }
+            };
+            CssAngleLiteral::try_new(*value, unit)
+                .map(CssGradientAngle::Literal)
+                .ok_or_else(|| {
+                    unsupported_value_at(location, None, "gradient angle must be finite")
+                })
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| {
+                let location = input.current_source_location();
+                let expression = parse_typed_calculation(input, CalculationRoot::Angle)?;
+                if expression.result_type() != CssCalculationType::Angle {
+                    return Err(unsupported_value_at(
+                        location,
+                        None,
+                        "gradient angle calculation must have an angle result",
+                    ));
+                }
+                Ok(expression)
+            })
+            .map(CssAngleCalculation::from_expression)
+            .map(CssGradientAngle::Calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+fn parse_side_or_corner<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssSideOrCorner, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let mut horizontal = None;
+    let mut vertical = None;
+    for _ in 0..2 {
+        let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) else {
+            break;
+        };
+        match_ignore_ascii_case! { &ident,
+            "left" if horizontal.is_none() => {
+                horizontal = Some(CssHorizontalGradientSide::Left);
+            },
+            "right" if horizontal.is_none() => {
+                horizontal = Some(CssHorizontalGradientSide::Right);
+            },
+            "top" if vertical.is_none() => {
+                vertical = Some(CssVerticalGradientSide::Top);
+            },
+            "bottom" if vertical.is_none() => {
+                vertical = Some(CssVerticalGradientSide::Bottom);
+            },
+            _ => return Err(unsupported_value_at(
+                location,
+                None,
+                format!("invalid gradient side or corner `{ident}`"),
+            )),
+        }
+    }
+    CssSideOrCorner::try_new(horizontal, vertical)
+        .ok_or_else(|| unsupported_value_at(location, None, "gradient direction is empty"))
+}
+
+fn parse_color_stop_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssColorStopList, ParseError<'i, Error>> {
+    let mut items = vec![CssColorStopListItem::Stop(Box::new(
+        parse_gradient_color_stop(input)?,
+    ))];
+    while input.try_parse(Parser::expect_comma).is_ok() {
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "color-stop list has an empty item",
+            ));
+        }
+        if let Ok(hint) =
+            input.try_parse(|input| -> std::result::Result<_, ParseError<'i, Error>> {
+                let hint = parse_gradient_line_position(input)?;
+                input.expect_comma().map_err(basic)?;
+                Ok(hint)
+            })
+        {
+            items.push(CssColorStopListItem::Hint(hint));
+        }
+        items.push(CssColorStopListItem::Stop(Box::new(
+            parse_gradient_color_stop(input)?,
+        )));
+    }
+    CssColorStopList::try_new(items)
+        .ok_or_else(|| unsupported_value(input, None, "gradient requires at least two color stops"))
+}
+
+fn parse_gradient_color_stop<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssGradientColorStop, ParseError<'i, Error>> {
+    let color = parse_color(input)?;
+    let position = input.try_parse(parse_gradient_line_position).ok();
+    Ok(CssGradientColorStop::new(color, position))
+}
+
+fn parse_gradient_line_position<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssGradientLinePosition, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let value = parse_length_with_context(input, LengthGrammar::Position, "gradient stop")?;
+    CssGradientLinePosition::try_new(value).ok_or_else(|| {
+        unsupported_value_at(location, None, "gradient stop requires a length-percentage")
+    })
+}
+
+#[derive(Clone, Debug)]
+enum ParsedRadialSize {
+    Extent(CssRadialExtent),
+    Explicit {
+        values: Vec<CssLength>,
+        location: cssparser::SourceLocation,
+    },
+}
+
+fn parse_radial_gradient<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssRadialGradient, ParseError<'i, Error>> {
+    let prelude = if next_starts_radial_prelude(input) {
+        let prelude = parse_radial_gradient_prelude(input)?;
+        input.expect_comma().map_err(basic)?;
+        Some(prelude)
+    } else {
+        None
+    };
+    let (shape, size, position) = prelude.unwrap_or((None, None, None));
+    let stops = parse_color_stop_list(input)?;
+    Ok(CssRadialGradient::new(shape, size, position, stops))
+}
+
+fn next_starts_radial_prelude<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let starts = match input.next() {
+        Ok(Token::Ident(ident)) => matches!(
+            ident.to_ascii_lowercase().as_str(),
+            "circle"
+                | "ellipse"
+                | "closest-side"
+                | "farthest-side"
+                | "closest-corner"
+                | "farthest-corner"
+                | "at"
+        ),
+        Ok(Token::Dimension { .. } | Token::Percentage { .. }) => true,
+        Ok(Token::Number { value, .. }) => *value == 0.0,
+        Ok(Token::Function(name)) => name.eq_ignore_ascii_case("calc"),
+        Ok(_) | Err(_) => false,
+    };
+    input.reset(&state);
+    starts
+}
+
+type RadialPrelude = (
+    Option<CssRadialShape>,
+    Option<CssRadialSize>,
+    Option<CssPositionValue>,
+);
+
+fn parse_radial_gradient_prelude<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<RadialPrelude, ParseError<'i, Error>> {
+    let start = input.current_source_location();
+    let mut shape = None;
+    let mut size = None;
+    let mut position = None;
+    let mut consumed = false;
+
+    while !input.is_exhausted() && !next_is_comma(input) {
+        if position.is_none()
+            && input
+                .try_parse(|input| input.expect_ident_matching("at"))
+                .is_ok()
+        {
+            position = Some(parse_css_position_value(input)?);
+            consumed = true;
+            break;
+        }
+        if shape.is_none()
+            && let Ok(parsed_shape) = input.try_parse(parse_radial_shape)
+        {
+            shape = Some(parsed_shape);
+            consumed = true;
+            continue;
+        }
+        if size.is_none()
+            && let Ok(parsed_size) = input.try_parse(parse_radial_size_input)
+        {
+            size = Some(parsed_size);
+            consumed = true;
+            continue;
+        }
+        return Err(unsupported_value(
+            input,
+            None,
+            "unsupported radial-gradient prelude component",
+        ));
+    }
+    if !consumed {
+        return Err(unsupported_value_at(
+            start,
+            None,
+            "radial-gradient prelude is empty",
+        ));
+    }
+
+    let size = size
+        .map(|size| validate_radial_size(shape, size))
+        .transpose()?;
+    Ok((shape, size, position))
+}
+
+fn parse_radial_shape<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssRadialShape, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "circle" => Ok(CssRadialShape::Circle),
+        "ellipse" => Ok(CssRadialShape::Ellipse),
+        _ => Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported radial-gradient shape `{ident}`"),
+        )),
+    }
+}
+
+fn parse_radial_size_input<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<ParsedRadialSize, ParseError<'i, Error>> {
+    if let Ok(extent) = input.try_parse(parse_radial_extent) {
+        return Ok(ParsedRadialSize::Extent(extent));
+    }
+    let location = input.current_source_location();
+    let first = parse_length_with_context(input, LengthGrammar::Position, "radial-gradient size")?;
+    let mut values = vec![first];
+    if let Ok(second) = input.try_parse(|input| {
+        parse_length_with_context(input, LengthGrammar::Position, "radial-gradient size")
+    }) {
+        values.push(second);
+    }
+    Ok(ParsedRadialSize::Explicit { values, location })
+}
+
+fn parse_radial_extent<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssRadialExtent, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "closest-side" => Ok(CssRadialExtent::ClosestSide),
+        "farthest-side" => Ok(CssRadialExtent::FarthestSide),
+        "closest-corner" => Ok(CssRadialExtent::ClosestCorner),
+        "farthest-corner" => Ok(CssRadialExtent::FarthestCorner),
+        _ => Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported radial-gradient extent `{ident}`"),
+        )),
+    }
+}
+
+fn validate_radial_size<'i>(
+    shape: Option<CssRadialShape>,
+    size: ParsedRadialSize,
+) -> std::result::Result<CssRadialSize, ParseError<'i, Error>> {
+    match size {
+        ParsedRadialSize::Extent(extent) => Ok(CssRadialSize::Extent(extent)),
+        ParsedRadialSize::Explicit { values, location } => match values.as_slice() {
+            [radius] if shape != Some(CssRadialShape::Ellipse) => {
+                CssRadialCircleSize::try_new(radius.clone())
+                    .map(CssRadialSize::Circle)
+                    .ok_or_else(|| {
+                        unsupported_value_at(
+                            location,
+                            None,
+                            "radial-gradient circle size requires a non-negative length",
+                        )
+                    })
+            }
+            [horizontal, vertical] if shape != Some(CssRadialShape::Circle) => {
+                CssRadialEllipseSize::try_new(horizontal.clone(), vertical.clone())
+                    .map(CssRadialSize::Ellipse)
+                    .ok_or_else(|| {
+                        unsupported_value_at(
+                            location,
+                            None,
+                            "radial-gradient ellipse size requires two non-negative length-percentages",
+                        )
+                    })
+            }
+            [_] => Err(unsupported_value_at(
+                location,
+                None,
+                "ellipse radial-gradient requires two explicit radii",
+            )),
+            [_, _] => Err(unsupported_value_at(
+                location,
+                None,
+                "circle radial-gradient requires one explicit radius",
+            )),
+            _ => Err(unsupported_value_at(
+                location,
+                None,
+                "radial-gradient has an invalid explicit size",
+            )),
+        },
+    }
 }
 
 pub(super) fn parse_image_layer<'i, 't>(

@@ -842,6 +842,51 @@ let _ = validate_style_attribute("color: red");
 //! }
 //! ```
 //!
+//! # Backgrounds, border images, and gradients
+//!
+//! Background and image values preserve authored layer, image, gradient, stop,
+//! border-image, and object-sizing structure. They do not resolve URLs, load or
+//! decode images, compute geometry, or paint.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssGradient, CssImageValue, CssKnownPropertyValueRef, CssSupportStatus,
+//!     feature_metadata, parse_style_attribute,
+//! };
+//!
+//! let report = parse_style_attribute(concat!(
+//!     "background-image: linear-gradient(to right, red 0%, 40%, blue); ",
+//!     "border-image: url(frame.png) 10 fill / 2 / 1 round",
+//! ));
+//! assert!(report.is_clean(), "{:?}", report.diagnostics());
+//!
+//! let CssKnownPropertyValueRef::BackgroundImage(images) = report.syntax()[0]
+//!     .known().expect("known background image")
+//!     .property_value().expect("ordinary background image")
+//! else { panic!("expected background-image") };
+//! assert!(matches!(
+//!     images.images().images(),
+//!     [CssImageValue::Gradient(CssGradient::Linear(_))]
+//! ));
+//!
+//! let CssKnownPropertyValueRef::BorderImage(border) = report.syntax()[1]
+//!     .known().expect("known border image")
+//!     .property_value().expect("ordinary border image")
+//! else { panic!("expected border-image") };
+//! assert!(border.border_image().slice().expect("slice").fill());
+//!
+//! let gradient = feature_metadata("official.value.linear-gradient")
+//!     .expect("linear-gradient metadata");
+//! assert_eq!(gradient.source().id().as_str(), "O-IMAGES3");
+//! assert_eq!(gradient.status(), CssSupportStatus::Complete);
+//! ```
+//!
+//! The public catalog exposes all 27 C13 property/value records as Complete and
+//! retains Complete metadata for `background-position`, `object-position`, and
+//! `box-shadow`. The 33 previously Partial Backgrounds/Borders property records
+//! are Complete as well. These metadata transitions do not add official ledger
+//! units.
+//!
 //! # Support metadata and application policy
 //!
 //! [`feature_catalog`] describes each declared conformance production as

@@ -1903,60 +1903,12 @@ static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("baseline.property.border-bottom-style"),
     active_coverage!("baseline.property.border-bottom-width"),
     active_coverage!("baseline.property.border-color"),
-    reserved_coverage!(
-        "official.property.border-image",
-        Property,
-        O_BACKGROUNDS3,
-        "#propdef-border-image",
-        "crate::parser::background",
-        "I02-C13",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.border-image-outset",
-        Property,
-        O_BACKGROUNDS3,
-        "#propdef-border-image-outset",
-        "crate::parser::background",
-        "I02-C13",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.border-image-repeat",
-        Property,
-        O_BACKGROUNDS3,
-        "#propdef-border-image-repeat",
-        "crate::parser::background",
-        "I02-C13",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.border-image-slice",
-        Property,
-        O_BACKGROUNDS3,
-        "#propdef-border-image-slice",
-        "crate::parser::background",
-        "I02-C13",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.border-image-source",
-        Property,
-        O_BACKGROUNDS3,
-        "#propdef-border-image-source",
-        "crate::parser::background",
-        "I02-C13",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.border-image-width",
-        Property,
-        O_BACKGROUNDS3,
-        "#propdef-border-image-width",
-        "crate::parser::background",
-        "I02-C13",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.border-image"),
+    active_coverage!("official.property.border-image-outset"),
+    active_coverage!("official.property.border-image-repeat"),
+    active_coverage!("official.property.border-image-slice"),
+    active_coverage!("official.property.border-image-source"),
+    active_coverage!("official.property.border-image-width"),
     active_coverage!("baseline.property.border-left"),
     active_coverage!("baseline.property.border-left-color"),
     active_coverage!("baseline.property.border-left-style"),
@@ -1975,33 +1927,9 @@ static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("baseline.property.border-top-width"),
     active_coverage!("baseline.property.border-width"),
     active_coverage!("baseline.property.box-shadow"),
-    reserved_coverage!(
-        "official.property.image-orientation",
-        Property,
-        O_IMAGES3,
-        "#propdef-image-orientation",
-        "crate::parser::background",
-        "I02-C13",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.image-rendering",
-        Property,
-        O_IMAGES3,
-        "#propdef-image-rendering",
-        "crate::parser::background",
-        "I02-C13",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.object-fit",
-        Property,
-        O_IMAGES3,
-        "#propdef-object-fit",
-        "crate::parser::background",
-        "I02-C13",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.image-orientation"),
+    active_coverage!("official.property.image-rendering"),
+    active_coverage!("official.property.object-fit"),
     active_coverage!("official.property.object-position"),
     active_coverage!("baseline.property.font"),
     active_coverage!("baseline.property.font-family"),
@@ -2414,170 +2342,26 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("official.value.oklab"),
     active_coverage!("official.value.oklch"),
     active_coverage!("official.value.predefined-color"),
-    reserved_coverage!(
-        "official.value.background-layer",
-        Value,
-        O_BACKGROUNDS3,
-        "#layering",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.background-image",
-        Value,
-        O_BACKGROUNDS3,
-        "#background-image",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.repeat-style",
-        Value,
-        O_BACKGROUNDS3,
-        "#background-repeat",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.background-attachment",
-        Value,
-        O_BACKGROUNDS3,
-        "#background-attachment",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.background-layer"),
+    active_coverage!("official.value.background-image"),
+    active_coverage!("official.value.repeat-style"),
+    active_coverage!("official.value.background-attachment"),
     active_coverage!("official.value.background-position"),
-    reserved_coverage!(
-        "official.value.background-size",
-        Value,
-        O_BACKGROUNDS3,
-        "#background-size",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.line-style",
-        Value,
-        O_BACKGROUNDS3,
-        "#border-style",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.line-width",
-        Value,
-        O_BACKGROUNDS3,
-        "#border-width",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.background-size"),
+    active_coverage!("official.value.line-style"),
+    active_coverage!("official.value.line-width"),
     active_coverage!("official.value.shadow"),
-    reserved_coverage!(
-        "official.value.image",
-        Value,
-        O_IMAGES3,
-        "#image-values",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.gradient",
-        Value,
-        O_IMAGES3,
-        "#gradients",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.linear-gradient",
-        Value,
-        O_IMAGES3,
-        "#linear-gradients",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.radial-gradient",
-        Value,
-        O_IMAGES3,
-        "#radial-gradients",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.repeating-linear-gradient",
-        Value,
-        O_IMAGES3,
-        "#repeating-gradients",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.repeating-radial-gradient",
-        Value,
-        O_IMAGES3,
-        "#repeating-gradients",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.color-stop-list",
-        Value,
-        O_IMAGES3,
-        "#color-stop-syntax",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.side-or-corner",
-        Value,
-        O_IMAGES3,
-        "#linear-gradients",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.radial-shape",
-        Value,
-        O_IMAGES3,
-        "#radial-gradients",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.radial-size",
-        Value,
-        O_IMAGES3,
-        "#radial-gradients",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.radial-extent",
-        Value,
-        O_IMAGES3,
-        "#radial-gradients",
-        "crate::parser::background",
-        "I02-C13",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.image"),
+    active_coverage!("official.value.gradient"),
+    active_coverage!("official.value.linear-gradient"),
+    active_coverage!("official.value.radial-gradient"),
+    active_coverage!("official.value.repeating-linear-gradient"),
+    active_coverage!("official.value.repeating-radial-gradient"),
+    active_coverage!("official.value.color-stop-list"),
+    active_coverage!("official.value.side-or-corner"),
+    active_coverage!("official.value.radial-shape"),
+    active_coverage!("official.value.radial-size"),
+    active_coverage!("official.value.radial-extent"),
     active_coverage!("baseline.rule.font-face"),
     active_coverage!("baseline.descriptor.font-family"),
     active_coverage!("baseline.descriptor.src"),
@@ -3102,6 +2886,18 @@ macro_rules! property_feature {
     };
 }
 
+macro_rules! complete_property_feature {
+    ($property:path, $canonical_name:literal, $stable_id:literal) => {
+        CssFeatureMetadata::complete_property(
+            $stable_id,
+            $property,
+            $canonical_name,
+            concat!("#propdef-", $canonical_name),
+            &[],
+        )
+    };
+}
+
 const PSEUDO_ELEMENT_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("official.selector.generated"),
     CssFeatureId::new("ext.pseudo-element.marker"),
@@ -3144,7 +2940,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 429] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 456] = [
     CssFeatureMetadata::complete(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -3600,11 +3396,137 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 429] = [
         "#keywords",
     ),
     CssFeatureMetadata::complete(
+        "official.value.background-layer",
+        CssFeatureKind::Value,
+        "<bg-layer>",
+        O_BACKGROUNDS3,
+        "#layering",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.background-image",
+        CssFeatureKind::Value,
+        "<bg-image>",
+        O_BACKGROUNDS3,
+        "#background-image",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.repeat-style",
+        CssFeatureKind::Value,
+        "<repeat-style>",
+        O_BACKGROUNDS3,
+        "#background-repeat",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.background-attachment",
+        CssFeatureKind::Value,
+        "<attachment>",
+        O_BACKGROUNDS3,
+        "#background-attachment",
+    ),
+    CssFeatureMetadata::complete(
         "official.value.background-position",
         CssFeatureKind::Value,
         "<bg-position>#",
         O_BACKGROUNDS3,
         "#background-position",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.background-size",
+        CssFeatureKind::Value,
+        "<bg-size>",
+        O_BACKGROUNDS3,
+        "#background-size",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.line-style",
+        CssFeatureKind::Value,
+        "<line-style>",
+        O_BACKGROUNDS3,
+        "#border-style",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.line-width",
+        CssFeatureKind::Value,
+        "<line-width>",
+        O_BACKGROUNDS3,
+        "#border-width",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.image",
+        CssFeatureKind::Value,
+        "<image>",
+        O_IMAGES3,
+        "#image-values",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.gradient",
+        CssFeatureKind::Value,
+        "<gradient>",
+        O_IMAGES3,
+        "#gradients",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.linear-gradient",
+        CssFeatureKind::Value,
+        "linear-gradient()",
+        O_IMAGES3,
+        "#linear-gradients",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.radial-gradient",
+        CssFeatureKind::Value,
+        "radial-gradient()",
+        O_IMAGES3,
+        "#radial-gradients",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.repeating-linear-gradient",
+        CssFeatureKind::Value,
+        "repeating-linear-gradient()",
+        O_IMAGES3,
+        "#repeating-gradients",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.repeating-radial-gradient",
+        CssFeatureKind::Value,
+        "repeating-radial-gradient()",
+        O_IMAGES3,
+        "#repeating-gradients",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.color-stop-list",
+        CssFeatureKind::Value,
+        "<color-stop-list>",
+        O_IMAGES3,
+        "#color-stop-syntax",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.side-or-corner",
+        CssFeatureKind::Value,
+        "<side-or-corner>",
+        O_IMAGES3,
+        "#linear-gradients",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.radial-shape",
+        CssFeatureKind::Value,
+        "<radial-shape>",
+        O_IMAGES3,
+        "#radial-gradients",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.radial-size",
+        CssFeatureKind::Value,
+        "<radial-size>",
+        O_IMAGES3,
+        "#radial-gradients",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.radial-extent",
+        CssFeatureKind::Value,
+        "<radial-extent>",
+        O_IMAGES3,
+        "#radial-gradients",
     ),
     CssFeatureMetadata::complete(
         "official.value.transform-list",
@@ -4891,55 +4813,85 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 429] = [
         "padding-left",
         "baseline.property.padding-left"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::Border,
         "border",
         "baseline.property.border"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderTop,
         "border-top",
         "baseline.property.border-top"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderRight,
         "border-right",
         "baseline.property.border-right"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderBottom,
         "border-bottom",
         "baseline.property.border-bottom"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderLeft,
         "border-left",
         "baseline.property.border-left"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderWidth,
         "border-width",
         "baseline.property.border-width"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderTopWidth,
         "border-top-width",
         "baseline.property.border-top-width"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderRightWidth,
         "border-right-width",
         "baseline.property.border-right-width"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderBottomWidth,
         "border-bottom-width",
         "baseline.property.border-bottom-width"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderLeftWidth,
         "border-left-width",
         "baseline.property.border-left-width"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::BorderImage,
+        "border-image",
+        "official.property.border-image"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::BorderImageOutset,
+        "border-image-outset",
+        "official.property.border-image-outset"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::BorderImageRepeat,
+        "border-image-repeat",
+        "official.property.border-image-repeat"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::BorderImageSlice,
+        "border-image-slice",
+        "official.property.border-image-slice"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::BorderImageSource,
+        "border-image-source",
+        "official.property.border-image-source"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::BorderImageWidth,
+        "border-image-width",
+        "official.property.border-image-width"
     ),
     CssFeatureMetadata::complete_property(
         "baseline.property.color",
@@ -4948,42 +4900,42 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 429] = [
         "#propdef-color",
         &[],
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::Background,
         "background",
         "baseline.property.background"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BackgroundColor,
         "background-color",
         "baseline.property.background-color"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderColor,
         "border-color",
         "baseline.property.border-color"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderTopColor,
         "border-top-color",
         "baseline.property.border-top-color"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderRightColor,
         "border-right-color",
         "baseline.property.border-right-color"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderBottomColor,
         "border-bottom-color",
         "baseline.property.border-bottom-color"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderLeftColor,
         "border-left-color",
         "baseline.property.border-left-color"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BackgroundImage,
         "background-image",
         "baseline.property.background-image"
@@ -5002,77 +4954,92 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 429] = [
         "#propdef-object-position",
         &[],
     ),
-    property_feature!(
+    complete_property_feature!(
+        CssKnownProperty::ImageOrientation,
+        "image-orientation",
+        "official.property.image-orientation"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::ImageRendering,
+        "image-rendering",
+        "official.property.image-rendering"
+    ),
+    complete_property_feature!(
+        CssKnownProperty::ObjectFit,
+        "object-fit",
+        "official.property.object-fit"
+    ),
+    complete_property_feature!(
         CssKnownProperty::BackgroundSize,
         "background-size",
         "baseline.property.background-size"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BackgroundRepeat,
         "background-repeat",
         "baseline.property.background-repeat"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BackgroundOrigin,
         "background-origin",
         "baseline.property.background-origin"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BackgroundClip,
         "background-clip",
         "baseline.property.background-clip"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BackgroundAttachment,
         "background-attachment",
         "baseline.property.background-attachment"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderStyle,
         "border-style",
         "baseline.property.border-style"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderTopStyle,
         "border-top-style",
         "baseline.property.border-top-style"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderRightStyle,
         "border-right-style",
         "baseline.property.border-right-style"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderBottomStyle,
         "border-bottom-style",
         "baseline.property.border-bottom-style"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderLeftStyle,
         "border-left-style",
         "baseline.property.border-left-style"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderRadius,
         "border-radius",
         "baseline.property.border-radius"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderTopLeftRadius,
         "border-top-left-radius",
         "baseline.property.border-top-left-radius"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderTopRightRadius,
         "border-top-right-radius",
         "baseline.property.border-top-right-radius"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderBottomRightRadius,
         "border-bottom-right-radius",
         "baseline.property.border-bottom-right-radius"
     ),
-    property_feature!(
+    complete_property_feature!(
         CssKnownProperty::BorderBottomLeftRadius,
         "border-bottom-left-radius",
         "baseline.property.border-bottom-left-radius"

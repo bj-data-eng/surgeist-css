@@ -699,6 +699,61 @@ two current-production-less `glyph-orientation-horizontal` and `ime-mode`
 spellings; the remaining exclusions cover exact non-property or downstream
 source areas.
 
+## Backgrounds, border images, and gradients
+
+Backgrounds 3 and Images 3 values remain authored and symbolic. Background
+shorthands preserve layer order, per-layer position/size coupling, repeats,
+attachments, boxes, and a final-layer color. Image values distinguish `none`,
+URLs, and typed linear, radial, and repeating gradients. Border-image values
+preserve their source, slice, width, outset, and repeat components without
+loading an image or resolving any geometry.
+
+```rust
+use surgeist_css::{
+    CssGradient, CssImageValue, CssKnownPropertyValueRef, CssSupportStatus,
+    feature_metadata, parse_style_attribute,
+};
+
+let report = parse_style_attribute(concat!(
+    "background-image: linear-gradient(to right, red 0%, 40%, blue); ",
+    "border-image: url(frame.png) 10 fill / 2 / 1 round",
+));
+assert!(report.is_clean(), "{:?}", report.diagnostics());
+
+let CssKnownPropertyValueRef::BackgroundImage(images) = report.syntax()[0]
+    .known().expect("known background image")
+    .property_value().expect("ordinary background image")
+else { panic!("expected background-image") };
+assert!(matches!(
+    images.images().images(),
+    [CssImageValue::Gradient(CssGradient::Linear(_))]
+));
+
+let CssKnownPropertyValueRef::BorderImage(border) = report.syntax()[1]
+    .known().expect("known border image")
+    .property_value().expect("ordinary border image")
+else { panic!("expected border-image") };
+assert!(border.border_image().slice().expect("slice").fill());
+
+let gradient = feature_metadata("official.value.linear-gradient")
+    .expect("linear-gradient metadata");
+assert_eq!(gradient.source().id().as_str(), "O-IMAGES3");
+assert_eq!(gradient.status(), CssSupportStatus::Complete);
+```
+
+C13 activates exactly 27 public `Complete` atomic records: nine properties and
+eighteen shared values. It also promotes the existing complete Backgrounds 3
+property grammars that previously carried Partial metadata. The already-Complete
+`background-position`, `object-position`, and `box-shadow` rows remain Complete.
+The public support catalog consequently contains 456 records. Activation and
+promotion do not add official ledger units: the inventory remains 162 property
+units (161 canonical properties plus the custom-property family), one normative
+legacy shorthand, and 167 non-property units.
+
+These models do not fetch or decode images, resolve URLs, apply cascade or
+substitution, compute background or border geometry, paint, serialize CSSOM, or
+lower values into another Surgeist crate.
+
 ## Media, supports, and import preludes
 
 Media Queries 3 types and features are retained as authored query syntax. A

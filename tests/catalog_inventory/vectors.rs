@@ -1053,7 +1053,7 @@ pub const PROPERTY_NEGATIVE_VECTORS: &[PropertyVector] = &[
     vector!(
         "official.property.border-image",
         "border-image",
-        "url(frame.png) 10 / / 1"
+        "url(frame.png) / 2"
     ),
     vector!(
         "official.property.border-image-outset",

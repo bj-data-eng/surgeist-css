@@ -4720,7 +4720,7 @@ fn c13_background_image_metadata_is_truthful() {
             "repeating-linear-gradient()",
             "O-IMAGES3",
             "#repeating-gradients",
-            "background-image: repeating-linear-gradient(red 0 10px, blue 20px)",
+            "background-image: repeating-linear-gradient(45deg, #000 10px, #fff 30px)",
         ),
         (
             "official.value.repeating-radial-gradient",
@@ -4728,7 +4728,7 @@ fn c13_background_image_metadata_is_truthful() {
             "repeating-radial-gradient()",
             "O-IMAGES3",
             "#repeating-gradients",
-            "background-image: repeating-radial-gradient(red 0 10px, blue 20px)",
+            "background-image: repeating-radial-gradient(ellipse 20% 30% at center, red, blue 40px)",
         ),
         (
             "official.value.color-stop-list",

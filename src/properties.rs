@@ -13,6 +13,19 @@ macro_rules! property_schema {
             All, "all", [], "baseline.property.all", CssAllDeclaredValue, CssAllPropertyValue, CssAllPropertyValueRepresentation, parse_all_property, { parse_all_property($input)? };
             Display, "display", [], "baseline.property.display", CssDisplay, CssDisplayPropertyValue, CssDisplayPropertyValueRepresentation, parse_display, { parse_display($input)? };
             BoxSizing, "box-sizing", [], "baseline.property.box-sizing", CssBoxSizing, CssBoxSizingPropertyValue, CssBoxSizingPropertyValueRepresentation, parse_box_sizing, { parse_box_sizing($input)? };
+            BorderCollapse, "border-collapse", [], "official.property.border-collapse", CssBorderCollapse, CssBorderCollapsePropertyValue, CssBorderCollapsePropertyValueRepresentation, parse_border_collapse, { parse_border_collapse($input)? };
+            BorderSpacing, "border-spacing", [], "official.property.border-spacing", CssBorderSpacing, CssBorderSpacingPropertyValue, CssBorderSpacingPropertyValueRepresentation, parse_border_spacing, { parse_border_spacing($input)? };
+            CaptionSide, "caption-side", [], "official.property.caption-side", CssCaptionSide, CssCaptionSidePropertyValue, CssCaptionSidePropertyValueRepresentation, parse_caption_side, { parse_caption_side($input)? };
+            Clip, "clip", [], "official.property.clip", CssClip, CssClipPropertyValue, CssClipPropertyValueRepresentation, parse_clip, { parse_clip($input)? };
+            EmptyCells, "empty-cells", [], "official.property.empty-cells", CssEmptyCells, CssEmptyCellsPropertyValue, CssEmptyCellsPropertyValueRepresentation, parse_empty_cells, { parse_empty_cells($input)? };
+            Orphans, "orphans", [], "official.property.orphans", CssPageLineMinimum, CssOrphansPropertyValue, CssOrphansPropertyValueRepresentation, parse_page_line_minimum, { parse_page_line_minimum($input, "orphans")? };
+            PageBreakAfter, "page-break-after", [], "official.property.page-break-after", CssPageBreak, CssPageBreakAfterPropertyValue, CssPageBreakAfterPropertyValueRepresentation, parse_page_break, { parse_page_break($input)? };
+            PageBreakBefore, "page-break-before", [], "official.property.page-break-before", CssPageBreak, CssPageBreakBeforePropertyValue, CssPageBreakBeforePropertyValueRepresentation, parse_page_break, { parse_page_break($input)? };
+            PageBreakInside, "page-break-inside", [], "official.property.page-break-inside", CssPageBreakInside, CssPageBreakInsidePropertyValue, CssPageBreakInsidePropertyValueRepresentation, parse_page_break_inside, { parse_page_break_inside($input)? };
+            Quotes, "quotes", [], "official.property.quotes", CssQuotes, CssQuotesPropertyValue, CssQuotesPropertyValueRepresentation, parse_quotes, { parse_quotes($input)? };
+            TableLayout, "table-layout", [], "official.property.table-layout", CssTableLayout, CssTableLayoutPropertyValue, CssTableLayoutPropertyValueRepresentation, parse_table_layout, { parse_table_layout($input)? };
+            Widows, "widows", [], "official.property.widows", CssPageLineMinimum, CssWidowsPropertyValue, CssWidowsPropertyValueRepresentation, parse_page_line_minimum, { parse_page_line_minimum($input, "widows")? };
+            WordSpacing, "word-spacing", [], "official.property.word-spacing", CssWordSpacing, CssWordSpacingPropertyValue, CssWordSpacingPropertyValueRepresentation, parse_word_spacing, { parse_word_spacing($input)? };
             Position, "position", [], "baseline.property.position", CssLayoutPosition, CssPositionPropertyValue, CssPositionPropertyValueRepresentation, parse_position, { parse_position($input)? };
             Direction, "direction", [], "baseline.property.direction", CssDirection, CssDirectionPropertyValue, CssDirectionPropertyValueRepresentation, parse_direction, { parse_direction($input)? };
             Overflow, "overflow", [], "baseline.property.overflow", CssOverflowI01PropertyValue, CssOverflowPropertyValue, CssOverflowPropertyValueRepresentation, parse_overflow_property, { parse_overflow_property($input)? };
@@ -791,6 +804,162 @@ macro_rules! define_grid_property_value {
 }
 
 macro_rules! define_property_value {
+    (
+        BorderCollapse, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            collapse
+        );
+    };
+    (
+        BorderSpacing, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            spacing
+        );
+    };
+    (
+        CaptionSide, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            side
+        );
+    };
+    (
+        Clip, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            clip
+        );
+    };
+    (
+        EmptyCells, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            cells
+        );
+    };
+    (
+        Orphans, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            minimum
+        );
+    };
+    (
+        PageBreakAfter, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            page_break
+        );
+    };
+    (
+        PageBreakBefore, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            page_break
+        );
+    };
+    (
+        PageBreakInside, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            page_break
+        );
+    };
+    (
+        Quotes, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            quotes
+        );
+    };
+    (
+        TableLayout, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            layout
+        );
+    };
+    (
+        Widows, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            minimum
+        );
+    };
+    (
+        WordSpacing, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            spacing
+        );
+    };
     (
         FontSize, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident

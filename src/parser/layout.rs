@@ -1,11 +1,152 @@
 use cssparser::{ParseError, Parser, ToCss, Token, match_ignore_ascii_case};
 
 use super::values::{
-    CalculationRoot, checked_percentage_value, parse_box_size_value, parse_typed_calculation,
+    CalculationRoot, LengthGrammar, checked_percentage_value, parse_box_size_value,
+    parse_length_with, parse_typed_calculation,
 };
 use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
+
+pub(super) fn parse_border_collapse<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderCollapse, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "collapse" => Ok(CssBorderCollapse::Collapse),
+        "separate" => Ok(CssBorderCollapse::Separate),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("border-collapse", ident.as_ref()),
+        )),
+    }
+}
+
+pub(super) fn parse_border_spacing<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderSpacing, ParseError<'i, Error>> {
+    let horizontal = parse_length_with(input, LengthGrammar::BorderSpacing)?;
+    let vertical = if input.is_exhausted() {
+        horizontal.clone()
+    } else {
+        parse_length_with(input, LengthGrammar::BorderSpacing)?
+    };
+    CssBorderSpacing::try_new(horizontal, vertical).ok_or_else(|| {
+        unsupported_value(
+            input,
+            None,
+            "border-spacing requires one or two non-negative lengths",
+        )
+    })
+}
+
+pub(super) fn parse_caption_side<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssCaptionSide, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "top" => Ok(CssCaptionSide::Top),
+        "bottom" => Ok(CssCaptionSide::Bottom),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("caption-side", ident.as_ref()),
+        )),
+    }
+}
+
+pub(super) fn parse_empty_cells<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssEmptyCells, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "show" => Ok(CssEmptyCells::Show),
+        "hide" => Ok(CssEmptyCells::Hide),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("empty-cells", ident.as_ref()),
+        )),
+    }
+}
+
+pub(super) fn parse_page_line_minimum<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    property: &str,
+) -> std::result::Result<CssPageLineMinimum, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Number {
+            int_value: Some(value),
+            ..
+        } => CssPageLineMinimum::try_literal(*value).ok_or_else(|| {
+            unsupported_value_at(
+                location,
+                None,
+                format!("{property} must be a positive integer"),
+            )
+        }),
+        Token::Number { .. } => Err(unsupported_value_at(
+            location,
+            None,
+            format!("{property} must be an integer"),
+        )),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Integer))
+            .map(CssIntegerCalculation::from_expression)
+            .map(CssPageLineMinimum::from_calculation),
+        token => Err(location.new_unexpected_token_error::<Error>(token.clone())),
+    }
+}
+
+pub(super) fn parse_page_break<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssPageBreak, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "auto" => Ok(CssPageBreak::Auto),
+        "always" => Ok(CssPageBreak::Always),
+        "avoid" => Ok(CssPageBreak::Avoid),
+        "left" => Ok(CssPageBreak::Left),
+        "right" => Ok(CssPageBreak::Right),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("page-break", ident.as_ref()),
+        )),
+    }
+}
+
+pub(super) fn parse_page_break_inside<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssPageBreakInside, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "auto" => Ok(CssPageBreakInside::Auto),
+        "avoid" => Ok(CssPageBreakInside::Avoid),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("page-break-inside", ident.as_ref()),
+        )),
+    }
+}
+
+pub(super) fn parse_table_layout<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTableLayout, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "auto" => Ok(CssTableLayout::Auto),
+        "fixed" => Ok(CssTableLayout::Fixed),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("table-layout", ident.as_ref()),
+        )),
+    }
+}
 
 pub(super) fn parse_display<'i, 't>(
     input: &mut Parser<'i, 't>,

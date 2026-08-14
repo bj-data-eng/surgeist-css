@@ -7,12 +7,68 @@ use super::background::{
 use super::box_model::{expand_radius_components, parse_drop_shadow, parse_shadow};
 use super::values::{
     CalculationRoot, LengthGrammar, checked_percentage_value, next_is_comma, next_is_delim,
-    next_is_ident, parse_length_with_context, parse_length_with_context_legacy, parse_number,
-    parse_typed_calculation,
+    next_is_ident, parse_length_with, parse_length_with_context, parse_length_with_context_legacy,
+    parse_number, parse_typed_calculation,
 };
 use crate::error::{CssFeatureId, Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
+
+pub(super) fn parse_clip<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssClip, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("auto"))
+        .is_ok()
+    {
+        return Ok(CssClip::Auto);
+    }
+
+    let location = input.current_source_location();
+    let name = input.expect_function().map_err(basic)?;
+    if !name.eq_ignore_ascii_case("rect") {
+        return Err(unsupported_value_at(
+            location,
+            None,
+            format!("unsupported clip function `{name}`"),
+        ));
+    }
+    input.parse_nested_block(parse_clip_rect).map(CssClip::Rect)
+}
+
+fn parse_clip_rect<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssClipRect, ParseError<'i, Error>> {
+    let top = parse_clip_edge(input)?;
+    let comma_separated = input.try_parse(Parser::expect_comma).is_ok();
+    let right = parse_clip_edge(input)?;
+    if comma_separated {
+        input.expect_comma().map_err(basic)?;
+    }
+    let bottom = parse_clip_edge(input)?;
+    if comma_separated {
+        input.expect_comma().map_err(basic)?;
+    }
+    let left = parse_clip_edge(input)?;
+    input.expect_exhausted().map_err(basic)?;
+    Ok(CssClipRect::new(top, right, bottom, left))
+}
+
+fn parse_clip_edge<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssClipEdge, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("auto"))
+        .is_ok()
+    {
+        return Ok(CssClipEdge::Auto);
+    }
+    let location = input.current_source_location();
+    let value = parse_length_with(input, LengthGrammar::Clip)?;
+    CssClipLength::try_new(value)
+        .map(CssClipEdge::Length)
+        .ok_or_else(|| unsupported_value_at(location, None, "clip edge requires a length or auto"))
+}
 
 pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] = &[
     CssFeatureId::new("official.value.transform-list"),

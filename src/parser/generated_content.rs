@@ -6,6 +6,36 @@ use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
 
+pub(super) fn parse_quotes<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssQuotes, ParseError<'i, Error>> {
+    let state = input.state();
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned)
+        && ident.eq_ignore_ascii_case("none")
+    {
+        return if input.is_exhausted() {
+            Ok(CssQuotes::None)
+        } else {
+            Err(unsupported_value(
+                input,
+                None,
+                "`none` cannot be combined with quotation pairs",
+            ))
+        };
+    }
+    input.reset(&state);
+
+    let mut pairs = Vec::new();
+    while !input.is_exhausted() {
+        let open = parse_content_string(input)?;
+        let close = parse_content_string(input)?;
+        pairs.push(CssQuotePair::new(open, close));
+    }
+    CssQuotePairList::try_new(pairs)
+        .map(CssQuotes::Pairs)
+        .ok_or_else(|| unsupported_value(input, None, "quotes requires `none` or string pairs"))
+}
+
 pub(super) fn parse_content<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssContent, ParseError<'i, Error>> {

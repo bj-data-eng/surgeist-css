@@ -4,9 +4,12 @@ use super::values::{
     parse_border_width_component, parse_color, parse_radius_component, parse_shadow_blur_length,
     parse_shadow_length,
 };
-use crate::error::{Error, basic, unsupported_value};
+use crate::error::{CssFeatureId, Error, basic, unsupported_value};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
+
+pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] =
+    &[CssFeatureId::new("official.value.box-edge-keywords")];
 
 pub(super) fn parse_box_decoration_break<'i, 't>(
     input: &mut Parser<'i, 't>,

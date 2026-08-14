@@ -1055,6 +1055,23 @@ pub(super) fn parse_letter_spacing<'i, 't>(
     }
 }
 
+pub(super) fn parse_word_spacing<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssWordSpacing, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("normal"))
+        .is_ok()
+    {
+        Ok(CssWordSpacing::Normal)
+    } else {
+        let location = input.current_source_location();
+        let value = parse_length_with(input, LengthGrammar::WordSpacing)?;
+        CssWordSpacingLength::try_new(value)
+            .map(CssWordSpacing::Length)
+            .ok_or_else(|| unsupported_value_at(location, None, "word-spacing requires a length"))
+    }
+}
+
 pub(super) fn parse_text_wrap<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssTextWrap, ParseError<'i, Error>> {

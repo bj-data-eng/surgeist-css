@@ -2978,6 +2978,19 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
     match property {
         CssKnownProperty::All => O_CASCADE4,
         CssKnownProperty::Display
+        | CssKnownProperty::BorderCollapse
+        | CssKnownProperty::BorderSpacing
+        | CssKnownProperty::CaptionSide
+        | CssKnownProperty::Clip
+        | CssKnownProperty::EmptyCells
+        | CssKnownProperty::Orphans
+        | CssKnownProperty::PageBreakAfter
+        | CssKnownProperty::PageBreakBefore
+        | CssKnownProperty::PageBreakInside
+        | CssKnownProperty::Quotes
+        | CssKnownProperty::TableLayout
+        | CssKnownProperty::Widows
+        | CssKnownProperty::WordSpacing
         | CssKnownProperty::Position
         | CssKnownProperty::Overflow
         | CssKnownProperty::Float
@@ -3164,6 +3177,33 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
 
 const fn property_production(property: CssKnownProperty, default: &'static str) -> &'static str {
     match property {
+        CssKnownProperty::BorderCollapse
+        | CssKnownProperty::BorderSpacing
+        | CssKnownProperty::CaptionSide
+        | CssKnownProperty::EmptyCells
+        | CssKnownProperty::TableLayout => match property {
+            CssKnownProperty::BorderCollapse => "tables.html#propdef-border-collapse",
+            CssKnownProperty::BorderSpacing => "tables.html#propdef-border-spacing",
+            CssKnownProperty::CaptionSide => "tables.html#propdef-caption-side",
+            CssKnownProperty::EmptyCells => "tables.html#propdef-empty-cells",
+            CssKnownProperty::TableLayout => "tables.html#propdef-table-layout",
+            _ => default,
+        },
+        CssKnownProperty::Clip => "visufx.html#propdef-clip",
+        CssKnownProperty::Orphans
+        | CssKnownProperty::PageBreakAfter
+        | CssKnownProperty::PageBreakBefore
+        | CssKnownProperty::PageBreakInside
+        | CssKnownProperty::Widows => match property {
+            CssKnownProperty::Orphans => "page.html#propdef-orphans",
+            CssKnownProperty::PageBreakAfter => "page.html#propdef-page-break-after",
+            CssKnownProperty::PageBreakBefore => "page.html#propdef-page-break-before",
+            CssKnownProperty::PageBreakInside => "page.html#propdef-page-break-inside",
+            CssKnownProperty::Widows => "page.html#propdef-widows",
+            _ => default,
+        },
+        CssKnownProperty::Quotes => "generate.html#propdef-quotes",
+        CssKnownProperty::WordSpacing => "text.html#propdef-word-spacing",
         CssKnownProperty::Display
         | CssKnownProperty::Position
         | CssKnownProperty::Float

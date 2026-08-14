@@ -125,12 +125,15 @@ pub(super) enum LengthGrammar {
     Radius,
     ShadowOffset,
     ShadowBlur,
+    BorderSpacing,
+    Clip,
     Gap,
     FontSize,
     LineHeight,
     TextIndent,
     VerticalAlign,
     LetterSpacing,
+    WordSpacing,
     TextDecorationThickness,
     GridTrack,
     BackgroundSize,
@@ -197,6 +200,7 @@ impl LengthGrammar {
                 | Self::BorderWidth
                 | Self::Radius
                 | Self::ShadowBlur
+                | Self::BorderSpacing
                 | Self::TextDecorationThickness
                 | Self::GridTrack
                 | Self::BackgroundSize
@@ -213,12 +217,15 @@ impl LengthGrammar {
             Self::Radius => "border-radius",
             Self::ShadowOffset => "box-shadow",
             Self::ShadowBlur => "box-shadow blur",
+            Self::BorderSpacing => "border-spacing",
+            Self::Clip => "clip",
             Self::Gap => "gap",
             Self::FontSize => "font-size",
             Self::LineHeight => "line-height",
             Self::TextIndent => "text-indent",
             Self::VerticalAlign => "vertical-align",
             Self::LetterSpacing => "letter-spacing",
+            Self::WordSpacing => "word-spacing",
             Self::TextDecorationThickness => "text-decoration-thickness",
             Self::GridTrack => "grid track",
             Self::BackgroundSize => "background-size",
@@ -361,12 +368,15 @@ fn typed_length_calculation_is_current_consumer(context: &str) -> bool {
             | "border-radius"
             | "box-shadow"
             | "box-shadow blur"
+            | "border-spacing"
+            | "clip"
             | "gap"
             | "font-size"
             | "line-height"
             | "text-indent"
             | "vertical-align"
             | "letter-spacing"
+            | "word-spacing"
             | "text-decoration-thickness"
             | "grid track"
             | "grid fit-content"

@@ -6749,6 +6749,354 @@ pub enum CssBoxDecorationBreak {
     Clone,
 }
 
+/// An authored CSS Box Model Level 3 `<box>` edge keyword.
+///
+/// The value names a box edge only. It does not select a layout, paint, or
+/// coordinate-space policy until a consuming property is interpreted by its
+/// downstream owner.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub enum CssBoxEdgeKeyword {
+    ContentBox,
+    PaddingBox,
+    BorderBox,
+    MarginBox,
+    FillBox,
+    StrokeBox,
+    ViewBox,
+}
+
+impl CssBoxEdgeKeyword {
+    /// Converts one decoded CSS keyword to its typed edge identity.
+    #[must_use]
+    pub fn from_keyword(keyword: &str) -> Option<Self> {
+        Some(match keyword.to_ascii_lowercase().as_str() {
+            "content-box" => Self::ContentBox,
+            "padding-box" => Self::PaddingBox,
+            "border-box" => Self::BorderBox,
+            "margin-box" => Self::MarginBox,
+            "fill-box" => Self::FillBox,
+            "stroke-box" => Self::StrokeBox,
+            "view-box" => Self::ViewBox,
+            _ => return None,
+        })
+    }
+
+    /// Returns the canonical CSS keyword spelling.
+    #[must_use]
+    pub const fn as_css_str(self) -> &'static str {
+        match self {
+            Self::ContentBox => "content-box",
+            Self::PaddingBox => "padding-box",
+            Self::BorderBox => "border-box",
+            Self::MarginBox => "margin-box",
+            Self::FillBox => "fill-box",
+            Self::StrokeBox => "stroke-box",
+            Self::ViewBox => "view-box",
+        }
+    }
+}
+
+/// The authored `border-collapse` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssBorderCollapse {
+    Collapse,
+    Separate,
+}
+
+/// A checked, non-negative authored `border-spacing` length.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBorderSpacingLength {
+    value: CssLength,
+}
+
+impl CssBorderSpacingLength {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        is_non_negative_absolute_length(&value).then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// The checked horizontal and vertical authored `border-spacing` lengths.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBorderSpacing {
+    horizontal: CssBorderSpacingLength,
+    vertical: CssBorderSpacingLength,
+}
+
+impl CssBorderSpacing {
+    #[must_use]
+    pub fn try_new(horizontal: CssLength, vertical: CssLength) -> Option<Self> {
+        Some(Self {
+            horizontal: CssBorderSpacingLength::try_new(horizontal)?,
+            vertical: CssBorderSpacingLength::try_new(vertical)?,
+        })
+    }
+
+    #[must_use]
+    pub const fn horizontal(&self) -> &CssBorderSpacingLength {
+        &self.horizontal
+    }
+
+    #[must_use]
+    pub const fn vertical(&self) -> &CssBorderSpacingLength {
+        &self.vertical
+    }
+}
+
+/// The authored `caption-side` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssCaptionSide {
+    Top,
+    Bottom,
+}
+
+/// A checked authored CSS2 `clip` rectangle length.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssClipLength {
+    value: CssLength,
+}
+
+impl CssClipLength {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        is_absolute_length(&value).then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// One authored edge of a CSS2 `clip: rect(...)` value.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssClipEdge {
+    Auto,
+    Length(CssClipLength),
+}
+
+/// The four authored edges of a CSS2 clipping rectangle.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssClipRect {
+    top: CssClipEdge,
+    right: CssClipEdge,
+    bottom: CssClipEdge,
+    left: CssClipEdge,
+}
+
+impl CssClipRect {
+    #[must_use]
+    pub const fn new(
+        top: CssClipEdge,
+        right: CssClipEdge,
+        bottom: CssClipEdge,
+        left: CssClipEdge,
+    ) -> Self {
+        Self {
+            top,
+            right,
+            bottom,
+            left,
+        }
+    }
+
+    #[must_use]
+    pub const fn top(&self) -> &CssClipEdge {
+        &self.top
+    }
+
+    #[must_use]
+    pub const fn right(&self) -> &CssClipEdge {
+        &self.right
+    }
+
+    #[must_use]
+    pub const fn bottom(&self) -> &CssClipEdge {
+        &self.bottom
+    }
+
+    #[must_use]
+    pub const fn left(&self) -> &CssClipEdge {
+        &self.left
+    }
+}
+
+/// The authored CSS2 `clip` value.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssClip {
+    Auto,
+    Rect(CssClipRect),
+}
+
+/// The authored `empty-cells` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssEmptyCells {
+    Show,
+    Hide,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum CssPageLineMinimumValue {
+    Literal(i32),
+    Calculation(CssIntegerCalculation),
+}
+
+/// A positive authored `orphans` or `widows` count, or a symbolic integer calculation.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssPageLineMinimum {
+    value: CssPageLineMinimumValue,
+}
+
+impl CssPageLineMinimum {
+    #[must_use]
+    pub const fn try_literal(value: i32) -> Option<Self> {
+        if value > 0 {
+            Some(Self {
+                value: CssPageLineMinimumValue::Literal(value),
+            })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn from_calculation(value: CssIntegerCalculation) -> Self {
+        Self {
+            value: CssPageLineMinimumValue::Calculation(value),
+        }
+    }
+
+    #[must_use]
+    pub const fn literal(&self) -> Option<i32> {
+        match self.value {
+            CssPageLineMinimumValue::Literal(value) => Some(value),
+            CssPageLineMinimumValue::Calculation(_) => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn calculation(&self) -> Option<&CssIntegerCalculation> {
+        match &self.value {
+            CssPageLineMinimumValue::Literal(_) => None,
+            CssPageLineMinimumValue::Calculation(value) => Some(value),
+        }
+    }
+}
+
+/// The authored CSS2 `page-break-before` or `page-break-after` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssPageBreak {
+    Auto,
+    Always,
+    Avoid,
+    Left,
+    Right,
+}
+
+/// The authored CSS2 `page-break-inside` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssPageBreakInside {
+    Auto,
+    Avoid,
+}
+
+/// One authored opening/closing pair in a `quotes` value.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssQuotePair {
+    open: CssContentString,
+    close: CssContentString,
+}
+
+impl CssQuotePair {
+    #[must_use]
+    pub const fn new(open: CssContentString, close: CssContentString) -> Self {
+        Self { open, close }
+    }
+
+    #[must_use]
+    pub const fn open(&self) -> &CssContentString {
+        &self.open
+    }
+
+    #[must_use]
+    pub const fn close(&self) -> &CssContentString {
+        &self.close
+    }
+}
+
+/// A nonempty authored list of quotation-mark pairs.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssQuotePairList {
+    pairs: Vec<CssQuotePair>,
+}
+
+impl CssQuotePairList {
+    #[must_use]
+    pub fn try_new(pairs: Vec<CssQuotePair>) -> Option<Self> {
+        (!pairs.is_empty()).then_some(Self { pairs })
+    }
+
+    #[must_use]
+    pub fn pairs(&self) -> &[CssQuotePair] {
+        &self.pairs
+    }
+}
+
+/// The authored CSS2 `quotes` value.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssQuotes {
+    None,
+    Pairs(CssQuotePairList),
+}
+
+/// The authored `table-layout` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssTableLayout {
+    Auto,
+    Fixed,
+}
+
+/// A checked authored `word-spacing` length.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssWordSpacingLength {
+    value: CssLength,
+}
+
+impl CssWordSpacingLength {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        is_absolute_length(&value).then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// The authored CSS2 `word-spacing` value.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssWordSpacing {
+    Normal,
+    Length(CssWordSpacingLength),
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CssWritingMode {
@@ -8929,8 +9277,27 @@ fn is_vertical_align_length(length: &CssLength) -> bool {
 }
 
 fn is_letter_spacing_length(length: &CssLength) -> bool {
+    is_absolute_length(length)
+}
+
+fn is_absolute_length(length: &CssLength) -> bool {
     match length {
         CssLength::Px(_) | CssLength::Dimension(_) | CssLength::Zero => true,
+        CssLength::Calc(calc) => !calc.uses_percentage(),
+        CssLength::Percent(_)
+        | CssLength::Auto
+        | CssLength::MinContent
+        | CssLength::MaxContent
+        | CssLength::FitContent
+        | CssLength::Normal => false,
+    }
+}
+
+fn is_non_negative_absolute_length(length: &CssLength) -> bool {
+    match length {
+        CssLength::Px(value) => value.value() >= 0.0,
+        CssLength::Dimension(value) => value.value() >= 0.0,
+        CssLength::Zero => true,
         CssLength::Calc(calc) => !calc.uses_percentage(),
         CssLength::Percent(_)
         | CssLength::Auto

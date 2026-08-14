@@ -5,7 +5,9 @@ use support::csstree::load_csstree_corpus;
 #[test]
 fn csstree_inventory_matches_pinned_revision() {
     let corpus = load_csstree_corpus().expect("committed CSSTree corpus should validate");
+    let cached = load_csstree_corpus().expect("validated corpus should remain cached");
 
+    assert!(std::ptr::eq(corpus, cached));
     assert_eq!(corpus.artifact_count(), 74);
     assert_eq!(corpus.case_count(), 935);
     assert_eq!(corpus.parsed_count(), 721);

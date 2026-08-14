@@ -6,23 +6,29 @@
 | --- | --- |
 | Cycle ID | `P01-I02-C14` |
 | Owning repository | `surgeist-css` |
-| Status | `complete` |
+| Status | `in_progress` |
 | Cycle base | `3b067893117eb8453259b7138633c01933eca16e` |
 | Published prerequisite | C13 `3b067893117eb8453259b7138633c01933eca16e`, fetched and read back |
 | Reviewed P01 | `plans/specs/P01-css-syntax-conformance-program.md`, semantic SHA-256 `87f6a94b893ffa416c6ff451575f0d5a21b4aa136e7bcd391cd6c0ce8810a2ae` |
 | Reviewed specification | `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256 `3f93c7f6c3656ebe0b33b8bf9c32e458f306f294d1a969a86df375a5858b1710`, sections 4, 9-12 |
 | Reviewed sequence | `plans/sequences/P01-I02-css-snapshot-2026-grammar-closure.md`, semantic SHA-256 `56bcf0340320339454e4ae1aa0b45a7ad2e37e03930e9e3bf7665f8ce4cbb15a`, entry `I02-C14` |
-| Bounded outcome | Close Flexbox 1, Multicolumn 1, the remaining seven official Partial value rows and 17 Reserved records, exact 162/167/219 reconciliation, I02 acceptance mapping, and SHA-free final handoff. |
+| Bounded outcome | Close Flexbox 1, Multicolumn 1, the remaining seven official Partial value rows and all 31 Reserved records (17 C14 shell/property records plus 14 official shared values), exact 162/167/219 reconciliation, I02 acceptance mapping, and SHA-free final handoff. |
 
 ## 2. Exact remaining ownership
 
-The base registry has exactly 17 C14 Reserved records: Flexbox `flex-flow`;
-Multicolumn `column-count`, `column-fill`, `column-rule`,
-`column-rule-color`, `column-rule-style`, `column-rule-width`, `column-span`,
-`column-width`, and `columns`; and the generic authored-shell/value records
-`at-rule`, `generic` qualified-rule, `generic` declaration, `stylesheet`,
-`rule-list`, `declaration-list`, and `style-block`. Existing Complete rows and
-truthful extensions remain unchanged. The remaining official Partial value rows
+The base registry has exactly 31 C14 Reserved records: 17 shell/property
+records—Flexbox `flex-flow`; Multicolumn `column-count`, `column-fill`,
+`column-rule`, `column-rule-color`, `column-rule-style`, `column-rule-width`,
+`column-span`, `column-width`, and `columns`; and generic authored-shell/value
+records `at-rule`, generic qualified-rule, generic declaration, `stylesheet`,
+`rule-list`, `declaration-list`, and `style-block`—plus these 14 official
+shared values: `syntax-token-stream`, `component-value`, `simple-block`,
+`function`, `declaration-value`, `any-value`, `an-plus-b`, `unicode-range`,
+`css-wide-keyword`, `custom-ident`, `ident`, `string`, `url`, and
+`url-modifier`. The 14 values retain their selected Syntax 3/Cascade 4/Values
+3 source fragments and receive public typed/vector evidence in T4. Existing
+Complete rows and truthful extensions remain unchanged. The remaining official
+Partial value rows
 are `official.value.dimension`, `official.value.angle`,
 `official.value.angle-percentage`, `official.value.time-percentage`,
 `official.value.frequency`, `official.value.frequency-percentage`, and
@@ -89,9 +95,22 @@ Each exact range receives a fresh independent review before the next task.
   repeated failures, and no source/proxy inspection.
 - **Commits:** `test: specify C14 generic authored shells`; `feat: add C14 generic authored shells`.
 
-### T4 I02 ledger and acceptance reconciliation
+### T4 Remaining official shared values
 
 - **Dependency:** T1-T3 CLEAN.
+- **RED:** `cargo test -p surgeist-css --offline --no-default-features --test values_grammar c14_remaining_shared_values_are_typed -- --exact`.
+- **Area/acceptance:** close `syntax-token-stream`, `component-value`,
+  `simple-block`, `function`, `declaration-value`, `any-value`, `an-plus-b`,
+  `unicode-range`, `css-wide-keyword`, `custom-ident`, `ident`, `string`,
+  `url`, and `url-modifier` with selected source domains, public typed or
+  parser-owned authored models, positive/boundary/adjacent-grammar rejection,
+  exact recovery, and independent vectors. No serialization, resource loading,
+  or initiative/count proxy.
+- **Commits:** `test: specify C14 remaining shared values`; `feat: add C14 remaining shared values`.
+
+### T5 I02 ledger and acceptance reconciliation
+
+- **Dependency:** T1-T4 CLEAN.
 - **RED:** `cargo test -p surgeist-css --offline --no-default-features --test conformance_catalog c14_remaining_official_values_are_typed -- --exact`.
 - **Area/acceptance:** public metadata and vectors close the seven listed
   official Partial values and directly exercise every retained Partial extension
@@ -101,9 +120,9 @@ Each exact range receives a fresh independent review before the next task.
   review evidence, never as a Rust test or state/count proxy.
 - **Commits:** `test: specify C14 ledger reconciliation`; `feat: reconcile C14 official ledger`.
 
-### T5 Docs, migration handoff, and initiative closure
+### T6 Docs, migration handoff, and initiative closure
 
-- **Dependency:** T1-T4 CLEAN.
+- **Dependency:** T1-T5 CLEAN.
 - **RED:** `cargo test -p surgeist-css --offline --no-default-features --test conformance_catalog c14_closure_metadata_and_docs_are_truthful -- --exact`.
 - **Area/acceptance:** README/rustdoc/doctests, direct public metadata tests,
   and SHA-free `plans/handoffs/P01-I02-C14-flexbox-multicolumn-and-initiative-closure.md` recording exact totals, promotions, exclusions, and product fixture digest only.

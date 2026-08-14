@@ -32,7 +32,6 @@ macro_rules! property_schema {
             OverflowX, "overflow-x", [], "baseline.property.overflow-x", CssOverflow, CssOverflowXPropertyValue, CssOverflowXPropertyValueRepresentation, parse_overflow, { parse_overflow($input)? };
             OverflowY, "overflow-y", [], "baseline.property.overflow-y", CssOverflow, CssOverflowYPropertyValue, CssOverflowYPropertyValueRepresentation, parse_overflow, { parse_overflow($input)? };
             FlexDirection, "flex-direction", [], "baseline.property.flex-direction", CssFlexDirection, CssFlexDirectionPropertyValue, CssFlexDirectionPropertyValueRepresentation, parse_flex_direction, { parse_flex_direction($input)? };
-            FlexFlow, "flex-flow", [], "official.property.flex-flow", CssFlexFlow, CssFlexFlowPropertyValue, CssFlexFlowPropertyValueRepresentation, parse_flex_flow, { parse_flex_flow($input)? };
             FlexWrap, "flex-wrap", [], "baseline.property.flex-wrap", CssFlexWrap, CssFlexWrapPropertyValue, CssFlexWrapPropertyValueRepresentation, parse_flex_wrap, { parse_flex_wrap($input)? };
             Float, "float", [], "baseline.property.float", CssFloat, CssFloatPropertyValue, CssFloatPropertyValueRepresentation, parse_float, { parse_float($input)? };
             Clear, "clear", [], "baseline.property.clear", CssClear, CssClearPropertyValue, CssClearPropertyValueRepresentation, parse_clear, { parse_clear($input)? };
@@ -845,18 +844,6 @@ macro_rules! define_grid_property_value {
 }
 
 macro_rules! define_property_value {
-    (
-        FlexFlow, $canonical:literal, $value:ty, $wrapper:ident,
-        $representation:ident
-    ) => {
-        define_additive_current_property_value!(
-            $canonical,
-            $wrapper,
-            $representation,
-            CssFlexFlow,
-            flow
-        );
-    };
     (
         ColumnCount, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident

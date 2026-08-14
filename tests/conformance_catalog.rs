@@ -2650,6 +2650,163 @@ fn selectors3_and_namespace_metadata_are_truthful() {
 }
 
 #[test]
+fn counter_styles_and_page_metadata_are_truthful() {
+    let counter_styles = [
+        (
+            "later.rule.counter-style",
+            CssFeatureKind::Rule,
+            "@counter-style",
+            "#the-counter-style-rule",
+        ),
+        (
+            "official.descriptor.counter-style.system",
+            CssFeatureKind::Descriptor,
+            "system in @counter-style",
+            "#counter-style-system",
+        ),
+        (
+            "official.descriptor.counter-style.negative",
+            CssFeatureKind::Descriptor,
+            "negative in @counter-style",
+            "#counter-style-negative",
+        ),
+        (
+            "official.descriptor.counter-style.prefix",
+            CssFeatureKind::Descriptor,
+            "prefix in @counter-style",
+            "#counter-style-prefix",
+        ),
+        (
+            "official.descriptor.counter-style.suffix",
+            CssFeatureKind::Descriptor,
+            "suffix in @counter-style",
+            "#counter-style-suffix",
+        ),
+        (
+            "official.descriptor.counter-style.range",
+            CssFeatureKind::Descriptor,
+            "range in @counter-style",
+            "#counter-style-range",
+        ),
+        (
+            "official.descriptor.counter-style.pad",
+            CssFeatureKind::Descriptor,
+            "pad in @counter-style",
+            "#counter-style-pad",
+        ),
+        (
+            "official.descriptor.counter-style.fallback",
+            CssFeatureKind::Descriptor,
+            "fallback in @counter-style",
+            "#counter-style-fallback",
+        ),
+        (
+            "official.descriptor.counter-style.symbols",
+            CssFeatureKind::Descriptor,
+            "symbols in @counter-style",
+            "#counter-style-symbols",
+        ),
+        (
+            "official.descriptor.counter-style.additive-symbols",
+            CssFeatureKind::Descriptor,
+            "additive-symbols in @counter-style",
+            "#counter-style-symbols",
+        ),
+        (
+            "official.descriptor.counter-style.speak-as",
+            CssFeatureKind::Descriptor,
+            "speak-as in @counter-style",
+            "#counter-style-speak-as",
+        ),
+        (
+            "official.value.counter-style",
+            CssFeatureKind::Value,
+            "<counter-style>",
+            "#the-counter-style-rule",
+        ),
+        (
+            "official.value.counter-style-name",
+            CssFeatureKind::Value,
+            "<counter-style-name>",
+            "#the-counter-style-rule",
+        ),
+        (
+            "official.value.symbol",
+            CssFeatureKind::Value,
+            "<symbol>",
+            "#counter-style-symbols",
+        ),
+        (
+            "official.value.symbols-function",
+            CssFeatureKind::Value,
+            "symbols()",
+            "#symbols-function",
+        ),
+        (
+            "official.value.symbols-type",
+            CssFeatureKind::Value,
+            "cyclic|numeric|alphabetic|symbolic|fixed",
+            "#symbols-function",
+        ),
+    ];
+
+    let page = [
+        (
+            "later.rule.page",
+            CssFeatureKind::Rule,
+            "@page",
+            "page.html#page-box",
+        ),
+        (
+            "official.selector.page-pseudo",
+            CssFeatureKind::Selector,
+            ":left|:right|:first",
+            "page.html#page-selectors",
+        ),
+    ];
+
+    for (id, kind, spelling, production) in counter_styles {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing metadata for {id}"));
+        assert_eq!(metadata.id().as_str(), id, "{id} identity");
+        assert_eq!(metadata.kind(), kind, "{id} kind");
+        assert_eq!(metadata.spelling(), spelling, "{id} spelling");
+        assert_eq!(
+            metadata.source().id().as_str(),
+            "O-COUNTERSTYLES3",
+            "{id} source"
+        );
+        assert_eq!(metadata.production(), production, "{id} production");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+        assert_eq!(metadata.supported_subset(), None, "{id} subset");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+        assert_eq!(
+            metadata.recognized_unsupported_code(),
+            None,
+            "{id} recognized code"
+        );
+        assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+    }
+
+    for (id, kind, spelling, production) in page {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing metadata for {id}"));
+        assert_eq!(metadata.id().as_str(), id, "{id} identity");
+        assert_eq!(metadata.kind(), kind, "{id} kind");
+        assert_eq!(metadata.spelling(), spelling, "{id} spelling");
+        assert_eq!(metadata.source().id().as_str(), "O-CSS2", "{id} source");
+        assert_eq!(metadata.production(), production, "{id} production");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+        assert_eq!(metadata.supported_subset(), None, "{id} subset");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+        assert_eq!(
+            metadata.recognized_unsupported_code(),
+            None,
+            "{id} recognized code"
+        );
+        assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+    }
+}
+
+#[test]
 fn named_conformance_records_expose_declared_metadata() {
     for expected in EXPECTED {
         let actual = feature_metadata(expected.id).expect("expected catalog record");

@@ -325,6 +325,112 @@ pub(super) fn parse_flex_direction<'i, 't>(
     }
 }
 
+pub(super) fn parse_flex_flow<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssFlexFlow, ParseError<'i, Error>> {
+    let mut direction = None;
+    let mut wrap = None;
+
+    while !input.is_exhausted() {
+        let location = input.current_source_location();
+        let ident = input.expect_ident_cloned().map_err(basic)?;
+        match_ignore_ascii_case! { &ident,
+            "row" => set_flex_flow_direction(
+                &mut direction,
+                CssFlexDirection::Row,
+                location,
+                ident.as_ref(),
+            )?,
+            "column" => set_flex_flow_direction(
+                &mut direction,
+                CssFlexDirection::Column,
+                location,
+                ident.as_ref(),
+            )?,
+            "row-reverse" => set_flex_flow_direction(
+                &mut direction,
+                CssFlexDirection::RowReverse,
+                location,
+                ident.as_ref(),
+            )?,
+            "column-reverse" => set_flex_flow_direction(
+                &mut direction,
+                CssFlexDirection::ColumnReverse,
+                location,
+                ident.as_ref(),
+            )?,
+            "nowrap" => set_flex_flow_wrap(
+                &mut wrap,
+                CssFlexWrap::NoWrap,
+                location,
+                ident.as_ref(),
+            )?,
+            "wrap" => set_flex_flow_wrap(
+                &mut wrap,
+                CssFlexWrap::Wrap,
+                location,
+                ident.as_ref(),
+            )?,
+            "wrap-reverse" => set_flex_flow_wrap(
+                &mut wrap,
+                CssFlexWrap::WrapReverse,
+                location,
+                ident.as_ref(),
+            )?,
+            _ => return Err(unsupported_value_at(
+                location,
+                None,
+                unsupported_keyword_reason("flex-flow", ident.as_ref()),
+            )),
+        }
+    }
+
+    if direction.is_none() && wrap.is_none() {
+        return Err(unsupported_value(
+            input,
+            None,
+            "flex-flow requires a direction or wrapping component",
+        ));
+    }
+
+    Ok(CssFlexFlow::new(
+        direction.unwrap_or(CssFlexDirection::Row),
+        wrap.unwrap_or(CssFlexWrap::NoWrap),
+    ))
+}
+
+fn set_flex_flow_direction<'i>(
+    slot: &mut Option<CssFlexDirection>,
+    value: CssFlexDirection,
+    location: cssparser::SourceLocation,
+    ident: &str,
+) -> std::result::Result<(), ParseError<'i, Error>> {
+    if slot.replace(value).is_some() {
+        return Err(unsupported_value_at(
+            location,
+            None,
+            unsupported_keyword_reason("flex-flow direction", ident),
+        ));
+    }
+    Ok(())
+}
+
+fn set_flex_flow_wrap<'i>(
+    slot: &mut Option<CssFlexWrap>,
+    value: CssFlexWrap,
+    location: cssparser::SourceLocation,
+    ident: &str,
+) -> std::result::Result<(), ParseError<'i, Error>> {
+    if slot.replace(value).is_some() {
+        return Err(unsupported_value_at(
+            location,
+            None,
+            unsupported_keyword_reason("flex-flow wrap", ident),
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn parse_flex_wrap<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssFlexWrap, ParseError<'i, Error>> {

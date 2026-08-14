@@ -2610,6 +2610,7 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
         | CssKnownProperty::UnicodeBidi
         | CssKnownProperty::WritingMode => O_WRITING3,
         CssKnownProperty::FlexDirection
+        | CssKnownProperty::FlexFlow
         | CssKnownProperty::FlexWrap
         | CssKnownProperty::AlignContent
         | CssKnownProperty::JustifyContent

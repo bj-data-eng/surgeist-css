@@ -82,6 +82,9 @@ macro_rules! property_schema {
             Grid, "grid", [], "baseline.property.grid", CssGrid, CssGridPropertyValue, CssGridPropertyValueRepresentation, parse_grid, { parse_grid($input)? };
             FontSize, "font-size", [], "baseline.property.font-size", CssFontSize, CssFontSizePropertyValue, CssFontSizePropertyValueRepresentation, parse_font_size, { parse_font_size($input)? };
             LineHeight, "line-height", [], "baseline.property.line-height", CssLineHeight, CssLineHeightPropertyValue, CssLineHeightPropertyValueRepresentation, parse_line_height, { parse_line_height($input)? };
+            TextCombineUpright, "text-combine-upright", [], "official.property.text-combine-upright", CssTextCombineUpright, CssTextCombineUprightPropertyValue, CssTextCombineUprightPropertyValueRepresentation, parse_text_combine_upright, { parse_text_combine_upright($input)? };
+            TextOrientation, "text-orientation", [], "official.property.text-orientation", CssTextOrientation, CssTextOrientationPropertyValue, CssTextOrientationPropertyValueRepresentation, parse_text_orientation, { parse_text_orientation($input)? };
+            UnicodeBidi, "unicode-bidi", [], "official.property.unicode-bidi", CssUnicodeBidi, CssUnicodeBidiPropertyValue, CssUnicodeBidiPropertyValueRepresentation, parse_unicode_bidi, { parse_unicode_bidi($input)? };
             WritingMode, "writing-mode", [], "baseline.property.writing-mode", CssWritingMode, CssWritingModePropertyValue, CssWritingModePropertyValueRepresentation, parse_writing_mode, { parse_writing_mode($input)? };
             TextAlign, "text-align", [], "baseline.property.text-align", CssTextAlign, CssTextAlignPropertyValue, CssTextAlignPropertyValueRepresentation, parse_text_align, { parse_text_align($input)? };
             TextAlignLast, "text-align-last", [], "baseline.property.text-align-last", CssTextAlignLast, CssTextAlignLastPropertyValue, CssTextAlignLastPropertyValueRepresentation, parse_text_align_last, { parse_text_align_last($input)? };
@@ -958,6 +961,42 @@ macro_rules! define_property_value {
             $representation,
             $value,
             spacing
+        );
+    };
+    (
+        TextCombineUpright, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            combine
+        );
+    };
+    (
+        TextOrientation, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            orientation
+        );
+    };
+    (
+        UnicodeBidi, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            bidi
         );
     };
     (
@@ -2279,6 +2318,46 @@ macro_rules! define_property_identity {
 }
 
 property_schema!(define_property_identity, schema_input);
+
+/// A reviewed authored property-name resolution outside name-equivalent schema aliases.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CssResolvedPropertyName {
+    Canonical(CssKnownProperty),
+    LegacyShorthand(CssLegacyPropertyAlias),
+}
+
+impl CssResolvedPropertyName {
+    pub(crate) const fn property(self) -> CssKnownProperty {
+        match self {
+            Self::Canonical(property) => property,
+            Self::LegacyShorthand(alias) => alias.target(),
+        }
+    }
+}
+
+/// An explicitly parsed legacy shorthand whose value maps to a canonical longhand.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CssLegacyPropertyAlias {
+    GlyphOrientationVertical,
+}
+
+impl CssLegacyPropertyAlias {
+    pub(crate) const fn target(self) -> CssKnownProperty {
+        match self {
+            Self::GlyphOrientationVertical => CssKnownProperty::TextOrientation,
+        }
+    }
+}
+
+pub(crate) fn resolve_property_name(name: &str) -> Option<CssResolvedPropertyName> {
+    if let Some(property) = CssKnownProperty::from_name(name) {
+        return Some(CssResolvedPropertyName::Canonical(property));
+    }
+    name.eq_ignore_ascii_case("glyph-orientation-vertical")
+        .then_some(CssResolvedPropertyName::LegacyShorthand(
+            CssLegacyPropertyAlias::GlyphOrientationVertical,
+        ))
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PropertyImplementation {

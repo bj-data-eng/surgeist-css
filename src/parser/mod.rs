@@ -3107,14 +3107,15 @@ pub(super) fn parse_declaration_core<'i, 't>(
         });
     }
 
-    let known_property = crate::CssKnownProperty::from_name(name.as_ref())
+    let resolved_property = resolve_property_name(name.as_ref())
         .ok_or_else(|| property_name_error(declaration_start.source_location(), name.as_ref()))?;
+    let known_property = resolved_property.property();
     let context = match mode {
         DeclarationMode::Ordinary => DeclarationBoundaryContext::OrdinaryKnown(known_property),
         DeclarationMode::Keyframe => DeclarationBoundaryContext::KeyframeKnown(known_property),
     };
     let (body, importance) = parse_declaration_boundary(input, &context, |input| {
-        parse_known_declaration_body(name.as_ref(), known_property, input)
+        parse_known_declaration_body(resolved_property, input)
     })?;
     Ok(ParsedDeclaration {
         body,
@@ -3124,13 +3125,14 @@ pub(super) fn parse_declaration_core<'i, 't>(
 }
 
 fn parse_known_declaration_body<'i, 't>(
-    name: &str,
-    known_property: crate::CssKnownProperty,
+    resolved_property: CssResolvedPropertyName,
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssDeclarationBody, ParseError<'i, Error>> {
+    let known_property = resolved_property.property();
+    let context_name = known_property.canonical_name();
     let state = input.state();
     let (authored, has_substitution) = collect_authored_declaration_value(input)
-        .map_err(|error| with_property_context(error, name))?;
+        .map_err(|error| with_property_context(error, context_name))?;
     if has_substitution {
         return Ok(CssDeclarationBody::Known(
             CssKnownDeclaration::from_substitution_dependent(
@@ -3150,7 +3152,7 @@ fn parse_known_declaration_body<'i, 't>(
                         input.current_source_location(),
                         "CSS global keyword must be the entire declaration value",
                     ),
-                    name,
+                    context_name,
                 ));
             }
             return Ok(CssDeclarationBody::Known(CssKnownDeclaration::from_global(
@@ -3163,12 +3165,36 @@ fn parse_known_declaration_body<'i, 't>(
         input.reset(&state);
     }
 
-    let declaration = parse_known_property_value(known_property, authored, input)
-        .map_err(|error| with_property_context(error, name))?;
+    let declaration = match resolved_property {
+        CssResolvedPropertyName::Canonical(_) => {
+            parse_known_property_value(known_property, authored, input)
+        }
+        CssResolvedPropertyName::LegacyShorthand(alias) => {
+            parse_legacy_property_alias_value(alias, authored, input)
+        }
+    }
+    .map_err(|error| with_property_context(error, context_name))?;
     input
         .expect_exhausted()
-        .map_err(|error| with_property_context(error.into(), name))?;
+        .map_err(|error| with_property_context(error.into(), context_name))?;
     Ok(CssDeclarationBody::Known(declaration))
+}
+
+fn parse_legacy_property_alias_value<'i, 't>(
+    alias: CssLegacyPropertyAlias,
+    authored: CssAuthoredDeclarationValue,
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssKnownDeclaration, ParseError<'i, Error>> {
+    match alias {
+        CssLegacyPropertyAlias::GlyphOrientationVertical => {
+            let value = parse_glyph_orientation_vertical(input)?;
+            Ok(CssKnownDeclaration::from_value(
+                CssKnownDeclarationValue::TextOrientation(CssDeclaredValue::Value(
+                    CssTextOrientationPropertyValue::new(authored, value),
+                )),
+            ))
+        }
+    }
 }
 
 fn parse_declaration_boundary<'i, 't, T>(

@@ -3029,7 +3029,11 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
         | CssKnownProperty::OutlineColor
         | CssKnownProperty::OutlineStyle
         | CssKnownProperty::OutlineWidth => O_UI3,
-        CssKnownProperty::Direction | CssKnownProperty::WritingMode => O_WRITING3,
+        CssKnownProperty::Direction
+        | CssKnownProperty::TextCombineUpright
+        | CssKnownProperty::TextOrientation
+        | CssKnownProperty::UnicodeBidi
+        | CssKnownProperty::WritingMode => O_WRITING3,
         CssKnownProperty::FlexDirection
         | CssKnownProperty::FlexWrap
         | CssKnownProperty::AlignContent

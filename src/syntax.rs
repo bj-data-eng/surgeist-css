@@ -7107,6 +7107,35 @@ pub enum CssWritingMode {
     SidewaysLr,
 }
 
+/// The authored `text-combine-upright` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssTextCombineUpright {
+    None,
+    All,
+}
+
+/// The authored `text-orientation` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssTextOrientation {
+    Mixed,
+    Upright,
+    Sideways,
+}
+
+/// The authored `unicode-bidi` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssUnicodeBidi {
+    Normal,
+    Embed,
+    Isolate,
+    BidiOverride,
+    IsolateOverride,
+    Plaintext,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CssTextAlign {

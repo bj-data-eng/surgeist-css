@@ -98,6 +98,83 @@ pub(super) fn parse_writing_mode<'i, 't>(
     }
 }
 
+pub(super) fn parse_text_combine_upright<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextCombineUpright, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "none" => Ok(CssTextCombineUpright::None),
+        "all" => Ok(CssTextCombineUpright::All),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("text-combine-upright", ident.as_ref()),
+        )),
+    }
+}
+
+pub(super) fn parse_text_orientation<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextOrientation, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "mixed" => Ok(CssTextOrientation::Mixed),
+        "upright" => Ok(CssTextOrientation::Upright),
+        "sideways" => Ok(CssTextOrientation::Sideways),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("text-orientation", ident.as_ref()),
+        )),
+    }
+}
+
+pub(super) fn parse_unicode_bidi<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssUnicodeBidi, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "normal" => Ok(CssUnicodeBidi::Normal),
+        "embed" => Ok(CssUnicodeBidi::Embed),
+        "isolate" => Ok(CssUnicodeBidi::Isolate),
+        "bidi-override" => Ok(CssUnicodeBidi::BidiOverride),
+        "isolate-override" => Ok(CssUnicodeBidi::IsolateOverride),
+        "plaintext" => Ok(CssUnicodeBidi::Plaintext),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("unicode-bidi", ident.as_ref()),
+        )),
+    }
+}
+
+pub(super) fn parse_glyph_orientation_vertical<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTextOrientation, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)? {
+        Token::Ident(ident) if ident.eq_ignore_ascii_case("auto") => Ok(CssTextOrientation::Mixed),
+        Token::Number {
+            int_value: Some(0), ..
+        } => Ok(CssTextOrientation::Upright),
+        Token::Dimension {
+            value: 0.0, unit, ..
+        } if unit.eq_ignore_ascii_case("deg") => Ok(CssTextOrientation::Upright),
+        Token::Number {
+            int_value: Some(90),
+            ..
+        } => Ok(CssTextOrientation::Sideways),
+        Token::Dimension {
+            value: 90.0, unit, ..
+        } if unit.eq_ignore_ascii_case("deg") => Ok(CssTextOrientation::Sideways),
+        _ => Err(unsupported_value_at(
+            location,
+            None,
+            "glyph-orientation-vertical accepts only auto, 0deg, 90deg, 0, or 90",
+        )),
+    }
+}
+
 pub(super) fn parse_text_align<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssTextAlign, ParseError<'i, Error>> {

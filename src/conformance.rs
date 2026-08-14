@@ -2458,7 +2458,6 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
         | CssKnownProperty::ColumnWidth
         | CssKnownProperty::Columns => O_MULTICOL1,
         CssKnownProperty::FlexDirection
-        | CssKnownProperty::FlexFlow
         | CssKnownProperty::FlexWrap
         | CssKnownProperty::AlignContent
         | CssKnownProperty::JustifyContent

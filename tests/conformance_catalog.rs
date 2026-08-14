@@ -1623,6 +1623,143 @@ fn assert_c03_value_metadata(
 }
 
 #[test]
+fn c14_closure_metadata_and_docs_are_truthful() {
+    for (id, kind, spelling, source, production) in [
+        (
+            "official.property.flex-flow",
+            CssFeatureKind::Property,
+            "flex-flow",
+            "O-FLEXBOX1",
+            "#propdef-flex-flow",
+        ),
+        (
+            "official.property.column-count",
+            CssFeatureKind::Property,
+            "column-count",
+            "O-MULTICOL1",
+            "#propdef-column-count",
+        ),
+        (
+            "official.property.column-fill",
+            CssFeatureKind::Property,
+            "column-fill",
+            "O-MULTICOL1",
+            "#propdef-column-fill",
+        ),
+        (
+            "official.property.column-rule",
+            CssFeatureKind::Property,
+            "column-rule",
+            "O-MULTICOL1",
+            "#propdef-column-rule",
+        ),
+        (
+            "official.property.column-rule-color",
+            CssFeatureKind::Property,
+            "column-rule-color",
+            "O-MULTICOL1",
+            "#propdef-column-rule-color",
+        ),
+        (
+            "official.property.column-rule-style",
+            CssFeatureKind::Property,
+            "column-rule-style",
+            "O-MULTICOL1",
+            "#propdef-column-rule-style",
+        ),
+        (
+            "official.property.column-rule-width",
+            CssFeatureKind::Property,
+            "column-rule-width",
+            "O-MULTICOL1",
+            "#propdef-column-rule-width",
+        ),
+        (
+            "official.property.column-span",
+            CssFeatureKind::Property,
+            "column-span",
+            "O-MULTICOL1",
+            "#propdef-column-span",
+        ),
+        (
+            "official.property.column-width",
+            CssFeatureKind::Property,
+            "column-width",
+            "O-MULTICOL1",
+            "#propdef-column-width",
+        ),
+        (
+            "official.property.columns",
+            CssFeatureKind::Property,
+            "columns",
+            "O-MULTICOL1",
+            "#propdef-columns",
+        ),
+        (
+            "official.rule.at-rule",
+            CssFeatureKind::Rule,
+            "generic at-rule",
+            "O-SYNTAX3",
+            "#at-rules,#consume-at-rule",
+        ),
+        (
+            "official.qualified-rule.generic",
+            CssFeatureKind::Rule,
+            "generic qualified rule",
+            "O-SYNTAX3",
+            "#consume-qualified-rule",
+        ),
+        (
+            "official.declaration.generic",
+            CssFeatureKind::Declaration,
+            "generic declaration",
+            "O-SYNTAX3",
+            "#consume-declaration",
+        ),
+        (
+            "official.value.stylesheet",
+            CssFeatureKind::Value,
+            "<stylesheet>",
+            "O-SYNTAX3",
+            "#parser-entry-points",
+        ),
+        (
+            "official.value.rule-list",
+            CssFeatureKind::Value,
+            "<rule-list>",
+            "O-SYNTAX3",
+            "#declaration-rule-list",
+        ),
+        (
+            "official.value.declaration-list",
+            CssFeatureKind::Value,
+            "<declaration-list>",
+            "O-SYNTAX3",
+            "#declaration-rule-list",
+        ),
+        (
+            "official.value.style-block",
+            CssFeatureKind::Value,
+            "<style-block>",
+            "O-SYNTAX3",
+            "#declaration-rule-list",
+        ),
+    ] {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+        assert_eq!(metadata.id().as_str(), id, "{id} identity");
+        assert_eq!(metadata.kind(), kind, "{id} kind");
+        assert_eq!(metadata.spelling(), spelling, "{id} spelling");
+        assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+        assert_eq!(metadata.production(), production, "{id} production");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+        assert_eq!(metadata.supported_subset(), None, "{id} subset");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+        assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+        assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+    }
+}
+
+#[test]
 fn c14_remaining_official_values_are_typed() {
     let dimension =
         CssLengthDimension::try_new(-1.5, CssLengthUnit::Cqw).expect("finite dimension");

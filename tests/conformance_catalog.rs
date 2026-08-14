@@ -1647,6 +1647,236 @@ fn assert_c03_value_metadata(
     assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
 }
 
+#[test]
+fn c14_remaining_official_values_are_typed() {
+    let dimension =
+        CssLengthDimension::try_new(-1.5, CssLengthUnit::Cqw).expect("finite dimension");
+    assert_eq!(dimension.value(), -1.5);
+    assert_eq!(dimension.unit(), CssLengthUnit::Cqw);
+    assert!(CssLengthDimension::try_new(f32::INFINITY, CssLengthUnit::Px).is_none());
+
+    let angle = CssAngleCalculation::try_literal(-0.5, CssAngleUnit::Turns).expect("finite angle");
+    let percentage = CssPercentageCalculation::try_literal(25.0).expect("finite percentage");
+    let time =
+        CssTimeCalculation::try_literal(-250.0, CssTimeUnit::Milliseconds).expect("finite time");
+    let frequency = CssFrequencyCalculation::try_literal(1.5, CssFrequencyUnit::Kilohertz)
+        .expect("finite frequency");
+    assert_eq!(angle.result_type(), CssCalculationType::Angle);
+    assert_eq!(percentage.result_type(), CssCalculationType::Percentage);
+    assert_eq!(time.result_type(), CssCalculationType::Time);
+    assert_eq!(frequency.result_type(), CssCalculationType::Frequency);
+    assert!(CssAngleCalculation::try_literal(f32::NAN, CssAngleUnit::Degrees).is_none());
+    assert!(CssTimeCalculation::try_literal(f32::INFINITY, CssTimeUnit::Seconds).is_none());
+    assert!(
+        CssFrequencyCalculation::try_literal(f32::NEG_INFINITY, CssFrequencyUnit::Hertz).is_none()
+    );
+
+    let parsed = parse_style_attribute(concat!(
+        "width: calc((1cqw + 2%) * 3); ",
+        "transform: rotate(calc((1turn + 180deg) / 2)); ",
+        "transition-delay: calc((-1s + 250ms) * 2); ",
+        "filter: hue-rotate(calc((1turn - 90deg) / 3))",
+    ));
+    assert!(parsed.is_clean(), "{:?}", parsed.diagnostics());
+    assert_eq!(
+        parsed
+            .syntax()
+            .iter()
+            .map(|declaration| declaration.known().expect("known value").property())
+            .collect::<Vec<_>>(),
+        [
+            CssKnownProperty::Width,
+            CssKnownProperty::Transform,
+            CssKnownProperty::TransitionDelay,
+            CssKnownProperty::Filter,
+        ],
+    );
+
+    let recovered = parse_style_attribute(concat!(
+        "width: 1deg; ",
+        "rotate: 1hz; ",
+        "transition-delay: 1px; ",
+        "color: red",
+    ));
+    assert_eq!(recovered.syntax().len(), 1);
+    assert_eq!(
+        recovered.syntax()[0]
+            .known()
+            .expect("retained sibling")
+            .property(),
+        CssKnownProperty::Color,
+    );
+    assert_eq!(recovered.diagnostics().len(), 3);
+    assert!(
+        recovered
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.action() == CssRecoveryAction::DropDeclaration)
+    );
+
+    for (id, spelling, production) in [
+        ("official.value.dimension", "<dimension>", "#dimensions"),
+        ("official.value.angle", "<angle>", "#angles"),
+        (
+            "official.value.angle-percentage",
+            "<angle-percentage>",
+            "#mixed-percentages",
+        ),
+        (
+            "official.value.time-percentage",
+            "<time-percentage>",
+            "#mixed-percentages",
+        ),
+        ("official.value.frequency", "<frequency>", "#frequency"),
+        (
+            "official.value.frequency-percentage",
+            "<frequency-percentage>",
+            "#mixed-percentages",
+        ),
+        (
+            "official.value.calc",
+            "calc()",
+            "#calc-notation,#calc-syntax,#calc-type-checking",
+        ),
+    ] {
+        assert_c03_value_metadata(
+            id,
+            spelling,
+            production,
+            CssSupportStatus::Complete,
+            None,
+            None,
+        );
+    }
+}
+
+#[test]
+fn c14_retained_partial_extensions_have_direct_public_evidence() {
+    for (id, kind, input) in [
+        (
+            "ext.value.relative-color",
+            CssFeatureKind::Value,
+            Input::Style("color: rgb(from red r g b / alpha)"),
+        ),
+        (
+            "ext.value.color-mix",
+            CssFeatureKind::Value,
+            Input::Style("color: color-mix(in oklch longer hue, red 25%, blue 75%)"),
+        ),
+        (
+            "ext.value.grid-repeat",
+            CssFeatureKind::Value,
+            Input::Style("grid-template-columns: repeat(auto-fit, 10px)"),
+        ),
+        (
+            "ext.value.basic-shape",
+            CssFeatureKind::Value,
+            Input::Style("clip-path: circle(50% at center)"),
+        ),
+        (
+            "ext.descriptor.font-weight-range",
+            CssFeatureKind::Descriptor,
+            Input::Sheet(
+                "@font-face { font-family: Demo; src: url(demo.woff2); font-weight: 300 700; }",
+            ),
+        ),
+        (
+            "ext.descriptor.font-style-oblique-range",
+            CssFeatureKind::Descriptor,
+            Input::Sheet(
+                "@font-face { font-family: Demo; src: url(demo.woff2); font-style: oblique -10deg 20deg; }",
+            ),
+        ),
+        (
+            "ext.descriptor.font-stretch-range",
+            CssFeatureKind::Descriptor,
+            Input::Sheet(
+                "@font-face { font-family: Demo; src: url(demo.woff2); font-stretch: 75% 125%; }",
+            ),
+        ),
+        (
+            "ext.value.font-source-modern-hints",
+            CssFeatureKind::Value,
+            Input::Sheet(
+                "@font-face { font-family: Demo; src: url(demo.woff2) format(woff2) tech(variations, color-colrv1); }",
+            ),
+        ),
+        (
+            "ext.property.font-weight-range",
+            CssFeatureKind::Property,
+            Input::Style("font-weight: 725"),
+        ),
+        (
+            "ext.supports.selector",
+            CssFeatureKind::Selector,
+            Input::Sheet("@supports selector(.card:is(.primary, .secondary)) {}"),
+        ),
+        (
+            "ext.media.range.width",
+            CssFeatureKind::MediaQuery,
+            Input::Sheet("@media (width >= 1px) {}"),
+        ),
+        (
+            "ext.media.range.height",
+            CssFeatureKind::MediaQuery,
+            Input::Sheet("@media (height < 100vh) {}"),
+        ),
+        (
+            "ext.media.range.resolution",
+            CssFeatureKind::MediaQuery,
+            Input::Sheet("@media (resolution >= 2dppx) {}"),
+        ),
+        (
+            "ext.media.range.color",
+            CssFeatureKind::MediaQuery,
+            Input::Sheet("@media (color > 0) {}"),
+        ),
+        (
+            "ext.media.range.monochrome",
+            CssFeatureKind::MediaQuery,
+            Input::Sheet("@media (monochrome = 1) {}"),
+        ),
+    ] {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+        assert_eq!(metadata.kind(), kind, "{id} kind");
+        assert_eq!(metadata.status(), CssSupportStatus::Partial, "{id} status");
+        assert!(metadata.supported_subset().is_some(), "{id} subset");
+        assert!(metadata.unsupported_remainder().is_some(), "{id} remainder");
+        assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+        assert!(diagnostics(input).is_empty(), "{id} public positive vector");
+    }
+
+    let unsupported = parse_sheet(concat!(
+        "@font-feature-values Demo { @styleset { nice: 1; } } ",
+        ".tail { color: red; }",
+    ));
+    let [CssRule::Style(_)] = unsupported.syntax().rules() else {
+        panic!("later sibling must survive the unsupported at-rule");
+    };
+    let [diagnostic] = unsupported.diagnostics() else {
+        panic!("expected one unsupported-at-rule diagnostic");
+    };
+    assert_eq!(diagnostic.error().code(), CssErrorCode::UnsupportedAtRule);
+    assert_eq!(diagnostic.action(), CssRecoveryAction::DropAtRule);
+    let ErrorKind::UnsupportedAtRule(detail) = diagnostic.error().kind() else {
+        panic!("expected typed unsupported-at-rule detail");
+    };
+    assert_eq!(detail.name().as_str(), "font-feature-values");
+    assert_eq!(detail.feature().as_str(), "later.rule.font-feature-values");
+
+    let metadata =
+        feature_metadata("later.rule.font-feature-values").expect("font-feature-values metadata");
+    assert_eq!(metadata.kind(), CssFeatureKind::Rule);
+    assert_eq!(metadata.spelling(), "@font-feature-values");
+    assert_eq!(metadata.source().id().as_str(), "I-FONTS4");
+    assert_eq!(metadata.production(), "#font-feature-values-rule");
+    assert_eq!(metadata.status(), CssSupportStatus::RecognizedUnsupported);
+    assert_eq!(
+        metadata.recognized_unsupported_code(),
+        Some(CssErrorCode::UnsupportedAtRule),
+    );
+}
+
 fn assert_c03_timing_metadata(
     id: &str,
     property: &str,

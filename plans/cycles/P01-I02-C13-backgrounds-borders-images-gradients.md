@@ -193,7 +193,8 @@ matches:
 
 ```sh
 test -n "$(git ls-files '*.rs')"
-git ls-files '*.rs' | xargs rg -n --color never '\\bunsafe\\s*(fn|trait|impl|extern|mod|\\{)' && exit 1 || test $? -eq 1
+c13_owned_rust="$(git ls-files '*.rs')"
+if printf '%s\n' "$c13_owned_rust" | xargs rg -n --pcre2 --color never '\bunsafe\s*(fn|trait|impl|extern|mod|\{|union)|\bstatic\s+mut\b|#\s*\[\s*(allow|deny)\s*\(\s*unsafe_code' ; then exit 1; else test $? -eq 1; fi
 ```
 
 After holistic review, run

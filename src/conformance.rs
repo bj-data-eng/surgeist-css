@@ -37,6 +37,8 @@ pub enum CssFeatureKind {
     Value,
     /// A recognized non-custom authored property production.
     Property,
+    /// An explicitly parsed authored property alias with its own grammar and mapping.
+    PropertyAlias,
     /// A selector production or finite selector spelling group.
     Selector,
     /// A media-query production or finite media-query spelling group.
@@ -1826,57 +1828,17 @@ static OFFICIAL_CUSTOM_PROPERTY_COVERAGE: CssOfficialCoverageRecord =
     active_coverage!("baseline.declaration.custom-property");
 
 static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
-    reserved_coverage!(
-        "official.property.border-collapse",
-        Property,
-        O_CSS2,
-        "tables.html#propdef-border-collapse",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.border-spacing",
-        Property,
-        O_CSS2,
-        "tables.html#propdef-border-spacing",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.border-collapse"),
+    active_coverage!("official.property.border-spacing"),
     active_coverage!("baseline.property.bottom"),
-    reserved_coverage!(
-        "official.property.caption-side",
-        Property,
-        O_CSS2,
-        "tables.html#propdef-caption-side",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.caption-side"),
     active_coverage!("baseline.property.clear"),
-    reserved_coverage!(
-        "official.property.clip",
-        Property,
-        O_CSS2,
-        "visufx.html#propdef-clip",
-        "crate::parser::effects",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.clip"),
     active_coverage!("baseline.property.content"),
     active_coverage!("baseline.property.counter-increment"),
     active_coverage!("baseline.property.counter-reset"),
     active_coverage!("baseline.property.display"),
-    reserved_coverage!(
-        "official.property.empty-cells",
-        Property,
-        O_CSS2,
-        "tables.html#propdef-empty-cells",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.empty-cells"),
     active_coverage!("baseline.property.float"),
     active_coverage!("baseline.property.height"),
     active_coverage!("baseline.property.left"),
@@ -1890,63 +1852,15 @@ static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("baseline.property.max-width"),
     active_coverage!("baseline.property.min-height"),
     active_coverage!("baseline.property.min-width"),
-    reserved_coverage!(
-        "official.property.orphans",
-        Property,
-        O_CSS2,
-        "page.html#propdef-orphans",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.orphans"),
     active_coverage!("baseline.property.overflow"),
-    reserved_coverage!(
-        "official.property.page-break-after",
-        Property,
-        O_CSS2,
-        "page.html#propdef-page-break-after",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.page-break-before",
-        Property,
-        O_CSS2,
-        "page.html#propdef-page-break-before",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.page-break-inside",
-        Property,
-        O_CSS2,
-        "page.html#propdef-page-break-inside",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.page-break-after"),
+    active_coverage!("official.property.page-break-before"),
+    active_coverage!("official.property.page-break-inside"),
     active_coverage!("baseline.property.position"),
-    reserved_coverage!(
-        "official.property.quotes",
-        Property,
-        O_CSS2,
-        "generate.html#propdef-quotes",
-        "crate::parser::generated_content",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.quotes"),
     active_coverage!("baseline.property.right"),
-    reserved_coverage!(
-        "official.property.table-layout",
-        Property,
-        O_CSS2,
-        "tables.html#propdef-table-layout",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.table-layout"),
     active_coverage!("baseline.property.text-align"),
     active_coverage!("baseline.property.text-decoration"),
     active_coverage!("baseline.property.text-indent"),
@@ -1955,25 +1869,9 @@ static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("baseline.property.vertical-align"),
     active_coverage!("baseline.property.visibility"),
     active_coverage!("baseline.property.white-space"),
-    reserved_coverage!(
-        "official.property.widows",
-        Property,
-        O_CSS2,
-        "page.html#propdef-widows",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.widows"),
     active_coverage!("baseline.property.width"),
-    reserved_coverage!(
-        "official.property.word-spacing",
-        Property,
-        O_CSS2,
-        "text.html#propdef-word-spacing",
-        "crate::parser::typography",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.word-spacing"),
     active_coverage!("baseline.property.z-index"),
     active_coverage!("baseline.property.all"),
     active_coverage!("baseline.property.margin"),
@@ -2122,33 +2020,9 @@ static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("official.property.font-variant-position"),
     active_coverage!("baseline.property.font-weight"),
     active_coverage!("baseline.property.direction"),
-    reserved_coverage!(
-        "official.property.text-combine-upright",
-        Property,
-        O_WRITING3,
-        "#propdef-text-combine-upright",
-        "crate::parser::typography",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.text-orientation",
-        Property,
-        O_WRITING3,
-        "#propdef-text-orientation",
-        "crate::parser::typography",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.unicode-bidi",
-        Property,
-        O_WRITING3,
-        "#propdef-unicode-bidi",
-        "crate::parser::typography",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.text-combine-upright"),
+    active_coverage!("official.property.text-orientation"),
+    active_coverage!("official.property.unicode-bidi"),
     active_coverage!("baseline.property.writing-mode"),
     reserved_coverage!(
         "official.property.column-count",
@@ -2251,86 +2125,22 @@ static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("baseline.property.flex-wrap"),
     active_coverage!("baseline.property.justify-content"),
     active_coverage!("baseline.property.box-sizing"),
-    reserved_coverage!(
-        "official.property.caret-color",
-        Property,
-        O_UI3,
-        "#propdef-caret-color",
-        "crate::parser::typography",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.caret-color"),
     active_coverage!("baseline.property.cursor"),
     active_coverage!("baseline.property.outline"),
     active_coverage!("baseline.property.outline-color"),
-    reserved_coverage!(
-        "official.property.outline-offset",
-        Property,
-        O_UI3,
-        "#propdef-outline-offset",
-        "crate::parser::effects",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.outline-offset"),
     active_coverage!("baseline.property.outline-style"),
     active_coverage!("baseline.property.outline-width"),
-    reserved_coverage!(
-        "official.property.resize",
-        Property,
-        O_UI3,
-        "#propdef-resize",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.resize"),
     active_coverage!("baseline.property.text-overflow"),
-    reserved_coverage!(
-        "official.property.contain",
-        Property,
-        O_CONTAIN1,
-        "#propdef-contain",
-        "crate::parser::layout",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.contain"),
     active_coverage!("baseline.property.transform"),
-    reserved_coverage!(
-        "official.property.transform-box",
-        Property,
-        O_TRANSFORMS1,
-        "#propdef-transform-box",
-        "crate::parser::effects",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.transform-box"),
     active_coverage!("baseline.property.transform-origin"),
-    reserved_coverage!(
-        "official.property.background-blend-mode",
-        Property,
-        O_COMPOSITING1,
-        "#propdef-background-blend-mode",
-        "crate::parser::effects",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.isolation",
-        Property,
-        O_COMPOSITING1,
-        "#propdef-isolation",
-        "crate::parser::effects",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
-    reserved_coverage!(
-        "official.property.mix-blend-mode",
-        Property,
-        O_COMPOSITING1,
-        "#propdef-mix-blend-mode",
-        "crate::parser::effects",
-        "I02-C12",
-        PropertyValueGlobalSubstitutionAndRecovery
-    ),
+    active_coverage!("official.property.background-blend-mode"),
+    active_coverage!("official.property.isolation"),
+    active_coverage!("official.property.mix-blend-mode"),
 ];
 
 static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
@@ -2586,15 +2396,7 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("official.value.position"),
     active_coverage!("official.value.calc"),
     active_coverage!("baseline.value.substitution-dependent"),
-    reserved_coverage!(
-        "official.value.box-edge-keywords",
-        Value,
-        O_BOX3,
-        "#keywords",
-        "crate::parser::box_model",
-        "I02-C12",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.box-edge-keywords"),
     active_coverage!("official.value.color"),
     active_coverage!("official.value.alpha"),
     active_coverage!("official.value.hue"),
@@ -2799,15 +2601,7 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("official.value.transform.skew"),
     active_coverage!("official.value.transform.skew-x"),
     active_coverage!("official.value.transform.skew-y"),
-    reserved_coverage!(
-        "official.value.blend-mode",
-        Value,
-        O_COMPOSITING1,
-        "#blending,#blendingseparable,#blendingnonseparable",
-        "crate::parser::effects",
-        "I02-C12",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.blend-mode"),
     active_coverage!("official.value.easing-function"),
     active_coverage!("official.value.cubic-bezier-easing"),
     active_coverage!("official.value.step-easing"),
@@ -2856,17 +2650,10 @@ static OFFICIAL_NON_PROPERTY_COVERAGE: CssOfficialCoverageGroup = CssOfficialCov
 
 #[expect(
     dead_code,
-    reason = "reserved legacy shorthand is reconciled directly until I02-C12"
+    reason = "reviewed directly against the official legacy shorthand"
 )]
-static OFFICIAL_LEGACY_PROPERTY_ALIAS_COVERAGE: CssOfficialCoverageRecord = reserved_coverage!(
-    "official.property-alias.glyph-orientation-vertical",
-    PropertyAlias,
-    O_WRITING3,
-    "#propdef-glyph-orientation-vertical",
-    "crate::properties",
-    "I02-C12",
-    LegacyPropertyAliasMappingAndRecovery
-);
+static OFFICIAL_LEGACY_PROPERTY_ALIAS_COVERAGE: CssOfficialCoverageRecord =
+    active_coverage!("official.property-alias.glyph-orientation-vertical");
 
 macro_rules! excluded_coverage {
     ($($index:literal),* $(,)?) => {
@@ -3348,7 +3135,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 402] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 429] = [
     CssFeatureMetadata::complete(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -3797,6 +3584,13 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 402] = [
         "#position",
     ),
     CssFeatureMetadata::complete(
+        "official.value.box-edge-keywords",
+        CssFeatureKind::Value,
+        "content-box|padding-box|border-box|margin-box|fill-box|stroke-box|view-box",
+        O_BOX3,
+        "#keywords",
+    ),
+    CssFeatureMetadata::complete(
         "official.value.background-position",
         CssFeatureKind::Value,
         "<bg-position>#",
@@ -3893,6 +3687,13 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 402] = [
         "skewY()",
         O_TRANSFORMS1,
         "#two-d-transform-functions",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.blend-mode",
+        CssFeatureKind::Value,
+        "normal|multiply|screen|overlay|darken|lighten|color-dodge|color-burn|hard-light|soft-light|difference|exclusion|hue|saturation|color|luminosity",
+        O_COMPOSITING1,
+        "#blending,#blendingseparable,#blendingnonseparable",
     ),
     CssFeatureMetadata::complete(
         "official.value.easing-function",
@@ -5512,6 +5313,181 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 402] = [
         &[],
         TIMING_SUBSET,
         TIMING_REMAINDER,
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.border-collapse",
+        CssKnownProperty::BorderCollapse,
+        "border-collapse",
+        "tables.html#propdef-border-collapse",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.border-spacing",
+        CssKnownProperty::BorderSpacing,
+        "border-spacing",
+        "tables.html#propdef-border-spacing",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.caption-side",
+        CssKnownProperty::CaptionSide,
+        "caption-side",
+        "tables.html#propdef-caption-side",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.clip",
+        CssKnownProperty::Clip,
+        "clip",
+        "visufx.html#propdef-clip",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.empty-cells",
+        CssKnownProperty::EmptyCells,
+        "empty-cells",
+        "tables.html#propdef-empty-cells",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.orphans",
+        CssKnownProperty::Orphans,
+        "orphans",
+        "page.html#propdef-orphans",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.page-break-after",
+        CssKnownProperty::PageBreakAfter,
+        "page-break-after",
+        "page.html#propdef-page-break-after",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.page-break-before",
+        CssKnownProperty::PageBreakBefore,
+        "page-break-before",
+        "page.html#propdef-page-break-before",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.page-break-inside",
+        CssKnownProperty::PageBreakInside,
+        "page-break-inside",
+        "page.html#propdef-page-break-inside",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.quotes",
+        CssKnownProperty::Quotes,
+        "quotes",
+        "generate.html#propdef-quotes",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.table-layout",
+        CssKnownProperty::TableLayout,
+        "table-layout",
+        "tables.html#propdef-table-layout",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.widows",
+        CssKnownProperty::Widows,
+        "widows",
+        "page.html#propdef-widows",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.word-spacing",
+        CssKnownProperty::WordSpacing,
+        "word-spacing",
+        "text.html#propdef-word-spacing",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.text-combine-upright",
+        CssKnownProperty::TextCombineUpright,
+        "text-combine-upright",
+        "#propdef-text-combine-upright",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.text-orientation",
+        CssKnownProperty::TextOrientation,
+        "text-orientation",
+        "#propdef-text-orientation",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.unicode-bidi",
+        CssKnownProperty::UnicodeBidi,
+        "unicode-bidi",
+        "#propdef-unicode-bidi",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.caret-color",
+        CssKnownProperty::CaretColor,
+        "caret-color",
+        "#propdef-caret-color",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.outline-offset",
+        CssKnownProperty::OutlineOffset,
+        "outline-offset",
+        "#propdef-outline-offset",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.resize",
+        CssKnownProperty::Resize,
+        "resize",
+        "#propdef-resize",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.contain",
+        CssKnownProperty::Contain,
+        "contain",
+        "#propdef-contain",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.transform-box",
+        CssKnownProperty::TransformBox,
+        "transform-box",
+        "#propdef-transform-box",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.background-blend-mode",
+        CssKnownProperty::BackgroundBlendMode,
+        "background-blend-mode",
+        "#propdef-background-blend-mode",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.isolation",
+        CssKnownProperty::Isolation,
+        "isolation",
+        "#propdef-isolation",
+        &[],
+    ),
+    CssFeatureMetadata::complete_property(
+        "official.property.mix-blend-mode",
+        CssKnownProperty::MixBlendMode,
+        "mix-blend-mode",
+        "#propdef-mix-blend-mode",
+        &[],
+    ),
+    CssFeatureMetadata::complete(
+        "official.property-alias.glyph-orientation-vertical",
+        CssFeatureKind::PropertyAlias,
+        "glyph-orientation-vertical",
+        O_WRITING3,
+        "#propdef-glyph-orientation-vertical",
     ),
     CssFeatureMetadata::complete(
         "official.selector.group",

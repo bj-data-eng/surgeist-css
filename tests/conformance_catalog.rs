@@ -1,15 +1,16 @@
 use surgeist_css::{
-    CssAngleCalculation, CssAngleUnit, CssBasicShapeValue, CssBoxShadow, CssCalculationType,
-    CssClipPathValue, CssDelayLiteral, CssEasingValue, CssErrorCode, CssExclusionReason,
-    CssFeatureKind, CssFilterFunctionValue, CssFilterValue, CssFrequencyCalculation,
-    CssFrequencyUnit, CssHorizontalPosition, CssIntegerCalculation, CssKnownProperty,
-    CssKnownPropertyValueRef, CssLength, CssLengthCalculation, CssLengthDimension, CssLengthUnit,
-    CssNumberCalculation, CssPercentageCalculation, CssRecoveryAction, CssResolution,
-    CssResolutionUnit, CssRule, CssSpecificationTier, CssSupportStatus, CssSupportsConditionKind,
-    CssTimeCalculation, CssTimeUnit, CssTransformFunctionValue, CssTransformPerspective,
-    CssTransformScaleComponent, CssTransformValue, CssVerticalPosition, ErrorKind,
-    conformance_exclusion, conformance_exclusions, feature_metadata, parse_sheet,
-    parse_style_attribute, property_metadata, specification_source, specification_sources,
+    CssAngleCalculation, CssAngleUnit, CssBasicShapeValue, CssBlendMode, CssBoxEdgeKeyword,
+    CssBoxShadow, CssCalculationType, CssClipPathValue, CssDelayLiteral, CssEasingValue,
+    CssErrorCode, CssExclusionReason, CssFeatureKind, CssFilterFunctionValue, CssFilterValue,
+    CssFrequencyCalculation, CssFrequencyUnit, CssHorizontalPosition, CssIntegerCalculation,
+    CssKnownProperty, CssKnownPropertyValueRef, CssLength, CssLengthCalculation,
+    CssLengthDimension, CssLengthUnit, CssNumberCalculation, CssPercentageCalculation,
+    CssRecoveryAction, CssResolution, CssResolutionUnit, CssRule, CssSpecificationTier,
+    CssSupportStatus, CssSupportsConditionKind, CssTimeCalculation, CssTimeUnit,
+    CssTransformFunctionValue, CssTransformPerspective, CssTransformScaleComponent,
+    CssTransformValue, CssVerticalPosition, ErrorKind, conformance_exclusion,
+    conformance_exclusions, feature_metadata, parse_sheet, parse_style_attribute,
+    property_metadata, specification_source, specification_sources,
 };
 
 #[derive(Clone, Copy)]
@@ -3015,6 +3016,7 @@ fn c12_property_metadata_is_truthful() {
 
     let alias = feature_metadata("official.property-alias.glyph-orientation-vertical")
         .expect("legacy glyph-orientation-vertical metadata");
+    assert_eq!(alias.kind(), CssFeatureKind::PropertyAlias);
     assert_eq!(alias.spelling(), "glyph-orientation-vertical");
     assert_eq!(alias.source().id().as_str(), "O-WRITING3");
     assert_eq!(alias.production(), "#propdef-glyph-orientation-vertical");
@@ -3041,7 +3043,7 @@ fn c12_property_metadata_is_truthful() {
     for (id, spelling, source, production, vector) in [
         (
             "official.value.box-edge-keywords",
-            "content-box|padding-box|border-box|fill-box|stroke-box|view-box",
+            "content-box|padding-box|border-box|margin-box|fill-box|stroke-box|view-box",
             "O-BOX3",
             "#keywords",
             "transform-box: view-box",
@@ -3068,6 +3070,44 @@ fn c12_property_metadata_is_truthful() {
         assert!(report.is_clean(), "{id}: {:?}", report.diagnostics());
         assert_eq!(report.syntax().len(), 1, "{id} parser vector");
     }
+
+    for keyword in [
+        "content-box",
+        "padding-box",
+        "border-box",
+        "margin-box",
+        "fill-box",
+        "stroke-box",
+        "view-box",
+    ] {
+        assert!(
+            CssBoxEdgeKeyword::from_keyword(keyword).is_some(),
+            "{keyword}"
+        );
+    }
+    assert_eq!(CssBoxEdgeKeyword::from_keyword("content"), None);
+
+    for keyword in [
+        "normal",
+        "multiply",
+        "screen",
+        "overlay",
+        "darken",
+        "lighten",
+        "color-dodge",
+        "color-burn",
+        "hard-light",
+        "soft-light",
+        "difference",
+        "exclusion",
+        "hue",
+        "saturation",
+        "color",
+        "luminosity",
+    ] {
+        assert!(CssBlendMode::from_keyword(keyword).is_some(), "{keyword}");
+    }
+    assert_eq!(CssBlendMode::from_keyword("plus-lighter"), None);
 }
 
 #[test]

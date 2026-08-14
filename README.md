@@ -639,6 +639,66 @@ targets. The crate does not paginate, match page selectors, apply page cascade,
 render generated markers, resolve counter inheritance, expose CSSOM, or lower
 these authored models into another Surgeist crate.
 
+## CSS2 residual, writing, UI, containment, and compositing properties
+
+The C12 property family adds complete authored grammars for thirteen CSS2
+residual properties, Writing Modes 3 `text-combine-upright`,
+`text-orientation`, and `unicode-bidi`, UI3 `caret-color`, `outline-offset`, and
+`resize`, Containment 1 `contain`, Transforms 1 `transform-box`, and Compositing
+1 `background-blend-mode`, `isolation`, and `mix-blend-mode`. Their property
+wrappers preserve exact authored CSS and expose typed current values without
+performing cascade, layout, pagination, painting, hit testing, containment
+semantics, blending, or writing-mode resolution.
+
+`glyph-orientation-vertical` is the selected Writing Modes legacy shorthand,
+not a name-equivalent schema alias. Its restricted `auto`, `0`, `0deg`, `90`,
+and `90deg` grammar maps to a parser-produced `text-orientation` declaration.
+The schema therefore keeps `CssKnownProperty::TextOrientation.aliases()` empty,
+while the conformance catalog exposes the explicit
+`official.property-alias.glyph-orientation-vertical` record.
+
+```rust
+use surgeist_css::{
+    CssBlendMode, CssFeatureKind, CssKnownProperty, CssKnownPropertyValueRef,
+    CssSupportStatus, feature_metadata, parse_style_attribute,
+};
+
+let report = parse_style_attribute(concat!(
+    "border-spacing: 2px 3px; ",
+    "glyph-orientation-vertical: 90; ",
+    "background-blend-mode: multiply, luminosity",
+));
+assert!(report.is_clean());
+assert_eq!(
+    report.syntax()[1].known().expect("legacy shorthand").property(),
+    CssKnownProperty::TextOrientation,
+);
+let CssKnownPropertyValueRef::BackgroundBlendMode(blending) = report.syntax()[2]
+    .known().expect("known blending property")
+    .property_value().expect("ordinary value")
+else { panic!("expected background blend modes") };
+assert_eq!(
+    blending.modes().modes(),
+    &[CssBlendMode::Multiply, CssBlendMode::Luminosity],
+);
+let alias = feature_metadata("official.property-alias.glyph-orientation-vertical")
+    .expect("legacy alias metadata");
+assert_eq!(alias.kind(), CssFeatureKind::PropertyAlias);
+assert_eq!(alias.status(), CssSupportStatus::Complete);
+```
+
+Exactly 27 C12 official rows are public `Complete` atomic records: 24 canonical
+properties, the explicit legacy shorthand, and the independent
+`official.value.box-edge-keywords` and `official.value.blend-mode` shared-value
+records. This activation does not inflate the immutable ledger or promote later
+work: it remains 162 property units (161 canonical properties plus the custom
+property family), one normative legacy shorthand, and 167 non-property units.
+The unchanged 131-row exclusion registry still includes exactly 50 superseded
+CSS2 property definitions, 20 informative CSS2 Appendix A properties, and the
+two current-production-less `glyph-orientation-horizontal` and `ime-mode`
+spellings; the remaining exclusions cover exact non-property or downstream
+source areas.
+
 ## Media, supports, and import preludes
 
 Media Queries 3 types and features are retained as authored query syntax. A

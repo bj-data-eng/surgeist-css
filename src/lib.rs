@@ -619,6 +619,51 @@ let _ = validate_style_attribute("color: red");
 //! assert_eq!(page.declarations().len(), 2);
 //! ```
 //!
+//! # Residual official properties and legacy orientation
+//!
+//! The C12 family exposes complete typed authored grammars for thirteen CSS2 residual
+//! properties; Writing Modes 3 text combination, orientation, and bidi properties; UI3 caret,
+//! outline-offset, and resize properties; Containment 1 `contain`; Transforms 1
+//! `transform-box`; and Compositing 1 blend and isolation properties. These values retain
+//! authored syntax and parser coordinates without applying cascade, layout, pagination,
+//! painting, containment semantics, blending, hit testing, or writing-mode resolution.
+//!
+//! `glyph-orientation-vertical` is an explicit restricted legacy shorthand that maps to a
+//! parser-produced [`CssKnownProperty::TextOrientation`] value. It is not a name-equivalent
+//! schema alias: [`CssKnownProperty::aliases`] remains empty for `TextOrientation`, while
+//! [`feature_metadata`] exposes its distinct [`CssFeatureKind::PropertyAlias`] record. The
+//! shared box-edge and blend-mode productions likewise have independent complete records.
+//!
+//! ```
+//! use surgeist_css::{
+//!     CssBlendMode, CssFeatureKind, CssKnownProperty, CssKnownPropertyValueRef,
+//!     CssSupportStatus, feature_metadata, parse_style_attribute,
+//! };
+//!
+//! let report = parse_style_attribute(concat!(
+//!     "border-spacing: 2px 3px; ",
+//!     "glyph-orientation-vertical: 90; ",
+//!     "background-blend-mode: multiply, luminosity",
+//! ));
+//! assert!(report.is_clean());
+//! assert_eq!(
+//!     report.syntax()[1].known().expect("legacy shorthand").property(),
+//!     CssKnownProperty::TextOrientation,
+//! );
+//! let CssKnownPropertyValueRef::BackgroundBlendMode(blending) = report.syntax()[2]
+//!     .known().expect("known blending property")
+//!     .property_value().expect("ordinary value")
+//! else { panic!("expected background blend modes") };
+//! assert_eq!(
+//!     blending.modes().modes(),
+//!     &[CssBlendMode::Multiply, CssBlendMode::Luminosity],
+//! );
+//! let alias = feature_metadata("official.property-alias.glyph-orientation-vertical")
+//!     .expect("legacy alias metadata");
+//! assert_eq!(alias.kind(), CssFeatureKind::PropertyAlias);
+//! assert_eq!(alias.status(), CssSupportStatus::Complete);
+//! ```
+//!
 //! # Media, supports, imports, and prelude recovery
 //!
 //! Media Queries 3 syntax preserves defined-false authored input without confusing it with

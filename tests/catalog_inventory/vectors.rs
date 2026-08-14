@@ -24,6 +24,82 @@ macro_rules! vector {
 pub const PROPERTY_POSITIVE_VECTORS: &[PropertyVector] = &[
     vector!("baseline.property.all", "all", "inherit"),
     vector!("baseline.property.display", "display", "block"),
+    vector!(
+        "official.property.border-collapse",
+        "border-collapse",
+        "collapse"
+    ),
+    vector!(
+        "official.property.border-spacing",
+        "border-spacing",
+        "2px 3px"
+    ),
+    vector!("official.property.caption-side", "caption-side", "bottom"),
+    vector!(
+        "official.property.clip",
+        "clip",
+        "rect(auto, 10px, 20px, -1px)"
+    ),
+    vector!("official.property.empty-cells", "empty-cells", "hide"),
+    vector!("official.property.orphans", "orphans", "3"),
+    vector!(
+        "official.property.page-break-after",
+        "page-break-after",
+        "right"
+    ),
+    vector!(
+        "official.property.page-break-before",
+        "page-break-before",
+        "always"
+    ),
+    vector!(
+        "official.property.page-break-inside",
+        "page-break-inside",
+        "avoid"
+    ),
+    vector!("official.property.quotes", "quotes", "\"open\" \"close\""),
+    vector!("official.property.table-layout", "table-layout", "fixed"),
+    vector!("official.property.widows", "widows", "4"),
+    vector!("official.property.word-spacing", "word-spacing", "-0.25em"),
+    vector!(
+        "official.property.text-combine-upright",
+        "text-combine-upright",
+        "all"
+    ),
+    vector!(
+        "official.property.text-orientation",
+        "text-orientation",
+        "sideways"
+    ),
+    vector!(
+        "official.property.unicode-bidi",
+        "unicode-bidi",
+        "isolate-override"
+    ),
+    vector!(
+        "official.property.caret-color",
+        "caret-color",
+        "rebeccapurple"
+    ),
+    vector!("official.property.outline-offset", "outline-offset", "-2px"),
+    vector!("official.property.resize", "resize", "horizontal"),
+    vector!("official.property.contain", "contain", "paint size"),
+    vector!(
+        "official.property.transform-box",
+        "transform-box",
+        "view-box"
+    ),
+    vector!(
+        "official.property.background-blend-mode",
+        "background-blend-mode",
+        "multiply, luminosity"
+    ),
+    vector!("official.property.isolation", "isolation", "isolate"),
+    vector!(
+        "official.property.mix-blend-mode",
+        "mix-blend-mode",
+        "soft-light"
+    ),
     vector!("baseline.property.box-sizing", "box-sizing", "border-box"),
     vector!("baseline.property.position", "position", "sticky"),
     vector!("baseline.property.direction", "direction", "rtl"),
@@ -609,6 +685,70 @@ pub const PROPERTY_POSITIVE_VECTORS: &[PropertyVector] = &[
 pub const PROPERTY_NEGATIVE_VECTORS: &[PropertyVector] = &[
     vector!("baseline.property.all", "all", "block"),
     vector!("baseline.property.display", "display", "inline"),
+    vector!(
+        "official.property.border-collapse",
+        "border-collapse",
+        "auto"
+    ),
+    vector!("official.property.border-spacing", "border-spacing", "-1px"),
+    vector!("official.property.caption-side", "caption-side", "left"),
+    vector!("official.property.clip", "clip", "rect(1px, 2px, 3px)"),
+    vector!("official.property.empty-cells", "empty-cells", "auto"),
+    vector!("official.property.orphans", "orphans", "0"),
+    vector!(
+        "official.property.page-break-after",
+        "page-break-after",
+        "page"
+    ),
+    vector!(
+        "official.property.page-break-before",
+        "page-break-before",
+        "recto"
+    ),
+    vector!(
+        "official.property.page-break-inside",
+        "page-break-inside",
+        "left"
+    ),
+    vector!("official.property.quotes", "quotes", "\"open\""),
+    vector!("official.property.table-layout", "table-layout", "collapse"),
+    vector!("official.property.widows", "widows", "0"),
+    vector!("official.property.word-spacing", "word-spacing", "auto"),
+    vector!(
+        "official.property.text-combine-upright",
+        "text-combine-upright",
+        "sideways"
+    ),
+    vector!(
+        "official.property.text-orientation",
+        "text-orientation",
+        "auto"
+    ),
+    vector!(
+        "official.property.unicode-bidi",
+        "unicode-bidi",
+        "isolate isolate"
+    ),
+    vector!("official.property.caret-color", "caret-color", "auto auto"),
+    vector!("official.property.outline-offset", "outline-offset", "auto"),
+    vector!("official.property.resize", "resize", "inline"),
+    vector!("official.property.contain", "contain", "size size"),
+    vector!(
+        "official.property.transform-box",
+        "transform-box",
+        "padding-box"
+    ),
+    vector!(
+        "official.property.background-blend-mode",
+        "background-blend-mode",
+        "multiply luminosity"
+    ),
+    vector!("official.property.isolation", "isolation", "none"),
+    vector!(
+        "official.property.mix-blend-mode",
+        "mix-blend-mode",
+        "multiply, screen"
+    ),
     vector!("baseline.property.box-sizing", "box-sizing", "padding-box"),
     vector!("baseline.property.position", "position", "running"),
     vector!("baseline.property.direction", "direction", "block"),

@@ -458,6 +458,193 @@ fn counter_style_block_recovery_handles_reserved_names_eof_and_depth_boundaries(
 }
 
 #[test]
+fn c11_rule_recovery_preserves_siblings_and_boundaries() {
+    let source = concat!(
+        "/* 😀 */\n",
+        "@counter-style root { system: cyclic; ",
+        "@page :left { margin: 1cm; } ",
+        "@counter-style descriptor-child { symbols: d; } ",
+        "@font-feature-values Demo { } ",
+        "@mystery-descriptor-rule { } ",
+        "symbols: r; } ",
+        "@page { @counter-style page-child { symbols: p; } margin: 1cm; } ",
+        "@media print { ",
+        "@counter-style media-child { symbols: m; } ",
+        "@page :right { margin: 2cm; } ",
+        ".media-kept { color: red; } } ",
+        ".host { ",
+        "@counter-style style-child { symbols: s; } ",
+        "@page :first { margin: 3cm; } ",
+        "color: blue; } ",
+        "@scope { ",
+        "@counter-style scope-child { symbols: c; } ",
+        "@page :left { margin: 4cm; } ",
+        ".scope-kept { color: green; } } ",
+        "@font-feature-values Tail { } ",
+        "@mystery-tail { } ",
+        ".tail { color: black; }",
+    );
+    let report = parse_sheet(source);
+
+    assert!(matches!(
+        report.syntax().rules(),
+        [
+            CssRule::CounterStyle(_),
+            CssRule::Page(_),
+            CssRule::Media(_),
+            CssRule::Style(_),
+            CssRule::Scope(_),
+            CssRule::Style(_),
+        ]
+    ));
+    let CssRule::CounterStyle(counter_style) = &report.syntax().rules()[0] else {
+        panic!("expected recovered counter style")
+    };
+    assert_eq!(counter_style.descriptors().occurrences().count(), 2);
+    let CssRule::Page(page) = &report.syntax().rules()[1] else {
+        panic!("expected recovered page")
+    };
+    assert_eq!(page.declarations().len(), 1);
+    let CssRule::Media(media) = &report.syntax().rules()[2] else {
+        panic!("expected recovered media parent")
+    };
+    assert!(matches!(media.rules(), [CssRule::Style(_)]));
+
+    let expected = [
+        (
+            "@page :left { margin: 1cm; }",
+            CssErrorCode::InvalidAtRulePlacement,
+        ),
+        (
+            "@counter-style descriptor-child { symbols: d; }",
+            CssErrorCode::InvalidAtRulePlacement,
+        ),
+        (
+            "@font-feature-values Demo { }",
+            CssErrorCode::UnsupportedAtRule,
+        ),
+        ("@mystery-descriptor-rule { }", CssErrorCode::UnknownAtRule),
+        (
+            "@counter-style page-child { symbols: p; }",
+            CssErrorCode::InvalidAtRulePlacement,
+        ),
+        (
+            "@counter-style media-child { symbols: m; }",
+            CssErrorCode::InvalidAtRulePlacement,
+        ),
+        (
+            "@page :right { margin: 2cm; }",
+            CssErrorCode::InvalidAtRulePlacement,
+        ),
+        (
+            "@counter-style style-child { symbols: s; }",
+            CssErrorCode::InvalidAtRulePlacement,
+        ),
+        (
+            "@page :first { margin: 3cm; }",
+            CssErrorCode::InvalidAtRulePlacement,
+        ),
+        (
+            "@counter-style scope-child { symbols: c; }",
+            CssErrorCode::InvalidAtRulePlacement,
+        ),
+        (
+            "@page :left { margin: 4cm; }",
+            CssErrorCode::InvalidAtRulePlacement,
+        ),
+        (
+            "@font-feature-values Tail { }",
+            CssErrorCode::UnsupportedAtRule,
+        ),
+        ("@mystery-tail { }", CssErrorCode::UnknownAtRule),
+    ];
+    assert_eq!(report.diagnostics().len(), expected.len());
+    for (diagnostic, (authored, code)) in report.diagnostics().iter().zip(expected) {
+        let start = source.find(authored).expect("authored invalid unit");
+        assert_eq!(diagnostic.error().code(), code, "{authored}");
+        assert_eq!(diagnostic.action(), CssRecoveryAction::DropAtRule);
+        assert_eq!(diagnostic.span().start().byte_offset().value(), start);
+        assert_eq!(
+            diagnostic.span().end().byte_offset().value(),
+            start + authored.len()
+        );
+        if code == CssErrorCode::InvalidAtRulePlacement {
+            let name_end = authored.find(char::is_whitespace).unwrap_or(authored.len());
+            assert_eq!(
+                diagnostic.error().position().byte_offset().value(),
+                start + name_end,
+                "{authored}"
+            );
+        }
+    }
+
+    for depth in [255_usize, 256, 257] {
+        let counter_source = format!(
+            "@counter-style deep{{symbols:x;prefix:{}x{};suffix:\".\";}}.tail{{}}",
+            "f(".repeat(depth),
+            ")".repeat(depth),
+        );
+        let counter_report = parse_sheet(&counter_source);
+        assert!(matches!(
+            counter_report.syntax().rules(),
+            [CssRule::CounterStyle(_), CssRule::Style(_)]
+        ));
+        let [counter_diagnostic] = counter_report.diagnostics() else {
+            panic!("depth {depth} must drop exactly the invalid descriptor")
+        };
+        assert_eq!(
+            counter_diagnostic.error().code() == CssErrorCode::NestingLimit,
+            depth >= 256,
+            "counter-style depth {depth}: {:?}",
+            counter_report.diagnostics()
+        );
+        assert_eq!(
+            counter_diagnostic.action(),
+            if depth >= 256 {
+                CssRecoveryAction::StopAtNestingLimit
+            } else {
+                CssRecoveryAction::DropDescriptor
+            }
+        );
+
+        let page_source = format!(
+            "@page{{margin-top:{}x{};margin-left:1cm;}}.tail{{}}",
+            "f(".repeat(depth),
+            ")".repeat(depth),
+        );
+        let page_report = parse_sheet(&page_source);
+        assert!(matches!(
+            page_report.syntax().rules(),
+            [CssRule::Page(_), CssRule::Style(_)]
+        ));
+        let [page_diagnostic] = page_report.diagnostics() else {
+            panic!("depth {depth} must drop exactly the invalid page declaration")
+        };
+        assert_eq!(
+            page_diagnostic.error().code() == CssErrorCode::NestingLimit,
+            depth >= 256,
+            "page depth {depth}: {:?}",
+            page_report.diagnostics()
+        );
+        assert_eq!(
+            page_diagnostic.action(),
+            if depth >= 256 {
+                CssRecoveryAction::StopAtNestingLimit
+            } else {
+                CssRecoveryAction::DropDeclaration
+            }
+        );
+    }
+
+    #[cfg(feature = "app-strict")]
+    {
+        let failure = surgeist_css::validate_sheet(source)
+            .expect_err("strict validation rejects every recovered C11 rule context");
+        assert_eq!(failure.diagnostics(), report.diagnostics());
+    }
+}
+
+#[test]
 fn later_counter_style_rule_metadata_matches_retained_public_behavior() {
     let metadata = feature_metadata("later.rule.counter-style").expect("counter-style metadata");
     assert_eq!(metadata.status(), CssSupportStatus::Complete);

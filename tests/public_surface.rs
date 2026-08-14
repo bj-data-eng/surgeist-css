@@ -3,23 +3,23 @@ use surgeist_css::{
     CssAuthoredColorMixPercentage, CssAuthoredColorSyntax, CssAuthoredFontFeature,
     CssAuthoredFontFeatureList, CssAuthoredFontFeatureSettings, CssAuthoredFontFeatureValue,
     CssAuthoredSystemColor, CssCalcOperator, CssColorInterpolationMethod,
-    CssColorInterpolationSpace, CssDefinedFalseMediaReason, CssErrorCode, CssExclusionReason,
-    CssFeatureKind, CssFontFamilyNameKind, CssFontFeature, CssFontFeatureIndex,
-    CssFontFeatureValue, CssFontSize, CssFontSizeAdjust, CssFontSizeLengthPercentage,
-    CssFontSynthesis, CssFontSynthesisValues, CssFontVariantCaps, CssFontVariantEastAsianValues,
-    CssFontVariantLigatureState, CssFontVariantLigatureValues, CssFontVariantNumericFigure,
-    CssFontVariantNumericValues, CssFontVariantPosition, CssFontVariantValues,
-    CssGenericFontFamily, CssGridAutoFlowAxis, CssHueInterpolationMethod, CssImportance,
-    CssKnownDeclaredValueRef, CssKnownProperty, CssKnownPropertyValueRef, CssLanguageRange,
-    CssLength, CssLineHeightLengthPercentage, CssMediaConditionKind, CssMediaQuery,
-    CssMediaQueryModifier, CssMediaType, CssNamespaceConstraint, CssNamespaceName,
-    CssNamespacePrefix, CssOpenTypeTag, CssPredefinedColorSpace, CssPropertyNameRef,
-    CssPseudoClass, CssPseudoElement, CssRecoveryAction, CssRelativeColorChannel,
-    CssRelativeColorEnvironment, CssRelativeColorExpressionValue, CssRelativeColorFunction,
-    CssRelativeColorResultDomain, CssRule, CssSelector, CssSelectorCombinator,
-    CssSpecificationTier, CssSupportStatus, CssSupportsConditionKind, CssSupportsConditionList,
-    ErrorKind, conformance_exclusion, feature_metadata, parse_sheet, parse_style_attribute,
-    property_metadata, specification_source,
+    CssColorInterpolationSpace, CssCounterStyleRange, CssCounterStyleSpeakAs, CssCounterSymbol,
+    CssDefinedFalseMediaReason, CssErrorCode, CssExclusionReason, CssFeatureKind,
+    CssFontFamilyNameKind, CssFontFeature, CssFontFeatureIndex, CssFontFeatureValue, CssFontSize,
+    CssFontSizeAdjust, CssFontSizeLengthPercentage, CssFontSynthesis, CssFontSynthesisValues,
+    CssFontVariantCaps, CssFontVariantEastAsianValues, CssFontVariantLigatureState,
+    CssFontVariantLigatureValues, CssFontVariantNumericFigure, CssFontVariantNumericValues,
+    CssFontVariantPosition, CssFontVariantValues, CssGenericFontFamily, CssGridAutoFlowAxis,
+    CssHueInterpolationMethod, CssImportance, CssKnownDeclaredValueRef, CssKnownProperty,
+    CssKnownPropertyValueRef, CssLanguageRange, CssLength, CssLineHeightLengthPercentage,
+    CssMediaConditionKind, CssMediaQuery, CssMediaQueryModifier, CssMediaType,
+    CssNamespaceConstraint, CssNamespaceName, CssNamespacePrefix, CssOpenTypeTag,
+    CssPredefinedColorSpace, CssPropertyNameRef, CssPseudoClass, CssPseudoElement,
+    CssRecoveryAction, CssRelativeColorChannel, CssRelativeColorEnvironment,
+    CssRelativeColorExpressionValue, CssRelativeColorFunction, CssRelativeColorResultDomain,
+    CssRule, CssSelector, CssSelectorCombinator, CssSpecificationTier, CssSupportStatus,
+    CssSupportsConditionKind, CssSupportsConditionList, ErrorKind, conformance_exclusion,
+    feature_metadata, parse_sheet, parse_style_attribute, property_metadata, specification_source,
 };
 
 #[test]
@@ -41,6 +41,39 @@ fn public_surface_exposes_checked_private_field_namespace_models() {
     );
     assert!(CssNamespacePrefix::try_new("svg icon").is_none());
     assert_eq!(CssNamespaceName::new("").as_str(), "");
+}
+
+#[test]
+fn public_surface_exposes_checked_counter_style_descriptor_models() {
+    let report = parse_sheet(concat!(
+        "@counter-style complete { system: additive; negative: \"(\" \" )\"; ",
+        "range: infinite -1, 1 infinite; pad: \"0\" 3; fallback: decimal; ",
+        "additive-symbols: C 100, X 10, I 1; speak-as: spell-out; }",
+    ));
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [CssRule::CounterStyle(rule)] = report.syntax().rules() else {
+        panic!("expected retained counter style")
+    };
+
+    let negative = rule.descriptors().negative().unwrap();
+    assert!(matches!(
+        negative.prefix(),
+        CssCounterSymbol::String(value) if value.as_str() == "("
+    ));
+    assert!(matches!(
+        rule.descriptors().range().map(|value| value.value()),
+        Some(CssCounterStyleRange::Ranges(ranges)) if ranges.ranges().len() == 2
+    ));
+    assert_eq!(rule.descriptors().pad().unwrap().minimum_length(), 3);
+    assert_eq!(rule.descriptors().fallback().unwrap().as_str(), "decimal");
+    assert_eq!(
+        rule.descriptors().additive_symbols().unwrap().tuples()[0].weight(),
+        100
+    );
+    assert!(matches!(
+        rule.descriptors().speak_as().map(|value| value.value()),
+        Some(CssCounterStyleSpeakAs::SpellOut)
+    ));
 }
 
 #[test]

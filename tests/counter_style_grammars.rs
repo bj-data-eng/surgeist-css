@@ -1,5 +1,6 @@
 use surgeist_css::{
-    CssCounterStyleDescriptorRef, CssCounterStyleName, CssCounterStyleSystem, CssCounterSymbol,
+    CssCounterStyleDescriptorRef, CssCounterStyleName, CssCounterStyleRange,
+    CssCounterStyleRangeBound, CssCounterStyleSpeakAs, CssCounterStyleSystem, CssCounterSymbol,
     CssCounterSymbolIdent, CssErrorCode, CssRecoveryAction, CssRule, CssSupportStatus,
     feature_metadata, parse_sheet,
 };
@@ -107,6 +108,154 @@ fn counter_style_descriptors_enforce_domains_order_and_recovery() {
     assert_eq!(base.descriptors().occurrences().count(), 2);
     assert_eq!(additive.descriptors().occurrences().count(), 7);
     assert_eq!(inherited.descriptors().occurrences().count(), 6);
+}
+
+#[test]
+fn counter_style_descriptor_models_preserve_authored_duplicates_and_effective_last_values() {
+    let source = concat!(
+        "@counter-style base { system: cyclic; symbols: b; } ",
+        "@counter-style rich { system: additive; ",
+        "negative: \"-\"; negative: \"(\" \" )\"; ",
+        "range: auto; range: infinite -1, 1 infinite; ",
+        "pad: 2 \"0\"; pad: \"_\" 3; ",
+        "fallback: decimal; fallback: base; ",
+        "additive-symbols: 10 X, 1 I; additive-symbols: C 100, X 10, I 1, N 0; ",
+        "speak-as: words; speak-as: base; }",
+    );
+    let report = parse_sheet(source);
+    assert!(report.is_clean(), "{:?}", report.diagnostics());
+    let [CssRule::CounterStyle(_), CssRule::CounterStyle(rule)] = report.syntax().rules() else {
+        panic!("expected base and rich counter styles")
+    };
+
+    let negative = rule.descriptors().negative().unwrap();
+    assert!(matches!(
+        negative.prefix(),
+        CssCounterSymbol::String(value) if value.as_str() == "("
+    ));
+    assert!(matches!(
+        negative.suffix(),
+        Some(CssCounterSymbol::String(value)) if value.as_str() == " )"
+    ));
+    let CssCounterStyleRange::Ranges(ranges) = rule.descriptors().range().unwrap().value() else {
+        panic!("expected explicit effective ranges")
+    };
+    assert_eq!(ranges.ranges().len(), 2);
+    assert_eq!(
+        ranges.ranges()[0].lower(),
+        CssCounterStyleRangeBound::Infinite
+    );
+    assert_eq!(
+        ranges.ranges()[0].upper(),
+        CssCounterStyleRangeBound::Integer(-1)
+    );
+    assert_eq!(
+        ranges.ranges()[1].lower(),
+        CssCounterStyleRangeBound::Integer(1)
+    );
+    assert_eq!(
+        ranges.ranges()[1].upper(),
+        CssCounterStyleRangeBound::Infinite
+    );
+
+    let pad = rule.descriptors().pad().unwrap();
+    assert_eq!(pad.minimum_length(), 3);
+    assert!(matches!(
+        pad.symbol(),
+        CssCounterSymbol::String(value) if value.as_str() == "_"
+    ));
+    assert_eq!(rule.descriptors().fallback().unwrap().as_str(), "base");
+    let tuples = rule.descriptors().additive_symbols().unwrap().tuples();
+    assert_eq!(
+        tuples
+            .iter()
+            .map(|tuple| tuple.weight())
+            .collect::<Vec<_>>(),
+        vec![100, 10, 1, 0]
+    );
+    assert!(matches!(
+        rule.descriptors().speak_as().map(|value| value.value()),
+        Some(CssCounterStyleSpeakAs::CounterStyle(name)) if name.as_str() == "base"
+    ));
+    assert_eq!(rule.descriptors().occurrences().count(), 13);
+}
+
+#[test]
+fn invalid_counter_style_descriptor_values_drop_only_the_descriptor_and_keep_effective_values() {
+    let source = concat!(
+        ".before {} ",
+        "@counter-style kept { system: additive; ",
+        "negative: \"-\" \"+\" extra; negative: \"-\"; ",
+        "range: 3 1; range: 1 3; ",
+        "pad: -1 \"0\"; pad: \"0\" 2; ",
+        "fallback: none; fallback: decimal; ",
+        "additive-symbols: 10 X, 10 I; additive-symbols: 10 X, 1 I; ",
+        "speak-as: inherit; speak-as: numbers; mystery: x; } ",
+        ".after {}",
+    );
+    let report = parse_sheet(source);
+    assert!(matches!(
+        report.syntax().rules(),
+        [
+            CssRule::Style(_),
+            CssRule::CounterStyle(_),
+            CssRule::Style(_)
+        ]
+    ));
+    let CssRule::CounterStyle(rule) = &report.syntax().rules()[1] else {
+        panic!("expected retained counter style")
+    };
+    assert_eq!(rule.descriptors().occurrences().count(), 7);
+    assert!(
+        matches!(rule.descriptors().range().unwrap().value(), CssCounterStyleRange::Ranges(ranges) if ranges.ranges().len() == 1)
+    );
+    assert_eq!(rule.descriptors().pad().unwrap().minimum_length(), 2);
+    assert_eq!(rule.descriptors().fallback().unwrap().as_str(), "decimal");
+    assert!(matches!(
+        rule.descriptors().speak_as().map(|value| value.value()),
+        Some(CssCounterStyleSpeakAs::Numbers)
+    ));
+
+    assert_eq!(report.diagnostics().len(), 7);
+    assert!(report.diagnostics()[..6].iter().all(|diagnostic| {
+        diagnostic.error().code() == CssErrorCode::InvalidDescriptorValue
+            && diagnostic.action() == CssRecoveryAction::DropDescriptor
+    }));
+    assert_eq!(
+        report.diagnostics()[6].error().code(),
+        CssErrorCode::UnknownDescriptor
+    );
+    assert_eq!(
+        report.diagnostics()[6].action(),
+        CssRecoveryAction::DropDescriptor
+    );
+}
+
+#[test]
+fn invalid_effective_counter_style_combinations_drop_only_the_at_rule() {
+    let source = concat!(
+        ".before {} ",
+        "@counter-style inherited-symbols { system: extends decimal; symbols: x; } ",
+        "@counter-style inherited-additive { system: extends decimal; additive-symbols: 1 I; } ",
+        "@counter-style missing-additive { system: additive; } ",
+        "@counter-style missing-symbols { range: auto; } ",
+        "@counter-style kept { system: additive; additive-symbols: 1 I; } ",
+        ".after {}",
+    );
+    let report = parse_sheet(source);
+    assert!(matches!(
+        report.syntax().rules(),
+        [
+            CssRule::Style(_),
+            CssRule::CounterStyle(_),
+            CssRule::Style(_)
+        ]
+    ));
+    assert_eq!(report.diagnostics().len(), 4);
+    assert!(report.diagnostics().iter().all(|diagnostic| {
+        diagnostic.error().code() == CssErrorCode::InvalidDescriptorCombination
+            && diagnostic.action() == CssRecoveryAction::DropAtRule
+    }));
 }
 
 #[test]

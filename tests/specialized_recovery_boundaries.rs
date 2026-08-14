@@ -183,6 +183,39 @@ fn font_source_descriptor_components_observe_the_exact_nesting_limit() {
 }
 
 #[test]
+fn counter_style_descriptor_components_observe_eof_and_exact_nesting_boundaries() {
+    let eof = "@counter-style eof{system:additive;additive-symbols:1 I;negative:\"-\"";
+    assert!(matches!(
+        parse_sheet(eof).syntax().rules(),
+        [CssRule::CounterStyle(_)]
+    ));
+    assert_implicit_closures(eof, 1);
+
+    for depth in [255_usize, 256, 257] {
+        let source = format!(
+            "@counter-style deep{{system:additive;additive-symbols:1 {}x{};}}.after{{}}",
+            "f(".repeat(depth),
+            ")".repeat(depth),
+        );
+        let report = parse_sheet(&source);
+        assert!(matches!(
+            report.syntax().rules().last(),
+            Some(CssRule::Style(_))
+        ));
+        let stopped = report.diagnostics().iter().any(|diagnostic| {
+            diagnostic.error().code() == CssErrorCode::NestingLimit
+                && diagnostic.action() == CssRecoveryAction::StopAtNestingLimit
+        });
+        assert_eq!(
+            stopped,
+            depth >= 256,
+            "depth {depth}: {:?}",
+            report.diagnostics()
+        );
+    }
+}
+
+#[test]
 fn specialized_boundary_misleading_delimiters_do_not_change_eof_allocation() {
     let source = ".x{--v:f(\") }\"/* ] } */x";
     let report = parse_sheet(source);

@@ -42,6 +42,71 @@ fn invalid_core_font_value_has_exact_property_diagnostic_and_retains_its_sibling
 }
 
 #[test]
+fn counter_style_descriptor_value_and_combination_errors_preserve_typed_context() {
+    let value_source = concat!(
+        "@counter-style kept { system: additive; ",
+        "additive-symbols: 10 X, 10 I; additive-symbols: 10 X, 1 I; }",
+    );
+    let value_report = parse_sheet(value_source);
+    assert!(matches!(
+        value_report.syntax().rules(),
+        [CssRule::CounterStyle(_)]
+    ));
+    let [value_diagnostic] = value_report.diagnostics() else {
+        panic!("expected one invalid additive ordering diagnostic")
+    };
+    assert_eq!(
+        value_diagnostic.error().code(),
+        CssErrorCode::InvalidDescriptorValue
+    );
+    assert_eq!(value_diagnostic.action(), CssRecoveryAction::DropDescriptor);
+    assert_eq!(
+        value_diagnostic.error().position().byte_offset().value(),
+        value_source.match_indices("10 I").next().unwrap().0
+    );
+    let ErrorKind::InvalidDescriptorValue(value) = value_diagnostic.error().kind() else {
+        panic!("expected typed descriptor-value error")
+    };
+    assert_eq!(value.at_rule().as_str(), "counter-style");
+    assert_eq!(value.descriptor().as_str(), "additive-symbols");
+
+    let combination_source =
+        "@counter-style inherited { system: extends decimal; symbols: x; } .after {}";
+    let combination_report = parse_sheet(combination_source);
+    assert!(matches!(
+        combination_report.syntax().rules(),
+        [CssRule::Style(_)]
+    ));
+    let [combination_diagnostic] = combination_report.diagnostics() else {
+        panic!("expected one invalid effective-combination diagnostic")
+    };
+    assert_eq!(
+        combination_diagnostic.error().code(),
+        CssErrorCode::InvalidDescriptorCombination
+    );
+    assert_eq!(
+        combination_diagnostic.action(),
+        CssRecoveryAction::DropAtRule
+    );
+    assert_eq!(
+        combination_diagnostic
+            .error()
+            .position()
+            .byte_offset()
+            .value(),
+        combination_source.find("system").unwrap()
+    );
+    let ErrorKind::InvalidDescriptorCombination(combination) =
+        combination_diagnostic.error().kind()
+    else {
+        panic!("expected typed descriptor-combination error")
+    };
+    assert_eq!(combination.at_rule().as_str(), "counter-style");
+    assert_eq!(combination.responsible().as_str(), "system");
+    assert_eq!(combination.conflicting()[0].as_str(), "symbols");
+}
+
+#[test]
 fn selectors3_invalid_language_and_pseudo_element_sequences_drop_exact_rules() {
     let failures = [
         ".empty:lang() { color: black; }",

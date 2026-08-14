@@ -71,6 +71,50 @@ fn defined_false_media_nodes_preserve_exact_non_bmp_byte_and_utf16_positions() {
 }
 
 #[test]
+fn counter_style_descriptor_positions_and_errors_use_non_bmp_utf16_coordinates() {
+    let source = concat!(
+        "/*😀*/@counter-style kept { system: additive; range: infinite -1; ",
+        "additive-symbols: 10 X, 10 I; additive-symbols: 10 X, 1 I; }",
+    );
+    let report = parse_sheet(source);
+    let [CssRule::CounterStyle(rule)] = report.syntax().rules() else {
+        panic!("expected retained counter style")
+    };
+    let range_offset = source.find("range").unwrap();
+    assert_position(
+        rule.descriptors().range().unwrap().position(),
+        range_offset,
+        0,
+        u32::try_from(source[..range_offset].encode_utf16().count()).unwrap(),
+    );
+
+    let [diagnostic] = report.diagnostics() else {
+        panic!("expected invalid additive ordering recovery")
+    };
+    let responsible = source.match_indices("10 I").next().unwrap().0;
+    let descriptor_start = source.find("additive-symbols").unwrap();
+    let descriptor_end = descriptor_start + source[descriptor_start..].find(';').unwrap() + 1;
+    assert_position(
+        diagnostic.error().position(),
+        responsible,
+        0,
+        u32::try_from(source[..responsible].encode_utf16().count()).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().start(),
+        descriptor_start,
+        0,
+        u32::try_from(source[..descriptor_start].encode_utf16().count()).unwrap(),
+    );
+    assert_position(
+        diagnostic.span().end(),
+        descriptor_end,
+        0,
+        u32::try_from(source[..descriptor_end].encode_utf16().count()).unwrap(),
+    );
+}
+
+#[test]
 fn supports_nodes_preserve_exact_non_bmp_byte_and_utf16_positions() {
     let source = "/*😀*/\n@supports /*🦊*/ (D\\69splay: grid) {}";
     let report = parse_sheet(source);

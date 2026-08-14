@@ -133,20 +133,20 @@ pub enum CssRule {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssCounterStyleRule {
     name: CssCounterStyleName,
-    descriptors: CssCounterStyleDescriptors,
+    descriptors: Box<CssCounterStyleDescriptors>,
     position: CssSourcePosition,
 }
 
 impl CssCounterStyleRule {
     #[must_use]
-    pub(crate) const fn new(
+    pub(crate) fn new(
         name: CssCounterStyleName,
         descriptors: CssCounterStyleDescriptors,
         position: CssSourcePosition,
     ) -> Self {
         Self {
             name,
-            descriptors,
+            descriptors: Box::new(descriptors),
             position,
         }
     }
@@ -179,9 +179,15 @@ impl CssCounterStyleRule {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CssCounterStyleDescriptors {
     system: Option<CssDescriptorOccurrence<CssCounterStyleSystem>>,
+    negative: Option<CssDescriptorOccurrence<CssCounterStyleNegative>>,
     symbols: Option<CssDescriptorOccurrence<CssCounterSymbols>>,
     prefix: Option<CssDescriptorOccurrence<CssCounterSymbol>>,
     suffix: Option<CssDescriptorOccurrence<CssCounterSymbol>>,
+    range: Option<CssDescriptorOccurrence<CssCounterStyleRange>>,
+    pad: Option<CssDescriptorOccurrence<CssCounterStylePad>>,
+    fallback: Option<CssDescriptorOccurrence<CssCounterStyleName>>,
+    additive_symbols: Option<CssDescriptorOccurrence<CssCounterAdditiveSymbols>>,
+    speak_as: Option<CssDescriptorOccurrence<CssCounterStyleSpeakAs>>,
     occurrences: Vec<CssCounterStyleDescriptor>,
 }
 
@@ -190,16 +196,30 @@ impl CssCounterStyleDescriptors {
         occurrences: Vec<CssCounterStyleDescriptor>,
     ) -> Result<Self, CssCounterStyleCombinationIssue> {
         let mut system = None;
+        let mut negative = None;
         let mut symbols = None;
         let mut prefix = None;
         let mut suffix = None;
+        let mut range = None;
+        let mut pad = None;
+        let mut fallback = None;
+        let mut additive_symbols = None;
+        let mut speak_as = None;
 
         for descriptor in &occurrences {
             match descriptor {
                 CssCounterStyleDescriptor::System(value) => system = Some(value.clone()),
+                CssCounterStyleDescriptor::Negative(value) => negative = Some(value.clone()),
                 CssCounterStyleDescriptor::Symbols(value) => symbols = Some(value.clone()),
                 CssCounterStyleDescriptor::Prefix(value) => prefix = Some(value.clone()),
                 CssCounterStyleDescriptor::Suffix(value) => suffix = Some(value.clone()),
+                CssCounterStyleDescriptor::Range(value) => range = Some(value.clone()),
+                CssCounterStyleDescriptor::Pad(value) => pad = Some(value.clone()),
+                CssCounterStyleDescriptor::Fallback(value) => fallback = Some(value.clone()),
+                CssCounterStyleDescriptor::AdditiveSymbols(value) => {
+                    additive_symbols = Some(value.clone());
+                }
+                CssCounterStyleDescriptor::SpeakAs(value) => speak_as = Some(value.clone()),
             }
         }
 
@@ -208,20 +228,31 @@ impl CssCounterStyleDescriptors {
             .map(CssDescriptorOccurrence::value)
             .unwrap_or(&CssCounterStyleSystem::Symbolic);
         match effective_system {
-            CssCounterStyleSystem::Extends(_) if symbols.is_some() => {
+            CssCounterStyleSystem::Extends(_)
+                if symbols.is_some() || additive_symbols.is_some() =>
+            {
+                let mut conflicting = Vec::new();
+                if symbols.is_some() {
+                    conflicting.push("symbols");
+                }
+                if additive_symbols.is_some() {
+                    conflicting.push("additive-symbols");
+                }
                 return Err(CssCounterStyleCombinationIssue::new(
                     system.as_ref().expect("extends is authored").position(),
                     "system",
-                    vec!["symbols"],
+                    conflicting,
                 ));
             }
             CssCounterStyleSystem::Extends(_) => {}
             CssCounterStyleSystem::Additive => {
-                return Err(CssCounterStyleCombinationIssue::new(
-                    system.as_ref().expect("additive is authored").position(),
-                    "system",
-                    vec!["additive-symbols"],
-                ));
+                if additive_symbols.is_none() {
+                    return Err(CssCounterStyleCombinationIssue::new(
+                        system.as_ref().expect("additive is authored").position(),
+                        "system",
+                        vec!["additive-symbols"],
+                    ));
+                }
             }
             CssCounterStyleSystem::Numeric | CssCounterStyleSystem::Alphabetic => {
                 let Some(symbols) = symbols.as_ref() else {
@@ -262,9 +293,15 @@ impl CssCounterStyleDescriptors {
 
         Ok(Self {
             system,
+            negative,
             symbols,
             prefix,
             suffix,
+            range,
+            pad,
+            fallback,
+            additive_symbols,
+            speak_as,
             occurrences,
         })
     }
@@ -273,6 +310,12 @@ impl CssCounterStyleDescriptors {
     #[must_use]
     pub const fn system(&self) -> Option<&CssDescriptorOccurrence<CssCounterStyleSystem>> {
         self.system.as_ref()
+    }
+
+    /// Returns the effective last valid authored `negative` occurrence.
+    #[must_use]
+    pub const fn negative(&self) -> Option<&CssDescriptorOccurrence<CssCounterStyleNegative>> {
+        self.negative.as_ref()
     }
 
     /// Returns the effective last valid authored `symbols` occurrence.
@@ -293,6 +336,38 @@ impl CssCounterStyleDescriptors {
         self.suffix.as_ref()
     }
 
+    /// Returns the effective last valid authored `range` occurrence.
+    #[must_use]
+    pub const fn range(&self) -> Option<&CssDescriptorOccurrence<CssCounterStyleRange>> {
+        self.range.as_ref()
+    }
+
+    /// Returns the effective last valid authored `pad` occurrence.
+    #[must_use]
+    pub const fn pad(&self) -> Option<&CssDescriptorOccurrence<CssCounterStylePad>> {
+        self.pad.as_ref()
+    }
+
+    /// Returns the effective last valid authored `fallback` occurrence.
+    #[must_use]
+    pub const fn fallback(&self) -> Option<&CssDescriptorOccurrence<CssCounterStyleName>> {
+        self.fallback.as_ref()
+    }
+
+    /// Returns the effective last valid authored `additive-symbols` occurrence.
+    #[must_use]
+    pub const fn additive_symbols(
+        &self,
+    ) -> Option<&CssDescriptorOccurrence<CssCounterAdditiveSymbols>> {
+        self.additive_symbols.as_ref()
+    }
+
+    /// Returns the effective last valid authored `speak-as` occurrence.
+    #[must_use]
+    pub const fn speak_as(&self) -> Option<&CssDescriptorOccurrence<CssCounterStyleSpeakAs>> {
+        self.speak_as.as_ref()
+    }
+
     /// Returns every valid authored core descriptor occurrence in source order.
     pub fn occurrences(&self) -> impl ExactSizeIterator<Item = CssCounterStyleDescriptorRef<'_>> {
         self.occurrences
@@ -304,27 +379,45 @@ impl CssCounterStyleDescriptors {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum CssCounterStyleDescriptor {
     System(CssDescriptorOccurrence<CssCounterStyleSystem>),
+    Negative(CssDescriptorOccurrence<CssCounterStyleNegative>),
     Symbols(CssDescriptorOccurrence<CssCounterSymbols>),
     Prefix(CssDescriptorOccurrence<CssCounterSymbol>),
     Suffix(CssDescriptorOccurrence<CssCounterSymbol>),
+    Range(CssDescriptorOccurrence<CssCounterStyleRange>),
+    Pad(CssDescriptorOccurrence<CssCounterStylePad>),
+    Fallback(CssDescriptorOccurrence<CssCounterStyleName>),
+    AdditiveSymbols(CssDescriptorOccurrence<CssCounterAdditiveSymbols>),
+    SpeakAs(CssDescriptorOccurrence<CssCounterStyleSpeakAs>),
 }
 
 impl CssCounterStyleDescriptor {
     fn as_ref(&self) -> CssCounterStyleDescriptorRef<'_> {
         match self {
             Self::System(value) => CssCounterStyleDescriptorRef::System(value),
+            Self::Negative(value) => CssCounterStyleDescriptorRef::Negative(value),
             Self::Symbols(value) => CssCounterStyleDescriptorRef::Symbols(value),
             Self::Prefix(value) => CssCounterStyleDescriptorRef::Prefix(value),
             Self::Suffix(value) => CssCounterStyleDescriptorRef::Suffix(value),
+            Self::Range(value) => CssCounterStyleDescriptorRef::Range(value),
+            Self::Pad(value) => CssCounterStyleDescriptorRef::Pad(value),
+            Self::Fallback(value) => CssCounterStyleDescriptorRef::Fallback(value),
+            Self::AdditiveSymbols(value) => CssCounterStyleDescriptorRef::AdditiveSymbols(value),
+            Self::SpeakAs(value) => CssCounterStyleDescriptorRef::SpeakAs(value),
         }
     }
 
     const fn position(&self) -> CssSourcePosition {
         match self {
             Self::System(value) => value.position(),
+            Self::Negative(value) => value.position(),
             Self::Symbols(value) => value.position(),
             Self::Prefix(value) => value.position(),
             Self::Suffix(value) => value.position(),
+            Self::Range(value) => value.position(),
+            Self::Pad(value) => value.position(),
+            Self::Fallback(value) => value.position(),
+            Self::AdditiveSymbols(value) => value.position(),
+            Self::SpeakAs(value) => value.position(),
         }
     }
 }
@@ -334,9 +427,15 @@ impl CssCounterStyleDescriptor {
 #[non_exhaustive]
 pub enum CssCounterStyleDescriptorRef<'a> {
     System(&'a CssDescriptorOccurrence<CssCounterStyleSystem>),
+    Negative(&'a CssDescriptorOccurrence<CssCounterStyleNegative>),
     Symbols(&'a CssDescriptorOccurrence<CssCounterSymbols>),
     Prefix(&'a CssDescriptorOccurrence<CssCounterSymbol>),
     Suffix(&'a CssDescriptorOccurrence<CssCounterSymbol>),
+    Range(&'a CssDescriptorOccurrence<CssCounterStyleRange>),
+    Pad(&'a CssDescriptorOccurrence<CssCounterStylePad>),
+    Fallback(&'a CssDescriptorOccurrence<CssCounterStyleName>),
+    AdditiveSymbols(&'a CssDescriptorOccurrence<CssCounterAdditiveSymbols>),
+    SpeakAs(&'a CssDescriptorOccurrence<CssCounterStyleSpeakAs>),
 }
 
 /// One authored Counter Styles 3 system choice.
@@ -368,6 +467,189 @@ impl CssCounterStyleFixedSystem {
     pub const fn first_symbol_value(self) -> Option<i32> {
         self.first_symbol_value
     }
+}
+
+/// One or two authored symbols applied around negative counter representations.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCounterStyleNegative {
+    prefix: CssCounterSymbol,
+    suffix: Option<CssCounterSymbol>,
+}
+
+impl CssCounterStyleNegative {
+    #[must_use]
+    pub(crate) const fn new(prefix: CssCounterSymbol, suffix: Option<CssCounterSymbol>) -> Self {
+        Self { prefix, suffix }
+    }
+
+    /// Returns the required symbol prepended to a negative representation.
+    #[must_use]
+    pub const fn prefix(&self) -> &CssCounterSymbol {
+        &self.prefix
+    }
+
+    /// Returns the optional symbol appended to a negative representation.
+    #[must_use]
+    pub const fn suffix(&self) -> Option<&CssCounterSymbol> {
+        self.suffix.as_ref()
+    }
+}
+
+/// One authored `range` descriptor value.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssCounterStyleRange {
+    Auto,
+    Ranges(CssCounterStyleRanges),
+}
+
+/// A nonempty authored comma-separated list of inclusive counter ranges.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCounterStyleRanges {
+    ranges: Vec<CssCounterStyleRangeInterval>,
+}
+
+impl CssCounterStyleRanges {
+    #[must_use]
+    pub(crate) fn new(ranges: Vec<CssCounterStyleRangeInterval>) -> Self {
+        debug_assert!(!ranges.is_empty());
+        Self { ranges }
+    }
+
+    /// Returns the valid inclusive ranges in authored order.
+    #[must_use]
+    pub fn ranges(&self) -> &[CssCounterStyleRangeInterval] {
+        &self.ranges
+    }
+}
+
+/// One intrinsically valid inclusive range from a `range` descriptor.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssCounterStyleRangeInterval {
+    lower: CssCounterStyleRangeBound,
+    upper: CssCounterStyleRangeBound,
+}
+
+impl CssCounterStyleRangeInterval {
+    #[must_use]
+    pub(crate) const fn new(
+        lower: CssCounterStyleRangeBound,
+        upper: CssCounterStyleRangeBound,
+    ) -> Self {
+        Self { lower, upper }
+    }
+
+    /// Returns the inclusive lower bound, where `Infinite` means negative infinity.
+    #[must_use]
+    pub const fn lower(self) -> CssCounterStyleRangeBound {
+        self.lower
+    }
+
+    /// Returns the inclusive upper bound, where `Infinite` means positive infinity.
+    #[must_use]
+    pub const fn upper(self) -> CssCounterStyleRangeBound {
+        self.upper
+    }
+}
+
+/// One authored finite integer or contextual `infinite` range bound.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssCounterStyleRangeBound {
+    Integer(i32),
+    Infinite,
+}
+
+/// One valid authored zero-padding descriptor.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCounterStylePad {
+    minimum_length: u32,
+    symbol: CssCounterSymbol,
+}
+
+impl CssCounterStylePad {
+    #[must_use]
+    pub(crate) const fn new(minimum_length: u32, symbol: CssCounterSymbol) -> Self {
+        Self {
+            minimum_length,
+            symbol,
+        }
+    }
+
+    /// Returns the nonnegative minimum representation length.
+    #[must_use]
+    pub const fn minimum_length(&self) -> u32 {
+        self.minimum_length
+    }
+
+    /// Returns the authored padding symbol.
+    #[must_use]
+    pub const fn symbol(&self) -> &CssCounterSymbol {
+        &self.symbol
+    }
+}
+
+/// A nonempty, strictly descending authored `additive-symbols` list.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCounterAdditiveSymbols {
+    tuples: Vec<CssCounterAdditiveTuple>,
+}
+
+impl CssCounterAdditiveSymbols {
+    #[must_use]
+    pub(crate) fn new(tuples: Vec<CssCounterAdditiveTuple>) -> Self {
+        debug_assert!(!tuples.is_empty());
+        debug_assert!(
+            tuples
+                .windows(2)
+                .all(|pair| pair[0].weight > pair[1].weight)
+        );
+        Self { tuples }
+    }
+
+    /// Returns the additive tuples in strictly descending authored weight order.
+    #[must_use]
+    pub fn tuples(&self) -> &[CssCounterAdditiveTuple] {
+        &self.tuples
+    }
+}
+
+/// One nonnegative integer weight and counter symbol in an additive list.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssCounterAdditiveTuple {
+    weight: u32,
+    symbol: CssCounterSymbol,
+}
+
+impl CssCounterAdditiveTuple {
+    #[must_use]
+    pub(crate) const fn new(weight: u32, symbol: CssCounterSymbol) -> Self {
+        Self { weight, symbol }
+    }
+
+    /// Returns the nonnegative additive weight.
+    #[must_use]
+    pub const fn weight(&self) -> u32 {
+        self.weight
+    }
+
+    /// Returns the counter symbol associated with the weight.
+    #[must_use]
+    pub const fn symbol(&self) -> &CssCounterSymbol {
+        &self.symbol
+    }
+}
+
+/// One authored Counter Styles 3 speech-synthesis choice.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssCounterStyleSpeakAs {
+    Auto,
+    Bullets,
+    Numbers,
+    Words,
+    SpellOut,
+    CounterStyle(CssCounterStyleName),
 }
 
 /// A nonempty authored `symbols` descriptor value.

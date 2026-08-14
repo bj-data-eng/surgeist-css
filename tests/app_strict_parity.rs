@@ -260,6 +260,32 @@ fn app_strict_parity_clean_and_recovered_sheet_and_style_results_are_exact() {
 }
 
 #[test]
+fn app_strict_counter_style_descriptors_match_ordinary_retention_and_recovery() {
+    let clean = assert_sheet_parity(concat!(
+        "@counter-style roman { system: additive; range: 1 infinite; ",
+        "negative: \"-\"; pad: 2 \"0\"; fallback: decimal; ",
+        "additive-symbols: 10 X, 1 I; speak-as: words; }",
+    ));
+    assert!(clean.is_clean(), "{:?}", clean.diagnostics());
+    assert!(matches!(clean.syntax().rules(), [CssRule::CounterStyle(_)]));
+
+    let recovered = assert_sheet_parity(concat!(
+        "@counter-style kept { system: additive; additive-symbols: 10 X, 10 I; ",
+        "additive-symbols: 10 X, 1 I; pad: -1 \"0\"; } .after {}",
+    ));
+    assert!(matches!(
+        recovered.syntax().rules(),
+        [CssRule::CounterStyle(_), CssRule::Style(_)]
+    ));
+    assert!(
+        recovered
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| { diagnostic.action() == CssRecoveryAction::DropDescriptor })
+    );
+}
+
+#[test]
 fn app_strict_parity_preserves_multiple_diagnostics_and_every_special_action() {
     let sheet = assert_sheet_parity("<!-- .x { mystery: 1; width: nope; } -->");
     assert!(sheet.diagnostics().len() >= 4);

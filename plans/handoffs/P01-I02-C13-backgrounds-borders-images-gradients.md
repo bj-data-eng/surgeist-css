@@ -18,7 +18,8 @@ share the same typed value families.
 
 Image values distinguish `none`, URLs, linear/radial gradients, and their
 repeating forms. Gradient values preserve directions, radial shapes and sizes,
-positions, stops, optional double positions, and interleaved hints. Border-image
+positions, stops with exactly one optional `<length-percentage>` position, and
+interleaved hints. Border-image
 shorthand and longhands preserve source, one-to-four slice/width/outset
 components, `fill`, and one- or two-axis repeat choices. `image-orientation`,
 `image-rendering`, `object-fit`, and the already-published `object-position`

@@ -160,6 +160,15 @@ macro_rules! property_schema {
             BackgroundOrigin, "background-origin", [], "baseline.property.background-origin", CssBackgroundBox, CssBackgroundOriginPropertyValue, CssBackgroundOriginPropertyValueRepresentation, parse_background_box_list, { parse_background_box_list($input)? };
             BackgroundClip, "background-clip", [], "baseline.property.background-clip", CssBackgroundBox, CssBackgroundClipPropertyValue, CssBackgroundClipPropertyValueRepresentation, parse_background_box_list, { parse_background_box_list($input)? };
             BackgroundAttachment, "background-attachment", [], "baseline.property.background-attachment", CssBackgroundAttachmentList, CssBackgroundAttachmentPropertyValue, CssBackgroundAttachmentPropertyValueRepresentation, parse_background_attachment_list, { parse_background_attachment_list($input)? };
+            BorderImage, "border-image", [], "official.property.border-image", CssBorderImage, CssBorderImagePropertyValue, CssBorderImagePropertyValueRepresentation, parse_border_image, { parse_border_image($input)? };
+            BorderImageOutset, "border-image-outset", [], "official.property.border-image-outset", CssBorderImageOutset, CssBorderImageOutsetPropertyValue, CssBorderImageOutsetPropertyValueRepresentation, parse_border_image_outset, { parse_border_image_outset($input)? };
+            BorderImageRepeat, "border-image-repeat", [], "official.property.border-image-repeat", CssBorderImageRepeat, CssBorderImageRepeatPropertyValue, CssBorderImageRepeatPropertyValueRepresentation, parse_border_image_repeat, { parse_border_image_repeat($input)? };
+            BorderImageSlice, "border-image-slice", [], "official.property.border-image-slice", CssBorderImageSlice, CssBorderImageSlicePropertyValue, CssBorderImageSlicePropertyValueRepresentation, parse_border_image_slice, { parse_border_image_slice($input)? };
+            BorderImageSource, "border-image-source", [], "official.property.border-image-source", CssImageValue, CssBorderImageSourcePropertyValue, CssBorderImageSourcePropertyValueRepresentation, parse_border_image_source, { parse_border_image_source($input)? };
+            BorderImageWidth, "border-image-width", [], "official.property.border-image-width", CssBorderImageWidth, CssBorderImageWidthPropertyValue, CssBorderImageWidthPropertyValueRepresentation, parse_border_image_width, { parse_border_image_width($input)? };
+            ImageOrientation, "image-orientation", [], "official.property.image-orientation", CssImageOrientation, CssImageOrientationPropertyValue, CssImageOrientationPropertyValueRepresentation, parse_image_orientation, { parse_image_orientation($input)? };
+            ImageRendering, "image-rendering", [], "official.property.image-rendering", CssImageRendering, CssImageRenderingPropertyValue, CssImageRenderingPropertyValueRepresentation, parse_image_rendering, { parse_image_rendering($input)? };
+            ObjectFit, "object-fit", [], "official.property.object-fit", CssObjectFit, CssObjectFitPropertyValue, CssObjectFitPropertyValueRepresentation, parse_object_fit, { parse_object_fit($input)? };
             BorderStyle, "border-style", [], "baseline.property.border-style", CssBorderStyles, CssBorderStylePropertyValue, CssBorderStylePropertyValueRepresentation, parse_border_styles, { parse_border_styles($input)? };
             BorderTopStyle, "border-top-style", [], "baseline.property.border-top-style", CssBorderStyle, CssBorderTopStylePropertyValue, CssBorderTopStylePropertyValueRepresentation, parse_border_style, { parse_border_style($input)? };
             BorderRightStyle, "border-right-style", [], "baseline.property.border-right-style", CssBorderStyle, CssBorderRightStylePropertyValue, CssBorderRightStylePropertyValueRepresentation, parse_border_style, { parse_border_style($input)? };
@@ -1629,6 +1638,143 @@ macro_rules! define_property_value {
         $representation:ident
     ) => {
         define_image_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        BorderImage, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: Box<CssBorderImage>,
+        }
+
+        /// A parser-produced authored ordinary value for `border-image`.
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) fn new(
+                authored: CssAuthoredDeclarationValue,
+                current: CssBorderImage,
+            ) -> Self {
+                Self {
+                    authored,
+                    representation: $representation {
+                        current: Box::new(current),
+                    },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            #[must_use]
+            pub const fn border_image(&self) -> &CssBorderImage {
+                &self.representation.current
+            }
+        }
+    };
+    (
+        BorderImageOutset, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBorderImageOutset,
+            outsets
+        );
+    };
+    (
+        BorderImageRepeat, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBorderImageRepeat,
+            repeat
+        );
+    };
+    (
+        BorderImageSlice, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBorderImageSlice,
+            slice
+        );
+    };
+    (
+        BorderImageSource, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssImageValue,
+            source
+        );
+    };
+    (
+        BorderImageWidth, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBorderImageWidth,
+            widths
+        );
+    };
+    (
+        ImageOrientation, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssImageOrientation,
+            orientation
+        );
+    };
+    (
+        ImageRendering, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssImageRendering,
+            rendering
+        );
+    };
+    (
+        ObjectFit, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssObjectFit,
+            fit
+        );
     };
     (
         MaskImage, $canonical:literal, $value:ty, $wrapper:ident,

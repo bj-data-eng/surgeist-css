@@ -1,4 +1,4 @@
-use cssparser::{ParseError, Parser, ParserState, Token, match_ignore_ascii_case};
+use cssparser::{ParseError, Parser, ParserState, ToCss, Token, match_ignore_ascii_case};
 
 use super::box_model::parse_border_style;
 use super::values::{
@@ -290,7 +290,7 @@ fn parse_background_size_prefix<'i, 't>(
     Ok(CssBackgroundSize::Explicit { width, height })
 }
 
-fn parse_image_value<'i, 't>(
+pub(super) fn parse_image_value<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssImageValue, ParseError<'i, Error>> {
     if input
@@ -303,6 +303,470 @@ fn parse_image_value<'i, 't>(
         return parse_gradient(input).map(CssImageValue::Gradient);
     }
     parse_url(input).map(CssImageValue::Url)
+}
+
+pub(super) fn parse_border_image_source<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssImageValue, ParseError<'i, Error>> {
+    parse_image_value(input)
+}
+
+pub(super) fn parse_border_image_slice<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageSlice, ParseError<'i, Error>> {
+    let mut values = Vec::new();
+    let mut fill = false;
+
+    while !input.is_exhausted() && values.len() < 4 {
+        if !fill
+            && input
+                .try_parse(|input| input.expect_ident_matching("fill"))
+                .is_ok()
+        {
+            fill = true;
+            continue;
+        }
+        match input.try_parse(parse_border_image_slice_component) {
+            Ok(value) => values.push(value),
+            Err(_) => break,
+        }
+    }
+
+    if !fill
+        && input
+            .try_parse(|input| input.expect_ident_matching("fill"))
+            .is_ok()
+    {
+        fill = true;
+    }
+    CssBorderImageSlice::try_new(values, fill)
+        .ok_or_else(|| unsupported_value(input, None, "border-image-slice is missing a value"))
+}
+
+fn parse_border_image_slice_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageSliceComponent, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)?.clone() {
+        Token::Number { value, .. } => CssNonNegativeNumber::try_new(value)
+            .map(CssBorderImageSliceComponent::Number)
+            .ok_or_else(|| {
+                unsupported_value_at(location, None, "border-image-slice must be non-negative")
+            }),
+        Token::Percentage { unit_value, .. } => CssNonNegativeNumber::try_new(unit_value * 100.0)
+            .map(CssBorderImageSliceComponent::Percentage)
+            .ok_or_else(|| {
+                unsupported_value_at(location, None, "border-image-slice must be non-negative")
+            }),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => {
+            if let Ok(expression) = input.try_parse(|input| {
+                input.parse_nested_block(|input| {
+                    parse_typed_calculation(input, CalculationRoot::Number)
+                })
+            }) {
+                return Ok(CssBorderImageSliceComponent::NumberCalculation(
+                    CssNumberCalculation::from_expression(expression),
+                ));
+            }
+            input
+                .parse_nested_block(|input| {
+                    parse_typed_calculation(input, CalculationRoot::Percentage)
+                })
+                .map(CssPercentageCalculation::from_expression)
+                .map(CssBorderImageSliceComponent::PercentageCalculation)
+        }
+        token => Err(unsupported_value_at(
+            location,
+            None,
+            format!(
+                "unsupported border-image-slice component `{}`",
+                token.to_css_string()
+            ),
+        )),
+    }
+}
+
+pub(super) fn parse_border_image_width<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageWidth, ParseError<'i, Error>> {
+    let mut values = Vec::new();
+    while !input.is_exhausted() && values.len() < 4 {
+        values.push(parse_border_image_width_component(input)?);
+    }
+    CssBorderImageWidth::try_new(values)
+        .ok_or_else(|| unsupported_value(input, None, "border-image-width is missing a value"))
+}
+
+fn parse_border_image_width_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageWidthComponent, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("auto"))
+        .is_ok()
+    {
+        return Ok(CssBorderImageWidthComponent::Auto);
+    }
+    if let Ok(number) =
+        input.try_parse(|input| parse_border_image_non_negative_number(input, "border-image-width"))
+    {
+        return Ok(match number {
+            CssNonNegativeNumberValue::Literal(value) => {
+                CssBorderImageWidthComponent::Number(value)
+            }
+            CssNonNegativeNumberValue::Calculation(value) => {
+                CssBorderImageWidthComponent::NumberCalculation(value)
+            }
+        });
+    }
+    let location = input.current_source_location();
+    let value =
+        parse_length_with_context(input, LengthGrammar::BackgroundSize, "border-image-width")?;
+    CssBorderImageWidthLengthPercentage::try_new(value)
+        .map(CssBorderImageWidthComponent::LengthPercentage)
+        .ok_or_else(|| {
+            unsupported_value_at(
+                location,
+                None,
+                "border-image-width must be a non-negative length-percentage",
+            )
+        })
+}
+
+pub(super) fn parse_border_image_outset<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageOutset, ParseError<'i, Error>> {
+    let mut values = Vec::new();
+    while !input.is_exhausted() && values.len() < 4 {
+        values.push(parse_border_image_outset_component(input)?);
+    }
+    CssBorderImageOutset::try_new(values)
+        .ok_or_else(|| unsupported_value(input, None, "border-image-outset is missing a value"))
+}
+
+fn parse_border_image_outset_component<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageOutsetComponent, ParseError<'i, Error>> {
+    if let Ok(number) = input
+        .try_parse(|input| parse_border_image_non_negative_number(input, "border-image-outset"))
+    {
+        return Ok(match number {
+            CssNonNegativeNumberValue::Literal(value) => {
+                CssBorderImageOutsetComponent::Number(value)
+            }
+            CssNonNegativeNumberValue::Calculation(value) => {
+                CssBorderImageOutsetComponent::NumberCalculation(value)
+            }
+        });
+    }
+    let location = input.current_source_location();
+    let value =
+        parse_length_with_context(input, LengthGrammar::BorderWidth, "border-image-outset")?;
+    CssBorderImageOutsetLength::try_new(value)
+        .map(CssBorderImageOutsetComponent::Length)
+        .ok_or_else(|| {
+            unsupported_value_at(
+                location,
+                None,
+                "border-image-outset must be a non-negative length",
+            )
+        })
+}
+
+fn parse_border_image_non_negative_number<'i, 't>(
+    input: &mut Parser<'i, 't>,
+    context: &str,
+) -> std::result::Result<CssNonNegativeNumberValue, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)?.clone() {
+        Token::Number { value, .. } => CssNonNegativeNumber::try_new(value)
+            .map(CssNonNegativeNumberValue::Literal)
+            .ok_or_else(|| {
+                unsupported_value_at(location, None, format!("{context} must be non-negative"))
+            }),
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Number))
+            .map(CssNumberCalculation::from_expression)
+            .map(CssNonNegativeNumberValue::Calculation),
+        token => Err(unsupported_value_at(
+            location,
+            None,
+            format!(
+                "unsupported {context} component `{}`",
+                token.to_css_string()
+            ),
+        )),
+    }
+}
+
+pub(super) fn parse_border_image_repeat<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageRepeat, ParseError<'i, Error>> {
+    let horizontal = parse_border_image_repeat_keyword(input)?;
+    let vertical = if input.is_exhausted() {
+        horizontal
+    } else {
+        parse_border_image_repeat_keyword(input)?
+    };
+    Ok(CssBorderImageRepeat::new(horizontal, vertical))
+}
+
+fn parse_border_image_repeat_keyword<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageRepeatKeyword, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "stretch" => Ok(CssBorderImageRepeatKeyword::Stretch),
+        "repeat" => Ok(CssBorderImageRepeatKeyword::Repeat),
+        "round" => Ok(CssBorderImageRepeatKeyword::Round),
+        "space" => Ok(CssBorderImageRepeatKeyword::Space),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("border-image-repeat", ident.as_ref()),
+        )),
+    }
+}
+
+fn next_starts_border_image_repeat<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let starts = matches!(
+        input.next(),
+        Ok(Token::Ident(value))
+            if matches!(
+                value.to_ascii_lowercase().as_str(),
+                "stretch" | "repeat" | "round" | "space"
+            )
+    );
+    input.reset(&state);
+    starts
+}
+
+fn next_starts_border_image_slice<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let starts = match input.next() {
+        Ok(Token::Number { .. } | Token::Percentage { .. }) => true,
+        Ok(Token::Ident(value)) => value.eq_ignore_ascii_case("fill"),
+        Ok(Token::Function(name)) => name.eq_ignore_ascii_case("calc"),
+        Ok(_) | Err(_) => false,
+    };
+    input.reset(&state);
+    starts
+}
+
+pub(super) fn parse_border_image<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImage, ParseError<'i, Error>> {
+    let mut source = None;
+    let mut slice = None;
+    let mut width = None;
+    let mut outset = None;
+    let mut repeat = None;
+
+    while !input.is_exhausted() {
+        if source.is_none() && next_starts_background_image(input) {
+            source = Some(parse_image_value(input)?);
+            continue;
+        }
+        if slice.is_none() && next_starts_border_image_slice(input) {
+            slice = Some(parse_border_image_slice_prefix(input)?);
+            if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+                if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+                    outset = Some(parse_border_image_outset_prefix(input)?);
+                } else {
+                    width = Some(parse_border_image_width_prefix(input)?);
+                    if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+                        outset = Some(parse_border_image_outset_prefix(input)?);
+                    }
+                }
+            }
+            continue;
+        }
+        if repeat.is_none() && next_starts_border_image_repeat(input) {
+            repeat = Some(parse_border_image_repeat_prefix(input)?);
+            continue;
+        }
+        return Err(unsupported_value(
+            input,
+            None,
+            "unsupported or duplicate border-image component",
+        ));
+    }
+
+    if source.is_none() && slice.is_none() && repeat.is_none() {
+        Err(unsupported_value(
+            input,
+            None,
+            "border-image shorthand is missing a component",
+        ))
+    } else {
+        Ok(CssBorderImage::new(source, slice, width, outset, repeat))
+    }
+}
+
+fn parse_border_image_slice_prefix<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageSlice, ParseError<'i, Error>> {
+    let mut values = Vec::new();
+    let mut fill = false;
+    while values.len() < 4 && next_starts_border_image_slice(input) {
+        if !fill
+            && input
+                .try_parse(|input| input.expect_ident_matching("fill"))
+                .is_ok()
+        {
+            fill = true;
+        } else {
+            values.push(parse_border_image_slice_component(input)?);
+        }
+    }
+    if !fill
+        && input
+            .try_parse(|input| input.expect_ident_matching("fill"))
+            .is_ok()
+    {
+        fill = true;
+    }
+    CssBorderImageSlice::try_new(values, fill)
+        .ok_or_else(|| unsupported_value(input, None, "border-image-slice is missing a value"))
+}
+
+fn parse_border_image_width_prefix<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageWidth, ParseError<'i, Error>> {
+    let mut values = Vec::new();
+    while values.len() < 4 {
+        match input.try_parse(parse_border_image_width_component) {
+            Ok(value) => values.push(value),
+            Err(_) => break,
+        }
+    }
+    CssBorderImageWidth::try_new(values)
+        .ok_or_else(|| unsupported_value(input, None, "border-image-width is missing a value"))
+}
+
+fn parse_border_image_outset_prefix<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageOutset, ParseError<'i, Error>> {
+    let mut values = Vec::new();
+    while values.len() < 4 {
+        match input.try_parse(parse_border_image_outset_component) {
+            Ok(value) => values.push(value),
+            Err(_) => break,
+        }
+    }
+    CssBorderImageOutset::try_new(values)
+        .ok_or_else(|| unsupported_value(input, None, "border-image-outset is missing a value"))
+}
+
+fn parse_border_image_repeat_prefix<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBorderImageRepeat, ParseError<'i, Error>> {
+    let horizontal = parse_border_image_repeat_keyword(input)?;
+    let vertical = input
+        .try_parse(parse_border_image_repeat_keyword)
+        .unwrap_or(horizontal);
+    Ok(CssBorderImageRepeat::new(horizontal, vertical))
+}
+
+pub(super) fn parse_image_orientation<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssImageOrientation, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("from-image"))
+        .is_ok()
+    {
+        return Ok(CssImageOrientation::FromImage);
+    }
+    if input
+        .try_parse(|input| input.expect_ident_matching("flip"))
+        .is_ok()
+    {
+        return Ok(CssImageOrientation::Flip(None));
+    }
+    let angle = parse_image_orientation_angle(input)?;
+    if input
+        .try_parse(|input| input.expect_ident_matching("flip"))
+        .is_ok()
+    {
+        Ok(CssImageOrientation::Flip(Some(angle)))
+    } else {
+        Ok(CssImageOrientation::Angle(angle))
+    }
+}
+
+fn parse_image_orientation_angle<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssImageOrientationAngle, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    match input.next().map_err(basic)?.clone() {
+        Token::Number { value: 0.0, .. } => Ok(CssImageOrientationAngle::Zero),
+        Token::Dimension { value, unit, .. } => {
+            let unit = match unit.to_ascii_lowercase().as_str() {
+                "deg" => CssAngleUnit::Degrees,
+                "grad" => CssAngleUnit::Gradians,
+                "rad" => CssAngleUnit::Radians,
+                "turn" => CssAngleUnit::Turns,
+                _ => {
+                    return Err(unsupported_value_at(
+                        location,
+                        None,
+                        format!("unsupported image-orientation angle unit `{unit}`"),
+                    ));
+                }
+            };
+            CssAngleLiteral::try_new(value, unit)
+                .map(CssImageOrientationAngle::Literal)
+                .ok_or_else(|| {
+                    unsupported_value_at(location, None, "image-orientation angle must be finite")
+                })
+        }
+        Token::Function(name) if name.eq_ignore_ascii_case("calc") => input
+            .parse_nested_block(|input| parse_typed_calculation(input, CalculationRoot::Angle))
+            .map(CssAngleCalculation::from_expression)
+            .map(CssImageOrientationAngle::Calculation),
+        token => Err(unsupported_value_at(
+            location,
+            None,
+            format!(
+                "unsupported image-orientation angle `{}`",
+                token.to_css_string()
+            ),
+        )),
+    }
+}
+
+pub(super) fn parse_image_rendering<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssImageRendering, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "auto" => Ok(CssImageRendering::Auto),
+        "crisp-edges" => Ok(CssImageRendering::CrispEdges),
+        "pixelated" => Ok(CssImageRendering::Pixelated),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("image-rendering", ident.as_ref()),
+        )),
+    }
+}
+
+pub(super) fn parse_object_fit<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssObjectFit, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "fill" => Ok(CssObjectFit::Fill),
+        "contain" => Ok(CssObjectFit::Contain),
+        "cover" => Ok(CssObjectFit::Cover),
+        "none" => Ok(CssObjectFit::None),
+        "scale-down" => Ok(CssObjectFit::ScaleDown),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("object-fit", ident.as_ref()),
+        )),
+    }
 }
 
 fn next_is_gradient<'i, 't>(input: &mut Parser<'i, 't>) -> bool {

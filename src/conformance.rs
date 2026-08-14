@@ -2870,6 +2870,12 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
         | CssKnownProperty::BackgroundOrigin
         | CssKnownProperty::BackgroundClip
         | CssKnownProperty::BackgroundAttachment
+        | CssKnownProperty::BorderImage
+        | CssKnownProperty::BorderImageOutset
+        | CssKnownProperty::BorderImageRepeat
+        | CssKnownProperty::BorderImageSlice
+        | CssKnownProperty::BorderImageSource
+        | CssKnownProperty::BorderImageWidth
         | CssKnownProperty::BorderStyle
         | CssKnownProperty::BorderTopStyle
         | CssKnownProperty::BorderRightStyle
@@ -2881,7 +2887,10 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
         | CssKnownProperty::BorderBottomRightRadius
         | CssKnownProperty::BorderBottomLeftRadius
         | CssKnownProperty::BoxShadow => O_BACKGROUNDS3,
-        CssKnownProperty::ObjectPosition => O_IMAGES3,
+        CssKnownProperty::ImageOrientation
+        | CssKnownProperty::ImageRendering
+        | CssKnownProperty::ObjectFit
+        | CssKnownProperty::ObjectPosition => O_IMAGES3,
         CssKnownProperty::FontSize
         | CssKnownProperty::FontFamily
         | CssKnownProperty::Font

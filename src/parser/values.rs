@@ -174,6 +174,10 @@ impl LengthGrammar {
         matches!(self, Self::Gap | Self::LineHeight)
     }
 
+    const fn allows_line_width_keyword(self) -> bool {
+        matches!(self, Self::BorderWidth)
+    }
+
     const fn allows_calc_percent(self) -> bool {
         matches!(
             self,
@@ -331,6 +335,9 @@ fn parse_length_with_context_mode<'i, 't>(
         Token::Ident(ident) => match_ignore_ascii_case! { ident,
             "auto" if grammar.allows_auto() => Ok(CssLength::Auto),
             "normal" if grammar.allows_normal() => Ok(CssLength::Normal),
+            "thin" if grammar.allows_line_width_keyword() => Ok(CssLength::Thin),
+            "medium" if grammar.allows_line_width_keyword() => Ok(CssLength::Medium),
+            "thick" if grammar.allows_line_width_keyword() => Ok(CssLength::Thick),
             "min-content" if grammar.allows_intrinsic() => Ok(CssLength::MinContent),
             "max-content" if grammar.allows_intrinsic() => Ok(CssLength::MaxContent),
             "fit-content" if grammar.allows_intrinsic() => Ok(CssLength::FitContent),

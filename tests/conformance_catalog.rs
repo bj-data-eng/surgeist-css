@@ -4511,7 +4511,7 @@ fn diagnostics(input: Input) -> Vec<(CssErrorCode, Option<&'static str>)> {
 }
 
 #[test]
-fn object_position_recognition_does_not_recognize_other_images_three_properties() {
+fn images_three_properties_are_publicly_recognized() {
     let object = parse_style_attribute("object-position: left top");
     assert!(object.is_clean(), "{:?}", object.diagnostics());
     assert_eq!(
@@ -4522,29 +4522,26 @@ fn object_position_recognition_does_not_recognize_other_images_three_properties(
         CssKnownProperty::ObjectPosition,
     );
 
-    for property in ["object-fit", "image-rendering", "image-orientation"] {
-        let source = format!("{property}: auto; color: red");
+    for (property, value) in [
+        ("object-fit", "cover"),
+        ("image-rendering", "pixelated"),
+        ("image-orientation", "from-image"),
+    ] {
+        let source = format!("{property}: {value}; color: red");
         let report = parse_style_attribute(&source);
-        assert_eq!(report.syntax().len(), 1, "{source}");
-        let [diagnostic] = report.diagnostics() else {
-            panic!("{source}: expected one unknown-property diagnostic");
-        };
-        assert_eq!(
-            diagnostic.error().code(),
-            CssErrorCode::UnknownProperty,
-            "{source}"
-        );
-        assert_eq!(
-            diagnostic.action(),
-            CssRecoveryAction::DropDeclaration,
-            "{source}"
-        );
-        let ErrorKind::UnknownProperty(detail) = diagnostic.error().kind() else {
-            panic!("{source}: expected unknown-property payload");
-        };
-        assert_eq!(detail.name().as_str(), property, "{source}");
+        assert!(report.is_clean(), "{source}: {:?}", report.diagnostics());
+        assert_eq!(report.syntax().len(), 2, "{source}");
         assert_eq!(
             report.syntax()[0]
+                .known()
+                .expect("retained Images 3 declaration")
+                .property()
+                .canonical_name(),
+            property,
+            "{source}",
+        );
+        assert_eq!(
+            report.syntax()[1]
                 .known()
                 .expect("retained color declaration")
                 .property(),

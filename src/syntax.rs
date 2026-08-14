@@ -8984,6 +8984,9 @@ pub enum CssLength {
     MaxContent,
     FitContent,
     Normal,
+    Thin,
+    Medium,
+    Thick,
     Calc(CssCalcLength),
 }
 
@@ -9243,7 +9246,7 @@ fn is_border_width(length: &CssLength) -> bool {
     match length {
         CssLength::Px(value) => value.value() >= 0.0,
         CssLength::Dimension(length) => length.value() >= 0.0,
-        CssLength::Zero => true,
+        CssLength::Zero | CssLength::Thin | CssLength::Medium | CssLength::Thick => true,
         CssLength::Calc(calc) => !calc.uses_percentage() && !calc_has_negative_component(calc),
         CssLength::Percent(_)
         | CssLength::Auto
@@ -9264,7 +9267,10 @@ fn is_radius_length(length: &CssLength) -> bool {
         | CssLength::MinContent
         | CssLength::MaxContent
         | CssLength::FitContent
-        | CssLength::Normal => false,
+        | CssLength::Normal
+        | CssLength::Thin
+        | CssLength::Medium
+        | CssLength::Thick => false,
     }
 }
 
@@ -9497,7 +9503,10 @@ fn is_shadow_length(length: &CssLength) -> bool {
         | CssLength::MinContent
         | CssLength::MaxContent
         | CssLength::FitContent
-        | CssLength::Normal => false,
+        | CssLength::Normal
+        | CssLength::Thin
+        | CssLength::Medium
+        | CssLength::Thick => false,
     }
 }
 
@@ -9529,7 +9538,10 @@ fn is_absolute_length(length: &CssLength) -> bool {
         | CssLength::MinContent
         | CssLength::MaxContent
         | CssLength::FitContent
-        | CssLength::Normal => false,
+        | CssLength::Normal
+        | CssLength::Thin
+        | CssLength::Medium
+        | CssLength::Thick => false,
     }
 }
 
@@ -9544,7 +9556,10 @@ fn is_non_negative_absolute_length(length: &CssLength) -> bool {
         | CssLength::MinContent
         | CssLength::MaxContent
         | CssLength::FitContent
-        | CssLength::Normal => false,
+        | CssLength::Normal
+        | CssLength::Thin
+        | CssLength::Medium
+        | CssLength::Thick => false,
     }
 }
 
@@ -9558,7 +9573,10 @@ fn is_text_decoration_thickness_length(length: &CssLength) -> bool {
         | CssLength::MinContent
         | CssLength::MaxContent
         | CssLength::FitContent
-        | CssLength::Normal => false,
+        | CssLength::Normal
+        | CssLength::Thin
+        | CssLength::Medium
+        | CssLength::Thick => false,
     }
 }
 
@@ -9582,7 +9600,10 @@ fn is_non_negative_length_percentage(length: &CssLength) -> bool {
         | CssLength::MinContent
         | CssLength::MaxContent
         | CssLength::FitContent
-        | CssLength::Normal => false,
+        | CssLength::Normal
+        | CssLength::Thin
+        | CssLength::Medium
+        | CssLength::Thick => false,
     }
 }
 
@@ -9740,6 +9761,307 @@ pub enum CssImageValue {
     None,
     Url(CssUrl),
     Gradient(CssGradient),
+}
+
+/// One non-negative authored `border-image-slice` component.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssBorderImageSliceComponent {
+    Number(CssNonNegativeNumber),
+    Percentage(CssNonNegativeNumber),
+    NumberCalculation(CssNumberCalculation),
+    PercentageCalculation(CssPercentageCalculation),
+}
+
+/// The expanded four-edge authored `border-image-slice` value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBorderImageSlice {
+    values: [CssBorderImageSliceComponent; 4],
+    fill: bool,
+}
+
+impl CssBorderImageSlice {
+    #[must_use]
+    pub fn try_new(values: Vec<CssBorderImageSliceComponent>, fill: bool) -> Option<Self> {
+        expand_border_image_sides(values).map(|values| Self { values, fill })
+    }
+
+    #[must_use]
+    pub const fn values(&self) -> &[CssBorderImageSliceComponent; 4] {
+        &self.values
+    }
+
+    #[must_use]
+    pub const fn fill(&self) -> bool {
+        self.fill
+    }
+}
+
+/// One authored `border-image-width` component.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssBorderImageWidthComponent {
+    Auto,
+    LengthPercentage(CssBorderImageWidthLengthPercentage),
+    Number(CssNonNegativeNumber),
+    NumberCalculation(CssNumberCalculation),
+}
+
+/// A checked non-negative authored length-percentage used by `border-image-width`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBorderImageWidthLengthPercentage {
+    value: CssLength,
+}
+
+impl CssBorderImageWidthLengthPercentage {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        is_non_negative_length_percentage(&value).then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// The expanded four-edge authored `border-image-width` value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBorderImageWidth {
+    values: [CssBorderImageWidthComponent; 4],
+}
+
+impl CssBorderImageWidth {
+    #[must_use]
+    pub fn try_new(values: Vec<CssBorderImageWidthComponent>) -> Option<Self> {
+        expand_border_image_sides(values).map(|values| Self { values })
+    }
+
+    #[must_use]
+    pub const fn values(&self) -> &[CssBorderImageWidthComponent; 4] {
+        &self.values
+    }
+}
+
+/// One authored `border-image-outset` component.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssBorderImageOutsetComponent {
+    Length(CssBorderImageOutsetLength),
+    Number(CssNonNegativeNumber),
+    NumberCalculation(CssNumberCalculation),
+}
+
+/// A checked non-negative authored length used by `border-image-outset`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBorderImageOutsetLength {
+    value: CssLength,
+}
+
+impl CssBorderImageOutsetLength {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        is_non_negative_absolute_length(&value).then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// The expanded four-edge authored `border-image-outset` value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBorderImageOutset {
+    values: [CssBorderImageOutsetComponent; 4],
+}
+
+impl CssBorderImageOutset {
+    #[must_use]
+    pub fn try_new(values: Vec<CssBorderImageOutsetComponent>) -> Option<Self> {
+        expand_border_image_sides(values).map(|values| Self { values })
+    }
+
+    #[must_use]
+    pub const fn values(&self) -> &[CssBorderImageOutsetComponent; 4] {
+        &self.values
+    }
+}
+
+fn expand_border_image_sides<T: Clone>(values: Vec<T>) -> Option<[T; 4]> {
+    match values.as_slice() {
+        [all] => Some([all.clone(), all.clone(), all.clone(), all.clone()]),
+        [vertical, horizontal] => Some([
+            vertical.clone(),
+            horizontal.clone(),
+            vertical.clone(),
+            horizontal.clone(),
+        ]),
+        [top, horizontal, bottom] => Some([
+            top.clone(),
+            horizontal.clone(),
+            bottom.clone(),
+            horizontal.clone(),
+        ]),
+        [top, right, bottom, left] => {
+            Some([top.clone(), right.clone(), bottom.clone(), left.clone()])
+        }
+        [] | [_, _, _, _, ..] => None,
+    }
+}
+
+/// One axis repetition keyword in `border-image-repeat`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssBorderImageRepeatKeyword {
+    Stretch,
+    Repeat,
+    Round,
+    Space,
+}
+
+/// The authored horizontal and vertical border-image repetition modes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssBorderImageRepeat {
+    horizontal: CssBorderImageRepeatKeyword,
+    vertical: CssBorderImageRepeatKeyword,
+}
+
+impl CssBorderImageRepeat {
+    #[must_use]
+    pub const fn new(
+        horizontal: CssBorderImageRepeatKeyword,
+        vertical: CssBorderImageRepeatKeyword,
+    ) -> Self {
+        Self {
+            horizontal,
+            vertical,
+        }
+    }
+
+    #[must_use]
+    pub const fn horizontal(self) -> CssBorderImageRepeatKeyword {
+        self.horizontal
+    }
+
+    #[must_use]
+    pub const fn vertical(self) -> CssBorderImageRepeatKeyword {
+        self.vertical
+    }
+}
+
+/// An authored `border-image` shorthand preserving only explicitly supplied components.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBorderImage {
+    source: Option<CssImageValue>,
+    slice: Option<CssBorderImageSlice>,
+    width: Option<CssBorderImageWidth>,
+    outset: Option<CssBorderImageOutset>,
+    repeat: Option<CssBorderImageRepeat>,
+}
+
+impl CssBorderImage {
+    #[must_use]
+    pub fn try_new(
+        source: Option<CssImageValue>,
+        slice: Option<CssBorderImageSlice>,
+        width: Option<CssBorderImageWidth>,
+        outset: Option<CssBorderImageOutset>,
+        repeat: Option<CssBorderImageRepeat>,
+    ) -> Option<Self> {
+        if source.is_none() && slice.is_none() && repeat.is_none()
+            || slice.is_none() && (width.is_some() || outset.is_some())
+        {
+            return None;
+        }
+        Some(Self {
+            source,
+            slice,
+            width,
+            outset,
+            repeat,
+        })
+    }
+
+    #[must_use]
+    pub(crate) const fn new(
+        source: Option<CssImageValue>,
+        slice: Option<CssBorderImageSlice>,
+        width: Option<CssBorderImageWidth>,
+        outset: Option<CssBorderImageOutset>,
+        repeat: Option<CssBorderImageRepeat>,
+    ) -> Self {
+        Self {
+            source,
+            slice,
+            width,
+            outset,
+            repeat,
+        }
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> Option<&CssImageValue> {
+        self.source.as_ref()
+    }
+
+    #[must_use]
+    pub const fn slice(&self) -> Option<&CssBorderImageSlice> {
+        self.slice.as_ref()
+    }
+
+    #[must_use]
+    pub const fn width(&self) -> Option<&CssBorderImageWidth> {
+        self.width.as_ref()
+    }
+
+    #[must_use]
+    pub const fn outset(&self) -> Option<&CssBorderImageOutset> {
+        self.outset.as_ref()
+    }
+
+    #[must_use]
+    pub const fn repeat(&self) -> Option<CssBorderImageRepeat> {
+        self.repeat
+    }
+}
+
+/// A finite authored angle used by `image-orientation`.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssImageOrientationAngle {
+    Zero,
+    Literal(CssAngleLiteral),
+    Calculation(CssAngleCalculation),
+}
+
+/// The authored Images 3 `image-orientation` syntax.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssImageOrientation {
+    FromImage,
+    Angle(CssImageOrientationAngle),
+    Flip(Option<CssImageOrientationAngle>),
+}
+
+/// The authored Images 3 `image-rendering` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssImageRendering {
+    Auto,
+    CrispEdges,
+    Pixelated,
+}
+
+/// The authored Images 3 `object-fit` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssObjectFit {
+    Fill,
+    Contain,
+    Cover,
+    None,
+    ScaleDown,
 }
 
 /// A nonempty authored comma-separated image list.
@@ -9998,7 +10320,10 @@ impl CssRadialCircleSize {
             | CssLength::MinContent
             | CssLength::MaxContent
             | CssLength::FitContent
-            | CssLength::Normal => false,
+            | CssLength::Normal
+            | CssLength::Thin
+            | CssLength::Medium
+            | CssLength::Thick => false,
         };
         valid.then_some(Self { radius })
     }
@@ -10027,7 +10352,10 @@ impl CssRadialEllipseSize {
             | CssLength::MinContent
             | CssLength::MaxContent
             | CssLength::FitContent
-            | CssLength::Normal => false,
+            | CssLength::Normal
+            | CssLength::Thin
+            | CssLength::Medium
+            | CssLength::Thick => false,
         };
         (valid(&horizontal) && valid(&vertical)).then_some(Self {
             horizontal,
@@ -10137,7 +10465,10 @@ impl CssPositionOffset {
             | CssLength::MinContent
             | CssLength::MaxContent
             | CssLength::FitContent
-            | CssLength::Normal => None,
+            | CssLength::Normal
+            | CssLength::Thin
+            | CssLength::Medium
+            | CssLength::Thick => None,
         }
     }
 
@@ -10382,6 +10713,9 @@ impl CssTransformOriginZ {
             | CssLength::MaxContent
             | CssLength::FitContent
             | CssLength::Normal
+            | CssLength::Thin
+            | CssLength::Medium
+            | CssLength::Thick
             | CssLength::Calc(_) => None,
         }
     }
@@ -11199,7 +11533,10 @@ impl CssTransformLength {
             | CssLength::MinContent
             | CssLength::MaxContent
             | CssLength::FitContent
-            | CssLength::Normal => false,
+            | CssLength::Normal
+            | CssLength::Thin
+            | CssLength::Medium
+            | CssLength::Thick => false,
         };
         is_length.then_some(Self { value })
     }
@@ -11229,7 +11566,10 @@ impl CssTransformNonNegativeLength {
             | CssLength::MinContent
             | CssLength::MaxContent
             | CssLength::FitContent
-            | CssLength::Normal => false,
+            | CssLength::Normal
+            | CssLength::Thin
+            | CssLength::Medium
+            | CssLength::Thick => false,
         };
         is_non_negative_length.then_some(Self { value })
     }
@@ -11972,7 +12312,10 @@ impl CssShapeLength {
             | CssLength::MinContent
             | CssLength::MaxContent
             | CssLength::FitContent
-            | CssLength::Normal => false,
+            | CssLength::Normal
+            | CssLength::Thin
+            | CssLength::Medium
+            | CssLength::Thick => false,
         };
         valid.then_some(Self { value })
     }
@@ -12000,7 +12343,10 @@ impl CssShapeLengthPercentage {
             | CssLength::MinContent
             | CssLength::MaxContent
             | CssLength::FitContent
-            | CssLength::Normal => false,
+            | CssLength::Normal
+            | CssLength::Thin
+            | CssLength::Medium
+            | CssLength::Thick => false,
         };
         valid.then_some(Self { value })
     }
@@ -13514,7 +13860,10 @@ pub(crate) fn length_has_negative_component(length: &CssLength) -> bool {
         | CssLength::MinContent
         | CssLength::MaxContent
         | CssLength::FitContent
-        | CssLength::Normal => false,
+        | CssLength::Normal
+        | CssLength::Thin
+        | CssLength::Medium
+        | CssLength::Thick => false,
     }
 }
 

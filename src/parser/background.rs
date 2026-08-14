@@ -12,6 +12,24 @@ use crate::validation::unsupported_keyword_reason;
 pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] = &[
     CssFeatureId::new("official.value.position"),
     CssFeatureId::new("official.value.background-position"),
+    CssFeatureId::new("official.value.background-layer"),
+    CssFeatureId::new("official.value.background-image"),
+    CssFeatureId::new("official.value.repeat-style"),
+    CssFeatureId::new("official.value.background-attachment"),
+    CssFeatureId::new("official.value.background-size"),
+    CssFeatureId::new("official.value.line-style"),
+    CssFeatureId::new("official.value.line-width"),
+    CssFeatureId::new("official.value.image"),
+    CssFeatureId::new("official.value.gradient"),
+    CssFeatureId::new("official.value.linear-gradient"),
+    CssFeatureId::new("official.value.radial-gradient"),
+    CssFeatureId::new("official.value.repeating-linear-gradient"),
+    CssFeatureId::new("official.value.repeating-radial-gradient"),
+    CssFeatureId::new("official.value.color-stop-list"),
+    CssFeatureId::new("official.value.side-or-corner"),
+    CssFeatureId::new("official.value.radial-shape"),
+    CssFeatureId::new("official.value.radial-size"),
+    CssFeatureId::new("official.value.radial-extent"),
 ];
 
 pub(super) fn parse_image_layer_list<'i, 't>(

@@ -28,9 +28,10 @@ for maintenance is the existing `tmp/csstree` at revision
 `88e3d965c0b1628642a30a841745b410d6835052`, whose `fixtures/ast` tree is
 `bfadc7a7a8d93dce59a27fa7df3bb0f6f6a623d8`.
 
-The committed leaf artifact root is `tests/corpus/csstree/`. It contains the
+The post-T1 adopted leaf layout is `tests/corpus/csstree/`: it contains the
 provider manifest, unchanged MIT notice, source sidecar and 74 imported source
-files, 74 neutral expectation files, and `generation-reports/all.json`. The
+files, 74 neutral expectation files, and `generation-reports/all.json`. At the
+declared cycle base this layout does not yet exist; C01-T1 creates it. The
 generator's temporary owner/journal state is never committed. The loader reads
 only committed JSON and never opens a checkout, invokes a generator, parses
 Rust source, inspects tests/catalogs/metadata, or derives an owner/count proxy
@@ -66,7 +67,9 @@ from implementation.
 - **Acceptance:** `check-corpus` passes against the adopted leaf artifact set;
   neutral disposition is active for all 935 cases with no reasons; the report
   and sidecar bind the exact source/revision/tree; the MIT notice is unchanged;
-  and no `.surgeist-generator` journal or temporary root is tracked.
+  no `.surgeist-generator` journal or temporary root is tracked; and the
+  provider-generated source bytes are preserved byte-for-byte, including any
+  upstream trailing whitespace.
 - **Exact commands:**
 
   ```sh
@@ -102,6 +105,8 @@ from implementation.
     --owner-root "$acceptance_owner" --corpus-root "$acceptance_corpus" check-corpus
   find "$acceptance_corpus/expectations" -type f -print0 | LC_ALL=C sort -z \
     | xargs -0 shasum -a 256 >"$acceptance_root/first.sha256"
+  (cd "$acceptance_corpus" && find source -type f -print0 | LC_ALL=C sort -z \
+    | xargs -0 shasum -a 256) >"$acceptance_root/source.sha256"
   cargo run --locked --offline --manifest-path ../surgeist-generator/Cargo.toml \
     --features css-corpus --bin surgeist-css-generate -- \
     --owner-root "$acceptance_owner" --corpus-root "$acceptance_corpus" generate
@@ -121,10 +126,20 @@ from implementation.
   cp "$acceptance_corpus/corpus.toml" tests/corpus/csstree/corpus.toml
   cp -R "$acceptance_corpus/source" tests/corpus/csstree/
   cp -R "$acceptance_corpus/expectations" tests/corpus/csstree/
+  (cd tests/corpus/csstree && find source -type f -print0 | LC_ALL=C sort -z \
+    | xargs -0 shasum -a 256) >"$acceptance_root/adopted-source.sha256"
+  cmp "$acceptance_root/source.sha256" "$acceptance_root/adopted-source.sha256"
   cargo run --locked --offline --manifest-path ../surgeist-generator/Cargo.toml \
     --features css-corpus --bin surgeist-css-generate -- \
     --owner-root "$PWD" --corpus-root "$PWD/tests/corpus/csstree" check-corpus
   ```
+
+  The final `git diff --check` excludes only the generated `source/**`
+  subtree: these imported upstream JSON bytes are immutable provider artifacts
+  and may contain upstream trailing whitespace. Their integrity is covered by
+  the provider `check-corpus` gate, the exact source inventory, and the
+  generated-set SHA inventories above; no whitespace normalization is
+  permitted.
 
   The worker records the exact disposable-root setup, census, artifact SHA
   inventory, and a second deterministic generation comparison, then promotes
@@ -158,6 +173,8 @@ from implementation.
   ```sh
   cargo test --offline --no-default-features --test csstree_loader
   cargo test --offline --features app-strict --test csstree_loader
+  cargo test --locked --offline --no-default-features --test csstree_loader
+  cargo test --locked --offline --features app-strict --test csstree_loader
   cargo clippy --offline --no-default-features --all-targets -- -F unsafe-code -D warnings
   cargo clippy --offline --features app-strict --all-targets -- -F unsafe-code -D warnings
   cargo fmt --check
@@ -180,6 +197,8 @@ cargo check --offline --no-default-features
 cargo check --offline --features app-strict
 cargo test --offline --no-default-features
 cargo test --offline --features app-strict
+cargo test --locked --offline --no-default-features
+cargo test --locked --offline --features app-strict
 cargo test --offline --no-default-features --doc
 cargo test --offline --features app-strict --doc
 cargo clippy --offline --no-default-features --all-targets -- -F unsafe-code -D warnings
@@ -187,7 +206,8 @@ cargo clippy --offline --features app-strict --all-targets -- -F unsafe-code -D 
 RUSTDOCFLAGS='-D warnings' cargo doc --offline --no-deps --no-default-features
 RUSTDOCFLAGS='-D warnings' cargo doc --offline --no-deps --features app-strict
 cargo fmt --check
-git diff --check 6cd91352f91274a93c559cb59d51d5fd7e947273..HEAD
+git diff --check 6cd91352f91274a93c559cb59d51d5fd7e947273..HEAD -- . \
+  ':(exclude)tests/corpus/csstree/source/**'
 test -n "$(git ls-files '*.rs')"
 c01_owned_rust="$(git ls-files '*.rs')"
 if printf '%s\n' "$c01_owned_rust" | xargs rg -n --pcre2 --color never '\bunsafe\s*(fn|trait|impl|extern|mod|\{|union)|\bstatic\s+mut\b|#\s*\[\s*(allow|deny)\s*\(\s*unsafe_code' ; then exit 1; else test $? -eq 1; fi

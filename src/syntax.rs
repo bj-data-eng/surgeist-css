@@ -9842,9 +9842,10 @@ fn is_non_negative_length_percentage(length: &CssLength) -> bool {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct CssUrl {
     value: String,
+    modifiers: Vec<CssUrlModifier>,
 }
 
 impl CssUrl {
@@ -9862,12 +9863,105 @@ impl CssUrl {
     pub(crate) fn new(value: impl Into<String>) -> Self {
         Self {
             value: value.into(),
+            modifiers: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn with_modifiers(value: impl Into<String>, modifiers: Vec<CssUrlModifier>) -> Self {
+        Self {
+            value: value.into(),
+            modifiers,
         }
     }
 
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.value
+    }
+
+    /// Returns the authored modifiers of a quoted `url()` value.
+    ///
+    /// Values and Units Level 3 defines modifier syntax without assigning
+    /// resource semantics to any particular modifier. This accessor therefore
+    /// preserves only the typed authored identifier/function forms; it does not
+    /// interpret a modifier, resolve the URL, or load a resource.
+    #[must_use]
+    pub fn modifiers(&self) -> &[CssUrlModifier] {
+        &self.modifiers
+    }
+}
+
+impl std::fmt::Debug for CssUrl {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Preserve the established diagnostic/debug projection used by the I01
+        // behavioral oracle. Authored modifiers are inspected through the
+        // intentional typed accessor above rather than Debug text.
+        formatter
+            .debug_struct("CssUrl")
+            .field("value", &self.value)
+            .finish()
+    }
+}
+
+/// One decoded CSS identifier retained as authored value syntax.
+///
+/// This parser-owned value does not apply consumer-specific keyword exclusions.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssIdent {
+    value: String,
+}
+
+impl CssIdent {
+    #[must_use]
+    pub(crate) fn new(value: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+        }
+    }
+
+    /// Returns the decoded, case-preserving identifier value.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+/// One authored Values and Units Level 3 URL modifier.
+///
+/// The source defines the syntax as either an identifier or functional
+/// notation, while assigning no modifier meanings. These values therefore stay
+/// symbolic and do not trigger URL resolution or resource loading.
+#[non_exhaustive]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CssUrlModifier {
+    Ident(CssIdent),
+    Function(CssUrlModifierFunction),
+}
+
+/// One parser-produced functional URL modifier.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssUrlModifierFunction {
+    name: CssIdent,
+    arguments: CssAuthoredFunctionArguments,
+}
+
+impl CssUrlModifierFunction {
+    #[must_use]
+    pub(crate) const fn new(name: CssIdent, arguments: CssAuthoredFunctionArguments) -> Self {
+        Self { name, arguments }
+    }
+
+    /// Returns the decoded, case-preserving function name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    /// Returns the preserved authored function arguments.
+    #[must_use]
+    pub const fn arguments(&self) -> &CssAuthoredFunctionArguments {
+        &self.arguments
     }
 }
 

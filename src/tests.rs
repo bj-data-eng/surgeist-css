@@ -2549,7 +2549,7 @@ fn rejects_unsupported_nth_patterns_and_of_selector_forms() {
     assert!(parse_sheet(":nth-child() { color: black; }").is_err());
     assert!(parse_sheet(":nth-child(foo) { color: black; }").is_err());
     assert!(parse_sheet(":nth-child(2n +) { color: black; }").is_err());
-    assert!(parse_sheet(":nth-child(2n + 1) { color: black; }").is_err());
+    assert!(parse_sheet(":nth-child(2n + +1) { color: black; }").is_err());
     assert!(parse_sheet(":nth-of-type(2n of .item) { color: black; }").is_err());
 }
 

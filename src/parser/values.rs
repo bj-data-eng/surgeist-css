@@ -11,6 +11,20 @@ use crate::syntax::*;
 use crate::validation::{LengthUnitStatus, classify_length_unit, parse_global_keyword};
 
 pub(crate) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] = &[
+    CssFeatureId::new("official.value.syntax-token-stream"),
+    CssFeatureId::new("official.value.component-value"),
+    CssFeatureId::new("official.value.simple-block"),
+    CssFeatureId::new("official.value.function"),
+    CssFeatureId::new("official.value.declaration-value"),
+    CssFeatureId::new("official.value.any-value"),
+    CssFeatureId::new("official.value.an-plus-b"),
+    CssFeatureId::new("official.value.unicode-range"),
+    CssFeatureId::new("official.value.css-wide-keyword"),
+    CssFeatureId::new("official.value.custom-ident"),
+    CssFeatureId::new("official.value.ident"),
+    CssFeatureId::new("official.value.string"),
+    CssFeatureId::new("official.value.url"),
+    CssFeatureId::new("official.value.url-modifier"),
     CssFeatureId::new("official.value.integer"),
     CssFeatureId::new("official.value.number"),
     CssFeatureId::new("official.value.dimension"),

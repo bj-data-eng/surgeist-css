@@ -1731,54 +1731,14 @@ static CONFORMANCE_EXCLUSIONS: &[CssExclusionMetadata] = &[
 
 // These private records are a hand-authored reconciliation of the official
 // production ledger. They intentionally do not participate in parser dispatch,
-// public feature lookup, or support-status calculation. Later grammar cycles
-// replace one reserved row with one public atomic feature and its independent
-// parser evidence; the persisted ledger remains an external review authority.
-#[expect(dead_code, reason = "private official-ledger reconciliation metadata")]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-struct CssReservedCoverageId(&'static str);
-
-#[expect(dead_code, reason = "private official-ledger reconciliation metadata")]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-enum CssOfficialCoverageKind {
-    Rule,
-    QualifiedRule,
-    Declaration,
-    Descriptor,
-    Value,
-    Property,
-    PropertyAlias,
-    Selector,
-    MediaFeature,
-}
-
-#[expect(dead_code, reason = "private official-ledger reconciliation metadata")]
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-enum CssCoverageEvidenceBoundary {
-    RulePlacementAstAndRecovery,
-    QualifiedRuleAstAndRecovery,
-    DeclarationValueAndRecovery,
-    DescriptorValueOrderingAndRecovery,
-    SharedValueTypedPositiveAndMutation,
-    PropertyValueGlobalSubstitutionAndRecovery,
-    LegacyPropertyAliasMappingAndRecovery,
-    SelectorAstMutationAndRecovery,
-    MediaQueryTypedPositiveDefinedFalseAndRecovery,
-}
+// public feature lookup, or support-status calculation. Every selected row is
+// now either an active public atomic feature or an explicit exclusion; the
+// persisted ledger remains an external review authority.
 
 #[expect(dead_code, reason = "private official-ledger reconciliation metadata")]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum CssOfficialCoverageRecord {
     Active(CssFeatureId),
-    Reserved {
-        id: CssReservedCoverageId,
-        kind: CssOfficialCoverageKind,
-        source: CssSpecificationSource,
-        production: &'static str,
-        future_module: &'static str,
-        future_cycle: &'static str,
-        evidence: CssCoverageEvidenceBoundary,
-    },
     Excluded(&'static CssExclusionMetadata),
 }
 
@@ -1799,28 +1759,6 @@ struct CssSharedCoverageRecord {
 macro_rules! active_coverage {
     ($id:literal) => {
         CssOfficialCoverageRecord::Active(CssFeatureId::new($id))
-    };
-}
-
-macro_rules! reserved_coverage {
-    (
-        $id:literal,
-        $kind:ident,
-        $source:ident,
-        $production:literal,
-        $module:literal,
-        $cycle:literal,
-        $evidence:ident
-    ) => {
-        CssOfficialCoverageRecord::Reserved {
-            id: CssReservedCoverageId($id),
-            kind: CssOfficialCoverageKind::$kind,
-            source: $source,
-            production: $production,
-            future_module: $module,
-            future_cycle: $cycle,
-            evidence: CssCoverageEvidenceBoundary::$evidence,
-        }
     };
 }
 
@@ -1999,82 +1937,18 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("official.rule.at-rule"),
     active_coverage!("official.qualified-rule.generic"),
     active_coverage!("official.declaration.generic"),
-    reserved_coverage!(
-        "official.value.syntax-token-stream",
-        Value,
-        O_SYNTAX3,
-        "#tokenization",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.component-value",
-        Value,
-        O_SYNTAX3,
-        "#consume-component-value",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.simple-block",
-        Value,
-        O_SYNTAX3,
-        "#consume-simple-block",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.function",
-        Value,
-        O_SYNTAX3,
-        "#consume-function",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.syntax-token-stream"),
+    active_coverage!("official.value.component-value"),
+    active_coverage!("official.value.simple-block"),
+    active_coverage!("official.value.function"),
     active_coverage!("official.value.stylesheet"),
     active_coverage!("official.value.rule-list"),
     active_coverage!("official.value.declaration-list"),
     active_coverage!("official.value.style-block"),
-    reserved_coverage!(
-        "official.value.declaration-value",
-        Value,
-        O_SYNTAX3,
-        "#any-value",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.any-value",
-        Value,
-        O_SYNTAX3,
-        "#any-value",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.an-plus-b",
-        Value,
-        O_SYNTAX3,
-        "#the-anb-type",
-        "crate::parser::selectors",
-        "I02-C10",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.unicode-range",
-        Value,
-        O_SYNTAX3,
-        "#urange-syntax",
-        "crate::parser::font_face",
-        "I02-C08",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.declaration-value"),
+    active_coverage!("official.value.any-value"),
+    active_coverage!("official.value.an-plus-b"),
+    active_coverage!("official.value.unicode-range"),
     active_coverage!("foundation.declaration-list.style-attribute"),
     active_coverage!("official.media.query-list-core"),
     active_coverage!("baseline.media.type"),
@@ -2118,60 +1992,12 @@ static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("official.selector.namespace-qualified-name"),
     active_coverage!("baseline.rule.import"),
     active_coverage!("foundation.declaration.importance"),
-    reserved_coverage!(
-        "official.value.css-wide-keyword",
-        Value,
-        O_CASCADE4,
-        "#defaulting-keywords",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.custom-ident",
-        Value,
-        O_VALUES3,
-        "#custom-idents",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.ident",
-        Value,
-        O_VALUES3,
-        "#custom-idents",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.string",
-        Value,
-        O_VALUES3,
-        "#strings",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.url",
-        Value,
-        O_VALUES3,
-        "#urls",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
-    reserved_coverage!(
-        "official.value.url-modifier",
-        Value,
-        O_VALUES3,
-        "#url-modifiers",
-        "crate::parser::values",
-        "I02-C03",
-        SharedValueTypedPositiveAndMutation
-    ),
+    active_coverage!("official.value.css-wide-keyword"),
+    active_coverage!("official.value.custom-ident"),
+    active_coverage!("official.value.ident"),
+    active_coverage!("official.value.string"),
+    active_coverage!("official.value.url"),
+    active_coverage!("official.value.url-modifier"),
     active_coverage!("official.value.integer"),
     active_coverage!("official.value.number"),
     active_coverage!("official.value.dimension"),
@@ -2789,7 +2615,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 473] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 487] = [
     CssFeatureMetadata::complete(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -2929,6 +2755,34 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 473] = [
         "#consume-declaration",
     ),
     CssFeatureMetadata::complete(
+        "official.value.syntax-token-stream",
+        CssFeatureKind::Value,
+        "syntax token stream",
+        O_SYNTAX3,
+        "#tokenization",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.component-value",
+        CssFeatureKind::Value,
+        "<component-value>",
+        O_SYNTAX3,
+        "#consume-component-value",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.simple-block",
+        CssFeatureKind::Value,
+        "simple block",
+        O_SYNTAX3,
+        "#consume-simple-block",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.function",
+        CssFeatureKind::Value,
+        "function",
+        O_SYNTAX3,
+        "#consume-function",
+    ),
+    CssFeatureMetadata::complete(
         "official.value.stylesheet",
         CssFeatureKind::Value,
         "<stylesheet>",
@@ -2956,6 +2810,34 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 473] = [
         O_SYNTAX3,
         "#declaration-rule-list",
     ),
+    CssFeatureMetadata::complete(
+        "official.value.declaration-value",
+        CssFeatureKind::Value,
+        "<declaration-value>",
+        O_SYNTAX3,
+        "#any-value",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.any-value",
+        CssFeatureKind::Value,
+        "<any-value>",
+        O_SYNTAX3,
+        "#any-value",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.an-plus-b",
+        CssFeatureKind::Value,
+        "<an+b>",
+        O_SYNTAX3,
+        "#the-anb-type",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.unicode-range",
+        CssFeatureKind::Value,
+        "<urange>",
+        O_SYNTAX3,
+        "#urange-syntax",
+    ),
     CssFeatureMetadata::partial(
         "baseline.declaration.custom-property",
         CssFeatureKind::Declaration,
@@ -2973,6 +2855,48 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 473] = [
         "#using-variables",
         "Known-property values with syntactically admissible var() references remain authored and symbolic.",
         "Other valid CSS Variables substitution functions and post-substitution forms are outside the I01 subset.",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.css-wide-keyword",
+        CssFeatureKind::Value,
+        "CSS-wide keyword",
+        O_CASCADE4,
+        "#defaulting-keywords",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.custom-ident",
+        CssFeatureKind::Value,
+        "<custom-ident>",
+        O_VALUES3,
+        "#custom-idents",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.ident",
+        CssFeatureKind::Value,
+        "<ident>",
+        O_VALUES3,
+        "#custom-idents",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.string",
+        CssFeatureKind::Value,
+        "<string>",
+        O_VALUES3,
+        "#strings",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.url",
+        CssFeatureKind::Value,
+        "<url>",
+        O_VALUES3,
+        "#urls",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.url-modifier",
+        CssFeatureKind::Value,
+        "<url-modifier>",
+        O_VALUES3,
+        "#url-modifiers",
     ),
     CssFeatureMetadata::complete(
         "official.value.integer",

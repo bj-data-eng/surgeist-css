@@ -1216,8 +1216,79 @@ pub(super) fn parse_image_layer<'i, 't>(
 pub(super) fn parse_url<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssUrl, ParseError<'i, Error>> {
-    let value = input.expect_url().map_err(basic)?.to_string();
-    CssUrl::try_new(value).ok_or_else(|| unsupported_value(input, None, "URL is empty"))
+    let location = input.current_source_location();
+    match input.next().map_err(basic)?.clone() {
+        Token::UnquotedUrl(value) => CssUrl::try_new(value.to_string())
+            .ok_or_else(|| unsupported_value(input, None, "URL is empty")),
+        Token::Function(name) if name.eq_ignore_ascii_case("url") => {
+            let (value, modifiers) = input.parse_nested_block(|input| {
+                let value = input.expect_string_cloned().map_err(basic)?.to_string();
+                let mut modifiers = Vec::new();
+                while !input.is_exhausted() {
+                    let modifier_location = input.current_source_location();
+                    match input.next().map_err(basic)?.clone() {
+                        Token::Ident(value) => {
+                            modifiers.push(CssUrlModifier::Ident(CssIdent::new(value.to_string())));
+                        }
+                        Token::Function(name) => {
+                            let arguments = input.parse_nested_block(|input| {
+                                let start = input.position();
+                                consume_url_modifier_components(input)?;
+                                Ok(CssAuthoredFunctionArguments::new(
+                                    input.slice_from(start).to_owned(),
+                                ))
+                            })?;
+                            modifiers.push(CssUrlModifier::Function(CssUrlModifierFunction::new(
+                                CssIdent::new(name.to_string()),
+                                arguments,
+                            )));
+                        }
+                        token => {
+                            return Err(
+                                modifier_location.new_unexpected_token_error::<Error>(token)
+                            );
+                        }
+                    }
+                }
+                Ok((value, modifiers))
+            })?;
+            if value.is_empty() {
+                Err(unsupported_value(input, None, "URL is empty"))
+            } else {
+                Ok(CssUrl::with_modifiers(value, modifiers))
+            }
+        }
+        token => Err(location.new_unexpected_token_error::<Error>(token)),
+    }
+}
+
+fn consume_url_modifier_components<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<(), ParseError<'i, Error>> {
+    while !input.is_exhausted() {
+        let location = input.current_source_location();
+        match input
+            .next_including_whitespace_and_comments()
+            .map_err(basic)?
+            .clone()
+        {
+            Token::Function(_)
+            | Token::ParenthesisBlock
+            | Token::SquareBracketBlock
+            | Token::CurlyBracketBlock => {
+                input.parse_nested_block(consume_url_modifier_components)?;
+            }
+            token @ (Token::BadString(_)
+            | Token::BadUrl(_)
+            | Token::CloseParenthesis
+            | Token::CloseSquareBracket
+            | Token::CloseCurlyBracket) => {
+                return Err(location.new_unexpected_token_error::<Error>(token));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn parse_mask_position_list<'i, 't>(

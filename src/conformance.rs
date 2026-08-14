@@ -2335,15 +2335,7 @@ static OFFICIAL_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
 
 static OFFICIAL_NON_PROPERTY_COVERAGE_ROWS: &[CssOfficialCoverageRecord] = &[
     active_coverage!("later.rule.page"),
-    reserved_coverage!(
-        "official.selector.page-pseudo",
-        Selector,
-        O_CSS2,
-        "page.html#page-selectors",
-        "crate::parser::selectors",
-        "I02-C11",
-        SelectorAstMutationAndRecovery
-    ),
+    active_coverage!("official.selector.page-pseudo"),
     active_coverage!("foundation.encoding.charset"),
     active_coverage!("baseline.rule.style"),
     reserved_coverage!(
@@ -3423,7 +3415,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 386] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 387] = [
     CssFeatureMetadata::complete(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -4218,13 +4210,19 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 386] = [
         O_COUNTERSTYLES3,
         "#the-counter-style-rule",
     ),
-    CssFeatureMetadata::recognized_unsupported(
+    CssFeatureMetadata::complete(
         "later.rule.page",
         CssFeatureKind::Rule,
         "@page",
         O_CSS2,
         "page.html#page-box",
-        CssErrorCode::UnsupportedAtRule,
+    ),
+    CssFeatureMetadata::complete(
+        "official.selector.page-pseudo",
+        CssFeatureKind::Selector,
+        ":left|:right|:first",
+        O_CSS2,
+        "page.html#page-selectors",
     ),
     CssFeatureMetadata::recognized_unsupported(
         "later.rule.font-feature-values",

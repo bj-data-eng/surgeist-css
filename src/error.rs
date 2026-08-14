@@ -1943,7 +1943,7 @@ fn unsupported_at_rule_feature(name: &str) -> Option<CssFeatureId> {
         Some(CssFeatureId::new("later.rule.supports"))
     } else if name.eq_ignore_ascii_case("counter-style") {
         Some(CssFeatureId::new("later.rule.counter-style"))
-    } else if name.eq_ignore_ascii_case("page") {
+    } else if name.eq_ignore_ascii_case("page") || is_page_margin_box_name(name) {
         Some(CssFeatureId::new("later.rule.page"))
     } else if name.eq_ignore_ascii_case("font-feature-values") {
         Some(CssFeatureId::new("later.rule.font-feature-values"))
@@ -1952,12 +1952,35 @@ fn unsupported_at_rule_feature(name: &str) -> Option<CssFeatureId> {
     }
 }
 
+fn is_page_margin_box_name(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "top-left-corner"
+            | "top-left"
+            | "top-center"
+            | "top-right"
+            | "top-right-corner"
+            | "bottom-left-corner"
+            | "bottom-left"
+            | "bottom-center"
+            | "bottom-right"
+            | "bottom-right-corner"
+            | "left-top"
+            | "left-middle"
+            | "left-bottom"
+            | "right-top"
+            | "right-middle"
+            | "right-bottom"
+    )
+}
+
 fn at_rule_requires_block(name: &str) -> bool {
     name.eq_ignore_ascii_case("font-face")
         || name.eq_ignore_ascii_case("keyframes")
         || name.eq_ignore_ascii_case("media")
         || name.eq_ignore_ascii_case("container")
         || name.eq_ignore_ascii_case("scope")
+        || name.eq_ignore_ascii_case("page")
 }
 
 fn property_feature_id(name: &str) -> CssFeatureId {

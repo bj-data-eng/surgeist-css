@@ -114,6 +114,7 @@ pub enum CssRule {
     Import(CssImportRule),
     Namespace(CssNamespaceRule),
     CounterStyle(CssCounterStyleRule),
+    Page(CssPageRule),
     LayerStatement(CssLayerStatementRule),
     LayerBlock(CssLayerBlockRule),
     FontFace(CssFontFaceRule),
@@ -123,6 +124,66 @@ pub enum CssRule {
     Supports(CssSupportsRule),
     Container(CssContainerRule),
     Scope(CssScopeRule),
+}
+
+/// One valid parser-produced CSS2 page rule.
+///
+/// The private fields retain the optional authored page pseudo selector, the
+/// ordered page-context margin declarations, and the at-keyword position.
+/// This authored model does not paginate, cascade, match pages, or resolve
+/// lengths and percentages.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssPageRule {
+    selector: Option<CssPageSelector>,
+    declarations: CssDeclarationList,
+    position: CssSourcePosition,
+}
+
+impl CssPageRule {
+    #[must_use]
+    pub(crate) const fn new(
+        selector: Option<CssPageSelector>,
+        declarations: CssDeclarationList,
+        position: CssSourcePosition,
+    ) -> Self {
+        Self {
+            selector,
+            declarations,
+            position,
+        }
+    }
+
+    /// Returns the authored page pseudo selector, or `None` for the default
+    /// page form with an empty prelude.
+    #[must_use]
+    pub const fn selector(&self) -> Option<CssPageSelector> {
+        self.selector
+    }
+
+    /// Returns the valid page-context margin declarations in authored order.
+    #[must_use]
+    pub const fn declarations(&self) -> &CssDeclarationList {
+        &self.declarations
+    }
+
+    /// Returns the semantic source position of the rule's at-keyword.
+    #[must_use]
+    pub const fn position(&self) -> CssSourcePosition {
+        self.position
+    }
+}
+
+/// The finite CSS2 pseudo-page selector set accepted by `@page`.
+///
+/// The default page form is represented by `None` from
+/// [`CssPageRule::selector`], keeping absence distinct from every authored
+/// pseudo selector.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CssPageSelector {
+    Left,
+    Right,
+    First,
 }
 
 /// One valid parser-produced Counter Styles 3 definition.

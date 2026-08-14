@@ -301,6 +301,11 @@ impl<'i> AtRuleParser<'i> for NestedStyleRuleParser<'i> {
                 "namespace",
                 "the stylesheet top level",
             )),
+            "page" => Err(invalid_at_rule_placement(
+                input.current_source_location(),
+                "page",
+                "the stylesheet top level",
+            )),
             _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
         }
     }

@@ -17,6 +17,7 @@ mod grid;
 mod keyframes;
 mod layout;
 mod nesting;
+mod page;
 mod queries;
 mod recovery;
 mod selectors;
@@ -42,6 +43,7 @@ use grid::*;
 use keyframes::{parse_keyframes_name, parse_keyframes_rule};
 use layout::*;
 use nesting::parse_style_rule_block;
+use page::{parse_page_rule, parse_page_selector};
 #[cfg(test)]
 pub(crate) use queries::parse_container_condition_for_test;
 #[cfg(test)]
@@ -178,6 +180,11 @@ static ATOMIC_IMPLEMENTATION_INVENTORIES: &[CssAtomicImplementationInventory] = 
         module: "crate::parser::nesting",
         kind: CssAtomicImplementationKind::Selector,
         stable_ids: nesting::IMPLEMENTED_SELECTORS,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::page",
+        kind: CssAtomicImplementationKind::Selector,
+        stable_ids: page::IMPLEMENTED_SELECTORS,
     },
     CssAtomicImplementationInventory {
         module: "crate::parser::queries",
@@ -948,6 +955,7 @@ fn into_scoped_rule(rule: CssRule) -> Option<CssScopedRule> {
         CssRule::Import(_)
         | CssRule::Namespace(_)
         | CssRule::CounterStyle(_)
+        | CssRule::Page(_)
         | CssRule::FontFace(_)
         | CssRule::Keyframes(_) => None,
     }
@@ -1014,6 +1022,7 @@ fn rule_start(rule: &CssRule) -> usize {
         CssRule::Import(rule) => rule.position(),
         CssRule::Namespace(rule) => rule.position(),
         CssRule::CounterStyle(rule) => rule.position(),
+        CssRule::Page(rule) => rule.position(),
         CssRule::LayerStatement(rule) => rule.position(),
         CssRule::LayerBlock(rule) => rule.position(),
         CssRule::FontFace(rule) => rule.position(),
@@ -1519,6 +1528,7 @@ enum StrictAtRulePrelude {
     Import(CssImportPrelude),
     Namespace(CssNamespacePrelude),
     CounterStyle(CssCounterStyleName),
+    Page(Option<CssPageSelector>),
     Layer(Vec<CssLayerName>),
     FontFace,
     Keyframes(CssKeyframesName),
@@ -1535,6 +1545,7 @@ impl StrictAtRulePrelude {
             Self::Import(_) => "baseline.rule.import",
             Self::Namespace(_) => "later.rule.namespace",
             Self::CounterStyle(_) => "later.rule.counter-style",
+            Self::Page(_) => "later.rule.page",
             Self::Layer(_) => "baseline.rule.layer-block",
             Self::FontFace => "baseline.rule.font-face",
             Self::Keyframes(_) => "baseline.rule.keyframes",
@@ -1701,6 +1712,37 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 }
                 Ok(StrictAtRulePrelude::CounterStyle(name))
             },
+            "page" => {
+                if self.top_level_phase.is_none() {
+                    return Err(invalid_at_rule_placement(
+                        input.current_source_location(),
+                        "page",
+                        "the stylesheet top level",
+                    ));
+                }
+                let selector = parse_page_selector(input).map_err(|error| {
+                    with_at_rule_prelude_context(
+                        error,
+                        "page",
+                        "later.rule.page",
+                        "an empty prelude or one of :left, :right, or :first",
+                    )
+                })?;
+                let following = self
+                    .source
+                    .get(input.position().byte_index()..)
+                    .unwrap_or_default()
+                    .trim_start();
+                if following.is_empty() || following.starts_with(';') {
+                    return Err(invalid_at_rule_body(
+                        input,
+                        "page",
+                        "later.rule.page",
+                        "a block-form page rule",
+                    ));
+                }
+                Ok(StrictAtRulePrelude::Page(selector))
+            },
             "font-face" => {
                 if !input.is_exhausted() {
                     return Err(with_at_rule_prelude_context(
@@ -1857,6 +1899,7 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 Ok(vec![CssRule::Namespace(rule)])
             }
             StrictAtRulePrelude::CounterStyle(_) => Err(()),
+            StrictAtRulePrelude::Page(_) => Err(()),
             StrictAtRulePrelude::Layer(names) => {
                 let names = CssLayerNameList::try_new(names).ok_or(())?;
                 self.mark_successful_layer_statement();
@@ -1913,6 +1956,18 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
                 )?;
                 self.mark_successful_body_rule();
                 Ok(vec![CssRule::CounterStyle(rule)])
+            }
+            StrictAtRulePrelude::Page(selector) => {
+                let rule = parse_page_rule(
+                    self.source,
+                    selector,
+                    input,
+                    start,
+                    &mut self.diagnostics,
+                    self.recovery.clone(),
+                )?;
+                self.mark_successful_body_rule();
+                Ok(vec![CssRule::Page(rule)])
             }
             StrictAtRulePrelude::Layer(names) => {
                 if names.len() > 1 {

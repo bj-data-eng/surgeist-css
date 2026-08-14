@@ -286,6 +286,35 @@ fn app_strict_counter_style_descriptors_match_ordinary_retention_and_recovery() 
 }
 
 #[test]
+fn app_strict_page_rules_match_ordinary_retention_and_recovery() {
+    let clean = assert_sheet_parity(concat!(
+        "@import \"print.css\"; ",
+        "@page :left { margin: -1cm 2% auto 3pt !important; }",
+    ));
+    assert!(clean.is_clean(), "{:?}", clean.diagnostics());
+    assert!(matches!(
+        clean.syntax().rules(),
+        [CssRule::Import(_), CssRule::Page(_)]
+    ));
+
+    let recovered = assert_sheet_parity(concat!(
+        "@page :first { color: red; mystery: 1; margin-top: 1em; ",
+        "margin-bottom: -2cm; } .after {}",
+    ));
+    assert!(matches!(
+        recovered.syntax().rules(),
+        [CssRule::Page(_), CssRule::Style(_)]
+    ));
+    assert_eq!(recovered.diagnostics().len(), 3);
+    assert!(
+        recovered
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| { diagnostic.action() == CssRecoveryAction::DropDeclaration })
+    );
+}
+
+#[test]
 fn app_strict_parity_preserves_multiple_diagnostics_and_every_special_action() {
     let sheet = assert_sheet_parity("<!-- .x { mystery: 1; width: nope; } -->");
     assert!(sheet.diagnostics().len() >= 4);

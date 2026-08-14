@@ -4,7 +4,7 @@
 
 - **Cycle ID:** `P01-I03-C01`
 - **Owning repository:** `/Users/codex/Development/surgeist-css`
-- **Status:** `reviewed`
+- **Status:** `in_progress`
 - **Cycle base:** `6cd91352f91274a93c559cb59d51d5fd7e947273`
 - **Reviewed specification:**
   `plans/specs/P01-I03-csstree-public-api-corpus-harness.md`, semantic

@@ -919,13 +919,47 @@ let _ = validate_style_attribute("color: red");
 //!     .expect("public Flexbox metadata");
 //! assert_eq!(metadata.source().id().as_str(), "O-FLEXBOX1");
 //! assert_eq!(metadata.status(), CssSupportStatus::Complete);
+//!
+//! let shared = feature_metadata("official.value.syntax-token-stream")
+//!     .expect("public Syntax 3 value metadata");
+//! assert_eq!(shared.status(), CssSupportStatus::Complete);
+//!
+//! let extension = feature_metadata("ext.value.relative-color")
+//!     .expect("preserved extension metadata");
+//! assert_eq!(extension.status(), CssSupportStatus::Partial);
+//! assert!(extension.supported_subset().is_some());
+//! assert!(extension.unsupported_remainder().is_some());
+//!
+//! let unsupported = feature_metadata("later.rule.font-feature-values")
+//!     .expect("recognized unsupported rule metadata");
+//! assert_eq!(
+//!     unsupported.status(),
+//!     CssSupportStatus::RecognizedUnsupported,
+//! );
 //! ```
 //!
-//! C14 activates ten property and seven non-property records and promotes seven
-//! existing Values 3 records without adding an official ledger unit. The
-//! immutable official inventory remains 162 property units, one normative
-//! legacy shorthand, and 167 non-property units. The exact 219-record I01
-//! baseline and 131-row exclusion registry remain unchanged.
+//! C14 closes all 31 records that entered the cycle as Reserved: ten Flexbox and
+//! Multicolumn properties; seven generic rule, declaration, and list shells; and
+//! fourteen shared values—`syntax-token-stream`, `component-value`, `simple-block`,
+//! `function`, `declaration-value`, `any-value`, `an-plus-b`, `unicode-range`,
+//! `css-wide-keyword`, `custom-ident`, `ident`, `string`, `url`, and `url-modifier`.
+//! It separately promotes the seven Values 3 records for `dimension`, `angle`,
+//! `angle-percentage`, `time-percentage`, `frequency`, `frequency-percentage`, and
+//! `calc()` from Partial to Complete.
+//!
+//! The preserved `ext.value.relative-color`, `ext.value.color-mix`,
+//! `ext.value.grid-repeat`, `ext.value.basic-shape`,
+//! `ext.descriptor.font-weight-range`, `ext.descriptor.font-style-oblique-range`,
+//! `ext.descriptor.font-stretch-range`, `ext.value.font-source-modern-hints`,
+//! `ext.property.font-weight-range`, `ext.supports.selector`,
+//! `ext.media.range.width`, `ext.media.range.height`,
+//! `ext.media.range.resolution`, `ext.media.range.color`, and
+//! `ext.media.range.monochrome` records remain Partial with explicit subset and
+//! remainder metadata. `@font-feature-values` remains RecognizedUnsupported. The
+//! public catalog reconciles to exactly 473 records; the immutable official
+//! inventory remains exactly 162 property units, one normative legacy shorthand,
+//! and 167 non-property units. All 219 I01 baseline records retain their
+//! classifications, and the exclusion registry remains exactly 131 rows.
 //!
 //! # Support metadata and application policy
 //!

@@ -787,21 +787,55 @@ let metadata = feature_metadata("official.property.flex-flow")
     .expect("public Flexbox metadata");
 assert_eq!(metadata.source().id().as_str(), "O-FLEXBOX1");
 assert_eq!(metadata.status(), CssSupportStatus::Complete);
+
+let shared = feature_metadata("official.value.syntax-token-stream")
+    .expect("public Syntax 3 value metadata");
+assert_eq!(shared.status(), CssSupportStatus::Complete);
+
+let extension = feature_metadata("ext.value.relative-color")
+    .expect("preserved extension metadata");
+assert_eq!(extension.status(), CssSupportStatus::Partial);
+assert!(extension.supported_subset().is_some());
+assert!(extension.unsupported_remainder().is_some());
+
+let unsupported = feature_metadata("later.rule.font-feature-values")
+    .expect("recognized unsupported rule metadata");
+assert_eq!(
+    unsupported.status(),
+    CssSupportStatus::RecognizedUnsupported,
+);
 ```
 
 The generic Syntax 3 at-rule, qualified-rule, declaration, stylesheet,
 rule-list, declaration-list, and style-block records are public `Complete`
-atomic metadata. The seven Values 3 records for dimension, angle,
-angle-percentage, time-percentage, frequency, frequency-percentage, and
-`calc()` are likewise `Complete`; preserved extension subsets remain truthful,
-and `@font-feature-values` remains recognized unsupported.
+atomic metadata. C14 also closes these fourteen formerly `Reserved` shared
+values as `Complete`: `syntax-token-stream`, `component-value`, `simple-block`,
+`function`, `declaration-value`, `any-value`, `an-plus-b`, `unicode-range`,
+`css-wide-keyword`, `custom-ident`, `ident`, `string`, `url`, and
+`url-modifier`.
 
-C14 activates ten property and seven non-property records and promotes the
-seven existing Values 3 records without adding an official ledger unit. The
-public support catalog contains 473 records. The immutable official inventory
-remains 162 property units (161 canonical properties plus the custom-property
-family), one normative legacy shorthand, and 167 non-property units. The exact
-219-record I01 baseline and the 131-row exclusion registry are unchanged.
+Together with the ten Flexbox/Multicolumn property records and seven generic
+shell records, those shared values account for all 31 records that entered C14
+as `Reserved`. C14 separately promotes the seven Values 3 records for
+`dimension`, `angle`, `angle-percentage`, `time-percentage`, `frequency`,
+`frequency-percentage`, and `calc()` from `Partial` to `Complete`.
+
+The preserved extension records `ext.value.relative-color`,
+`ext.value.color-mix`, `ext.value.grid-repeat`, `ext.value.basic-shape`,
+`ext.descriptor.font-weight-range`, `ext.descriptor.font-style-oblique-range`,
+`ext.descriptor.font-stretch-range`, `ext.value.font-source-modern-hints`,
+`ext.property.font-weight-range`, `ext.supports.selector`,
+`ext.media.range.width`, `ext.media.range.height`,
+`ext.media.range.resolution`, `ext.media.range.color`, and
+`ext.media.range.monochrome` remain `Partial`, with both subset and remainder
+metadata. The `@font-feature-values` rule remains `RecognizedUnsupported` with
+its typed unsupported-at-rule diagnostic.
+
+The public support catalog contains exactly 473 records. The immutable official
+inventory reconciles to exactly 162 property units (161 canonical properties
+plus the custom-property family), one normative legacy shorthand, and 167
+non-property units. All 219 preserved I01 baseline records retain their
+classifications, and the exclusion registry remains exactly 131 rows.
 
 The crate still stops at strict authored syntax. Cascade, substitution,
 selector matching, query evaluation, resource loading, layout, pagination,

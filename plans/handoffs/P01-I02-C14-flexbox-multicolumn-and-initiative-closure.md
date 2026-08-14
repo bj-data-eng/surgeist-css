@@ -9,7 +9,13 @@ substitution; evaluate selectors or queries; load resources; perform layout,
 pagination, painting, or animation; serialize CSSOM; or lower syntax into
 another Surgeist crate.
 
-## Public Surface And Promotions
+## Public Surface And Reserved Closures
+
+C14 closes all 31 records that entered the cycle as `Reserved`. The first 17
+are ten property records and seven generic shell records that become public
+`Complete` metadata. The other 14 are already-public official shared-value
+records whose status becomes `Complete`. This distinction preserves the exact
+catalog-cardinality reconciliation below.
 
 C14 activates these ten property records as public `Complete` metadata:
 `official.property.flex-flow`, `official.property.column-count`,
@@ -24,36 +30,72 @@ It activates seven public `Complete` non-property records:
 `official.value.rule-list`, `official.value.declaration-list`, and
 `official.value.style-block`.
 
-It promotes these seven existing Values 3 records from `Partial` to
+C14 closes these fourteen formerly `Reserved` official shared-value records as
+public `Complete` metadata: `official.value.syntax-token-stream`,
+`official.value.component-value`, `official.value.simple-block`,
+`official.value.function`, `official.value.declaration-value`,
+`official.value.any-value`, `official.value.an-plus-b`,
+`official.value.unicode-range`, `official.value.css-wide-keyword`,
+`official.value.custom-ident`, `official.value.ident`,
+`official.value.string`, `official.value.url`, and
+`official.value.url-modifier`.
+
+## Partial Promotions And Retained Boundaries
+
+C14 promotes these seven existing Values 3 records from `Partial` to
 `Complete`: `official.value.dimension`, `official.value.angle`,
 `official.value.angle-percentage`, `official.value.time-percentage`,
 `official.value.frequency`, `official.value.frequency-percentage`, and
-`official.value.calc`. The supported preserved extensions remain `Partial`
-with explicit subset and remainder metadata. `later.rule.font-feature-values`
-remains `RecognizedUnsupported` with its typed unsupported-at-rule diagnostic.
+`official.value.calc`.
+
+The following preserved extension records remain `Partial`, each with explicit
+supported-subset and unsupported-remainder metadata:
+
+- `ext.value.relative-color`
+- `ext.value.color-mix`
+- `ext.value.grid-repeat`
+- `ext.value.basic-shape`
+- `ext.descriptor.font-weight-range`
+- `ext.descriptor.font-style-oblique-range`
+- `ext.descriptor.font-stretch-range`
+- `ext.value.font-source-modern-hints`
+- `ext.property.font-weight-range`
+- `ext.supports.selector`
+- `ext.media.range.width`
+- `ext.media.range.height`
+- `ext.media.range.resolution`
+- `ext.media.range.color`
+- `ext.media.range.monochrome`
+
+`later.rule.font-feature-values` remains `RecognizedUnsupported` with its typed
+unsupported-at-rule diagnostic. These retained boundaries are not initiative
+closure gaps.
 
 All stable IDs retain their previous meaning. The additions are additive: no
 public type, stable ID, dependency, feature, or manifest entry is renamed or
-removed. The public support catalog contains 473 records after the 17
-activations; the seven status promotions do not change cardinality.
+removed. The public support catalog contains exactly 473 records after the 17
+public catalog additions. Closing the fourteen existing Reserved records and
+promoting the seven existing Partial records do not change cardinality.
 
 ## Exact Inventory And Exclusions
 
-The immutable official inventory remains exactly 162 property units: 161
+The immutable official inventory reconciles to exactly 162 property units: 161
 canonical properties plus the `--*` custom-property family. The one normative
 `glyph-orientation-vertical` legacy shorthand remains separate. The
-non-property inventory remains exactly 167 units, and all 219 preserved I01
-feature records retain their classifications.
+non-property inventory reconciles to exactly 167 units. Together those official
+inventories account for the complete selected source ledger without changing
+unit identity. All 219 preserved I01 feature records retain their
+classifications.
 
-The public exclusion registry remains exactly 131 rows. No exclusion was added,
-removed, or reclassified. The registry still contains the 50 superseded CSS2
-property definitions, 20 informative CSS2 Appendix A properties, and the two
-current-production-less `glyph-orientation-horizontal` and `ime-mode`
+The public exclusion registry reconciles to exactly 131 rows. No exclusion was
+added, removed, or reclassified. The registry still contains the 50 superseded
+CSS2 property definitions, 20 informative CSS2 Appendix A properties, and the
+two current-production-less `glyph-orientation-horizontal` and `ime-mode`
 spellings. The remaining 59 rows continue to exclude the selected official
 source areas outside authored syntax, including Flexbox and Multicolumn layout,
-pagination, and rendering algorithms; the Flexbox WebKit legacy aliases; Syntax
-3 fragment APIs and serialization; and other downstream loading, evaluation,
-matching, cascade, CSSOM, and rendering concerns.
+pagination, and rendering algorithms; the Flexbox WebKit legacy aliases;
+Syntax 3 fragment APIs and serialization; and other downstream loading,
+evaluation, matching, cascade, CSSOM, and rendering concerns.
 
 ## Product Fixture
 

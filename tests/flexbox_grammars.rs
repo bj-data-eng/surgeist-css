@@ -20,6 +20,7 @@ fn c14_flex_flow_retain_typed_structure() {
         (CssFlexDirection::Column, CssFlexWrap::NoWrap),
         (CssFlexDirection::Row, CssFlexWrap::NoWrap),
     ];
+    assert_eq!(report.syntax().len(), expected.len());
     for (declaration, (direction, wrap)) in report.syntax().iter().zip(expected) {
         assert_eq!(
             declaration.known().unwrap().property(),

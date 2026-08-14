@@ -139,6 +139,7 @@ pub(super) enum LengthGrammar {
     GridTrack,
     BackgroundSize,
     Position,
+    NonNegativeLength,
 }
 
 impl LengthGrammar {
@@ -209,6 +210,7 @@ impl LengthGrammar {
                 | Self::TextDecorationThickness
                 | Self::GridTrack
                 | Self::BackgroundSize
+                | Self::NonNegativeLength
         )
     }
 
@@ -236,6 +238,7 @@ impl LengthGrammar {
             Self::GridTrack => "grid track",
             Self::BackgroundSize => "background-size",
             Self::Position => "position",
+            Self::NonNegativeLength => "non-negative length",
         }
     }
 }
@@ -396,6 +399,8 @@ fn typed_length_calculation_is_current_consumer(context: &str) -> bool {
             | "translate"
             | "gradient stop"
             | "radial-gradient size"
+            | "column-width"
+            | "column-rule-width"
     )
 }
 

@@ -2609,6 +2609,15 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
         | CssKnownProperty::TextOrientation
         | CssKnownProperty::UnicodeBidi
         | CssKnownProperty::WritingMode => O_WRITING3,
+        CssKnownProperty::ColumnCount
+        | CssKnownProperty::ColumnFill
+        | CssKnownProperty::ColumnRule
+        | CssKnownProperty::ColumnRuleColor
+        | CssKnownProperty::ColumnRuleStyle
+        | CssKnownProperty::ColumnRuleWidth
+        | CssKnownProperty::ColumnSpan
+        | CssKnownProperty::ColumnWidth
+        | CssKnownProperty::Columns => O_MULTICOL1,
         CssKnownProperty::FlexDirection
         | CssKnownProperty::FlexFlow
         | CssKnownProperty::FlexWrap

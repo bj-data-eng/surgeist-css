@@ -16,6 +16,7 @@ mod generated_content;
 mod grid;
 mod keyframes;
 mod layout;
+mod multicolumn;
 mod nesting;
 mod page;
 mod queries;
@@ -42,6 +43,7 @@ use generated_content::*;
 use grid::*;
 use keyframes::{parse_keyframes_name, parse_keyframes_rule};
 use layout::*;
+use multicolumn::*;
 use nesting::parse_style_rule_block;
 use page::{parse_page_rule, parse_page_selector};
 #[cfg(test)]

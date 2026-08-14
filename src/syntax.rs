@@ -4792,6 +4792,213 @@ impl CssFlexFlow {
     }
 }
 
+/// A checked positive authored integer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssPositiveInteger {
+    value: i32,
+}
+
+impl CssPositiveInteger {
+    #[must_use]
+    pub const fn try_new(value: i32) -> Option<Self> {
+        if value > 0 {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> i32 {
+        self.value
+    }
+}
+
+/// A positive integer whose calculated range remains authored and symbolic.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssPositiveIntegerValue {
+    Literal(CssPositiveInteger),
+    Calculation(CssIntegerCalculation),
+}
+
+/// The authored `column-count` value.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssColumnCount {
+    Auto,
+    Count(CssPositiveIntegerValue),
+}
+
+/// The authored `column-fill` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssColumnFill {
+    Auto,
+    Balance,
+    BalanceAll,
+}
+
+/// A checked non-negative authored length without a percentage component.
+///
+/// Calculations remain symbolic because their range is enforced during computed-value
+/// processing, outside this crate's authored-syntax boundary.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssNonNegativeLength {
+    value: CssLength,
+}
+
+impl CssNonNegativeLength {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        let valid = match &value {
+            CssLength::Px(value) => value.value() >= 0.0,
+            CssLength::Dimension(value) => value.value() >= 0.0,
+            CssLength::Zero => true,
+            CssLength::Calc(value) => !value.uses_percentage(),
+            CssLength::Percent(_)
+            | CssLength::Auto
+            | CssLength::MinContent
+            | CssLength::MaxContent
+            | CssLength::FitContent
+            | CssLength::Normal
+            | CssLength::Thin
+            | CssLength::Medium
+            | CssLength::Thick => false,
+        };
+        valid.then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// The shared authored `<line-style>` domain used by borders and column rules.
+pub type CssLineStyle = CssBorderStyle;
+
+/// The shared authored `<line-width>` domain.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssLineWidth {
+    Thin,
+    Medium,
+    Thick,
+    Length(CssNonNegativeLength),
+}
+
+/// The authored components present in a `column-rule` shorthand.
+#[derive(Clone)]
+pub struct CssColumnRule {
+    width: Option<CssLineWidth>,
+    style: Option<CssLineStyle>,
+    color: Option<Box<CssParsedColor>>,
+}
+
+impl std::fmt::Debug for CssColumnRule {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CssColumnRule")
+            .field("width", &self.width)
+            .field("style", &self.style)
+            .field("color", &self.current_color())
+            .finish()
+    }
+}
+
+impl PartialEq for CssColumnRule {
+    fn eq(&self, other: &Self) -> bool {
+        self.width == other.width
+            && self.style == other.style
+            && parsed_color_options_equal(self.color.as_deref(), other.color.as_deref())
+    }
+}
+
+impl CssColumnRule {
+    pub(crate) fn new(
+        width: Option<CssLineWidth>,
+        style: Option<CssLineStyle>,
+        color: Option<CssParsedColor>,
+    ) -> Self {
+        Self {
+            width,
+            style,
+            color: color.map(Box::new),
+        }
+    }
+
+    #[must_use]
+    pub const fn width(&self) -> Option<&CssLineWidth> {
+        self.width.as_ref()
+    }
+
+    #[must_use]
+    pub const fn style(&self) -> Option<CssLineStyle> {
+        self.style
+    }
+
+    /// Returns the exact authored color component, when present.
+    #[must_use]
+    pub const fn current_color(&self) -> Option<&CssAuthoredColor> {
+        match self.color.as_ref() {
+            Some(color) => Some(color.current()),
+            None => None,
+        }
+    }
+
+    /// Returns the frozen I01 color representation when one exists.
+    #[must_use]
+    pub const fn color(&self) -> Option<&CssColor> {
+        match self.color.as_ref() {
+            Some(color) => color.i01_subset(),
+            None => None,
+        }
+    }
+}
+
+/// The authored `column-span` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssColumnSpan {
+    None,
+    All,
+}
+
+/// The authored `column-width` value.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssColumnWidth {
+    Auto,
+    Length(CssNonNegativeLength),
+}
+
+/// The authored component values of the `columns` shorthand.
+///
+/// Omitted components are represented by their specified `auto` initial value. This syntax value
+/// does not calculate used column sizes or perform multi-column layout.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssColumns {
+    width: CssColumnWidth,
+    count: CssColumnCount,
+}
+
+impl CssColumns {
+    pub(crate) const fn new(width: CssColumnWidth, count: CssColumnCount) -> Self {
+        Self { width, count }
+    }
+
+    #[must_use]
+    pub const fn width(&self) -> &CssColumnWidth {
+        &self.width
+    }
+
+    #[must_use]
+    pub const fn count(&self) -> &CssColumnCount {
+        &self.count
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum CssFloat {

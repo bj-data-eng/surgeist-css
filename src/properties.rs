@@ -65,6 +65,15 @@ macro_rules! property_schema {
             Gap, "gap", [], "baseline.property.gap", CssLength, CssGapPropertyValue, CssGapPropertyValueRepresentation, parse_gap_value, { parse_gap_value($input)? };
             RowGap, "row-gap", [], "baseline.property.row-gap", CssLength, CssRowGapPropertyValue, CssRowGapPropertyValueRepresentation, parse_gap_value, { parse_gap_value($input)? };
             ColumnGap, "column-gap", [], "baseline.property.column-gap", CssLength, CssColumnGapPropertyValue, CssColumnGapPropertyValueRepresentation, parse_gap_value, { parse_gap_value($input)? };
+            ColumnCount, "column-count", [], "official.property.column-count", CssColumnCount, CssColumnCountPropertyValue, CssColumnCountPropertyValueRepresentation, parse_column_count, { parse_column_count($input)? };
+            ColumnFill, "column-fill", [], "official.property.column-fill", CssColumnFill, CssColumnFillPropertyValue, CssColumnFillPropertyValueRepresentation, parse_column_fill, { parse_column_fill($input)? };
+            ColumnRule, "column-rule", [], "official.property.column-rule", CssColumnRule, CssColumnRulePropertyValue, CssColumnRulePropertyValueRepresentation, parse_column_rule, { parse_column_rule($input)? };
+            ColumnRuleColor, "column-rule-color", [], "official.property.column-rule-color", CssParsedColor, CssColumnRuleColorPropertyValue, CssColumnRuleColorPropertyValueRepresentation, parse_color, { parse_color($input)? };
+            ColumnRuleStyle, "column-rule-style", [], "official.property.column-rule-style", CssLineStyle, CssColumnRuleStylePropertyValue, CssColumnRuleStylePropertyValueRepresentation, parse_line_style, { parse_line_style($input)? };
+            ColumnRuleWidth, "column-rule-width", [], "official.property.column-rule-width", CssLineWidth, CssColumnRuleWidthPropertyValue, CssColumnRuleWidthPropertyValueRepresentation, parse_line_width, { parse_line_width($input)? };
+            ColumnSpan, "column-span", [], "official.property.column-span", CssColumnSpan, CssColumnSpanPropertyValue, CssColumnSpanPropertyValueRepresentation, parse_column_span, { parse_column_span($input)? };
+            ColumnWidth, "column-width", [], "official.property.column-width", CssColumnWidth, CssColumnWidthPropertyValue, CssColumnWidthPropertyValueRepresentation, parse_column_width, { parse_column_width($input)? };
+            Columns, "columns", [], "official.property.columns", CssColumns, CssColumnsPropertyValue, CssColumnsPropertyValueRepresentation, parse_columns, { parse_columns($input)? };
             GridFlowTolerance, "grid-flow-tolerance", [], "baseline.property.grid-flow-tolerance", CssGridFlowTolerance, CssGridFlowTolerancePropertyValue, CssGridFlowTolerancePropertyValueRepresentation, parse_grid_flow_tolerance, { parse_grid_flow_tolerance($input)? };
             GridTemplateRows, "grid-template-rows", [], "baseline.property.grid-template-rows", CssGridTrackList, CssGridTemplateRowsPropertyValue, CssGridTemplateRowsPropertyValueRepresentation, parse_grid_track_list, { parse_grid_track_list($input)? };
             GridTemplateColumns, "grid-template-columns", [], "baseline.property.grid-template-columns", CssGridTrackList, CssGridTemplateColumnsPropertyValue, CssGridTemplateColumnsPropertyValueRepresentation, parse_grid_track_list, { parse_grid_track_list($input)? };
@@ -846,6 +855,108 @@ macro_rules! define_property_value {
             $representation,
             CssFlexFlow,
             flow
+        );
+    };
+    (
+        ColumnCount, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            count
+        );
+    };
+    (
+        ColumnFill, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            fill
+        );
+    };
+    (
+        ColumnRule, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            rule
+        );
+    };
+    (
+        ColumnRuleColor, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_color_property_value!($canonical, $wrapper, $representation);
+    };
+    (
+        ColumnRuleStyle, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            style
+        );
+    };
+    (
+        ColumnRuleWidth, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            width
+        );
+    };
+    (
+        ColumnSpan, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            span
+        );
+    };
+    (
+        ColumnWidth, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            width
+        );
+    };
+    (
+        Columns, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            columns
         );
     };
     (

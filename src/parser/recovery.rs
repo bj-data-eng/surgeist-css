@@ -9,6 +9,17 @@ use crate::syntax::{CssNamespaceName, CssNamespacePrefix, CssSelector};
 
 use super::CssNamespaceBindings;
 
+pub(super) static IMPLEMENTED_RULES: &[crate::CssFeatureId] =
+    &[crate::CssFeatureId::new("official.rule.at-rule")];
+
+pub(super) static IMPLEMENTED_QUALIFIED_RULES: &[crate::CssFeatureId] =
+    &[crate::CssFeatureId::new("official.qualified-rule.generic")];
+
+pub(super) static IMPLEMENTED_SHARED_VALUES: &[crate::CssFeatureId] = &[
+    crate::CssFeatureId::new("official.value.rule-list"),
+    crate::CssFeatureId::new("official.value.style-block"),
+];
+
 pub(super) const STRUCTURAL_NESTING_LIMIT: u32 = 256;
 pub(super) const DIRECT_PARSE_DEPTH: u32 = 128;
 

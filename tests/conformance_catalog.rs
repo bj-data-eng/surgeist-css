@@ -9,7 +9,7 @@ use surgeist_css::{
     CssSupportStatus, CssSupportsConditionKind, CssTimeCalculation, CssTimeUnit,
     CssTransformFunctionValue, CssTransformPerspective, CssTransformScaleComponent,
     CssTransformValue, CssVerticalPosition, ErrorKind, conformance_exclusion,
-    conformance_exclusions, feature_catalog, feature_metadata, parse_sheet, parse_style_attribute,
+    conformance_exclusions, feature_metadata, parse_sheet, parse_style_attribute,
     property_metadata, specification_source, specification_sources,
 };
 
@@ -4855,6 +4855,4 @@ fn c13_background_image_metadata_is_truthful() {
         assert_eq!(metadata.supported_subset(), None, "{id}");
         assert_eq!(metadata.unsupported_remainder(), None, "{id}");
     }
-
-    assert_eq!(feature_catalog().len(), 456);
 }

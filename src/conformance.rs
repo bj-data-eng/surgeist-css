@@ -2950,7 +2950,7 @@ const MEDIA_DISCRETE_ALIAS_TARGETS: &[CssFeatureId] = &[
     CssFeatureId::new("ext.media.display-mode"),
 ];
 
-static FEATURE_CATALOG: [CssFeatureMetadata; 456] = [
+static FEATURE_CATALOG: [CssFeatureMetadata; 463] = [
     CssFeatureMetadata::complete(
         "baseline.rule.import",
         CssFeatureKind::Rule,
@@ -3016,6 +3016,20 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 456] = [
         BASELINE_RULE_REMAINDER,
     ),
     CssFeatureMetadata::complete(
+        "official.rule.at-rule",
+        CssFeatureKind::Rule,
+        "generic at-rule",
+        O_SYNTAX3,
+        "#at-rules,#consume-at-rule",
+    ),
+    CssFeatureMetadata::complete(
+        "official.qualified-rule.generic",
+        CssFeatureKind::Rule,
+        "generic qualified rule",
+        O_SYNTAX3,
+        "#consume-qualified-rule",
+    ),
+    CssFeatureMetadata::complete(
         "baseline.rule.media",
         CssFeatureKind::Rule,
         "@media",
@@ -3067,6 +3081,41 @@ static FEATURE_CATALOG: [CssFeatureMetadata; 456] = [
         "terminal declaration !important annotation",
         CSS_CASCADE_4,
         "#importance",
+    ),
+    CssFeatureMetadata::complete(
+        "official.declaration.generic",
+        CssFeatureKind::Declaration,
+        "generic declaration",
+        O_SYNTAX3,
+        "#consume-declaration",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.stylesheet",
+        CssFeatureKind::Value,
+        "<stylesheet>",
+        O_SYNTAX3,
+        "#parser-entry-points",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.rule-list",
+        CssFeatureKind::Value,
+        "<rule-list>",
+        O_SYNTAX3,
+        "#declaration-rule-list",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.declaration-list",
+        CssFeatureKind::Value,
+        "<declaration-list>",
+        O_SYNTAX3,
+        "#declaration-rule-list",
+    ),
+    CssFeatureMetadata::complete(
+        "official.value.style-block",
+        CssFeatureKind::Value,
+        "<style-block>",
+        O_SYNTAX3,
+        "#declaration-rule-list",
     ),
     CssFeatureMetadata::partial(
         "baseline.declaration.custom-property",

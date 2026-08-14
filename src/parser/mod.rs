@@ -132,6 +132,12 @@ static IMPLEMENTED_QUALIFIED_RULES: &[CssFeatureId] = &[CssFeatureId::new("basel
 static IMPLEMENTED_DECLARATIONS: &[CssFeatureId] = &[
     CssFeatureId::new("foundation.declaration-list.style-attribute"),
     CssFeatureId::new("foundation.declaration.importance"),
+    CssFeatureId::new("official.declaration.generic"),
+];
+
+static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] = &[
+    CssFeatureId::new("official.value.stylesheet"),
+    CssFeatureId::new("official.value.declaration-list"),
 ];
 
 static IMPLEMENTED_CONTAINER_EXTENSIONS: &[CssFeatureId] =
@@ -152,6 +158,26 @@ static ATOMIC_IMPLEMENTATION_INVENTORIES: &[CssAtomicImplementationInventory] = 
         module: "crate::parser",
         kind: CssAtomicImplementationKind::Declaration,
         stable_ids: IMPLEMENTED_DECLARATIONS,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser",
+        kind: CssAtomicImplementationKind::SharedValue,
+        stable_ids: IMPLEMENTED_SHARED_VALUES,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::recovery",
+        kind: CssAtomicImplementationKind::Rule,
+        stable_ids: recovery::IMPLEMENTED_RULES,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::recovery",
+        kind: CssAtomicImplementationKind::QualifiedRule,
+        stable_ids: recovery::IMPLEMENTED_QUALIFIED_RULES,
+    },
+    CssAtomicImplementationInventory {
+        module: "crate::parser::recovery",
+        kind: CssAtomicImplementationKind::SharedValue,
+        stable_ids: recovery::IMPLEMENTED_SHARED_VALUES,
     },
     CssAtomicImplementationInventory {
         module: "crate::parser",

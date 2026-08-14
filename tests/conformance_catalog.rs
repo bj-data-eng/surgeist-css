@@ -1623,6 +1623,83 @@ fn assert_c03_value_metadata(
 }
 
 #[test]
+fn c14_amended_ledger_public_metadata_is_reconciled() {
+    for id in [
+        "official.value.syntax-token-stream",
+        "official.value.component-value",
+        "official.value.simple-block",
+        "official.value.function",
+        "official.value.declaration-value",
+        "official.value.any-value",
+        "official.value.an-plus-b",
+        "official.value.unicode-range",
+        "official.value.css-wide-keyword",
+        "official.value.custom-ident",
+        "official.value.ident",
+        "official.value.string",
+        "official.value.url",
+        "official.value.url-modifier",
+    ] {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+        assert_eq!(metadata.id().as_str(), id, "{id} identity");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+        assert_eq!(metadata.supported_subset(), None, "{id} subset");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+        assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+    }
+
+    for id in [
+        "official.value.dimension",
+        "official.value.angle",
+        "official.value.angle-percentage",
+        "official.value.time-percentage",
+        "official.value.frequency",
+        "official.value.frequency-percentage",
+        "official.value.calc",
+    ] {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+        assert_eq!(metadata.id().as_str(), id, "{id} identity");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+        assert_eq!(metadata.supported_subset(), None, "{id} subset");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+        assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+    }
+
+    for id in [
+        "ext.value.relative-color",
+        "ext.value.color-mix",
+        "ext.value.grid-repeat",
+        "ext.value.basic-shape",
+        "ext.descriptor.font-weight-range",
+        "ext.descriptor.font-style-oblique-range",
+        "ext.descriptor.font-stretch-range",
+        "ext.value.font-source-modern-hints",
+        "ext.property.font-weight-range",
+        "ext.supports.selector",
+        "ext.media.range.width",
+        "ext.media.range.height",
+        "ext.media.range.resolution",
+        "ext.media.range.color",
+        "ext.media.range.monochrome",
+    ] {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing `{id}` metadata"));
+        assert_eq!(metadata.id().as_str(), id, "{id} identity");
+        assert_eq!(metadata.status(), CssSupportStatus::Partial, "{id} status");
+        assert!(metadata.supported_subset().is_some(), "{id} subset");
+        assert!(metadata.unsupported_remainder().is_some(), "{id} remainder");
+        assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+    }
+
+    let metadata =
+        feature_metadata("later.rule.font-feature-values").expect("font-feature-values metadata");
+    assert_eq!(metadata.status(), CssSupportStatus::RecognizedUnsupported);
+    assert_eq!(
+        metadata.recognized_unsupported_code(),
+        Some(CssErrorCode::UnsupportedAtRule)
+    );
+}
+
+#[test]
 fn c14_closure_metadata_and_docs_are_truthful() {
     for (id, kind, spelling, source, production) in [
         (

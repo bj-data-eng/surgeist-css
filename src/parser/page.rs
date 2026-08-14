@@ -184,6 +184,9 @@ impl<'i> DeclarationParser<'i> for PageBodyParser<'i> {
         input: &mut Parser<'i, 't>,
         declaration_start: &ParserState,
     ) -> Result<Self::Declaration, ParseError<'i, Self::Error>> {
+        let implicit_closures =
+            self.recovery
+                .check_component_values(self.source, input, "css.declaration")?;
         let Some(property) = CssKnownProperty::from_name(name.as_ref()) else {
             return Err(property_name_error(
                 declaration_start.source_location(),
@@ -197,9 +200,6 @@ impl<'i> DeclarationParser<'i> for PageBodyParser<'i> {
             ));
         }
 
-        let implicit_closures =
-            self.recovery
-                .check_component_values(self.source, input, "css.declaration")?;
         let parsed = parse_declaration_core(
             DeclarationMode::Ordinary,
             name.clone(),

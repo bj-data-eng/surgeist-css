@@ -81,6 +81,35 @@ fn counter_style_rules_retain_valid_core_definitions() {
 }
 
 #[test]
+fn counter_style_descriptors_enforce_domains_order_and_recovery() {
+    let report = parse_sheet(concat!(
+        "@counter-style base { system: cyclic; symbols: b; } ",
+        "@counter-style additive { system: additive; negative: \"-\" \"(\"; ",
+        "range: infinite -1, 1 infinite; pad: 2 \"0\"; fallback: base; ",
+        "additive-symbols: 100 C, 10 X, 1 I, 0 N; speak-as: words; } ",
+        "@counter-style inherited { system: extends base; negative: \"(\" \" )\"; ",
+        "range: auto; pad: 0 \"\"; fallback: decimal; speak-as: base; }",
+    ));
+
+    assert!(
+        report.is_clean(),
+        "valid descriptor domains should be retained without recovery: {:?}",
+        report.diagnostics()
+    );
+    let [
+        CssRule::CounterStyle(base),
+        CssRule::CounterStyle(additive),
+        CssRule::CounterStyle(inherited),
+    ] = report.syntax().rules()
+    else {
+        panic!("expected all valid counter styles to be retained")
+    };
+    assert_eq!(base.descriptors().occurrences().count(), 2);
+    assert_eq!(additive.descriptors().occurrences().count(), 7);
+    assert_eq!(inherited.descriptors().occurrences().count(), 6);
+}
+
+#[test]
 fn counter_style_system_model_retains_fixed_and_extends_forms() {
     assert!(CssCounterStyleName::try_new("default").is_none());
     assert_eq!(

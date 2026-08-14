@@ -47,6 +47,249 @@ pub(super) fn parse_image_layer_list<'i, 't>(
     Ok(CssParsedImageValueList::new(current, i01_subset))
 }
 
+pub(super) fn parse_background<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssParsedBackground, ParseError<'i, Error>> {
+    let mut layers = Vec::new();
+    let mut color_projections = Vec::new();
+
+    loop {
+        let (layer, color_projection, color_location) = parse_background_layer(input)?;
+        let has_comma = input.try_parse(Parser::expect_comma).is_ok();
+        if has_comma && let Some(location) = color_location {
+            return Err(unsupported_value_at(
+                location,
+                None,
+                "background color is allowed only in the final layer",
+            ));
+        }
+        layers.push(layer);
+        color_projections.push(color_projection);
+        if !has_comma {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "background layer list has an empty item",
+            ));
+        }
+    }
+
+    let i01_subset = match (layers.as_slice(), color_projections.as_slice()) {
+        ([layer], [projection]) if layer.has_only_color() => projection.clone(),
+        _ => None,
+    };
+    Ok(CssParsedBackground::new(
+        CssBackground::new(layers),
+        i01_subset,
+    ))
+}
+
+fn parse_background_layer<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<
+    (
+        CssBackgroundLayer,
+        Option<CssColor>,
+        Option<cssparser::SourceLocation>,
+    ),
+    ParseError<'i, Error>,
+> {
+    let mut image = None;
+    let mut position = None;
+    let mut size = None;
+    let mut repeat = None;
+    let mut attachment = None;
+    let mut boxes = Vec::new();
+    let mut color = None;
+    let mut color_projection = None;
+    let mut color_location = None;
+
+    while !input.is_exhausted() && !next_is_comma(input) {
+        if image.is_none() && next_starts_background_image(input) {
+            image = Some(parse_image_value(input)?);
+            continue;
+        }
+        if position.is_none() && next_starts_background_position(input) {
+            position = Some(parse_background_position_prefix(input)?);
+            if input.try_parse(|input| input.expect_delim('/')).is_ok() {
+                size = Some(parse_background_size_prefix(input)?);
+            }
+            continue;
+        }
+        if repeat.is_none() && next_starts_background_repeat(input) {
+            repeat = Some(parse_background_repeat_prefix(input)?);
+            continue;
+        }
+        if attachment.is_none()
+            && let Ok(value) = input.try_parse(parse_background_attachment)
+        {
+            attachment = Some(value);
+            continue;
+        }
+        if boxes.len() < 2
+            && let Ok(value) = input.try_parse(parse_background_box)
+        {
+            boxes.push(value);
+            continue;
+        }
+        if color.is_none() {
+            let location = input.current_source_location();
+            if let Ok(parsed) = input.try_parse(parse_color) {
+                let (current, i01_subset) = parsed.into_parts();
+                color = Some(current);
+                color_projection = i01_subset;
+                color_location = Some(location);
+                continue;
+            }
+        }
+        return Err(unsupported_value(
+            input,
+            None,
+            "unsupported or duplicate background layer component",
+        ));
+    }
+
+    if image.is_none()
+        && position.is_none()
+        && repeat.is_none()
+        && attachment.is_none()
+        && boxes.is_empty()
+        && color.is_none()
+    {
+        return Err(unsupported_value(input, None, "background layer is empty"));
+    }
+
+    let boxes = match boxes.as_slice() {
+        [] => None,
+        [value] => Some(CssBackgroundLayerBoxes::One(*value)),
+        [origin, clip] => Some(CssBackgroundLayerBoxes::OriginAndClip {
+            origin: *origin,
+            clip: *clip,
+        }),
+        _ => None,
+    };
+    Ok((
+        CssBackgroundLayer::new(image, position, size, repeat, attachment, boxes, color),
+        color_projection,
+        color_location,
+    ))
+}
+
+fn next_starts_background_image<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let starts = match input.next() {
+        Ok(Token::Ident(value)) => value.eq_ignore_ascii_case("none"),
+        Ok(Token::UnquotedUrl(_)) => true,
+        Ok(Token::Function(name)) => {
+            name.eq_ignore_ascii_case("url")
+                || matches!(
+                    name.to_ascii_lowercase().as_str(),
+                    "linear-gradient"
+                        | "repeating-linear-gradient"
+                        | "radial-gradient"
+                        | "repeating-radial-gradient"
+                )
+        }
+        Ok(_) | Err(_) => false,
+    };
+    input.reset(&state);
+    starts
+}
+
+fn next_starts_background_position<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let starts = match input.next() {
+        Ok(Token::Ident(value)) => matches!(
+            value.to_ascii_lowercase().as_str(),
+            "left" | "right" | "top" | "bottom" | "center"
+        ),
+        Ok(Token::Dimension { .. } | Token::Percentage { .. }) => true,
+        Ok(Token::Number { value, .. }) => *value == 0.0,
+        Ok(Token::Function(name)) => name.eq_ignore_ascii_case("calc"),
+        Ok(_) | Err(_) => false,
+    };
+    input.reset(&state);
+    starts
+}
+
+fn parse_background_position_prefix<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundPosition, ParseError<'i, Error>> {
+    let mut atoms = Vec::new();
+    let mut states = Vec::new();
+    while atoms.len() < 4 && next_starts_background_position(input) {
+        states.push(input.state());
+        atoms.push(parse_generic_position_atom(input)?);
+    }
+    build_background_position(&atoms).ok_or_else(|| {
+        invalid_generic_position_atom(input, &states[invalid_background_atom_index(&atoms)])
+    })
+}
+
+fn next_starts_background_repeat<'i, 't>(input: &mut Parser<'i, 't>) -> bool {
+    let state = input.state();
+    let starts = matches!(
+        input.next(),
+        Ok(Token::Ident(value))
+            if matches!(
+                value.to_ascii_lowercase().as_str(),
+                "repeat-x" | "repeat-y" | "repeat" | "space" | "round" | "no-repeat"
+            )
+    );
+    input.reset(&state);
+    starts
+}
+
+fn parse_background_repeat_prefix<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundRepeat, ParseError<'i, Error>> {
+    let first = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &first,
+        "repeat-x" => Ok(CssBackgroundRepeat::RepeatX),
+        "repeat-y" => Ok(CssBackgroundRepeat::RepeatY),
+        _ => {
+            let x = parse_background_repeat_style_from_ident(input, first.as_ref())?;
+            let y = input
+                .try_parse(|input| {
+                    let second = input.expect_ident_cloned().map_err(basic)?;
+                    parse_background_repeat_style_from_ident(input, second.as_ref())
+                })
+                .unwrap_or(x);
+            Ok(CssBackgroundRepeat::Axes { x, y })
+        }
+    }
+}
+
+fn parse_background_size_prefix<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundSize, ParseError<'i, Error>> {
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        return match_ignore_ascii_case! { &ident,
+            "cover" => Ok(CssBackgroundSize::Cover),
+            "contain" => Ok(CssBackgroundSize::Contain),
+            "auto" => {
+                let height = input.try_parse(parse_background_size_component).ok();
+                Ok(CssBackgroundSize::Explicit {
+                    width: CssBackgroundSizeComponent::Auto,
+                    height,
+                })
+            },
+            _ => Err(unsupported_value(
+                input,
+                None,
+                unsupported_keyword_reason("background-size", ident.as_ref()),
+            )),
+        };
+    }
+
+    let width = parse_background_size_component(input)?;
+    let height = input.try_parse(parse_background_size_component).ok();
+    Ok(CssBackgroundSize::Explicit { width, height })
+}
+
 fn parse_image_value<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssImageValue, ParseError<'i, Error>> {
@@ -1238,6 +1481,27 @@ pub(super) fn parse_background_box<'i, 't>(
             unsupported_keyword_reason("background box", ident.as_ref()),
         )),
     }
+}
+
+pub(super) fn parse_background_box_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBackgroundBoxList, ParseError<'i, Error>> {
+    let mut boxes = Vec::new();
+    loop {
+        boxes.push(parse_background_box(input)?);
+        if input.try_parse(Parser::expect_comma).is_err() {
+            break;
+        }
+        if input.is_exhausted() {
+            return Err(unsupported_value(
+                input,
+                None,
+                "background box list has an empty item",
+            ));
+        }
+    }
+    CssBackgroundBoxList::try_new(boxes)
+        .ok_or_else(|| unsupported_value(input, None, "background box list is empty"))
 }
 
 pub(super) fn parse_background_attachment_list<'i, 't>(

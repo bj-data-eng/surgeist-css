@@ -145,7 +145,7 @@ macro_rules! property_schema {
             BorderBottomWidth, "border-bottom-width", [], "baseline.property.border-bottom-width", CssLength, CssBorderBottomWidthPropertyValue, CssBorderBottomWidthPropertyValueRepresentation, parse_border_width_component, { parse_border_width_component($input)? };
             BorderLeftWidth, "border-left-width", [], "baseline.property.border-left-width", CssLength, CssBorderLeftWidthPropertyValue, CssBorderLeftWidthPropertyValueRepresentation, parse_border_width_component, { parse_border_width_component($input)? };
             Color, "color", [], "baseline.property.color", CssColor, CssColorPropertyValue, CssColorPropertyValueRepresentation, parse_color, { parse_color($input)? };
-            Background, "background", [], "baseline.property.background", CssColor, CssBackgroundPropertyValue, CssBackgroundPropertyValueRepresentation, parse_color, { parse_color($input)? };
+            Background, "background", [], "baseline.property.background", CssColor, CssBackgroundPropertyValue, CssBackgroundPropertyValueRepresentation, parse_background, { parse_background($input)? };
             BackgroundColor, "background-color", [], "baseline.property.background-color", CssColor, CssBackgroundColorPropertyValue, CssBackgroundColorPropertyValueRepresentation, parse_color, { parse_color($input)? };
             BorderColor, "border-color", [], "baseline.property.border-color", CssColor, CssBorderColorPropertyValue, CssBorderColorPropertyValueRepresentation, parse_color, { parse_color($input)? };
             BorderTopColor, "border-top-color", [], "baseline.property.border-top-color", CssColor, CssBorderTopColorPropertyValue, CssBorderTopColorPropertyValueRepresentation, parse_color, { parse_color($input)? };
@@ -157,8 +157,8 @@ macro_rules! property_schema {
             ObjectPosition, "object-position", [], "official.property.object-position", CssObjectPosition, CssObjectPositionPropertyValue, CssObjectPositionPropertyValueRepresentation, parse_object_position, { parse_object_position($input)? };
             BackgroundSize, "background-size", [], "baseline.property.background-size", CssBackgroundSizeList, CssBackgroundSizePropertyValue, CssBackgroundSizePropertyValueRepresentation, parse_background_size_list, { parse_background_size_list($input)? };
             BackgroundRepeat, "background-repeat", [], "baseline.property.background-repeat", CssBackgroundRepeatList, CssBackgroundRepeatPropertyValue, CssBackgroundRepeatPropertyValueRepresentation, parse_background_repeat_list, { parse_background_repeat_list($input)? };
-            BackgroundOrigin, "background-origin", [], "baseline.property.background-origin", CssBackgroundBox, CssBackgroundOriginPropertyValue, CssBackgroundOriginPropertyValueRepresentation, parse_background_box, { parse_background_box($input)? };
-            BackgroundClip, "background-clip", [], "baseline.property.background-clip", CssBackgroundBox, CssBackgroundClipPropertyValue, CssBackgroundClipPropertyValueRepresentation, parse_background_box, { parse_background_box($input)? };
+            BackgroundOrigin, "background-origin", [], "baseline.property.background-origin", CssBackgroundBox, CssBackgroundOriginPropertyValue, CssBackgroundOriginPropertyValueRepresentation, parse_background_box_list, { parse_background_box_list($input)? };
+            BackgroundClip, "background-clip", [], "baseline.property.background-clip", CssBackgroundBox, CssBackgroundClipPropertyValue, CssBackgroundClipPropertyValueRepresentation, parse_background_box_list, { parse_background_box_list($input)? };
             BackgroundAttachment, "background-attachment", [], "baseline.property.background-attachment", CssBackgroundAttachmentList, CssBackgroundAttachmentPropertyValue, CssBackgroundAttachmentPropertyValueRepresentation, parse_background_attachment_list, { parse_background_attachment_list($input)? };
             BorderStyle, "border-style", [], "baseline.property.border-style", CssBorderStyles, CssBorderStylePropertyValue, CssBorderStylePropertyValueRepresentation, parse_border_styles, { parse_border_styles($input)? };
             BorderTopStyle, "border-top-style", [], "baseline.property.border-top-style", CssBorderStyle, CssBorderTopStylePropertyValue, CssBorderTopStylePropertyValueRepresentation, parse_border_style, { parse_border_style($input)? };
@@ -415,6 +415,17 @@ fn mask_position_list_i01_projection(value: &CssMaskPositionList) -> Option<CssP
 
 fn transform_origin_i01_projection(value: &CssTransformOrigin) -> Option<CssPosition> {
     value.legacy().cloned()
+}
+
+fn background_box_list_i01_projection(value: &CssBackgroundBoxList) -> Option<CssBackgroundBox> {
+    match value.boxes() {
+        [value] => Some(*value),
+        _ => None,
+    }
+}
+
+fn exact_i01_projection<T: Clone>(value: &T) -> Option<T> {
+    Some(value.clone())
 }
 
 fn font_size_i01_projection(value: &CssFontSize) -> Option<CssLength> {
@@ -1371,7 +1382,68 @@ macro_rules! define_property_value {
         Background, $canonical:literal, $value:ty, $wrapper:ident,
         $representation:ident
     ) => {
-        define_color_property_value!($canonical, $wrapper, $representation);
+        #[derive(Clone, Debug, PartialEq)]
+        pub(crate) struct $representation {
+            current: CssBackground,
+            color_component: CssAuthoredColor,
+            i01_subset: Option<CssColor>,
+        }
+
+        /// A parser-produced authored ordinary value for `background`.
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct $wrapper {
+            authored: CssAuthoredDeclarationValue,
+            representation: $representation,
+        }
+
+        impl $wrapper {
+            #[must_use]
+            pub(crate) fn new(
+                authored: CssAuthoredDeclarationValue,
+                parsed: CssParsedBackground,
+            ) -> Self {
+                let (current, i01_subset) = parsed.into_parts();
+                let color_component = current
+                    .layers()
+                    .last()
+                    .and_then(CssBackgroundLayer::color)
+                    .cloned()
+                    .unwrap_or_else(CssAuthoredColor::transparent);
+                Self {
+                    authored,
+                    representation: $representation {
+                        current,
+                        color_component,
+                        i01_subset,
+                    },
+                }
+            }
+
+            #[must_use]
+            pub fn as_css(&self) -> &str {
+                self.authored.as_css()
+            }
+
+            /// Returns the exact authored shorthand layers.
+            #[must_use]
+            pub const fn background(&self) -> &CssBackground {
+                &self.representation.current
+            }
+
+            /// Returns the shorthand's color component, preserving the existing
+            /// color accessor and using its specified transparent initial when omitted.
+            #[must_use]
+            pub const fn current(&self) -> &CssAuthoredColor {
+                &self.representation.color_component
+            }
+
+            /// Returns the frozen color-only I01 payload when the entire shorthand
+            /// belongs to that compatibility subset.
+            #[must_use]
+            pub const fn i01_subset(&self) -> Option<&CssColor> {
+                self.representation.i01_subset.as_ref()
+            }
+        }
     };
     (
         BackgroundColor, $canonical:literal, $value:ty, $wrapper:ident,
@@ -1730,6 +1802,76 @@ macro_rules! define_property_value {
             CssPositionList,
             positions,
             background_position_list_i01_projection
+        );
+    };
+    (
+        BackgroundSize, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBackgroundSizeList,
+            CssBackgroundSizeList,
+            sizes,
+            exact_i01_projection
+        );
+    };
+    (
+        BackgroundRepeat, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBackgroundRepeatList,
+            CssBackgroundRepeatList,
+            repeats,
+            exact_i01_projection
+        );
+    };
+    (
+        BackgroundOrigin, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBackgroundBoxList,
+            CssBackgroundBox,
+            boxes,
+            background_box_list_i01_projection
+        );
+    };
+    (
+        BackgroundClip, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBackgroundBoxList,
+            CssBackgroundBox,
+            boxes,
+            background_box_list_i01_projection
+        );
+    };
+    (
+        BackgroundAttachment, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            CssBackgroundAttachmentList,
+            CssBackgroundAttachmentList,
+            attachments,
+            exact_i01_projection
         );
     };
     (

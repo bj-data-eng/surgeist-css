@@ -10538,6 +10538,168 @@ impl CssPositionList {
     }
 }
 
+/// The exact authored background box component count for one shorthand layer.
+///
+/// One box supplies both origin and clip. Two boxes preserve their authored
+/// origin-then-clip order without resolving either box against layout.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssBackgroundLayerBoxes {
+    One(CssBackgroundBox),
+    OriginAndClip {
+        origin: CssBackgroundBox,
+        clip: CssBackgroundBox,
+    },
+}
+
+impl CssBackgroundLayerBoxes {
+    /// Returns the shorthand layer's background-origin component.
+    #[must_use]
+    pub const fn origin(self) -> CssBackgroundBox {
+        match self {
+            Self::One(value) | Self::OriginAndClip { origin: value, .. } => value,
+        }
+    }
+
+    /// Returns the shorthand layer's background-clip component.
+    #[must_use]
+    pub const fn clip(self) -> CssBackgroundBox {
+        match self {
+            Self::One(value) | Self::OriginAndClip { clip: value, .. } => value,
+        }
+    }
+}
+
+/// One parser-produced authored `background` shorthand layer.
+///
+/// Construction is parser-owned so a size cannot exist without an immediately
+/// preceding position and a color cannot occur outside the final layer.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBackgroundLayer {
+    image: Option<CssImageValue>,
+    position: Option<CssBackgroundPosition>,
+    size: Option<CssBackgroundSize>,
+    repeat: Option<CssBackgroundRepeat>,
+    attachment: Option<CssBackgroundAttachment>,
+    boxes: Option<CssBackgroundLayerBoxes>,
+    color: Option<CssAuthoredColor>,
+}
+
+impl CssBackgroundLayer {
+    #[must_use]
+    pub(crate) const fn new(
+        image: Option<CssImageValue>,
+        position: Option<CssBackgroundPosition>,
+        size: Option<CssBackgroundSize>,
+        repeat: Option<CssBackgroundRepeat>,
+        attachment: Option<CssBackgroundAttachment>,
+        boxes: Option<CssBackgroundLayerBoxes>,
+        color: Option<CssAuthoredColor>,
+    ) -> Self {
+        Self {
+            image,
+            position,
+            size,
+            repeat,
+            attachment,
+            boxes,
+            color,
+        }
+    }
+
+    /// Returns this layer's authored image, if present.
+    #[must_use]
+    pub const fn image(&self) -> Option<&CssImageValue> {
+        self.image.as_ref()
+    }
+
+    /// Returns this layer's authored position, if present.
+    #[must_use]
+    pub const fn position(&self) -> Option<&CssBackgroundPosition> {
+        self.position.as_ref()
+    }
+
+    /// Returns the size coupled to this layer's position, if authored.
+    #[must_use]
+    pub const fn size(&self) -> Option<&CssBackgroundSize> {
+        self.size.as_ref()
+    }
+
+    /// Returns this layer's authored repeat style, if present.
+    #[must_use]
+    pub const fn repeat(&self) -> Option<CssBackgroundRepeat> {
+        self.repeat
+    }
+
+    /// Returns this layer's authored attachment, if present.
+    #[must_use]
+    pub const fn attachment(&self) -> Option<CssBackgroundAttachment> {
+        self.attachment
+    }
+
+    /// Returns the exact one- or two-box shorthand component, if present.
+    #[must_use]
+    pub const fn boxes(&self) -> Option<CssBackgroundLayerBoxes> {
+        self.boxes
+    }
+
+    /// Returns the authored color on the final layer, if present.
+    #[must_use]
+    pub const fn color(&self) -> Option<&CssAuthoredColor> {
+        self.color.as_ref()
+    }
+
+    pub(crate) const fn has_only_color(&self) -> bool {
+        self.image.is_none()
+            && self.position.is_none()
+            && self.size.is_none()
+            && self.repeat.is_none()
+            && self.attachment.is_none()
+            && self.boxes.is_none()
+            && self.color.is_some()
+    }
+}
+
+/// A nonempty authored comma list of `background` shorthand layers.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssBackground {
+    layers: Vec<CssBackgroundLayer>,
+}
+
+impl CssBackground {
+    #[must_use]
+    pub(crate) const fn new(layers: Vec<CssBackgroundLayer>) -> Self {
+        Self { layers }
+    }
+
+    /// Returns the authored layers in comma order.
+    #[must_use]
+    pub fn layers(&self) -> &[CssBackgroundLayer] {
+        &self.layers
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CssParsedBackground {
+    current: CssBackground,
+    i01_subset: Option<CssColor>,
+}
+
+impl CssParsedBackground {
+    #[must_use]
+    pub(crate) const fn new(current: CssBackground, i01_subset: Option<CssColor>) -> Self {
+        Self {
+            current,
+            i01_subset,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn into_parts(self) -> (CssBackground, Option<CssColor>) {
+        (self.current, self.i01_subset)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum CssBackgroundSizeComponent {
@@ -10634,6 +10796,26 @@ pub enum CssBackgroundBox {
     BorderBox,
     PaddingBox,
     ContentBox,
+}
+
+/// A nonempty authored comma list of background box longhand values.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssBackgroundBoxList {
+    boxes: Vec<CssBackgroundBox>,
+}
+
+impl CssBackgroundBoxList {
+    /// Constructs a nonempty background box list.
+    #[must_use]
+    pub fn try_new(boxes: Vec<CssBackgroundBox>) -> Option<Self> {
+        (!boxes.is_empty()).then_some(Self { boxes })
+    }
+
+    /// Returns the authored boxes in comma order.
+    #[must_use]
+    pub fn boxes(&self) -> &[CssBackgroundBox] {
+        &self.boxes
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

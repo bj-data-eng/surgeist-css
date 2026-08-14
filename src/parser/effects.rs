@@ -36,6 +36,72 @@ pub(super) fn parse_clip<'i, 't>(
     input.parse_nested_block(parse_clip_rect).map(CssClip::Rect)
 }
 
+pub(super) fn parse_outline_offset<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssOutlineOffset, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let value = parse_length_with_context(input, LengthGrammar::OutlineOffset, "outline-offset")?;
+    CssOutlineOffset::try_new(value)
+        .ok_or_else(|| unsupported_value_at(location, None, "outline-offset requires a length"))
+}
+
+pub(super) fn parse_transform_box<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssTransformBox, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    CssBoxEdgeKeyword::from_keyword(ident.as_ref())
+        .and_then(CssTransformBox::try_new)
+        .ok_or_else(|| {
+            unsupported_value_at(
+                location,
+                None,
+                unsupported_keyword_reason("transform-box", ident.as_ref()),
+            )
+        })
+}
+
+pub(super) fn parse_blend_mode<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBlendMode, ParseError<'i, Error>> {
+    let location = input.current_source_location();
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    CssBlendMode::from_keyword(ident.as_ref()).ok_or_else(|| {
+        unsupported_value_at(
+            location,
+            None,
+            unsupported_keyword_reason("blend-mode", ident.as_ref()),
+        )
+    })
+}
+
+pub(super) fn parse_blend_mode_list<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssBlendModeList, ParseError<'i, Error>> {
+    let mut modes = vec![parse_blend_mode(input)?];
+    while !input.is_exhausted() {
+        input.expect_comma().map_err(basic)?;
+        modes.push(parse_blend_mode(input)?);
+    }
+    CssBlendModeList::try_new(modes)
+        .ok_or_else(|| unsupported_value(input, None, "blend-mode list is empty"))
+}
+
+pub(super) fn parse_isolation<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssIsolation, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "auto" => Ok(CssIsolation::Auto),
+        "isolate" => Ok(CssIsolation::Isolate),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("isolation", ident.as_ref()),
+        )),
+    }
+}
+
 fn parse_clip_rect<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssClipRect, ParseError<'i, Error>> {
@@ -71,6 +137,7 @@ fn parse_clip_edge<'i, 't>(
 }
 
 pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] = &[
+    CssFeatureId::new("official.value.blend-mode"),
     CssFeatureId::new("official.value.transform-list"),
     CssFeatureId::new("official.value.transform-function"),
     CssFeatureId::new("official.value.transform.matrix"),

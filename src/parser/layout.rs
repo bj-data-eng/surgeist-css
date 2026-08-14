@@ -8,6 +8,68 @@ use crate::error::{Error, basic, unsupported_value, unsupported_value_at};
 use crate::syntax::*;
 use crate::validation::unsupported_keyword_reason;
 
+pub(super) fn parse_resize<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssResize, ParseError<'i, Error>> {
+    let ident = input.expect_ident_cloned().map_err(basic)?;
+    match_ignore_ascii_case! { &ident,
+        "none" => Ok(CssResize::None),
+        "both" => Ok(CssResize::Both),
+        "horizontal" => Ok(CssResize::Horizontal),
+        "vertical" => Ok(CssResize::Vertical),
+        _ => Err(unsupported_value(
+            input,
+            None,
+            unsupported_keyword_reason("resize", ident.as_ref()),
+        )),
+    }
+}
+
+pub(super) fn parse_contain<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssContain, ParseError<'i, Error>> {
+    let state = input.state();
+    if let Ok(ident) = input.try_parse(Parser::expect_ident_cloned) {
+        let standalone = match_ignore_ascii_case! { &ident,
+            "none" => Some(CssContain::None),
+            "strict" => Some(CssContain::Strict),
+            "content" => Some(CssContain::Content),
+            _ => None,
+        };
+        if let Some(value) = standalone {
+            return Ok(value);
+        }
+    }
+    input.reset(&state);
+
+    let mut components = Vec::new();
+    while !input.is_exhausted() {
+        let location = input.current_source_location();
+        let ident = input.expect_ident_cloned().map_err(basic)?;
+        let component = match_ignore_ascii_case! { &ident,
+            "size" => CssContainComponent::Size,
+            "layout" => CssContainComponent::Layout,
+            "paint" => CssContainComponent::Paint,
+            _ => return Err(unsupported_value_at(
+                location,
+                None,
+                unsupported_keyword_reason("contain", ident.as_ref()),
+            )),
+        };
+        if components.contains(&component) {
+            return Err(unsupported_value_at(
+                location,
+                None,
+                format!("duplicate contain component `{ident}`"),
+            ));
+        }
+        components.push(component);
+    }
+    CssContainComponentList::try_new(components)
+        .map(CssContain::Components)
+        .ok_or_else(|| unsupported_value(input, None, "contain component list is empty"))
+}
+
 pub(super) fn parse_border_collapse<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssBorderCollapse, ParseError<'i, Error>> {

@@ -181,13 +181,18 @@ macro_rules! property_schema {
             AspectRatio, "aspect-ratio", [], "baseline.property.aspect-ratio", CssAspectRatio, CssAspectRatioPropertyValue, CssAspectRatioPropertyValueRepresentation, parse_aspect_ratio, { parse_aspect_ratio($input)? };
             ScrollbarWidth, "scrollbar-width", [], "baseline.property.scrollbar-width", CssScrollbarWidth, CssScrollbarWidthPropertyValue, CssScrollbarWidthPropertyValueRepresentation, parse_scrollbar_width, { parse_scrollbar_width($input)? };
             Cursor, "cursor", [], "baseline.property.cursor", CssCursor, CssCursorPropertyValue, CssCursorPropertyValueRepresentation, parse_cursor, { parse_cursor($input)? };
+            CaretColor, "caret-color", [], "official.property.caret-color", CssCaretColor, CssCaretColorPropertyValue, CssCaretColorPropertyValueRepresentation, parse_caret_color, { parse_caret_color($input)? };
             PointerEvents, "pointer-events", [], "baseline.property.pointer-events", CssPointerEvents, CssPointerEventsPropertyValue, CssPointerEventsPropertyValueRepresentation, parse_pointer_events, { parse_pointer_events($input)? };
             UserSelect, "user-select", [], "baseline.property.user-select", CssUserSelect, CssUserSelectPropertyValue, CssUserSelectPropertyValueRepresentation, parse_user_select, { parse_user_select($input)? };
+            Resize, "resize", [], "official.property.resize", CssResize, CssResizePropertyValue, CssResizePropertyValueRepresentation, parse_resize, { parse_resize($input)? };
+            Contain, "contain", [], "official.property.contain", CssContain, CssContainPropertyValue, CssContainPropertyValueRepresentation, parse_contain, { parse_contain($input)? };
             Outline, "outline", [], "baseline.property.outline", CssOutline, CssOutlinePropertyValue, CssOutlinePropertyValueRepresentation, parse_outline, { parse_outline($input)? };
             OutlineColor, "outline-color", [], "baseline.property.outline-color", CssColor, CssOutlineColorPropertyValue, CssOutlineColorPropertyValueRepresentation, parse_color, { parse_color($input)? };
+            OutlineOffset, "outline-offset", [], "official.property.outline-offset", CssOutlineOffset, CssOutlineOffsetPropertyValue, CssOutlineOffsetPropertyValueRepresentation, parse_outline_offset, { parse_outline_offset($input)? };
             OutlineStyle, "outline-style", [], "baseline.property.outline-style", CssOutlineStyle, CssOutlineStylePropertyValue, CssOutlineStylePropertyValueRepresentation, parse_outline_style, { parse_outline_style($input)? };
             OutlineWidth, "outline-width", [], "baseline.property.outline-width", CssOutlineWidth, CssOutlineWidthPropertyValue, CssOutlineWidthPropertyValueRepresentation, parse_outline_width, { parse_outline_width($input)? };
             Transform, "transform", [], "baseline.property.transform", CssTransform, CssTransformPropertyValue, CssTransformPropertyValueRepresentation, parse_transform, { parse_transform($input)? };
+            TransformBox, "transform-box", [], "official.property.transform-box", CssTransformBox, CssTransformBoxPropertyValue, CssTransformBoxPropertyValueRepresentation, parse_transform_box, { parse_transform_box($input)? };
             TransformOrigin, "transform-origin", [], "baseline.property.transform-origin", CssTransformOrigin, CssTransformOriginPropertyValue, CssTransformOriginPropertyValueRepresentation, parse_transform_origin, { parse_transform_origin($input)? };
             Translate, "translate", [], "baseline.property.translate", CssTranslate, CssTranslatePropertyValue, CssTranslatePropertyValueRepresentation, parse_translate, { parse_translate($input)? };
             Rotate, "rotate", [], "baseline.property.rotate", CssRotate, CssRotatePropertyValue, CssRotatePropertyValueRepresentation, parse_rotate, { parse_rotate($input)? };
@@ -195,6 +200,9 @@ macro_rules! property_schema {
             Filter, "filter", [], "baseline.property.filter", CssFilter, CssFilterPropertyValue, CssFilterPropertyValueRepresentation, parse_filter, { parse_filter($input)? };
             BackdropFilter, "backdrop-filter", [], "baseline.property.backdrop-filter", CssFilter, CssBackdropFilterPropertyValue, CssBackdropFilterPropertyValueRepresentation, parse_filter, { parse_filter($input)? };
             ClipPath, "clip-path", [], "baseline.property.clip-path", CssClipPath, CssClipPathPropertyValue, CssClipPathPropertyValueRepresentation, parse_clip_path, { parse_clip_path($input)? };
+            BackgroundBlendMode, "background-blend-mode", [], "official.property.background-blend-mode", CssBlendModeList, CssBackgroundBlendModePropertyValue, CssBackgroundBlendModePropertyValueRepresentation, parse_blend_mode_list, { parse_blend_mode_list($input)? };
+            Isolation, "isolation", [], "official.property.isolation", CssIsolation, CssIsolationPropertyValue, CssIsolationPropertyValueRepresentation, parse_isolation, { parse_isolation($input)? };
+            MixBlendMode, "mix-blend-mode", [], "official.property.mix-blend-mode", CssBlendMode, CssMixBlendModePropertyValue, CssMixBlendModePropertyValueRepresentation, parse_blend_mode, { parse_blend_mode($input)? };
             Mask, "mask", [], "baseline.property.mask", CssMaskList, CssMaskPropertyValue, CssMaskPropertyValueRepresentation, parse_mask_list, { parse_mask_list($input)? };
             MaskImage, "mask-image", [], "baseline.property.mask-image", CssImageLayerList, CssMaskImagePropertyValue, CssMaskImagePropertyValueRepresentation, parse_image_layer_list, { parse_image_layer_list($input)? };
             MaskSize, "mask-size", [], "baseline.property.mask-size", CssBackgroundSizeList, CssMaskSizePropertyValue, CssMaskSizePropertyValueRepresentation, parse_background_size_list, { parse_background_size_list($input)? };
@@ -997,6 +1005,102 @@ macro_rules! define_property_value {
             $representation,
             $value,
             bidi
+        );
+    };
+    (
+        CaretColor, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            caret
+        );
+    };
+    (
+        OutlineOffset, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            offset
+        );
+    };
+    (
+        Resize, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            resize
+        );
+    };
+    (
+        Contain, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            containment
+        );
+    };
+    (
+        TransformBox, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            reference_box
+        );
+    };
+    (
+        BackgroundBlendMode, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            modes
+        );
+    };
+    (
+        Isolation, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            isolation
+        );
+    };
+    (
+        MixBlendMode, $canonical:literal, $value:ty, $wrapper:ident,
+        $representation:ident
+    ) => {
+        define_additive_current_property_value!(
+            $canonical,
+            $wrapper,
+            $representation,
+            $value,
+            mode
         );
     };
     (

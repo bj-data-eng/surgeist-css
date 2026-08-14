@@ -6797,6 +6797,217 @@ impl CssBoxEdgeKeyword {
     }
 }
 
+/// The authored `caret-color` value.
+///
+/// This value preserves color syntax only; it does not choose a rendered caret
+/// color or apply contrast adjustments.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CssCaretColor {
+    Auto,
+    Color(Box<CssAuthoredColor>),
+}
+
+/// A checked authored `outline-offset` length.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CssOutlineOffset {
+    value: CssLength,
+}
+
+impl CssOutlineOffset {
+    #[must_use]
+    pub fn try_new(value: CssLength) -> Option<Self> {
+        is_absolute_length(&value).then_some(Self { value })
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> &CssLength {
+        &self.value
+    }
+}
+
+/// The authored `resize` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssResize {
+    None,
+    Both,
+    Horizontal,
+    Vertical,
+}
+
+/// One independently authored Containment 1 containment kind.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssContainComponent {
+    Size,
+    Layout,
+    Paint,
+}
+
+/// A nonempty, duplicate-free authored list of containment kinds.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssContainComponentList {
+    components: Vec<CssContainComponent>,
+}
+
+impl CssContainComponentList {
+    #[must_use]
+    pub fn try_new(components: Vec<CssContainComponent>) -> Option<Self> {
+        if components.is_empty()
+            || components
+                .iter()
+                .enumerate()
+                .any(|(index, component)| components[..index].contains(component))
+        {
+            return None;
+        }
+        Some(Self { components })
+    }
+
+    #[must_use]
+    pub fn components(&self) -> &[CssContainComponent] {
+        &self.components
+    }
+}
+
+/// The authored Containment 1 `contain` value.
+///
+/// This is syntax only and does not apply size, layout, or paint containment.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssContain {
+    None,
+    Strict,
+    Content,
+    Components(CssContainComponentList),
+}
+
+/// A checked authored `transform-box` reference-box keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CssTransformBox {
+    edge: CssBoxEdgeKeyword,
+}
+
+impl CssTransformBox {
+    #[must_use]
+    pub const fn try_new(edge: CssBoxEdgeKeyword) -> Option<Self> {
+        match edge {
+            CssBoxEdgeKeyword::ContentBox
+            | CssBoxEdgeKeyword::BorderBox
+            | CssBoxEdgeKeyword::FillBox
+            | CssBoxEdgeKeyword::StrokeBox
+            | CssBoxEdgeKeyword::ViewBox => Some(Self { edge }),
+            CssBoxEdgeKeyword::PaddingBox | CssBoxEdgeKeyword::MarginBox => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn edge(&self) -> CssBoxEdgeKeyword {
+        self.edge
+    }
+}
+
+/// One authored Compositing and Blending Level 1 `<blend-mode>` keyword.
+///
+/// The value identifies authored syntax only; it does not perform painting or
+/// compositing calculations.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub enum CssBlendMode {
+    Normal,
+    Darken,
+    Multiply,
+    ColorBurn,
+    Lighten,
+    Screen,
+    ColorDodge,
+    Overlay,
+    SoftLight,
+    HardLight,
+    Difference,
+    Exclusion,
+    Hue,
+    Saturation,
+    Color,
+    Luminosity,
+}
+
+impl CssBlendMode {
+    /// Converts one decoded CSS keyword to its typed blend-mode identity.
+    #[must_use]
+    pub fn from_keyword(keyword: &str) -> Option<Self> {
+        Some(match keyword.to_ascii_lowercase().as_str() {
+            "normal" => Self::Normal,
+            "darken" => Self::Darken,
+            "multiply" => Self::Multiply,
+            "color-burn" => Self::ColorBurn,
+            "lighten" => Self::Lighten,
+            "screen" => Self::Screen,
+            "color-dodge" => Self::ColorDodge,
+            "overlay" => Self::Overlay,
+            "soft-light" => Self::SoftLight,
+            "hard-light" => Self::HardLight,
+            "difference" => Self::Difference,
+            "exclusion" => Self::Exclusion,
+            "hue" => Self::Hue,
+            "saturation" => Self::Saturation,
+            "color" => Self::Color,
+            "luminosity" => Self::Luminosity,
+            _ => return None,
+        })
+    }
+
+    /// Returns the canonical CSS keyword spelling.
+    #[must_use]
+    pub const fn as_css_str(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Darken => "darken",
+            Self::Multiply => "multiply",
+            Self::ColorBurn => "color-burn",
+            Self::Lighten => "lighten",
+            Self::Screen => "screen",
+            Self::ColorDodge => "color-dodge",
+            Self::Overlay => "overlay",
+            Self::SoftLight => "soft-light",
+            Self::HardLight => "hard-light",
+            Self::Difference => "difference",
+            Self::Exclusion => "exclusion",
+            Self::Hue => "hue",
+            Self::Saturation => "saturation",
+            Self::Color => "color",
+            Self::Luminosity => "luminosity",
+        }
+    }
+}
+
+/// A nonempty ordered authored comma-separated blend-mode list.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CssBlendModeList {
+    modes: Vec<CssBlendMode>,
+}
+
+impl CssBlendModeList {
+    #[must_use]
+    pub fn try_new(modes: Vec<CssBlendMode>) -> Option<Self> {
+        (!modes.is_empty()).then_some(Self { modes })
+    }
+
+    #[must_use]
+    pub fn modes(&self) -> &[CssBlendMode] {
+        &self.modes
+    }
+}
+
+/// The authored `isolation` keyword.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CssIsolation {
+    Auto,
+    Isolate,
+}
+
 /// The authored `border-collapse` keyword.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]

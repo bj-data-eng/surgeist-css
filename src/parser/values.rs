@@ -127,6 +127,7 @@ pub(super) enum LengthGrammar {
     ShadowBlur,
     BorderSpacing,
     Clip,
+    OutlineOffset,
     Gap,
     FontSize,
     LineHeight,
@@ -219,6 +220,7 @@ impl LengthGrammar {
             Self::ShadowBlur => "box-shadow blur",
             Self::BorderSpacing => "border-spacing",
             Self::Clip => "clip",
+            Self::OutlineOffset => "outline-offset",
             Self::Gap => "gap",
             Self::FontSize => "font-size",
             Self::LineHeight => "line-height",
@@ -370,6 +372,7 @@ fn typed_length_calculation_is_current_consumer(context: &str) -> bool {
             | "box-shadow blur"
             | "border-spacing"
             | "clip"
+            | "outline-offset"
             | "gap"
             | "font-size"
             | "line-height"

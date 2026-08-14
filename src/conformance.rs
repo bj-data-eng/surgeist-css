@@ -3023,12 +3023,16 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
         | CssKnownProperty::Left
         | CssKnownProperty::ZIndex => O_CSS2,
         CssKnownProperty::BoxSizing
+        | CssKnownProperty::CaretColor
+        | CssKnownProperty::OutlineOffset
+        | CssKnownProperty::Resize
         | CssKnownProperty::TextOverflow
         | CssKnownProperty::Cursor
         | CssKnownProperty::Outline
         | CssKnownProperty::OutlineColor
         | CssKnownProperty::OutlineStyle
         | CssKnownProperty::OutlineWidth => O_UI3,
+        CssKnownProperty::Contain => O_CONTAIN1,
         CssKnownProperty::Direction
         | CssKnownProperty::TextCombineUpright
         | CssKnownProperty::TextOrientation
@@ -3150,7 +3154,12 @@ const fn property_source(property: CssKnownProperty) -> CssSpecificationSource {
         CssKnownProperty::AspectRatio => I_SIZING3,
         CssKnownProperty::ScrollbarWidth => R_SCROLLBARS1,
         CssKnownProperty::PointerEvents | CssKnownProperty::UserSelect => X_UI4,
-        CssKnownProperty::Transform | CssKnownProperty::TransformOrigin => O_TRANSFORMS1,
+        CssKnownProperty::Transform
+        | CssKnownProperty::TransformBox
+        | CssKnownProperty::TransformOrigin => O_TRANSFORMS1,
+        CssKnownProperty::BackgroundBlendMode
+        | CssKnownProperty::Isolation
+        | CssKnownProperty::MixBlendMode => O_COMPOSITING1,
         CssKnownProperty::Translate | CssKnownProperty::Rotate | CssKnownProperty::Scale => {
             I_TRANSFORMS2
         }

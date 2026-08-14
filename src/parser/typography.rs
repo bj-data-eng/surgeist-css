@@ -14,6 +14,19 @@ pub(super) static IMPLEMENTED_PROPERTY_EXTENSIONS: &[CssFeatureId] =
 pub(super) static IMPLEMENTED_SHARED_VALUES: &[CssFeatureId] =
     &[CssFeatureId::new("official.value.opentype-tag")];
 
+pub(super) fn parse_caret_color<'i, 't>(
+    input: &mut Parser<'i, 't>,
+) -> std::result::Result<CssCaretColor, ParseError<'i, Error>> {
+    if input
+        .try_parse(|input| input.expect_ident_matching("auto"))
+        .is_ok()
+    {
+        return Ok(CssCaretColor::Auto);
+    }
+    let (color, _) = parse_color(input)?.into_parts();
+    Ok(CssCaretColor::Color(Box::new(color)))
+}
+
 pub(super) fn parse_font_size<'i, 't>(
     input: &mut Parser<'i, 't>,
 ) -> std::result::Result<CssFontSize, ParseError<'i, Error>> {

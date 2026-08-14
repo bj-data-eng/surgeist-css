@@ -938,12 +938,14 @@ let _ = validate_style_attribute("color: red");
 //! );
 //! ```
 //!
-//! C14 closes all 31 records that entered the cycle as Reserved: ten Flexbox and
-//! Multicolumn properties; seven generic rule, declaration, and list shells; and
-//! fourteen shared values—`syntax-token-stream`, `component-value`, `simple-block`,
-//! `function`, `declaration-value`, `any-value`, `an-plus-b`, `unicode-range`,
-//! `css-wide-keyword`, `custom-ident`, `ident`, `string`, `url`, and `url-modifier`.
-//! It separately promotes the seven Values 3 records for `dimension`, `angle`,
+//! C14 makes all 31 records that entered the cycle as Reserved public Complete
+//! catalog entries: ten Flexbox and Multicolumn properties; seven generic rule,
+//! declaration, and list shells; and fourteen shared values—`syntax-token-stream`,
+//! `component-value`, `simple-block`, `function`, `declaration-value`, `any-value`,
+//! `an-plus-b`, `unicode-range`, `css-wide-keyword`, `custom-ident`, `ident`,
+//! `string`, `url`, and `url-modifier`. The first two groups are 17 shell/property
+//! additions, and the last group is 14 shared-value additions. It separately
+//! promotes the seven Values 3 records for `dimension`, `angle`,
 //! `angle-percentage`, `time-percentage`, `frequency`, `frequency-percentage`, and
 //! `calc()` from Partial to Complete.
 //!
@@ -955,10 +957,11 @@ let _ = validate_style_attribute("color: red");
 //! `ext.media.range.width`, `ext.media.range.height`,
 //! `ext.media.range.resolution`, `ext.media.range.color`, and
 //! `ext.media.range.monochrome` records remain Partial with explicit subset and
-//! remainder metadata. `@font-feature-values` remains RecognizedUnsupported. The
-//! public catalog reconciles to exactly 473 records; the immutable official
-//! inventory remains exactly 162 property units, one normative legacy shorthand,
-//! and 167 non-property units. All 219 I01 baseline records retain their
+//! remainder metadata. `@font-feature-values` remains RecognizedUnsupported. C13's
+//! 456 public catalog records plus C14's 31 additions reconcile to exactly 487
+//! records. That catalog cardinality is distinct from the immutable official
+//! inventory of exactly 162 property units, one normative legacy shorthand, and
+//! 167 non-property units. All 219 I01 baseline records retain their
 //! classifications, and the exclusion registry remains exactly 131 rows.
 //!
 //! # Support metadata and application policy

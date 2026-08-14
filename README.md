@@ -807,18 +807,18 @@ assert_eq!(
 ```
 
 The generic Syntax 3 at-rule, qualified-rule, declaration, stylesheet,
-rule-list, declaration-list, and style-block records are public `Complete`
-atomic metadata. C14 also closes these fourteen formerly `Reserved` shared
-values as `Complete`: `syntax-token-stream`, `component-value`, `simple-block`,
-`function`, `declaration-value`, `any-value`, `an-plus-b`, `unicode-range`,
-`css-wide-keyword`, `custom-ident`, `ident`, `string`, `url`, and
-`url-modifier`.
+rule-list, declaration-list, and style-block records become public `Complete`
+atomic metadata. C14 also makes these fourteen formerly `Reserved` shared
+values public `Complete` metadata: `syntax-token-stream`, `component-value`,
+`simple-block`, `function`, `declaration-value`, `any-value`, `an-plus-b`,
+`unicode-range`, `css-wide-keyword`, `custom-ident`, `ident`, `string`, `url`,
+and `url-modifier`.
 
-Together with the ten Flexbox/Multicolumn property records and seven generic
-shell records, those shared values account for all 31 records that entered C14
-as `Reserved`. C14 separately promotes the seven Values 3 records for
-`dimension`, `angle`, `angle-percentage`, `time-percentage`, `frequency`,
-`frequency-percentage`, and `calc()` from `Partial` to `Complete`.
+Together, the ten Flexbox/Multicolumn property records, seven generic shell
+records, and fourteen shared-value records are the 31 public catalog additions
+that entered C14 as `Reserved`. C14 separately promotes the seven Values 3
+records for `dimension`, `angle`, `angle-percentage`, `time-percentage`,
+`frequency`, `frequency-percentage`, and `calc()` from `Partial` to `Complete`.
 
 The preserved extension records `ext.value.relative-color`,
 `ext.value.color-mix`, `ext.value.grid-repeat`, `ext.value.basic-shape`,
@@ -831,11 +831,13 @@ The preserved extension records `ext.value.relative-color`,
 metadata. The `@font-feature-values` rule remains `RecognizedUnsupported` with
 its typed unsupported-at-rule diagnostic.
 
-The public support catalog contains exactly 473 records. The immutable official
-inventory reconciles to exactly 162 property units (161 canonical properties
-plus the custom-property family), one normative legacy shorthand, and 167
-non-property units. All 219 preserved I01 baseline records retain their
-classifications, and the exclusion registry remains exactly 131 rows.
+The C13 public support catalog contained exactly 456 records. C14 adds the 31
+records above, so the public support catalog contains exactly 487 records. That
+catalog cardinality is distinct from the immutable official inventory of
+exactly 162 property units (161 canonical properties plus the custom-property
+family), one normative legacy shorthand, and 167 non-property units. All 219
+preserved I01 baseline records retain their classifications, and the exclusion
+registry remains exactly 131 rows.
 
 The crate still stops at strict authored syntax. Cascade, substitution,
 selector matching, query evaluation, resource loading, layout, pagination,

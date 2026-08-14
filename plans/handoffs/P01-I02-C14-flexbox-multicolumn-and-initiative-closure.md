@@ -11,11 +11,11 @@ another Surgeist crate.
 
 ## Public Surface And Reserved Closures
 
-C14 closes all 31 records that entered the cycle as `Reserved`. The first 17
-are ten property records and seven generic shell records that become public
-`Complete` metadata. The other 14 are already-public official shared-value
-records whose status becomes `Complete`. This distinction preserves the exact
-catalog-cardinality reconciliation below.
+C14 closes all 31 records that entered the cycle as `Reserved` by adding them
+to the public catalog as `Complete` metadata. The first 17 are ten property
+records and seven generic shell records. The other 14 are official shared-value
+records. This distinction preserves the exact catalog-cardinality
+reconciliation below.
 
 C14 activates these ten property records as public `Complete` metadata:
 `official.property.flex-flow`, `official.property.column-count`,
@@ -73,13 +73,15 @@ closure gaps.
 
 All stable IDs retain their previous meaning. The additions are additive: no
 public type, stable ID, dependency, feature, or manifest entry is renamed or
-removed. The public support catalog contains exactly 473 records after the 17
-public catalog additions. Closing the fourteen existing Reserved records and
-promoting the seven existing Partial records do not change cardinality.
+removed. C13 ended with exactly 456 public catalog records. C14 adds all 31
+formerly `Reserved` records—17 shell/property records plus 14 shared-value
+records—so the public support catalog contains exactly 487 records. Promoting
+the seven existing Partial records does not change cardinality.
 
 ## Exact Inventory And Exclusions
 
-The immutable official inventory reconciles to exactly 162 property units: 161
+Catalog cardinality is distinct from the inventories below. The immutable
+official inventory reconciles to exactly 162 property units: 161
 canonical properties plus the `--*` custom-property family. The one normative
 `glyph-orientation-vertical` legacy shorthand remains separate. The
 non-property inventory reconciles to exactly 167 units. Together those official

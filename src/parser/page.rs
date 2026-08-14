@@ -6,11 +6,11 @@ use cssparser::{
 use super::recovery::{RecoveryLoopOutcome, RecoveryProgress, RecoveryState};
 use super::{
     DeclarationMode, ParsedDeclaration, block_item_diagnostic, is_declaration_recovery_unit,
-    parse_declaration_core,
+    parse_declaration_core, top_level_only_at_rule_placement,
 };
 use crate::error::{
-    CssFeatureId, Error, basic, invalid_at_rule_body, invalid_at_rule_placement,
-    property_name_error, unsupported_value, with_property_context,
+    CssFeatureId, Error, basic, invalid_at_rule_body, property_name_error, unsupported_value,
+    with_property_context,
 };
 use crate::properties::{CssKnownProperty, CssKnownPropertyValueRef};
 use crate::syntax::*;
@@ -90,7 +90,7 @@ struct PageBodyParser<'s> {
 
 enum PageBodyAtRulePrelude<'i> {
     MarginBox(CowRcStr<'i>),
-    NestedPage,
+    TopLevelOnly(CowRcStr<'i>, cssparser::SourceLocation),
     Other,
 }
 
@@ -102,10 +102,12 @@ impl<'i> AtRuleParser<'i> for PageBodyParser<'i> {
     fn parse_prelude<'t>(
         &mut self,
         name: CowRcStr<'i>,
-        _input: &mut Parser<'i, 't>,
+        input: &mut Parser<'i, 't>,
     ) -> Result<Self::Prelude, ParseError<'i, Self::Error>> {
-        if name.eq_ignore_ascii_case("page") {
-            return Ok(PageBodyAtRulePrelude::NestedPage);
+        let location = input.current_source_location();
+        while input.next_including_whitespace_and_comments().is_ok() {}
+        if name.eq_ignore_ascii_case("counter-style") || name.eq_ignore_ascii_case("page") {
+            return Ok(PageBodyAtRulePrelude::TopLevelOnly(name, location));
         }
         if is_page_margin_box(name.as_ref()) {
             return Ok(PageBodyAtRulePrelude::MarginBox(name));
@@ -131,11 +133,9 @@ impl<'i> AtRuleParser<'i> for PageBodyParser<'i> {
             PageBodyAtRulePrelude::MarginBox(name) => {
                 Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name)))
             }
-            PageBodyAtRulePrelude::NestedPage => Err(invalid_at_rule_placement(
-                input.current_source_location(),
-                "page",
-                "the stylesheet top level",
-            )),
+            PageBodyAtRulePrelude::TopLevelOnly(name, location) => {
+                Err(top_level_only_at_rule_placement(location, name.as_ref()))
+            }
             PageBodyAtRulePrelude::Other => Err(invalid_at_rule_body(
                 input,
                 "page",

@@ -558,24 +558,37 @@ fn c11_rule_recovery_preserves_siblings_and_boundaries() {
         ),
         ("@mystery-tail { }", CssErrorCode::UnknownAtRule),
     ];
-    assert_eq!(report.diagnostics().len(), expected.len());
+    assert_eq!(
+        report.diagnostics().len(),
+        expected.len(),
+        "{:#?}",
+        report.diagnostics()
+    );
     for (diagnostic, (authored, code)) in report.diagnostics().iter().zip(expected) {
         let start = source.find(authored).expect("authored invalid unit");
-        assert_eq!(diagnostic.error().code(), code, "{authored}");
+        assert_eq!(
+            diagnostic.error().code(),
+            code,
+            "{authored}: {diagnostic:#?}"
+        );
         assert_eq!(diagnostic.action(), CssRecoveryAction::DropAtRule);
         assert_eq!(diagnostic.span().start().byte_offset().value(), start);
         assert_eq!(
             diagnostic.span().end().byte_offset().value(),
             start + authored.len()
         );
-        if code == CssErrorCode::InvalidAtRulePlacement {
-            let name_end = authored.find(char::is_whitespace).unwrap_or(authored.len());
-            assert_eq!(
-                diagnostic.error().position().byte_offset().value(),
-                start + name_end,
-                "{authored}"
-            );
-        }
+        assert_eq!(
+            diagnostic.error().position().byte_offset().value(),
+            start,
+            "{authored}"
+        );
+        assert_eq!(diagnostic.error().position().line().value(), 1);
+        let line_start = source[..start].rfind('\n').map_or(0, |offset| offset + 1);
+        assert_eq!(
+            diagnostic.error().position().column().value() as usize,
+            source[line_start..start].encode_utf16().count(),
+            "{authored}"
+        );
     }
 
     for depth in [255_usize, 256, 257] {

@@ -1,12 +1,16 @@
 use cssparser::{
-    AtRuleParser, CowRcStr, DeclarationParser, ParseError, Parser, ParserState,
-    QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, match_ignore_ascii_case,
+    AtRuleParser, BasicParseErrorKind, CowRcStr, DeclarationParser, ParseError, ParseErrorKind,
+    Parser, ParserState, QualifiedRuleParser, RuleBodyItemParser, RuleBodyParser, SourceLocation,
+    match_ignore_ascii_case,
 };
 
 use super::background::parse_url;
 use super::recovery::{RecoveryLoopOutcome, RecoveryProgress, RecoveryState};
 use super::values::parse_integer;
-use super::{block_item_diagnostic, is_declaration_recovery_unit, parse_descriptor_boundary};
+use super::{
+    block_item_diagnostic, is_declaration_recovery_unit, parse_descriptor_boundary,
+    top_level_only_at_rule_placement,
+};
 use crate::error::{
     Error, basic, descriptor_name_error, invalid_descriptor_combination, unsupported_value,
     unsupported_value_at, with_descriptor_context,
@@ -51,18 +55,18 @@ pub(super) fn parse_counter_style_rule<'i, 't>(
         let unit_end = items.input.position().byte_index();
         match item {
             Ok(descriptor) => occurrences.push(descriptor),
-            Err((error, failed_unit)) if is_declaration_recovery_unit(failed_unit) => {
-                if let Some(diagnostic) = block_item_diagnostic(
-                    source,
-                    error,
-                    failed_unit,
-                    unit_end,
-                    crate::CssRecoveryAction::DropDescriptor,
-                ) {
+            Err((error, failed_unit)) => {
+                let action = if is_declaration_recovery_unit(failed_unit) {
+                    crate::CssRecoveryAction::DropDescriptor
+                } else {
+                    crate::CssRecoveryAction::DropAtRule
+                };
+                if let Some(diagnostic) =
+                    block_item_diagnostic(source, error, failed_unit, unit_end, action)
+                {
                     diagnostics.push(diagnostic);
                 }
             }
-            Err((error, _)) => return Err(error),
         }
         if progress_outcome == RecoveryLoopOutcome::Terminated {
             break;
@@ -92,10 +96,45 @@ struct CounterStyleDescriptorParser<'s> {
     recovery: RecoveryState,
 }
 
+enum CounterStyleBodyAtRulePrelude<'i> {
+    TopLevelOnly(CowRcStr<'i>, SourceLocation),
+    Other(CowRcStr<'i>, SourceLocation),
+}
+
 impl<'i> AtRuleParser<'i> for CounterStyleDescriptorParser<'i> {
-    type Prelude = ();
+    type Prelude = CounterStyleBodyAtRulePrelude<'i>;
     type AtRule = CssCounterStyleDescriptor;
     type Error = Error;
+
+    fn parse_prelude<'t>(
+        &mut self,
+        name: CowRcStr<'i>,
+        input: &mut Parser<'i, 't>,
+    ) -> Result<Self::Prelude, ParseError<'i, Self::Error>> {
+        let location = input.current_source_location();
+        while input.next_including_whitespace_and_comments().is_ok() {}
+        if name.eq_ignore_ascii_case("counter-style") || name.eq_ignore_ascii_case("page") {
+            return Ok(CounterStyleBodyAtRulePrelude::TopLevelOnly(name, location));
+        }
+        Ok(CounterStyleBodyAtRulePrelude::Other(name, location))
+    }
+
+    fn parse_block<'t>(
+        &mut self,
+        prelude: Self::Prelude,
+        _start: &ParserState,
+        _input: &mut Parser<'i, 't>,
+    ) -> Result<Self::AtRule, ParseError<'i, Self::Error>> {
+        match prelude {
+            CounterStyleBodyAtRulePrelude::TopLevelOnly(name, location) => {
+                Err(top_level_only_at_rule_placement(location, name.as_ref()))
+            }
+            CounterStyleBodyAtRulePrelude::Other(name, location) => Err(ParseError {
+                kind: ParseErrorKind::Basic(BasicParseErrorKind::AtRuleInvalid(name)),
+                location,
+            }),
+        }
+    }
 }
 
 impl<'i> QualifiedRuleParser<'i> for CounterStyleDescriptorParser<'i> {
@@ -112,7 +151,7 @@ impl<'i> RuleBodyItemParser<'i, CssCounterStyleDescriptor, Error>
     }
 
     fn parse_qualified(&self) -> bool {
-        false
+        true
     }
 }
 

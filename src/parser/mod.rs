@@ -1330,6 +1330,13 @@ pub(super) fn structural_recovery_production(failed_unit: &str) -> &'static str 
     }
 }
 
+pub(super) fn top_level_only_at_rule_placement<'i>(
+    location: cssparser::SourceLocation,
+    name: &str,
+) -> ParseError<'i, Error> {
+    invalid_at_rule_placement(location, name, "the stylesheet top level")
+}
+
 pub(super) fn is_declaration_recovery_unit(failed_unit: &str) -> bool {
     let mut input = ParserInput::new(failed_unit);
     let mut parser = Parser::new(&mut input);
@@ -1683,10 +1690,9 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
             },
             "counter-style" => {
                 if self.top_level_phase.is_none() {
-                    return Err(invalid_at_rule_placement(
+                    return Err(top_level_only_at_rule_placement(
                         input.current_source_location(),
                         "counter-style",
-                        "the stylesheet top level",
                     ));
                 }
                 let name = parse_counter_style_name(input).map_err(|error| {
@@ -1714,10 +1720,9 @@ impl<'i> AtRuleParser<'i> for StrictRuleParser<'i> {
             },
             "page" => {
                 if self.top_level_phase.is_none() {
-                    return Err(invalid_at_rule_placement(
+                    return Err(top_level_only_at_rule_placement(
                         input.current_source_location(),
                         "page",
-                        "the stylesheet top level",
                     ));
                 }
                 let selector = parse_page_selector(input).map_err(|error| {
@@ -2699,6 +2704,14 @@ impl<'i> AtRuleParser<'i> for ScopedRuleParser<'i> {
                 input.current_source_location(),
                 "namespace",
                 "the stylesheet top level",
+            )),
+            "counter-style" => Err(top_level_only_at_rule_placement(
+                input.current_source_location(),
+                "counter-style",
+            )),
+            "page" => Err(top_level_only_at_rule_placement(
+                input.current_source_location(),
+                "page",
             )),
             _ => Err(input.new_error(cssparser::BasicParseErrorKind::AtRuleInvalid(name))),
         }

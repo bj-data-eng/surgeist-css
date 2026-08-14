@@ -2807,6 +2807,270 @@ fn counter_styles_and_page_metadata_are_truthful() {
 }
 
 #[test]
+fn c12_property_metadata_is_truthful() {
+    let properties = [
+        (
+            "official.property.border-collapse",
+            "border-collapse",
+            "O-CSS2",
+            "tables.html#propdef-border-collapse",
+            "collapse",
+        ),
+        (
+            "official.property.border-spacing",
+            "border-spacing",
+            "O-CSS2",
+            "tables.html#propdef-border-spacing",
+            "2px 3px",
+        ),
+        (
+            "official.property.caption-side",
+            "caption-side",
+            "O-CSS2",
+            "tables.html#propdef-caption-side",
+            "bottom",
+        ),
+        (
+            "official.property.clip",
+            "clip",
+            "O-CSS2",
+            "visufx.html#propdef-clip",
+            "rect(auto, 10px, 20px, -1px)",
+        ),
+        (
+            "official.property.empty-cells",
+            "empty-cells",
+            "O-CSS2",
+            "tables.html#propdef-empty-cells",
+            "hide",
+        ),
+        (
+            "official.property.orphans",
+            "orphans",
+            "O-CSS2",
+            "page.html#propdef-orphans",
+            "3",
+        ),
+        (
+            "official.property.page-break-after",
+            "page-break-after",
+            "O-CSS2",
+            "page.html#propdef-page-break-after",
+            "right",
+        ),
+        (
+            "official.property.page-break-before",
+            "page-break-before",
+            "O-CSS2",
+            "page.html#propdef-page-break-before",
+            "always",
+        ),
+        (
+            "official.property.page-break-inside",
+            "page-break-inside",
+            "O-CSS2",
+            "page.html#propdef-page-break-inside",
+            "avoid",
+        ),
+        (
+            "official.property.quotes",
+            "quotes",
+            "O-CSS2",
+            "generate.html#propdef-quotes",
+            "\"open\" \"close\"",
+        ),
+        (
+            "official.property.table-layout",
+            "table-layout",
+            "O-CSS2",
+            "tables.html#propdef-table-layout",
+            "fixed",
+        ),
+        (
+            "official.property.widows",
+            "widows",
+            "O-CSS2",
+            "page.html#propdef-widows",
+            "4",
+        ),
+        (
+            "official.property.word-spacing",
+            "word-spacing",
+            "O-CSS2",
+            "text.html#propdef-word-spacing",
+            "-0.25em",
+        ),
+        (
+            "official.property.text-combine-upright",
+            "text-combine-upright",
+            "O-WRITING3",
+            "#propdef-text-combine-upright",
+            "all",
+        ),
+        (
+            "official.property.text-orientation",
+            "text-orientation",
+            "O-WRITING3",
+            "#propdef-text-orientation",
+            "sideways",
+        ),
+        (
+            "official.property.unicode-bidi",
+            "unicode-bidi",
+            "O-WRITING3",
+            "#propdef-unicode-bidi",
+            "isolate-override",
+        ),
+        (
+            "official.property.caret-color",
+            "caret-color",
+            "O-UI3",
+            "#propdef-caret-color",
+            "rebeccapurple",
+        ),
+        (
+            "official.property.outline-offset",
+            "outline-offset",
+            "O-UI3",
+            "#propdef-outline-offset",
+            "-2px",
+        ),
+        (
+            "official.property.resize",
+            "resize",
+            "O-UI3",
+            "#propdef-resize",
+            "horizontal",
+        ),
+        (
+            "official.property.contain",
+            "contain",
+            "O-CONTAIN1",
+            "#propdef-contain",
+            "paint size",
+        ),
+        (
+            "official.property.transform-box",
+            "transform-box",
+            "O-TRANSFORMS1",
+            "#propdef-transform-box",
+            "view-box",
+        ),
+        (
+            "official.property.background-blend-mode",
+            "background-blend-mode",
+            "O-COMPOSITING1",
+            "#propdef-background-blend-mode",
+            "multiply, luminosity",
+        ),
+        (
+            "official.property.isolation",
+            "isolation",
+            "O-COMPOSITING1",
+            "#propdef-isolation",
+            "isolate",
+        ),
+        (
+            "official.property.mix-blend-mode",
+            "mix-blend-mode",
+            "O-COMPOSITING1",
+            "#propdef-mix-blend-mode",
+            "soft-light",
+        ),
+    ];
+
+    for (id, name, source, production, authored_value) in properties {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing metadata for {id}"));
+        assert_eq!(metadata.id().as_str(), id, "{id} identity");
+        assert_eq!(metadata.kind(), CssFeatureKind::Property, "{id} kind");
+        assert_eq!(metadata.spelling(), name, "{id} spelling");
+        assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+        assert_eq!(metadata.production(), production, "{id} production");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+        assert_eq!(metadata.supported_subset(), None, "{id} subset");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+        assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+        assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+
+        let property = property_metadata(name).unwrap_or_else(|| panic!("missing property {name}"));
+        assert_eq!(property.feature(), metadata, "{id} property metadata");
+        assert_eq!(property.canonical_name(), name, "{id} canonical name");
+
+        let source = format!("{name}: {authored_value}");
+        let report = parse_style_attribute(&source);
+        assert!(report.is_clean(), "{id}: {:?}", report.diagnostics());
+        let [declaration] = report.syntax().as_slice() else {
+            panic!("{id}: expected one retained declaration");
+        };
+        assert_eq!(
+            declaration
+                .known()
+                .expect("known C12 property")
+                .property()
+                .stable_id(),
+            id,
+            "{id} parser vector",
+        );
+    }
+
+    let alias = feature_metadata("official.property-alias.glyph-orientation-vertical")
+        .expect("legacy glyph-orientation-vertical metadata");
+    assert_eq!(alias.spelling(), "glyph-orientation-vertical");
+    assert_eq!(alias.source().id().as_str(), "O-WRITING3");
+    assert_eq!(alias.production(), "#propdef-glyph-orientation-vertical");
+    assert_eq!(alias.status(), CssSupportStatus::Complete);
+    assert_eq!(alias.supported_subset(), None);
+    assert_eq!(alias.unsupported_remainder(), None);
+    assert_eq!(alias.recognized_unsupported_code(), None);
+    assert!(alias.baseline_alias_targets().is_empty());
+    let alias_report = parse_style_attribute("glyph-orientation-vertical: 90");
+    assert!(alias_report.is_clean(), "{:?}", alias_report.diagnostics());
+    assert_eq!(
+        alias_report.syntax()[0]
+            .known()
+            .expect("known legacy alias")
+            .property(),
+        CssKnownProperty::TextOrientation,
+    );
+    assert!(CssKnownProperty::TextOrientation.aliases().is_empty());
+    assert_eq!(
+        CssKnownProperty::from_name("glyph-orientation-vertical"),
+        None
+    );
+
+    for (id, spelling, source, production, vector) in [
+        (
+            "official.value.box-edge-keywords",
+            "content-box|padding-box|border-box|fill-box|stroke-box|view-box",
+            "O-BOX3",
+            "#keywords",
+            "transform-box: view-box",
+        ),
+        (
+            "official.value.blend-mode",
+            "normal|multiply|screen|overlay|darken|lighten|color-dodge|color-burn|hard-light|soft-light|difference|exclusion|hue|saturation|color|luminosity",
+            "O-COMPOSITING1",
+            "#blending,#blendingseparable,#blendingnonseparable",
+            "background-blend-mode: multiply, luminosity",
+        ),
+    ] {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing metadata for {id}"));
+        assert_eq!(metadata.kind(), CssFeatureKind::Value, "{id} kind");
+        assert_eq!(metadata.spelling(), spelling, "{id} spelling");
+        assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+        assert_eq!(metadata.production(), production, "{id} production");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+        assert_eq!(metadata.supported_subset(), None, "{id} subset");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+        assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+        assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+        let report = parse_style_attribute(vector);
+        assert!(report.is_clean(), "{id}: {:?}", report.diagnostics());
+        assert_eq!(report.syntax().len(), 1, "{id} parser vector");
+    }
+}
+
+#[test]
 fn named_conformance_records_expose_declared_metadata() {
     for expected in EXPECTED {
         let actual = feature_metadata(expected.id).expect("expected catalog record");

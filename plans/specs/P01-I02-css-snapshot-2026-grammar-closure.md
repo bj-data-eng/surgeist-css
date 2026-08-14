@@ -4,7 +4,7 @@
 
 This is the JIT implementation contract for `P01-I02` in `surgeist-css`.
 It is subordinate to the reviewed P01 program at semantic SHA-256
-`db899aea31b168128b4d8bd5c4be58057a9860e0de4d0d4b00f049955b16eb22`
+`87f6a94b893ffa416c6ff451575f0d5a21b4aa136e7bcd391cd6c0ce8810a2ae`
 and incorporates its I02-entry and source-contradiction reconciliations. The
 initiative base is the published, fetchable I01 candidate
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; the P01 reconciliation commit
@@ -332,6 +332,31 @@ undeclared-prefix `svg|a` boundary and every other fixture row remain
 byte-for-byte identical. Any additional frozen-oracle contradiction returns to
 P01 reconciliation before implementation.
 
+### 3.7 C11 Counter-Style And Page Oracle Correction
+
+P01.14 reconciles two C01 rows that encode the official Counter Styles 3 and
+CSS2 page-rule behavior allocated to C11. C11 shall replace only the expected
+observables for these stable scenario IDs while preserving their entry point,
+feature mode, and authored input:
+
+- `catalog.non-property.later.rule.counter-style.boundary` retains the valid
+  `@counter-style thumbs` definition; and
+- `catalog.non-property.later.rule.page.boundary` retains the valid `@page`
+  block.
+
+Both rows become clean and retain only their valid public rule identity,
+`rule:later.rule.counter-style` or `rule:later.rule.page`; all other fields are
+byte-identical and the obsolete `UnsupportedAtRule` diagnostic is removed. The
+fixture SHA-256 before C11 is
+`96be045dc181fe5fc258e76b09458b441139504a3cae13c41897995ab3ae8f5d`; the
+hand-authored two-row replacement yields
+`7c2cf7d79368d76d94cc0b383be70cc404d4c69d7caa72eedba6f0762e0b2356`.
+Task review verifies the exact two-row diff. No Rust test asserts either
+digest, derives expected values from production, masks a corrected case, or
+uses source/test owner sets or counts as completeness evidence. Any additional
+frozen-oracle contradiction returns to P01 reconciliation before
+implementation.
+
 ## 4. Conformance Profile And Catalog
 
 ### 4.1 Tiers, Sources, And Dispositions
@@ -505,7 +530,8 @@ At initiative completion:
 - preserved extensions are `Complete`, `Partial`, or
   `RecognizedUnsupported` truthfully, with exact subset/remainder or diagnostic
   identity; except for the exact section 3.3 seven-row, section 3.4 one-row,
-  section 3.5 eight-row, and section 3.6 six-row source corrections, no
+  section 3.5 eight-row, section 3.6 six-row, and section 3.7 two-row source
+  corrections, no
   preserved I01 accepted vector regresses;
 - unknown spellings remain distinct from recognized unsupported spellings;
 - exact I01 baseline tests become subset-preservation tests rather than replacing
@@ -570,12 +596,65 @@ is retained as `CssSupportsConditionKind::GeneralEnclosed` without a recovery
 diagnostic. Direct public behavior and named metadata tests prove both typed and
 general-enclosed branches; no Complete Selectors 4 claim is made.
 
-Counter-style and page descriptors use source-order occurrence lists,
-effective-last lookup where defined, exact required/conflicting descriptor
-validation, and `DropDescriptor` recovery. Page blocks reuse ordinary
-declarations and do not add later margin-box rules. Font-face closure includes
-the complete Fonts 3 descriptor grammar while preserving selected Fonts 4
-descriptor extensions truthfully.
+Counter-style uses `CssRule::CounterStyle(CssCounterStyleRule)` with checked
+`CssCounterStyleName`, parser-owned position, and private
+`CssCounterStyleDescriptors`/occurrence models. The descriptor view exposes
+authored `occurrences()` plus effective-last accessors for `system`, `negative`,
+`prefix`, `suffix`, `range`, `pad`, `fallback`, `symbols`,
+`additive-symbols`, and `speak-as`; each descriptor has a checked typed value
+and source position. Existing `CssCounterStyle`, `CssCounterStyleName`,
+`CssCounterName`, and symbol primitives remain compatible projections.
+The exact domains are: system cyclic/numeric/alphabetic/symbolic/additive,
+fixed with optional integer, or `extends` followed by a counter-style name;
+negative one or two symbols; prefix/suffix one symbol; range `auto` or a
+comma-separated list of inclusive integer/`infinite` bounds; pad a
+nonnegative integer plus one symbol; fallback a counter-style name; symbols a
+nonempty symbol list; additive-symbols a strictly descending list of
+nonnegative integer/symbol pairs; and speak-as auto/bullets/numbers/words/
+spell-out or a counter-style name. Counter-style names are checked custom
+identifiers excluding CSS-wide keywords and the reserved `none` spelling.
+Duplicate valid
+descriptors remain authored in occurrence order and effective accessors return
+the last valid occurrence. Invalid descriptor values are
+`InvalidDescriptorValue`/`DropDescriptor`; unknown names are
+`UnknownDescriptor`/`DropDescriptor`. A rule with valid defining `symbols`, or
+valid `additive-symbols` when effective `system` is additive, is retained even
+if other descriptors were dropped. `system: extends` inherits the defining and
+other effective descriptors from its named style and cannot be combined with
+`symbols` or `additive-symbols`; an additive system requires additive symbols,
+and a non-extends defining system requires symbols. Missing defining symbols,
+non-descending additive weights, invalid `extends` combinations, or other
+incompatible effective descriptors emit
+`InvalidDescriptorCombination`/`DropAtRule`; invalid input does not advance
+the phase. Public vectors cover extends inheritance/rejection, infinite range,
+comma-separated ranges, strict additive ordering, reserved names, and all
+duplicate/effective-last cases.
+
+Page uses `CssRule::Page(CssPageRule)` with optional checked
+`CssPageSelector::{Left,Right,First}` and an explicit default form, private
+ordered declaration fields, accessors, and parser position. `@page` is
+top-level and block-form only; its body uses the ordinary declaration AST but
+is restricted to CSS2 page-context `margin` and `margin-top/right/bottom/left`
+with CSS2 length, percentage, and `auto` domains. Page margins permit negative
+values and all CSS2 length units except `em` and `ex`; those two units are
+invalid specifically in page context. Valid declarations preserve
+typed values, importance, authored order, and positions. A known non-margin
+declaration is `InvalidPropertyValue`/`DropDeclaration`; an unknown declaration
+is `UnknownProperty`/`DropDeclaration`; invalid values use the existing typed
+property diagnostic and retain later siblings. The page prelude is empty or
+one of `:left`, `:right`, or `:first`; any other pseudo, duplicate selector,
+trailing token, or malformed token is `InvalidAtRulePrelude`/`DropAtRule`.
+Nested margin-box at-rules remain recognized unsupported and are
+`UnsupportedAtRule`/`DropAtRule`; other nested rules are
+`InvalidAtRuleBody`/`DropAtRule`. A top-level page rule is a body rule accepted
+after the valid initial encoding/import/layer/namespace prelude and transitions
+the phase to `Body`; an import after it remains invalid. A page rule inside
+conditional or nested contexts is `InvalidAtRulePlacement`/`DropAtRule`. EOF,
+non-BMP positions, repeated failures, validators, and strict parity are
+covered publicly. Valid rules advance the top-level body phase; invalid input
+does not. Page layout, pagination, cascade, and margin-box semantics remain
+excluded. Font-face closure includes the complete Fonts 3 descriptor grammar
+while preserving selected Fonts 4 descriptor extensions truthfully.
 
 Keyframes accept empty rule/block lists and preserve duplicate selector blocks
 and duplicate offsets in authored order. Important keyframe declarations remain
@@ -782,9 +861,10 @@ inspection. They reiterate the excluded downstream semantics.
 I01 behavioral tests remain baseline-preservation evidence, subject only to the
 seven source-backed C07 corrections in section 3.3, the one source-backed C08
 correction in section 3.4, and the eight source-backed C09 corrections in
-section 3.5, plus the six source-backed C10 corrections in section 3.6, with
-the post-C10 fixture digest
-`96be045dc181fe5fc258e76b09458b441139504a3cae13c41897995ab3ae8f5d`.
+section 3.5, plus the six source-backed C10 corrections in section 3.6 and
+the two source-backed C11 corrections in section 3.7, with the post-C11
+fixture digest
+`7c2cf7d79368d76d94cc0b383be70cc404d4c69d7caa72eedba6f0762e0b2356`.
 At I02 completion,
 the coordinator and reviewers map every acceptance item to direct source
 inspection, compiler-visible API evidence, behavioral tests, or deterministic
@@ -812,7 +892,7 @@ source/code shape as completion evidence.
 | `2.17` | section 5: duplicate/empty keyframe structures |
 
 I02 also preserves all I01 finding evidence after the reviewed section 3.3,
-3.4, 3.5, and 3.6 corrections. If closing a row would change another frozen
+3.4, 3.5, 3.6, and 3.7 corrections. If closing a row would change another frozen
 section 3.1 semantic, require unsafe, cross an ownership boundary, or require
 another breaking cycle, stop and reconcile P01.
 
@@ -830,10 +910,10 @@ I02 is complete only when all predicates hold:
    counts.
 3. The exact 219-row I01 feature baseline remains classified; the seven C07
    scenario IDs in section 3.3, the one C08 scenario ID in section 3.4, and the
-   eight C09 scenario IDs in section 3.5 and six C10 scenario IDs in section
-   3.6 carry their reviewed source-backed replacement observables; the C10
-   fixture has exact SHA-256
-   `96be045dc181fe5fc258e76b09458b441139504a3cae13c41897995ab3ae8f5d`;
+   eight C09 scenario IDs in section 3.5, six C10 scenario IDs in section
+   3.6, and two C11 scenario IDs in section 3.7 carry their reviewed
+   source-backed replacement observables; the C11 fixture has exact SHA-256
+   `7c2cf7d79368d76d94cc0b383be70cc404d4c69d7caa72eedba6f0762e0b2356`;
    every other accepted vector does not regress; extension status and
    provenance are truthful.
 4. All fourteen allocated findings in section 11 have implemented source and

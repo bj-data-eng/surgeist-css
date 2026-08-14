@@ -4,11 +4,11 @@
 
 This sequence implements the reviewed P01-I02 specification at
 `plans/specs/P01-I02-css-snapshot-2026-grammar-closure.md`, SHA-256
-`0d26ae87704ecc16c09a59f3684a3af15edfdc5082259ca2bec0135377d97f62`,
+`3f93c7f6c3656ebe0b33b8bf9c32e458f306f294d1a969a86df375a5858b1710`,
 and its official ledger at SHA-256
 `626d176a734d48c3a6202c189daeadc5ff93253c20ac6681d91f93b01ab11b0d`.
 It is subordinate to reviewed P01 semantic SHA-256
-`db899aea31b168128b4d8bd5c4be58057a9860e0de4d0d4b00f049955b16eb22`.
+`87f6a94b893ffa416c6ff451575f0d5a21b4aa136e7bcd391cd6c0ce8810a2ae`.
 The published I01 base is
 `bc5394ff5855109dd1d224d29278d6ab601cef4f`; planning commits after that base
 belong to the I02 candidate range.
@@ -18,8 +18,8 @@ prior cycle's reviewed, verified, published/read-back handoff and the
 user-required clean, process-free post-cycle state. C14 additionally requires a
 separate exact-range initiative review before its publication. No grammar task
 begins before C01 publication. Except for the exact seven-scenario C07,
-one-scenario C08, eight-scenario C09, and six-scenario C10 source-backed oracle
-corrections reviewed in specification sections 3.3-3.6, a need for a second
+one-scenario C08, eight-scenario C09, six-scenario C10, and two-scenario C11
+source-backed oracle corrections reviewed in specification sections 3.3-3.7, a need for a second
 breaking cycle, another frozen I01 semantic change, unsafe, external
 acquisition, or root/sibling edit stops and returns to P01. Exact commands and
 gate choreography belong to each JIT cycle plan and the canonical Surgeist
@@ -30,8 +30,9 @@ workflow.
 ### I02-C01 Evolution Boundary And I01 Equivalence Foundation
 
 - **Owner/source:** `surgeist-css`; specification sections 1-3, 10, and 12.1.
-- **Prerequisite/entry:** published I01 `bc5394f`; reviewed P01 reconciliation
-  `e290a7f...`; reviewed I02 spec/ledger; no I02 grammar edit has begun.
+- **Prerequisite/entry:** published I01 `bc5394f`; reviewed P01 planning-only
+  reconciliation `537b97b46e0ab8625413b005f74eb79eeaa0ac64`; reviewed I02
+  spec/ledger; no I02 grammar edit has begun.
 
 Freeze and review the hand-authored I01 behavioral corpus before representation
 edits. It records public parser inputs and observables without test-owner names,
@@ -260,6 +261,9 @@ Complete the remaining official at-rule families from finding 2.1. Implement
 `@counter-style` descriptors/definition validity/source-order effects and CSS2
 `@page` selectors/declarations with exact placement, descriptor/declaration
 recovery, and public accessors. Margin-box rules remain outside the ledger.
+Apply only section 3.7's two reviewed fixture replacements; both become clean
+and retain their respective public rule identity. The final fixture digest is
+`7c2cf7d79368d76d94cc0b383be70cc404d4c69d7caa72eedba6f0762e0b2356`.
 
 Exit: every official rule/descriptor row is Complete or exactly excluded;
 unknown and recognized-unsupported at-rules remain distinct. **Handoff:** rule/
@@ -327,7 +331,8 @@ cleanup, then published/read-back I02 SHA and root-only actions.
 
 Every cycle preserves the I01 behavioral corpus's authored inputs and public
 observables except for C07's exact seven, C08's exact one, C09's exact eight,
-and C10's exact six reviewed source-backed replacement observables; every
+and C10's exact six and C11's exact two reviewed source-backed replacement
+observables; every
 unaffected row remains byte-identical. Every cycle also
 preserves all prior completed I02 vectors, parser progress/depth guarantees,
 diagnostic ordering and coordinates, custom/substitution authored text,

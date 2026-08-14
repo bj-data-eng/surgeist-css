@@ -510,3 +510,35 @@ namespace recovery, exact legacy selector spellings, and preservation of the
 existing Selectors 4/nesting/scope boundaries through public parser behavior.
 Any need to change another fixture row, make a second breaking API change, or
 claim unsupported Selectors 4 syntax stops again for P01 reconciliation.
+
+## P01.14 C11 Counter-Style And Page Oracle Reconciliation
+
+C10 is published and read back at
+`104ab4d9c2166dfe5d9179500e50da9a84026bbd`. JIT discovery for I02-C11 proves
+that two frozen C01 boundary rows still encode the official rule families
+allocated to C11:
+
+- `catalog.non-property.later.rule.counter-style.boundary` retains a valid
+  `@counter-style thumbs` definition as `UnsupportedAtRule`; and
+- `catalog.non-property.later.rule.page.boundary` retains a valid `@page`
+  block as `UnsupportedAtRule`.
+
+The frozen ledger assigns `later.rule.counter-style` and its ten official
+Counter Styles 3 descriptor/value rows to C11, and assigns `later.rule.page`
+and `official.selector.page-pseudo` to C11. Preserving the unsupported
+diagnostics would make those reviewed Complete outcomes false. P01 therefore
+authorizes one source-backed C11 oracle correction limited to these two stable
+IDs and authored inputs. Each row becomes clean, retains only its valid public
+rule identity (`rule:later.rule.counter-style` or `rule:later.rule.page`), and
+removes only the obsolete unsupported-rule diagnostic; entry point, feature
+mode, authored input, and every other fixture field remain unchanged.
+
+The fixture SHA-256 before C11 is
+`96be045dc181fe5fc258e76b09458b441139504a3cae13c41897995ab3ae8f5d`; the
+hand-authored two-row replacement yields
+`7c2cf7d79368d76d94cc0b383be70cc404d4c69d7caa72eedba6f0762e0b2356`.
+C11 task review must prove exactly those two rows changed and every other byte
+is identical. No Rust test asserts either digest, derives expected values from
+production, masks a corrected row, or compares source/test/catalog owner sets
+or counts. Any additional frozen-oracle contradiction returns to P01
+reconciliation before implementation.

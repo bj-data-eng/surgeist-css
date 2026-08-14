@@ -9,7 +9,7 @@ use surgeist_css::{
     CssSupportStatus, CssSupportsConditionKind, CssTimeCalculation, CssTimeUnit,
     CssTransformFunctionValue, CssTransformPerspective, CssTransformScaleComponent,
     CssTransformValue, CssVerticalPosition, ErrorKind, conformance_exclusion,
-    conformance_exclusions, feature_metadata, parse_sheet, parse_style_attribute,
+    conformance_exclusions, feature_catalog, feature_metadata, parse_sheet, parse_style_attribute,
     property_metadata, specification_source, specification_sources,
 };
 
@@ -4549,4 +4549,312 @@ fn images_three_properties_are_publicly_recognized() {
             "{source}",
         );
     }
+}
+
+#[test]
+fn c13_background_image_metadata_is_truthful() {
+    let c13_records = [
+        (
+            "official.property.border-image",
+            CssFeatureKind::Property,
+            "border-image",
+            "O-BACKGROUNDS3",
+            "#propdef-border-image",
+            "border-image: url(frame.png) 10 fill / 2 / 1 round",
+        ),
+        (
+            "official.property.border-image-outset",
+            CssFeatureKind::Property,
+            "border-image-outset",
+            "O-BACKGROUNDS3",
+            "#propdef-border-image-outset",
+            "border-image-outset: 1 2px 3 4px",
+        ),
+        (
+            "official.property.border-image-repeat",
+            CssFeatureKind::Property,
+            "border-image-repeat",
+            "O-BACKGROUNDS3",
+            "#propdef-border-image-repeat",
+            "border-image-repeat: round space",
+        ),
+        (
+            "official.property.border-image-slice",
+            CssFeatureKind::Property,
+            "border-image-slice",
+            "O-BACKGROUNDS3",
+            "#propdef-border-image-slice",
+            "border-image-slice: 10 fill",
+        ),
+        (
+            "official.property.border-image-source",
+            CssFeatureKind::Property,
+            "border-image-source",
+            "O-BACKGROUNDS3",
+            "#propdef-border-image-source",
+            "border-image-source: linear-gradient(red, blue)",
+        ),
+        (
+            "official.property.border-image-width",
+            CssFeatureKind::Property,
+            "border-image-width",
+            "O-BACKGROUNDS3",
+            "#propdef-border-image-width",
+            "border-image-width: 1 auto 25% 4px",
+        ),
+        (
+            "official.property.image-orientation",
+            CssFeatureKind::Property,
+            "image-orientation",
+            "O-IMAGES3",
+            "#propdef-image-orientation",
+            "image-orientation: 90deg flip",
+        ),
+        (
+            "official.property.image-rendering",
+            CssFeatureKind::Property,
+            "image-rendering",
+            "O-IMAGES3",
+            "#propdef-image-rendering",
+            "image-rendering: crisp-edges",
+        ),
+        (
+            "official.property.object-fit",
+            CssFeatureKind::Property,
+            "object-fit",
+            "O-IMAGES3",
+            "#propdef-object-fit",
+            "object-fit: scale-down",
+        ),
+        (
+            "official.value.background-layer",
+            CssFeatureKind::Value,
+            "<bg-layer>",
+            "O-BACKGROUNDS3",
+            "#layering",
+            "background: url(hero.png) left top / cover no-repeat fixed border-box",
+        ),
+        (
+            "official.value.background-image",
+            CssFeatureKind::Value,
+            "<bg-image>",
+            "O-BACKGROUNDS3",
+            "#background-image",
+            "background-image: url(hero.png), none",
+        ),
+        (
+            "official.value.repeat-style",
+            CssFeatureKind::Value,
+            "<repeat-style>",
+            "O-BACKGROUNDS3",
+            "#background-repeat",
+            "background-repeat: repeat-x, no-repeat round",
+        ),
+        (
+            "official.value.background-attachment",
+            CssFeatureKind::Value,
+            "<attachment>",
+            "O-BACKGROUNDS3",
+            "#background-attachment",
+            "background-attachment: fixed, local",
+        ),
+        (
+            "official.value.background-size",
+            CssFeatureKind::Value,
+            "<bg-size>",
+            "O-BACKGROUNDS3",
+            "#background-size",
+            "background-size: cover, 10px auto",
+        ),
+        (
+            "official.value.line-style",
+            CssFeatureKind::Value,
+            "<line-style>",
+            "O-BACKGROUNDS3",
+            "#border-style",
+            "border-style: none hidden dotted dashed",
+        ),
+        (
+            "official.value.line-width",
+            CssFeatureKind::Value,
+            "<line-width>",
+            "O-BACKGROUNDS3",
+            "#border-width",
+            "border-width: thin 2px medium thick",
+        ),
+        (
+            "official.value.image",
+            CssFeatureKind::Value,
+            "<image>",
+            "O-IMAGES3",
+            "#image-values",
+            "background-image: url(hero.png)",
+        ),
+        (
+            "official.value.gradient",
+            CssFeatureKind::Value,
+            "<gradient>",
+            "O-IMAGES3",
+            "#gradients",
+            "background-image: linear-gradient(red, blue)",
+        ),
+        (
+            "official.value.linear-gradient",
+            CssFeatureKind::Value,
+            "linear-gradient()",
+            "O-IMAGES3",
+            "#linear-gradients",
+            "background-image: linear-gradient(to right, red, blue)",
+        ),
+        (
+            "official.value.radial-gradient",
+            CssFeatureKind::Value,
+            "radial-gradient()",
+            "O-IMAGES3",
+            "#radial-gradients",
+            "background-image: radial-gradient(circle, red, blue)",
+        ),
+        (
+            "official.value.repeating-linear-gradient",
+            CssFeatureKind::Value,
+            "repeating-linear-gradient()",
+            "O-IMAGES3",
+            "#repeating-gradients",
+            "background-image: repeating-linear-gradient(red 0 10px, blue 20px)",
+        ),
+        (
+            "official.value.repeating-radial-gradient",
+            CssFeatureKind::Value,
+            "repeating-radial-gradient()",
+            "O-IMAGES3",
+            "#repeating-gradients",
+            "background-image: repeating-radial-gradient(red 0 10px, blue 20px)",
+        ),
+        (
+            "official.value.color-stop-list",
+            CssFeatureKind::Value,
+            "<color-stop-list>",
+            "O-IMAGES3",
+            "#color-stop-syntax",
+            "background-image: linear-gradient(red 10%, 20%, blue 90%)",
+        ),
+        (
+            "official.value.side-or-corner",
+            CssFeatureKind::Value,
+            "<side-or-corner>",
+            "O-IMAGES3",
+            "#linear-gradients",
+            "background-image: linear-gradient(to right bottom, red, blue)",
+        ),
+        (
+            "official.value.radial-shape",
+            CssFeatureKind::Value,
+            "<radial-shape>",
+            "O-IMAGES3",
+            "#radial-gradients",
+            "background-image: radial-gradient(circle, red, blue)",
+        ),
+        (
+            "official.value.radial-size",
+            CssFeatureKind::Value,
+            "<radial-size>",
+            "O-IMAGES3",
+            "#radial-gradients",
+            "background-image: radial-gradient(ellipse 20% 30%, red, blue)",
+        ),
+        (
+            "official.value.radial-extent",
+            CssFeatureKind::Value,
+            "<radial-extent>",
+            "O-IMAGES3",
+            "#radial-gradients",
+            "background-image: radial-gradient(closest-side, red, blue)",
+        ),
+    ];
+    assert_eq!(c13_records.len(), 27);
+
+    for (id, kind, spelling, source, production, vector) in c13_records {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing {id}"));
+        assert_eq!(metadata.id().as_str(), id, "{id} identity");
+        assert_eq!(metadata.kind(), kind, "{id} kind");
+        assert_eq!(metadata.spelling(), spelling, "{id} spelling");
+        assert_eq!(metadata.source().id().as_str(), source, "{id} source");
+        assert_eq!(metadata.production(), production, "{id} production");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id} status");
+        assert_eq!(metadata.supported_subset(), None, "{id} subset");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id} remainder");
+        assert_eq!(metadata.recognized_unsupported_code(), None, "{id} code");
+        assert!(metadata.baseline_alias_targets().is_empty(), "{id} atomic");
+
+        if kind == CssFeatureKind::Property {
+            let property = property_metadata(spelling)
+                .unwrap_or_else(|| panic!("missing property metadata for {spelling}"));
+            assert!(std::ptr::eq(metadata, property.feature()), "{id} owner");
+        }
+
+        let report = parse_style_attribute(vector);
+        assert!(report.is_clean(), "{id}: {:?}", report.diagnostics());
+        assert_eq!(report.syntax().len(), 1, "{id} parser vector");
+    }
+
+    let promoted_properties = [
+        "background",
+        "background-color",
+        "background-image",
+        "background-size",
+        "background-repeat",
+        "background-origin",
+        "background-clip",
+        "background-attachment",
+        "border",
+        "border-top",
+        "border-right",
+        "border-bottom",
+        "border-left",
+        "border-width",
+        "border-top-width",
+        "border-right-width",
+        "border-bottom-width",
+        "border-left-width",
+        "border-color",
+        "border-top-color",
+        "border-right-color",
+        "border-bottom-color",
+        "border-left-color",
+        "border-style",
+        "border-top-style",
+        "border-right-style",
+        "border-bottom-style",
+        "border-left-style",
+        "border-radius",
+        "border-top-left-radius",
+        "border-top-right-radius",
+        "border-bottom-right-radius",
+        "border-bottom-left-radius",
+    ];
+    assert_eq!(promoted_properties.len(), 33);
+    for name in promoted_properties {
+        let metadata = property_metadata(name)
+            .unwrap_or_else(|| panic!("missing promoted property metadata for {name}"))
+            .feature();
+        assert_eq!(metadata.source().id().as_str(), "O-BACKGROUNDS3", "{name}");
+        assert_eq!(metadata.production(), format!("#propdef-{name}"), "{name}");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{name}");
+        assert_eq!(metadata.supported_subset(), None, "{name}");
+        assert_eq!(metadata.unsupported_remainder(), None, "{name}");
+    }
+
+    for (id, source) in [
+        ("baseline.property.background-position", "O-BACKGROUNDS3"),
+        ("official.property.object-position", "O-IMAGES3"),
+        ("baseline.property.box-shadow", "O-BACKGROUNDS3"),
+    ] {
+        let metadata = feature_metadata(id).unwrap_or_else(|| panic!("missing preserved {id}"));
+        assert_eq!(metadata.source().id().as_str(), source, "{id}");
+        assert_eq!(metadata.status(), CssSupportStatus::Complete, "{id}");
+        assert_eq!(metadata.supported_subset(), None, "{id}");
+        assert_eq!(metadata.unsupported_remainder(), None, "{id}");
+    }
+
+    assert_eq!(feature_catalog().len(), 456);
 }

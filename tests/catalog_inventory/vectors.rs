@@ -424,6 +424,36 @@ pub const PROPERTY_POSITIVE_VECTORS: &[PropertyVector] = &[
         "border-left-width",
         "4px"
     ),
+    vector!(
+        "official.property.border-image",
+        "border-image",
+        "url(frame.png) 10 fill / 2 / 1 round"
+    ),
+    vector!(
+        "official.property.border-image-outset",
+        "border-image-outset",
+        "1 2px 3 4px"
+    ),
+    vector!(
+        "official.property.border-image-repeat",
+        "border-image-repeat",
+        "round space"
+    ),
+    vector!(
+        "official.property.border-image-slice",
+        "border-image-slice",
+        "10 fill"
+    ),
+    vector!(
+        "official.property.border-image-source",
+        "border-image-source",
+        "linear-gradient(red, blue)"
+    ),
+    vector!(
+        "official.property.border-image-width",
+        "border-image-width",
+        "1 auto 25% 4px"
+    ),
     vector!("baseline.property.color", "color", "black"),
     vector!("baseline.property.background", "background", "#fff"),
     vector!(
@@ -542,6 +572,17 @@ pub const PROPERTY_POSITIVE_VECTORS: &[PropertyVector] = &[
         "box-shadow",
         "inset 1px 2px 3px 4px black"
     ),
+    vector!(
+        "official.property.image-orientation",
+        "image-orientation",
+        "90deg flip"
+    ),
+    vector!(
+        "official.property.image-rendering",
+        "image-rendering",
+        "crisp-edges"
+    ),
+    vector!("official.property.object-fit", "object-fit", "scale-down"),
     vector!("baseline.property.opacity", "opacity", "0.5"),
     vector!("baseline.property.flex-grow", "flex-grow", "2"),
     vector!("baseline.property.flex-shrink", "flex-shrink", "0"),
@@ -1009,6 +1050,36 @@ pub const PROPERTY_NEGATIVE_VECTORS: &[PropertyVector] = &[
         "border-left-width",
         "10%"
     ),
+    vector!(
+        "official.property.border-image",
+        "border-image",
+        "url(frame.png) 10 / / 1"
+    ),
+    vector!(
+        "official.property.border-image-outset",
+        "border-image-outset",
+        "-1"
+    ),
+    vector!(
+        "official.property.border-image-repeat",
+        "border-image-repeat",
+        "repeat round stretch"
+    ),
+    vector!(
+        "official.property.border-image-slice",
+        "border-image-slice",
+        "10 20 30 40 50"
+    ),
+    vector!(
+        "official.property.border-image-source",
+        "border-image-source",
+        "cover"
+    ),
+    vector!(
+        "official.property.border-image-width",
+        "border-image-width",
+        "-1"
+    ),
     vector!("baseline.property.color", "color", "black white"),
     vector!("baseline.property.background", "background", "#fff #000"),
     vector!(
@@ -1119,6 +1190,21 @@ pub const PROPERTY_NEGATIVE_VECTORS: &[PropertyVector] = &[
         "-1px"
     ),
     vector!("baseline.property.box-shadow", "box-shadow", "1px 2px -3px"),
+    vector!(
+        "official.property.image-orientation",
+        "image-orientation",
+        "flip 90deg"
+    ),
+    vector!(
+        "official.property.image-rendering",
+        "image-rendering",
+        "smooth"
+    ),
+    vector!(
+        "official.property.object-fit",
+        "object-fit",
+        "cover contain"
+    ),
     vector!("baseline.property.opacity", "opacity", "solid"),
     vector!("baseline.property.flex-grow", "flex-grow", "solid"),
     vector!("baseline.property.flex-shrink", "flex-shrink", "solid"),
